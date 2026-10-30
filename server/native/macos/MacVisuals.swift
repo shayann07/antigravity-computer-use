@@ -248,23 +248,15 @@ final class MacVisuals: NSObject {
         let container = NSView(frame: NSRect(x: 0, y: 0, width: barWidth, height: barHeight))
         container.autoresizingMask = [.width, .height]
 
-        let hostRoot: NSView
-        if #available(macOS 26.0, *) {
-            let glass = NSGlassEffectView(frame: NSRect(x: 0, y: 0, width: barWidth, height: barHeight))
-            glass.style = .regular
-            glass.cornerRadius = barHeight / 2
-            glass.appearance = NSAppearance(named: .darkAqua)
-            glass.wantsLayer = true
-            glass.contentView = container
-            hostRoot = glass
-        } else {
-            let effect = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: barWidth, height: barHeight))
-            effect.material = .hudWindow; effect.blendingMode = .behindWindow; effect.state = .active
-            effect.wantsLayer = true; effect.layer?.cornerRadius = barHeight / 2; effect.layer?.masksToBounds = true
-            effect.appearance = NSAppearance(named: .darkAqua)
-            effect.addSubview(container)
-            hostRoot = effect
-        }
+        // AppKit's supported native glass surface is NSVisualEffectView. The
+        // newer SwiftUI glass type is not an AppKit symbol and cannot be used
+        // by this native host on the macOS SDKs used for Intel or ARM builds.
+        let effect = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: barWidth, height: barHeight))
+        effect.material = .hudWindow; effect.blendingMode = .behindWindow; effect.state = .active
+        effect.wantsLayer = true; effect.layer?.cornerRadius = barHeight / 2; effect.layer?.masksToBounds = true
+        effect.appearance = NSAppearance(named: .darkAqua)
+        effect.addSubview(container)
+        let hostRoot: NSView = effect
 
         label.frame = NSRect(x: 18, y: 12, width: 206, height: 20)
         label.font = .systemFont(ofSize: 13, weight: .semibold)
@@ -301,13 +293,13 @@ final class MacVisuals: NSObject {
         writeHudBounds(p.frame)
     }
     func layoutControls(for presentation: MacHudStatePresentation) {
-        if #available(macOS 26.0, *), let glass = rootView as? NSGlassEffectView {
+        if let glass = rootView as? NSVisualEffectView {
             if presentation.isEmergency {
-                glass.tintColor = NSColor(calibratedRed: 0.42, green: 0.06, blue: 0.08, alpha: 0.88)
+                glass.layer?.backgroundColor = NSColor(calibratedRed: 0.42, green: 0.06, blue: 0.08, alpha: 0.88).cgColor
             } else if presentation.resolvedState == "paused" {
-                glass.tintColor = NSColor(calibratedRed: 0.14, green: 0.10, blue: 0.04, alpha: 0.50)
+                glass.layer?.backgroundColor = NSColor(calibratedRed: 0.14, green: 0.10, blue: 0.04, alpha: 0.50).cgColor
             } else {
-                glass.tintColor = NSColor(calibratedRed: 0.05, green: 0.07, blue: 0.11, alpha: 0.44)
+                glass.layer?.backgroundColor = NSColor(calibratedRed: 0.05, green: 0.07, blue: 0.11, alpha: 0.44).cgColor
             }
         }
         label.stringValue = presentation.title
