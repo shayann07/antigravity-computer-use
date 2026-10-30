@@ -588,3 +588,26 @@ Windows x64, macOS ARM64 and macOS Intel. The workflow now builds the
 self-contained LiquidGlass companion before bundling Windows. This prepares
 signed artifacts only; it does not publish a release, and the Windows native
 install step still records the project ACL limitation rather than weakening it.
+
+## Windows beta.4 candidate — 31 October 2026
+
+The Windows-only release candidate fixes package-helper discovery: the native
+host lives in `bin/`, while the sealed LiquidGlass companion lives in the
+release's sibling `liquidglass/` directory. Its renderer now uses the correct
+surface bounds and embeds official Phosphor fill SVGs. A plain fallback keeps
+controls readable when the package helper is unavailable; it does not emulate
+the library. The companion renders a caller-owned backdrop and does not provide
+live refraction of other applications.
+
+Focused Windows tests passed for the real package, icon rendering, cached
+surfaces, a hung helper and process cleanup; 51 updater transaction tests
+passed, including refusal of a Windows update missing the companion. The prior
+full suite before these HUD changes had 441 passes and 11 skips. Re-run the
+full suite, exact-head CI and signed-bundle qualification for the final commit.
+The isolated Windows install check still reports `insecure_storage_ancestor`;
+it is a skip, not a pass, and no parent ACL was modified.
+
+Beta.4 is intended as a Windows-only prerelease. The matching published bundle,
+real Antigravity task, installed identity, physical safety checks and production
+update transport still require acceptance. Mac assets and hardware acceptance
+remain separate; do not describe them as qualified by Windows results.

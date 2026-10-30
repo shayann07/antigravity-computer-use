@@ -5,6 +5,7 @@ import {Driver} from '../server/driver.mjs';
 import fs from 'node:fs';import path from 'node:path';
 import {spawn} from 'node:child_process';
 import {storageOperation} from '../server/storage.mjs';
+import {priorWindowsCleanupVerified} from '../server/recovery.mjs';
 function fixture(){
  const guardian=new EventEmitter();guardian.messages=[];guardian.send=m=>guardian.messages.push(m);guardian.request=async m=>{guardian.messages.push(m);return {state:'stopped',controls_visible:true};};guardian.close=()=>{};guardian.pid=998;
  const driver={abortCalls:0,async abort(){this.abortCalls++;},info:{pid:999}};
@@ -78,7 +79,15 @@ test('recovered End waits for actual prior process exits and preserves Stop',{sk
   children[2].kill();await children[2].done;const ledger=path.join(dir,JSON.parse(fs.readFileSync(file)).guard+'.inputs');fs.writeFileSync(ledger,'k:65:0:0');
   await assert.rejects(r.finish(),e=>e.code==='recovered_cleanup_unverified');assert.equal(JSON.parse(fs.readFileSync(file)).open,true);
   // Fixture evidence only: do not invoke a native input-release helper here.
-  fs.writeFileSync(ledger,'');assert.equal((await r.finish()).ended,true);assert.equal(r.state,'stopped');assert.equal(fs.readFileSync(latch,'utf8'),'stopped');assert.equal(JSON.parse(fs.readFileSync(file)).open,false);
+  fs.writeFileSync(ledger,'');
+  // A ChildProcess close event does not guarantee Windows has already removed
+  // its process identity. Wait for the exact predicate used by the runtime;
+  // do not retry input, weaken the predicate, or mark cleanup verified early.
+  const record=JSON.parse(fs.readFileSync(file)),cleanupDeadline=performance.now()+5000;
+  while(!priorWindowsCleanupVerified(dir,record)&&performance.now()<cleanupDeadline)await new Promise(resolve=>setTimeout(resolve,25));
+  storageOperation('verify-data-tree',dir);
+  assert.equal(priorWindowsCleanupVerified(dir,record),true,'Prior fixture processes or their ledger remain unverified');
+  assert.equal((await r.finish()).ended,true);assert.equal(r.state,'stopped');assert.equal(fs.readFileSync(latch,'utf8'),'stopped');assert.equal(JSON.parse(fs.readFileSync(file)).open,false);
  }finally{
   if(controller&&controller.exitCode===null&&controller.signalCode===null)controller.kill();if(controller)await controller.done;
   for(const child of children){if(child.exitCode===null&&child.signalCode===null)child.kill();await child.done;}

@@ -104,45 +104,29 @@ namespace Axon {
         }
         internal static void Hud(Graphics g,string state,int hover,float phase,string activity=null) {
             g.SmoothingMode=SmoothingMode.AntiAlias;g.TextRenderingHint=System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
-            RectangleF panel=new RectangleF(1,1,HudWidth-2,HudHeight-2);Color accent=StateColor(state);
-            // Use the published LiquidGlass material profile through the native
-            // compatibility adapter. The adapter keeps this safety-critical
-            // layered window dependency-free and never captures foreign pixels.
+            RectangleF panel=new RectangleF(1,1,HudWidth-2,HudHeight-2);bool packageAvailable=false;
+            // Render the material with the published LiquidGlass package. A
+            // plain readable surface keeps the controls available if the helper
+            // is missing or cannot respond; no desktop pixels are captured.
             using(GraphicsPath shape=Overlay.RoundRect(panel,21)) {
                 using(Bitmap packageSurface=LiquidGlassPackageClient.Surface(state,(int)panel.Width,(int)panel.Height)) {
-                    if(packageSurface!=null) g.DrawImage(packageSurface,panel);
-                    else LiquidGlassMaterial.DrawSurface(g,shape,panel,accent,Math.Max(.72f,Math.Min(1f,(float)BreathLevel)),1f);
+                    if(packageSurface!=null) {g.DrawImage(packageSurface,panel);packageAvailable=true;}
+                    else using(SolidBrush fallback=new SolidBrush(Color.FromArgb(245,24,29,39)))g.FillPath(fallback,shape);
                 }
             }
             string detail=state=="active"?(String.IsNullOrEmpty(activity)?"Antigravity is working":activity+" with Antigravity"):state=="paused"?"Paused · you have control":state=="stopped"?"Stopped · re-arm to begin":"Antigravity is ready";
             Label(g,detail,9,FontStyle.Regular,Color.FromArgb(240,243,246),new RectangleF(28,6,238,40));
             Rectangle hot=hover==1?ToggleRect:hover==2?StopRect:ModeRect;
             if(hover!=0)using(GraphicsPath r=Overlay.RoundRect(hot,16))using(LinearGradientBrush b=new LinearGradientBrush(hot,hover==2?Color.FromArgb(114,107,52,65):Color.FromArgb(86,90,113,137),hover==2?Color.FromArgb(72,59,31,42):Color.FromArgb(54,45,61,78),90f))g.FillPath(b,r);
-            // Phosphor fill-weight geometry: solid shapes, no outline strokes.
-            using(SolidBrush icon=new SolidBrush(Color.FromArgb(232,239,245))) {
-                using(GraphicsPath slider=Overlay.RoundRect(new RectangleF(286,17,22,4),2))g.FillPath(icon,slider);
-                using(GraphicsPath slider=Overlay.RoundRect(new RectangleF(286,24,22,4),2))g.FillPath(icon,slider);
-                using(GraphicsPath slider=Overlay.RoundRect(new RectangleF(286,31,22,4),2))g.FillPath(icon,slider);
-                g.FillEllipse(icon,291,15,8,8);g.FillEllipse(icon,300,22,8,8);g.FillEllipse(icon,294,29,8,8);
-                if(state=="active") {
-                    using(GraphicsPath pause=Overlay.RoundRect(new RectangleF(339,17,6,18),2))g.FillPath(icon,pause);
-                    using(GraphicsPath pause=Overlay.RoundRect(new RectangleF(348,17,6,18),2))g.FillPath(icon,pause);
-                } else {
-                    using(GraphicsPath play=new GraphicsPath()){play.AddLine(337,16,354,26);play.AddLine(354,26,337,36);play.CloseFigure();g.FillPath(icon,play);}
-                }
+            // The package surface includes the unmodified Phosphor fill icons.
+            // Keep controls legible while the helper is unavailable or starting.
+            if(!packageAvailable) {
+                Color ink=Color.FromArgb(232,239,245);
+                Label(g,"≡",13,FontStyle.Regular,ink,new RectangleF(287,6,24,40));
+                Label(g,state=="active"?"Ⅱ":"▶",11,FontStyle.Regular,ink,new RectangleF(338,6,24,40));
+                Label(g,state=="stopped"?"×":"■",10,FontStyle.Regular,ink,new RectangleF(393,6,22,40));
             }
-            using(Pen divider=new Pen(Color.FromArgb(52,210,222,234),1))g.DrawLine(divider,366,16,366,36);
-            if(state=="stopped") {
-                using(SolidBrush close=new SolidBrush(Color.FromArgb(224,232,239))) {
-                    using(GraphicsPath slash=IconSlash(392,20,404,32,3.2f))g.FillPath(close,slash);
-                    using(GraphicsPath slash=IconSlash(404,20,392,32,3.2f))g.FillPath(close,slash);
-                }
-            } else using(GraphicsPath stop=Overlay.RoundRect(new RectangleF(392,20,12,12),2)){using(SolidBrush b=new SolidBrush(hover==2?Color.FromArgb(248,159,165):Color.FromArgb(224,232,239)))g.FillPath(b,stop);}
             Label(g,state=="stopped"?"Hide":"Stop",8.5f,FontStyle.Regular,Color.FromArgb(222,230,237),new RectangleF(412,7,50,38));
-        }
-        static GraphicsPath IconSlash(float x1,float y1,float x2,float y2,float width) {
-            float dx=x2-x1,dy=y2-y1,len=(float)Math.Sqrt(dx*dx+dy*dy);float nx=-dy/len*width*.5f,ny=dx/len*width*.5f;
-            GraphicsPath p=new GraphicsPath();p.AddPolygon(new[]{new PointF(x1+nx,y1+ny),new PointF(x2+nx,y2+ny),new PointF(x2-nx,y2-ny),new PointF(x1-nx,y1-ny)});return p;
         }
         internal static void Export(string directory) {
             Directory.CreateDirectory(directory);

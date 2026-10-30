@@ -38,6 +38,10 @@ export function verifyUpdateBundle(directory,m,{node,host,storage}={}){
   ...'index desktop-service service-lease desktop-tools receipts incidents update-core storage deployment mcp runtime guardian driver build sessions policy render upstream-utils version platform macos-build auto-update recovery update-notice atomic-json'.split(' ').map(name=>'server/'+name+'.mjs'),
   'server/control-contract.json','scripts/desktop.mjs','scripts/arguments.mjs','scripts/diagnostics.mjs','scripts/install.mjs','scripts/update.mjs','scripts/rollback.mjs','scripts/sidecar.mjs','release-public-key.pem',
   ...(m.platform==='win32'?['install.cmd']:['install.command','Setup.Mac.Permissions.command'])];
+ // Windows releases from beta.4 onward promise the package-backed HUD. An
+ // otherwise signed but incomplete bundle must not silently drop that helper.
+ if(m.platform==='win32'&&(m.version==='0.3.0-beta.4'||newerVersion(m.version,'0.3.0-beta.4')))
+  required.push('liquidglass/LiquidGlass.Host.exe','liquidglass/libSkiaSharp.dll');
  if(!bundle.files||typeof bundle.files!=='object'||Array.isArray(bundle.files)||required.some(name=>!Object.hasOwn(bundle.files,name)))throw Error('update_bundle_incomplete');
  const names=Object.keys(bundle.files),signed=Object.keys(m.files).filter(name=>name!=='bundle-manifest.json');
  if(names.length!==signed.length||names.some(name=>!Object.hasOwn(m.files,name)||bundle.files[name]!==m.files[name].sha256))throw Error('update_bundle_inventory_mismatch');

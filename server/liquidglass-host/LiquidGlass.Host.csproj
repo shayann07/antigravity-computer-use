@@ -6,8 +6,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <PublishTrimmed>false</PublishTrimmed>
     <SelfContained>false</SelfContained>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="Program.cs" />
+    <EmbeddedResource Include="icons/*.svg">
+      <LogicalName>Icons.%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
     <PackageReference Include="LiquidGlass" Version="1.0.0" />
     <PackageReference Include="SkiaSharp" Version="4.153.1" />
   </ItemGroup>

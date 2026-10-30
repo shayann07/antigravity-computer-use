@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <b><a href="https://github.com/shayann07/antigravity-computer-use/releases/tag/v0.3.0-beta.3">Download for Windows</a></b> ·
+  <b><a href="https://github.com/shayann07/antigravity-computer-use/releases/tag/v0.3.0-beta.4">Download for Windows</a></b> ·
   <a href="#see-it-in-action">Demo</a> ·
   <a href="#install">Install</a> ·
   <a href="docs/INSTALLATION.md">Documentation</a> ·
@@ -30,10 +30,9 @@ dialogs, and operate custom canvases through screenshots. It works in the
 **Antigravity Agent Manager App**. No separate LLM, extra model subscription,
 browser extension or required MCP server.
 
-> **Windows beta.** The current release candidate is **v0.3.0-beta.3**. Real
-> desktop safety, AI image export, Mac qualification and signed candidate checks
-> have passed; external-display and published-release transport limits remain.
-> See [what is verified](#status-and-limits) before installing.
+> **Windows beta.** Version **v0.3.0-beta.4** is a Windows x64 release candidate.
+> Automated checks and earlier real desktop tests do not prove every workflow on
+> this build. See [what is verified](#status-and-limits) before installing.
 
 **macOS experimental support:** Apple Silicon/Intel adapters share the same
 controller, tool schemas and `/computer-use` skill. Intel Mac physical
@@ -41,13 +40,12 @@ qualification passed on a single Retina display; external-display, sleep/wake
 and permission-revocation hardware checks remain pending.
 [Mac qualification details](docs/MACOS-QUALIFICATION.md).
 
-The beta.3 line adds control recovery, sanitized failure reports and signed
-whole-bundle updates.
-The development branch also supports structured, unverified agent feedback;
+The beta line includes control recovery, sanitized failure reports and signed
+whole-bundle updates. It also supports structured, unverified agent feedback;
 automatic issue reporting is opt-in and requires GitHub authentication. Models
 can miss problems, while runtime errors are logged independently. It shares the
 runtime with the Mac adapter. [Implementation and acceptance status](docs/RELIABILITY-IMPLEMENTATION.md).
-The Windows download and one-line installer below are pinned to beta.3.
+The Windows download and one-line installer below are pinned to beta.4.
 Our [public CI guide](docs/CI.md) explains the fork checks, local commands and
 the separate maintainer signing workflow.
 
@@ -141,12 +139,12 @@ this project adds no separate model service or telemetry. [Security model](SECUR
 
 | Area | Verified evidence and remaining work |
 | --- | --- |
-| **Beta.3 source and candidate** | 446 local tests, 435 passed, zero failed, 11 explicit ACL qualification skips; exact-head Windows, macOS ARM and Intel CI passed. Skips are not ACL qualification passes. |
-| **Physical safety** | Windows held-drag Esc, persisted Stop, human Re-arm, second task and clean End passed. Intel Mac Stop/re-arm and second Calculator task passed. |
-| **Real app workflow** | Current installed Windows beta.3 completed genuine native-AI Upscaly PNG and JPG exports after bounded GPU-OOM recovery; independent dimensions and hashes are recorded in the handoff. |
+| **Automated checks** | See the [current handoff](HANDOFF.md) for the candidate's exact test and CI results. ACL-related skips are not native qualification passes. |
+| **Physical safety** | Earlier Windows builds passed held-drag Esc, persisted Stop, human Re-arm, a second task and clean End. These are historical checks, not proof for every later build. |
+| **Real app workflow** | An earlier Windows build completed genuine native-AI Upscaly PNG and JPG exports; independent dimensions and hashes are recorded in the handoff. |
 | **Speed** | The earlier High-effort Antigravity tasks took **4m29s PNG / 4m33s JPEG**. Host/model orchestration dominates the remaining delay. These are historical witnesses, not a current speed guarantee. |
 | **Still open** | Live physical queued/held-input interruption on the final helper, real mixed-DPI/multi-monitor hardware, broader applications and cursor/glow feedback. |
-| **Platforms** | Windows x64 is the primary beta target. macOS ARM/Intel is experimental with single-display qualification; Linux is unsupported. Published notarization/Gatekeeper distribution remains pending. |
+| **Platforms** | This release contains Windows x64 assets. macOS ARM/Intel support remains experimental and is not included in this Windows-only release. Linux is unsupported. |
 
 [Current handoff and TODOs](HANDOFF.md) · [Validation](VALIDATION.md) ·
 [Performance measurements](docs/PERFORMANCE.md) · [Project status](PROJECT-STATUS.md)
@@ -157,8 +155,8 @@ Windows source builds require **Windows x64, Node 24.20.0** and the inbox .NET
 Framework compiler. Experimental Mac builds use **macOS 14+, matching Intel or
 Apple Silicon Node 24.20.0, and Xcode Command Line Tools**; follow the
 [Mac build and qualification guide](docs/MACOS.md). There are no npm runtime
-dependencies. Clone the current implementation branch/PR for Mac development;
-the published Windows tag does not contain the Mac adapter.
+dependencies. The shared source includes the Mac adapter; the Windows-only
+release does not publish a new Mac bundle.
 
 ```powershell
 git clone https://github.com/shayann07/antigravity-computer-use.git

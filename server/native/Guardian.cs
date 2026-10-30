@@ -339,6 +339,7 @@ namespace Axon {
             tips.SetToolTip(stopButton,"Stop immediately · Esc or Ctrl+Alt+F12");
             tips.SetToolTip(toggle,"Pause, resume, or re-arm control. Resuming requires a fresh observation.");
             FormClosing += delegate(object sender, FormClosingEventArgs e) { if(!normalClose&&state!="idle")SetState("stopped",null,false);DismissControls(); };
+            LiquidGlassPackageClient.SurfaceReady += PackageSurfaceReady;
             timer.Interval = 70; timer.Tick += Tick; timer.Start();
         }
         // Initialize the message handle/hooks without ever showing a window.
@@ -394,6 +395,9 @@ namespace Axon {
             tips.SetToolTip(modeButton,takeover.Mode=="manual"?"Manual pause: mouse and keyboard do not interrupt. Click for control settings.":"Smart takeover: ignores jitter; deliberate input pauses. Click for control settings.");
             AccessibleName="Antigravity computer use: "+state;
             Invalidate();toggle.Invalidate();stopButton.Invalidate();modeButton.Invalidate();
+        }
+        void PackageSurfaceReady() {
+            try { if(!IsDisposed && IsHandleCreated) BeginInvoke((MethodInvoker)delegate { if(!IsDisposed) RefreshHud(); }); } catch { }
         }
         string PreferenceFile {get {return Path.Combine(Path.GetDirectoryName(ControlFence.FileName),"control-preferences.json");}}
         void LoadTakeoverMode() {
@@ -644,6 +648,7 @@ namespace Axon {
         }
         protected override void OnClosed(EventArgs e) {
             if (registered) UnregisterHotKey(Handle,1);
+            LiquidGlassPackageClient.SurfaceReady -= PackageSurfaceReady;LiquidGlassPackageClient.Close();
             CursorSafety.Close();Presence.Stop(); Overlay.Stop(); base.OnClosed(e);
         }
     }

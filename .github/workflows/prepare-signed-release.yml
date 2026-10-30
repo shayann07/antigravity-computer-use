@@ -52,7 +52,7 @@ jobs:
         if: runner.os == 'Windows'
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: 10.0.403
       - name: Publish package-backed Windows LiquidGlass companion
         if: runner.os == 'Windows'
         shell: pwsh
@@ -60,6 +60,11 @@ jobs:
           dotnet publish server/liquidglass-host/LiquidGlass.Host.csproj
           --configuration Release --runtime win-x64 --self-contained true
           -p:PublishSingleFile=true -o .localdata/liquidglass-publish
+      - name: Verify package-backed Windows HUD client
+        if: runner.os == 'Windows'
+        env:
+          AGCU_LIQUIDGLASS_HELPER_BUILD: ${{ github.workspace }}/.localdata/liquidglass-publish
+        run: node --test tests/liquidglass-client.test.mjs
       - name: Build sealed bundle
         env:
           AGCU_LIQUIDGLASS_HELPER_BUILD: ${{ runner.os == 'Windows' && format('{0}/.localdata/liquidglass-publish', github.workspace) || '' }}

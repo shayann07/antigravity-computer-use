@@ -17,8 +17,13 @@ Anthropic `anthropics/claude-quickstarts`, revision `9ec32b91df50b0d4906cae64b13
 
 The Windows bundle includes the locally installed official Node executable, with its version/checksum recorded in `bundle-manifest.json` and upstream Node license under `licenses/`. No proprietary product bundles, extracted assets or leaked source maps are included. Product names identify compatibility; no affiliation or endorsement is claimed.
 
-The Windows HUD material profile is adapted from `shayann07/liquidglass`,
-`ports/dotnet/LiquidGlass.Skia/GlassPainter.cs`, under Apache-2.0. The
-adaptation is recorded in `server/native/LiquidGlassMaterial.cs`; the native
-host uses a dependency-free GDI+ compatibility renderer so it does not capture
-foreign desktop pixels or require the library's modern .NET/Skia runtime.
+The Windows HUD companion uses the published `LiquidGlass` 1.0.0 NuGet package
+by `shayann07/liquidglass` (Apache-2.0) and `SkiaSharp` / native assets 4.153.1
+(MIT and other included notices), together with the self-contained .NET 10
+runtime. Their licenses and notices are retained in
+`licenses/`. The companion renders a caller-owned surface and does not capture
+foreign desktop pixels.
+
+The Windows HUD uses unmodified fill icons from `phosphor-icons/core`, revision
+`2b75f3ad12b420c9504ef05df8d2564a28f8500e`, under MIT. Their source SVGs are in
+`server/liquidglass-host/icons/` and the license is in `licenses/Phosphor-Icons.txt`.
