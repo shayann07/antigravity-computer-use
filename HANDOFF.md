@@ -583,3 +583,8 @@ Their Windows source and macOS Intel/ARM checks passed after the AppKit fix in
 supported `NSVisualEffectView` surface. Main currently contains both Mac
 changes; the post-merge main CI run is still in progress.
 
+Signed-release preparation run `41119626654` completed successfully for
+Windows x64, macOS ARM64 and macOS Intel. The workflow now builds the
+self-contained LiquidGlass companion before bundling Windows. This prepares
+signed artifacts only; it does not publish a release, and the Windows native
+install step still records the project ACL limitation rather than weakening it.
