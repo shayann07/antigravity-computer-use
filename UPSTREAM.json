@@ -708,7 +708,7 @@
     },
     {
       "path": ".github/workflows/prepare-signed-release.yml",
-      "sha256": "f7db129d77b6cb60b5ad213b8b0f4220b8b050f4886b16a37b7a4bbb264f5cda"
+      "sha256": "f57e787312c0c5b0365ca4ee4fcf0d9768069742692fcee2331bfd6c0fefabd7"
     },
     {
       "path": "server/recovery.mjs",
