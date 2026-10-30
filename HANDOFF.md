@@ -577,3 +577,9 @@ Fresh exact-head regression on `b2791c2`: serial Node test run completed with
 the package-client and bundle changes did not regress the controller suite; it
 does not replace physical or installed-device qualification.
 
+PR review update: PR #29 merged as `dfb9a8e` and PR #30 merged as `df71a4e`.
+Their Windows source and macOS Intel/ARM checks passed after the AppKit fix in
+`0db7fdb`, which replaced the unavailable `NSGlassEffectView` symbol with the
+supported `NSVisualEffectView` surface. Main currently contains both Mac
+changes; the post-merge main CI run is still in progress.
+
