@@ -48,7 +48,21 @@ jobs:
         run: node scripts/check-provenance.mjs
       - name: Verify release asset validation regressions
         run: node --test tests/signed-assets.test.mjs
+      - name: Build package-backed Windows LiquidGlass companion
+        if: runner.os == 'Windows'
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: 10.0.x
+      - name: Publish package-backed Windows LiquidGlass companion
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: >-
+          dotnet publish server/liquidglass-host/LiquidGlass.Host.csproj
+          --configuration Release --runtime win-x64 --self-contained true
+          -p:PublishSingleFile=true -o .localdata/liquidglass-publish
       - name: Build sealed bundle
+        env:
+          AGCU_LIQUIDGLASS_HELPER_BUILD: ${{ runner.os == 'Windows' && format('{0}/.localdata/liquidglass-publish', github.workspace) || '' }}
         run: node scripts/bundle.mjs --output .localdata/release-bundle
       - name: Sign published-update metadata and prepare payload assets
         env:
