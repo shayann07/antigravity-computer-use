@@ -30,7 +30,6 @@ final class MacControlPanel: NSPanel {
 
 final class MacHudButton: NSButton {
     var isEmergencyAction = false
-    var isPrimaryRearm = false
     var hudTitle: String = "" { didSet { needsDisplay = true } }
     var hudIcon: MacPhosphorIcon = .slidersHorizontalFill { didSet { needsDisplay = true } }
     var onEscape: (() -> Void)?
@@ -61,14 +60,11 @@ final class MacHudButton: NSButton {
     override func draw(_ dirtyRect: NSRect) {
         let pillRect = bounds.insetBy(dx: 1, dy: 1)
         let pill = NSBezierPath(roundedRect: pillRect, xRadius: pillRect.height / 2, yRadius: pillRect.height / 2)
-        if isPrimaryRearm {
-            NSColor(calibratedRed: 0.94, green: 0.25, blue: 0.22, alpha: isHighlighted ? 0.96 : 0.86).setFill()
-        } else if isEmergencyAction {
-            NSColor(calibratedRed: 0.90, green: 0.22, blue: 0.21, alpha: isHighlighted ? 0.88 : 0.72).setFill()
-        } else {
-            NSColor(calibratedWhite: 1.0, alpha: isHighlighted ? 0.22 : 0.12).setFill()
+        if isHighlighted {
+            if isEmergencyAction { NSColor(calibratedRed: 0.48, green: 0.16, blue: 0.22, alpha: 0.55).setFill() }
+            else { NSColor(calibratedWhite: 1.0, alpha: 0.16).setFill() }
+            pill.fill()
         }
-        pill.fill()
 
         let fg = NSColor(calibratedWhite: 0.99, alpha: 1.0)
         if hudTitle.isEmpty {
@@ -154,7 +150,7 @@ final class MacVisuals: NSObject {
         case "active":
             return MacHudStatePresentation(
                 resolvedState: "active",
-                title: "Working · Esc to stop",
+                title: "Antigravity is working",
                 toggleTitle: "",
                 toggleSymbol: MacPhosphorIcon.pauseFill.rawValue,
                 toggleAccessibilityLabel: "Pause computer use",
@@ -167,7 +163,7 @@ final class MacVisuals: NSObject {
         case "paused":
             return MacHudStatePresentation(
                 resolvedState: "paused",
-                title: "Paused · Resume or Esc",
+                title: "Paused · you have control",
                 toggleTitle: "",
                 toggleSymbol: MacPhosphorIcon.playFill.rawValue,
                 toggleAccessibilityLabel: "Resume computer use",
@@ -180,8 +176,8 @@ final class MacVisuals: NSObject {
         case "stopped":
             return MacHudStatePresentation(
                 resolvedState: "stopped",
-                title: "Stopped · Re-arm required",
-                toggleTitle: "Re-arm",
+                title: "Stopped · re-arm to begin",
+                toggleTitle: "",
                 toggleSymbol: MacPhosphorIcon.playFill.rawValue,
                 toggleAccessibilityLabel: "Re-arm computer use",
                 stopTitle: "Hide",
@@ -297,7 +293,6 @@ final class MacVisuals: NSObject {
         }
         label.stringValue = presentation.title
         label.textColor = .white
-        toggle.isPrimaryRearm = presentation.isEmergency
         toggle.hudTitle = presentation.toggleTitle
         toggle.hudIcon = MacPhosphorIcon(rawValue: presentation.toggleSymbol) ?? .playFill
         toggle.setAccessibilityLabel(presentation.toggleAccessibilityLabel)
@@ -306,17 +301,12 @@ final class MacVisuals: NSObject {
         stop.hudIcon = MacPhosphorIcon(rawValue: presentation.stopSymbol) ?? .stopFill
         stop.setAccessibilityLabel(presentation.stopAccessibilityLabel)
         stop.isEmergencyAction = !presentation.isEmergency
-        if presentation.isEmergency {
-            label.frame = NSRect(x: 18, y: 12, width: 174, height: 20)
-            more.frame = NSRect(x: 196, y: 6, width: 32, height: 32)
-            toggle.frame = NSRect(x: 234, y: 6, width: 84, height: 32)
-            stop.frame = NSRect(x: 324, y: 6, width: 64, height: 32)
-        } else {
-            label.frame = NSRect(x: 18, y: 12, width: 210, height: 20)
-            more.frame = NSRect(x: 234, y: 6, width: 32, height: 32)
-            toggle.frame = NSRect(x: 272, y: 6, width: 32, height: 32)
-            stop.frame = NSRect(x: 310, y: 6, width: 78, height: 32)
-        }
+        // Keep the controls under the human's hand in the same positions in
+        // every state. The native material carries the bar, without nested pills.
+        label.frame = NSRect(x: 18, y: 12, width: 210, height: 20)
+        more.frame = NSRect(x: 234, y: 6, width: 32, height: 32)
+        toggle.frame = NSRect(x: 272, y: 6, width: 32, height: 32)
+        stop.frame = NSRect(x: 310, y: 6, width: 78, height: 32)
         toggle.needsDisplay = true; stop.needsDisplay = true; more.needsDisplay = true
     }
     func show(_ next: String) {

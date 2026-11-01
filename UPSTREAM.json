@@ -576,11 +576,11 @@
     },
     {
       "path": "server/native/macos/MacOperations.swift",
-      "sha256": "ac034b5a770dd11444e0675af26f5580039dc1fb5c698fbe87139d2422d1814d"
+      "sha256": "44b466abe7f0c0d13a38ab6d362f2ae242ac2f23dcbe470dd38cff222847229d"
     },
     {
       "path": "server/native/macos/MacVisuals.swift",
-      "sha256": "934f58a99697d794f670a7fb79ef367cf098c81a9608712d188ccf9832e61438"
+      "sha256": "f35d2d1065b4f81c6f66cc3f732192bdb648cbcdd456dfde7e793322e434c38f"
     },
     {
       "path": "server/native/macos/PrivateStorage.swift",
@@ -848,7 +848,7 @@
     },
     {
       "path": "docs/MACOS-GLASS-MATERIAL.md",
-      "sha256": "856deb802844c6752e47f312717a862310acc7a31902bb03ef62ee2f06abc315"
+      "sha256": "58dec76850c9489d8907f6c16fd83584828d156751ba01410a04b7871a50cc89"
     }
   ],
   "external_files": [

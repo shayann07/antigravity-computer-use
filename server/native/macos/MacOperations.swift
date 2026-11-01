@@ -302,10 +302,10 @@ func macContractTest() throws {
     let pausedHud = MacVisuals.statePresentation(for: "paused", latched: false)
     let stoppedHud = MacVisuals.statePresentation(for: "stopped", latched: false)
     let latchedHud = MacVisuals.statePresentation(for: "active", latched: true)
-    guard activeHud.title.contains("Working"), !activeHud.isEmergency,
+    guard activeHud.title == "Antigravity is working", !activeHud.isEmergency,
           pausedHud.title.contains("Paused"), !pausedHud.isEmergency,
-          stoppedHud.title == "Stopped · Re-arm required", stoppedHud.isEmergency, stoppedHud.contrastTarget >= 8.5,
-          latchedHud.resolvedState == "stopped", latchedHud.title == "Stopped · Re-arm required", latchedHud.isEmergency else {
+          stoppedHud.title == "Stopped · re-arm to begin", stoppedHud.toggleTitle.isEmpty, stoppedHud.isEmergency, stoppedHud.contrastTarget >= 8.5,
+          latchedHud.resolvedState == "stopped", latchedHud.title == "Stopped · re-arm to begin", latchedHud.isEmergency else {
         throw AxonError("contract_test_failed", "Mac HUD state presentation or emergency contrast target differs.")
     }
     guard macRole("AXWebArea") == "Document",

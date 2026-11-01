@@ -19,6 +19,9 @@ and sealed by the release inventory. The handwritten icon approximations are
 removed; only the fill colour changes while loading. The settings icon matches
 Windows' filled sliders icon. Icon decoding/rendering is checked offscreen; a
 missing icon retains a readable text fallback rather than an empty control.
+The Mac bar uses the same state wording and settings/play/pause/stop/hide artwork
+as Windows. Controls keep fixed positions across states; the expanded red Re-arm
+pill is removed. Native focus feedback and descriptive accessibility labels remain.
 
 The native contract reports the selected material backend and the five decoded
 icons. CI includes Intel and Apple Silicon on macOS 15 and 26, exercising older
