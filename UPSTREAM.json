@@ -476,7 +476,7 @@
     },
     {
       "path": "skills/computer-use/references/recovery.md",
-      "sha256": "b9fd4728d4fe525990d03499fefb7702a2035e0ad2b59cf3d090417f63a96cb1"
+      "sha256": "77df37e69f48e8d3104d01691537ebd955e4d0293aff54300f36147ec378cdfe"
     },
     {
       "path": "scripts/measure-run.mjs",
@@ -492,7 +492,7 @@
     },
     {
       "path": "HANDOFF.md",
-      "sha256": "5f28f9aeb3934c5097fcdb77f4ca597cad40f23158d9fbec3504f79fd9f3a1f4"
+      "sha256": "d04ec1f14f0a97b2149467a76c07e1fb572b3d78605425fa3bb2ffcec8e2bfb6"
     },
     {
       "path": "tests/guardian-visibility.mjs",
@@ -604,7 +604,7 @@
     },
     {
       "path": "skills/computer-use/SKILL.md",
-      "sha256": "8e348bac0e356dd9ffd09fcc7743e329d88b5f1c765910e60eb1908a24ce2998"
+      "sha256": "35888b141b5c251552bdbac1910bbcbbf2ff6534fc171e10b725a6618d7d481f"
     },
     {
       "path": "docs/MACOS.md",
@@ -865,6 +865,10 @@
     {
       "path": "docs/qualification.md",
       "sha256": "6c106ef780da4501f02c2a063094f98cbd0f0f54f76f4c41f48432df859d6ee9"
+    },
+    {
+      "path": "tests/skill-guidance.test.mjs",
+      "sha256": "8633c828cbea9e89f3115f8d123c3693d5838d1a0ad2d76f7050ee219f569460"
     }
   ],
   "external_files": [

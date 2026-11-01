@@ -43,7 +43,23 @@ job failed its concurrent native build at the existing 120-second Swift
 deadline. That failure is retained, not converted to a pass. The Mac workflow
 now serializes test files to avoid unrelated native compilers competing with
 the intentional two-builder race. That race and its deadlines are unchanged;
-verify the new exact-head CI before merging.
+all six exact-head checks at `10db3d0` passed, including both Intel runs. PR #39
+merged as `7e93d41`; its merged tree matches the reviewed head. The full local
+suite's 497 passes and 12 skips are not physical acceptance.
+
+A follow-up skill audit found instructions forbidding the terminal that its
+first command needs, incorrectly saying Mac recovered-task cleanup is always
+blocked, and recovery advice implying another caller's sidecar can be restarted
+or a bar is visible without confirmation. The shared entrypoint/reference now
+match the supported Windows/Mac cleanup checks, ownership and visibility rules.
+No runtime policy, installed skill or Stop latch is changed by these source
+edits. Real model uptake and workflow timing remain unqualified until the owner
+releases the desktop; no speed improvement is inferred from wording changes.
+The first PR #40 Windows run at `a13b2f3` failed because the guidance test
+explicitly required the contradictory “do not open a terminal” wording. The
+test now resolves the documented entrypoint against the real offline CLI
+schema instead; its bounded-handoff assertions remain. Retain the failed run
+and verify the corrected head's regressions/CI before merging.
 
 PR #35 (Windows own-HUD avoidance) and PR #36 (Mac native glass/official icon
 assets) remain draft pending the live and physical checks the owner deferred.
