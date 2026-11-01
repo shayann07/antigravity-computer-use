@@ -7,7 +7,7 @@ GitHub-downloaded bundle. Read [the current qualification record](docs/WINDOWS-B
 before relying on the historical entries below. PNG/JPEG outputs and native NCNN
 execution passed; the 471.556-second Flash workflow does not establish a speed
 fix. Public updater transfer timeout #32 and banner overlap #33 were found in
-real tests. The source download-deadline repair is a separate, unpublished change.
+real tests. The download-deadline repair is merged source, not included in beta.4.
 Keep the full goal active; Mac and physical/hardware gates are still pending.
 
 The `codex/latency-evidence-validation` work selects the comparison utility from
@@ -17,6 +17,14 @@ evidence-file preservation. See [performance methodology](docs/PERFORMANCE.md).
 Current installed status CLI median is 296.4 ms across seven read-only samples;
 the retained Flash task still has 10.6754-second median inter-call gaps. This is
 measurement support, not an actual host speed fix or release acceptance.
+
+PR #35 (Windows own-HUD avoidance) and PR #36 (Mac native glass/official icon
+assets) remain draft pending the live and physical checks the owner deferred.
+Their source/native CI passed, but neither candidate is installed over the
+published Windows baseline. The refreshed Mac and Claude handoff prompts point
+to the actual published release and current candidate branches. The latency
+utility regression at `c01e32e` passed 494 tests locally: 482 pass, zero fail,
+12 explicit skips. These records do not complete the remaining release gates.
 
 ## 30 October final Intel Mac Space/capture & Liquid Glass HUD repair
 

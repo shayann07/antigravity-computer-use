@@ -492,7 +492,7 @@
     },
     {
       "path": "HANDOFF.md",
-      "sha256": "4527c40ea788dc1e5b7992fbdabc78aedd5c7bbe189051f81cd01f66b3dc536a"
+      "sha256": "6f74e641bf9c347d3ff52ce6c11769b738e87a5dfe8b2ec2ebacc38308966644"
     },
     {
       "path": "tests/guardian-visibility.mjs",
@@ -500,7 +500,7 @@
     },
     {
       "path": "docs/CLAUDE-CODE-HANDOFF-PROMPT.md",
-      "sha256": "6d655cd101d7185cdece6b1cf0632f7388812d6d7b2f7d21dba8eefe159b0473"
+      "sha256": "2c7834de05a7298dce7b1de47779e157d4447d9c884a693cdb344c0ecaee8646"
     },
     {
       "path": "docs/BRANCHES.md",
@@ -648,7 +648,7 @@
     },
     {
       "path": "docs/MAC-QUALIFICATION-PROMPT.md",
-      "sha256": "0198e78d5798684372be5e1e45d1bad489c84ddbe85109a4fe2c2ab342a35fdc"
+      "sha256": "7793a8a8a3538a719d85eec7db79c8deaa20c1ac2b42ccb3cf42fcfd52d38cb2"
     },
     {
       "path": "tests/reporting.test.mjs",
