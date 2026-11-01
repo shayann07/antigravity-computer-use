@@ -26,6 +26,13 @@ that wrapper/scheduler for release qualification. The supported IPC client's
 seven unknown-delivery transport regressions passed; this finding is not a
 claim that the published controller replayed an action.
 
+The installed Stop qualification harness has also been repaired: exact build
+and policy binding, idle ownership preflight, fresh project-local evidence,
+strict current-task ledger checks, real Esc during the held drag and one
+explicitly visible local Re-arm. Its read-only `--check-only` path verified the
+published beta.4 installation without controls or app input. The interactive
+flow remains unrun while the owner is unavailable; see docs/qualification.md.
+
 PR #35 (Windows own-HUD avoidance) and PR #36 (Mac native glass/official icon
 assets) remain draft pending the live and physical checks the owner deferred.
 Their source/native CI passed, but neither candidate is installed over the
