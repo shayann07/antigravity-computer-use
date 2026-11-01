@@ -86,6 +86,12 @@ programmatic latch deletion or manufactured re-arm. On failure the harness ends
 only its reserved task; uncertain in-flight input may request Stop for cleanup,
 and that cleanup request is never counted as physical Esc.
 
+`tests/installed-qualification.test.mjs` also exercises this procedure with an
+inert in-memory transport, including an already-owned task and incomplete Stop
+evidence. Those records carry `evidence_kind: inert_fixture`; no native process,
+physical input or human re-arm occurs. They check the harness's decisions, not
+desktop acceptance. CLI/configuration arguments cannot select that fixture.
+
 The original dev7 run used the older synthetic-hotkey plus human-Esc procedure.
 Its final close call failed because the test supplied an unsupported argument;
 close/end were recovered separately and the failure was retained. That record

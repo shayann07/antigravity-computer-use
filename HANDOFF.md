@@ -32,6 +32,11 @@ strict current-task ledger checks, real Esc during the held drag and one
 explicitly visible local Re-arm. Its read-only `--check-only` path verified the
 published beta.4 installation without controls or app input. The interactive
 flow remains unrun while the owner is unavailable; see docs/qualification.md.
+The 15 qualification regressions and seven transport-failure regressions pass.
+Whole-procedure fixtures explicitly identify themselves as inert and exercise
+successful sequencing, refusal of another task and incomplete Stop evidence.
+They are not physical acceptance. The owner deferred desktop testing; no live
+installation, controls, policy or Stop latch was changed by these source checks.
 
 PR #35 (Windows own-HUD avoidance) and PR #36 (Mac native glass/official icon
 assets) remain draft pending the live and physical checks the owner deferred.

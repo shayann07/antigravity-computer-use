@@ -24,10 +24,10 @@ export async function beginSignal({input=process.stdin,timeoutMs=45000}={}){
  });}finally{lines.close();input.pause();}
 }
 
-export async function installedStopQualification(configFile,{checkOnly=false}={}){
+export async function installedStopQualification(configFile,{checkOnly=false,fixtures}={}){
  assert.equal(process.platform,'win32','This harness qualifies the installed Windows helper');
  const config=stopConfig(JSON.parse(fs.readFileSync(configFile,'utf8'))),evidence=newStopEvidence(config);
- const record={passed:false,qualification_complete:false,stage:'preflight',expected_build_id:config.expected_build_id,checks:[],events:[],desktop_input_attempted:false,input_completion_acknowledged:false,target_release_delivery_verified:false};
+ const record={passed:false,qualification_complete:false,evidence_kind:fixtures?'inert_fixture':'installed_protocol',stage:'preflight',expected_build_id:config.expected_build_id,checks:[],events:[],desktop_input_attempted:false,input_completion_acknowledged:false,target_release_delivery_verified:false};
  let aborting=false,ownsTask=false,operationPending=false,request,policy,directory,sequence=0,lastState;
  const save=()=>{if(aborting){record.passed=false;record.stage='aborted';}return writeAtomicJSON(path.join(evidence,'result.json'),record);};
  const call=async(command,args={})=>{
@@ -48,14 +48,15 @@ export async function installedStopQualification(configFile,{checkOnly=false}={}
  try{
   const install=JSON.parse(fs.readFileSync(config.installation));assert.equal(install.integration,'direct');
   const release=install.release,manifest=verifyQualificationRelease(release,config.expected_build_id);
-  const verified=spawnSync(process.execPath,[path.join(projectRoot,'scripts/verify-install.mjs'),path.dirname(config.installation)],{encoding:'utf8',windowsHide:true,timeout:30000});
+  const verified=fixtures?.verifyInstall?fixtures.verifyInstall():spawnSync(process.execPath,[path.join(projectRoot,'scripts/verify-install.mjs'),path.dirname(config.installation)],{encoding:'utf8',windowsHide:true,timeout:30000});
   assert.equal(verified.status,0,'Installed identity/private-storage verification failed; inspect the private run.');
   assert.equal(JSON.parse(verified.stdout).build_id,config.expected_build_id);
   policy=JSON.parse(fs.readFileSync(path.join(release,'desktop-policy.json')));
   assert.equal(policy.permission_mode,'host-managed','Standalone approvals are never bypassed');
   directory=policy.data_dir;assert.equal(path.resolve(directory),path.join(path.dirname(config.installation),'data'));
-  ({request}=await import(pathToFileURL(path.join(release,'scripts/desktop.mjs'))));
+  if(fixtures?.request)request=fixtures.request;else ({request}=await import(pathToFileURL(path.join(release,'scripts/desktop.mjs'))));
   const cli=command=>{
+   if(fixtures?.lifecycle)return fixtures.lifecycle(command);
    const child=spawnSync(path.join(release,'node.exe'),[path.join(release,'scripts/desktop.mjs'),command],{encoding:'utf8',windowsHide:true,timeout:20000});
    assert.equal(child.status,0,'Installed lifecycle command failed: '+command);return JSON.parse(child.stdout);
   };
@@ -71,7 +72,7 @@ export async function installedStopQualification(configFile,{checkOnly=false}={}
   for(const point of [config.from,config.to])assert(point[0]<image.image.width&&point[1]<image.image.height,'Coordinates are outside the actual screenshot');
   record.stage='awaiting_image_inspection';save();
   console.log(JSON.stringify({stage:record.stage,image:image.image,hwnd:config.hwnd,evidence,instruction:'Inspect this actual image and its harmless drag path. With the human ready, send BEGIN. The human must press Esc as soon as the selection starts moving. Do not re-arm until prompted.'}));
-  await beginSignal();
+  await (fixtures?.begin||beginSignal)();
   const moved=await input('move',{hwnd:config.hwnd,observation_id:image.metadata.observation_id,x:config.from[0],y:config.from[1],risk:'routine',reason:'Approach the inspected harmless drag start'});
   assert(moved.ok&&moved.metadata,moved.error?.code);
   const session=JSON.parse(fs.readFileSync(path.join(directory,'desktop-session.json')));

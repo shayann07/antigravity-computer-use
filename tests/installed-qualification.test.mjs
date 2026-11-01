@@ -3,7 +3,7 @@ import fs from 'node:fs';import path from 'node:path';import net from 'node:net'
 import {createHash} from 'node:crypto';import {PassThrough} from 'node:stream';import {spawnSync} from 'node:child_process';
 import {testDirectory,testRoot} from './paths.mjs';
 import {stopConfig,newStopEvidence,verifyQualificationRelease,qualificationIdle,qualificationRequest,currentInputJournal,qualificationLedger,finishQualification,physicalStopSteps} from './installed-qualification.mjs';
-import {beginSignal} from './installed-stop-resume.mjs';
+import {beginSignal,installedStopQualification} from './installed-stop-resume.mjs';
 import {request} from '../scripts/desktop.mjs';
 import {validate} from '../server/desktop-tools.mjs';
 const id='1'.repeat(64);
@@ -89,3 +89,63 @@ test('importing the installed Stop harness cannot start control or require Windo
  const run=spawnSync(process.execPath,['--input-type=module','-e','await import('+JSON.stringify(module)+');console.log("import-only");'],{encoding:'utf8',windowsHide:true,timeout:10000,env:{...process.env,AGCU_DATA_DIR:dir}});
  assert.equal(run.status,0,run.stderr);assert.equal(run.stdout.trim(),'import-only');assert.deepEqual(fs.readdirSync(dir),[]);
 });
+
+// Whole-flow fixture: no executable is started, no native connection exists and
+// all apparent input/Stop/re-arm states below are explicitly simulated data.
+async function simulatedQualification(t,{busy=false,incompleteStop=false}={}){
+ const dir=folder(t),target=path.join(dir,'installation'),release=path.join(target,'releases','fixture'),data=path.join(target,'data');
+ fs.mkdirSync(release,{recursive:true});fs.mkdirSync(data);
+ const bytes='inert payload',files={'fixture.txt':createHash('sha256').update(bytes).digest('hex')};
+ const expected=createHash('sha256').update(JSON.stringify(files)).digest('hex');fs.writeFileSync(path.join(release,'fixture.txt'),bytes);
+ fs.writeFileSync(path.join(release,'bundle-manifest.json'),JSON.stringify({build_id:expected,files,version:'fixture'}));
+ fs.writeFileSync(path.join(release,'desktop-policy.json'),JSON.stringify({permission_mode:'host-managed',data_dir:data}));
+ const installation=path.join(target,'installation.json');fs.writeFileSync(installation,JSON.stringify({release,integration:'direct'}));
+ fs.writeFileSync(path.join(data,'desktop-session.json'),JSON.stringify({pid:123,secret:'inert',pipe:'not-a-real-connection'}));
+ const configFile=path.join(dir,'config.json'),evidence=path.join(dir,'evidence');
+ fs.writeFileSync(configFile,JSON.stringify({installation,expected_build_id:expected,hwnd:1,from:[10,20],to:[30,20],evidence}));
+ let state=busy?'active':'idle',open=busy,reason='';const calls=[];
+ const guard='guard-123-11111111-1111-1111-1111-111111111111.state',journal=path.join(data,guard+'.inputs'),latch=path.join(data,'emergency.stop');
+ fs.writeFileSync(journal,'');
+ const status=()=>({ok:true,build_id:expected,state,task_open:open,approved_apps:state==='active'?[{pid:7}]:[],recovered_task:false,controller_ownership_lost:false,permission_mode:'host-managed',private_data_storage:true,custom_cursor:state==='active',control_reason:reason});
+ const fixtures={
+  verifyInstall:()=>({status:0,stdout:JSON.stringify({build_id:expected})}),begin:async()=>{},
+  async request(_session,command,args,_timeout,policy){
+   assert.equal(policy,'host-managed');calls.push(command);
+   if(command==='status')return status();
+   if(command==='ready'){open=true;return {...status(),ready:state==='idle',controls_visible:true};}
+   if(command==='snapshot'){
+    if(state==='stopped')return {ok:false};state='active';open=true;
+    return {ok:true,metadata:{observation_id:'inert-frame'},image:{path:'inert-not-a-screenshot',width:100,height:100}};
+   }
+   if(command==='move'){fs.writeFileSync(path.join(data,'task-state.json'),JSON.stringify({schema:1,open:true,guard,dispatched:true}));return {ok:true,input_completed:true,metadata:{observation_id:'inert-next'}};}
+   if(command==='run'){
+    assert.equal(args.steps.length,8);fs.writeFileSync(journal,'m:4');await new Promise(resolve=>setTimeout(resolve,25));
+    fs.writeFileSync(journal,'');fs.writeFileSync(latch,'inert-only');state='stopped';reason='escape';return {ok:false,failed_index:0,completed:[],skipped:incompleteStop?6:7};
+   }
+   if(command==='resume')return {ok:false};
+   if(command==='end'){open=false;state=state==='stopped'?'stopped':'idle';return {ok:true,ended:true,state};}
+   assert.fail('Unexpected simulated command '+command);
+  },
+  lifecycle(command){calls.push('cli:'+command);if(command==='shutdown')return {ok:true};if(command==='start')return {ok:true,state:'stopped'};
+   assert.equal(command,'ready');open=true;setTimeout(()=>{fs.unlinkSync(latch);state='idle';reason='simulated-human-rearm';},15);
+   return {ok:true,state:'stopped',task_open:true,controls_visible:true};
+  }
+ };
+ const log=console.log;console.log=()=>{};
+ try{
+  if(busy){await assert.rejects(installedStopQualification(configFile,{fixtures}),e=>e.code==='qualification_not_idle');assert.deepEqual(calls,['status']);return;}
+  if(incompleteStop){
+   await assert.rejects(installedStopQualification(configFile,{fixtures}));
+   const result=JSON.parse(fs.readFileSync(path.join(evidence,'result.json')));
+   assert.equal(result.passed,false);assert.equal(result.evidence_kind,'inert_fixture');assert.equal(result.cleanup_unconfirmed,false);
+   assert.equal(calls.filter(command=>command==='run').length,1);assert.equal(calls.at(-1),'end');
+   assert(!calls.some(command=>command.startsWith('cli:')));assert(fs.existsSync(latch));return;
+  }
+  const result=await installedStopQualification(configFile,{fixtures});
+  assert.equal(result.passed,true);assert.equal(result.evidence_kind,'inert_fixture');assert.equal(result.qualification_complete,false);assert.equal(result.target_release_delivery_verified,false);
+  assert(calls.indexOf('cli:ready')>calls.indexOf('cli:start'));assert.equal(calls.filter(command=>command==='run').length,1);assert.equal(calls.includes('stop'),false);
+ }finally{console.log=log;}
+}
+test('the complete installed protocol sequence has an explicitly inert regression',{skip:process.platform!=='win32'},async t=>simulatedQualification(t));
+test('an already reserved installation is never shown, stopped, ended or driven by the harness',{skip:process.platform!=='win32'},async t=>simulatedQualification(t,{busy:true}));
+test('incomplete Stop evidence fails without replay, restart or re-arm and ends only the owned task',{skip:process.platform!=='win32'},async t=>simulatedQualification(t,{incompleteStop:true}));

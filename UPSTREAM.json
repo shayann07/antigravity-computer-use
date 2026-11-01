@@ -492,7 +492,7 @@
     },
     {
       "path": "HANDOFF.md",
-      "sha256": "c80dd37b3a06f3ac3b72e9660a3e77b000899982be4e4a271ce34ed6ae243542"
+      "sha256": "006631dd330e5ad68e49bd5a3983e959c1f1c41e29b1233633d6104d0d78b067"
     },
     {
       "path": "tests/guardian-visibility.mjs",
@@ -856,15 +856,15 @@
     },
     {
       "path": "tests/installed-qualification.test.mjs",
-      "sha256": "f1c7b780d77a8571c9ac779a3ac1d2448161246cebbceb614a2824697bf543c3"
+      "sha256": "fc530221ab61dbeef211371f1e2fe5225ed46d6a523222aea3e5755f390d0b76"
     },
     {
       "path": "tests/installed-stop-resume.mjs",
-      "sha256": "fadb24b773174f970d03b6873c8c2ef961963660a6331a349d7a6e331851f836"
+      "sha256": "abfefb66646d528ed24383dbb7f908f9b478f6e913170b60df39a46a0bc42f61"
     },
     {
       "path": "docs/qualification.md",
-      "sha256": "d9ae995074bfd9174680e7722abf499e270a7c950da9c297857f0d5c82849868"
+      "sha256": "6c106ef780da4501f02c2a063094f98cbd0f0f54f76f4c41f48432df859d6ee9"
     }
   ],
   "external_files": [
