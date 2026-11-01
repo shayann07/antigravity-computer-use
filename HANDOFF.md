@@ -37,6 +37,13 @@ Whole-procedure fixtures explicitly identify themselves as inert and exercise
 successful sequencing, refusal of another task and incomplete Stop evidence.
 They are not physical acceptance. The owner deferred desktop testing; no live
 installation, controls, policy or Stop latch was changed by these source checks.
+At `c8622ad`, the local full suite passed 497/509 with 12 explicit skips.
+Windows and the pull-request Intel/ARM jobs passed, but a duplicate push Intel
+job failed its concurrent native build at the existing 120-second Swift
+deadline. That failure is retained, not converted to a pass. The Mac workflow
+now serializes test files to avoid unrelated native compilers competing with
+the intentional two-builder race. That race and its deadlines are unchanged;
+verify the new exact-head CI before merging.
 
 PR #35 (Windows own-HUD avoidance) and PR #36 (Mac native glass/official icon
 assets) remain draft pending the live and physical checks the owner deferred.

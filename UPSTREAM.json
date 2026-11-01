@@ -492,7 +492,7 @@
     },
     {
       "path": "HANDOFF.md",
-      "sha256": "006631dd330e5ad68e49bd5a3983e959c1f1c41e29b1233633d6104d0d78b067"
+      "sha256": "5f28f9aeb3934c5097fcdb77f4ca597cad40f23158d9fbec3504f79fd9f3a1f4"
     },
     {
       "path": "tests/guardian-visibility.mjs",
@@ -564,7 +564,7 @@
     },
     {
       "path": ".github/workflows/macos.yml",
-      "sha256": "a34cdbdacb37960f241ff7eedd37e3a3baf177ee0dc9a0ebb48c1db1081e92f6"
+      "sha256": "4535f967e3a7d16847d4d0a74f884d3104615fa8a15dbd138b498b889eb3c575"
     },
     {
       "path": "server/native/macos/MacControl.swift",

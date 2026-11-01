@@ -24,7 +24,10 @@ jobs:
       - name: Compile native adapters and check contracts without desktop access
         run: node scripts/macos-native-check.mjs
       - name: Full shared and platform regression suite
-        run: node --test tests/*.test.mjs
+        # Several files compile isolated native helpers. Keep cross-file work
+        # serial on hosted Intel runners; the explicit two-builder race test
+        # still runs both builders concurrently and retains its deadlines.
+        run: node --test --test-concurrency=1 tests/*.test.mjs
       - name: Package the prebuilt Mac candidate
         run: node scripts/bundle.mjs --output .localdata/macos-bundle
       - name: Install, restart, update and rollback in a project-local fake home
