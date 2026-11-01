@@ -391,6 +391,9 @@ final class MacGuardian: NSObject {
                 var allowed = hostManaged
                 if !hostManaged {
                     visuals.hideForCapture()
+                    // Capture hiding removes our pointer window; the human
+                    // needs the normal OS cursor throughout a modal decision.
+                    visuals.releaseCursor()
                     let alert = NSAlert(); alert.messageText = kind == "app" ? "Allow this app for this session?" : "Allow one sensitive action?"
                     alert.informativeText = String((identity?["path"] as? String ?? "") + "\n\n" + (str(message["message"]) ?? "").prefix(6000))
                     alert.addButton(withTitle: "Deny"); alert.addButton(withTitle: "Allow")
@@ -398,7 +401,9 @@ final class MacGuardian: NSObject {
                     let expiry = Timer(timeInterval: 90, repeats: false) { _ in NSApp.abortModal() }
                     RunLoop.main.add(expiry, forMode: .common); RunLoop.main.add(expiry, forMode: .modalPanel)
                     allowed = alert.runModal() == .alertSecondButtonReturn
-                    expiry.invalidate(); prompt = nil; visuals.finishCapture(state)
+                    expiry.invalidate(); prompt = nil
+                    tick() // Resolve takeover, Stop and expiry before restoring control visuals.
+                    visuals.finishCapture(state)
                 }
                 if state == "stopped" || state == "paused" || MacFence.latchBlocks(MacFence.latch) { allowed = false }
                 var result: [String: Any] = ["allowed": allowed, "decision": allowed ? (hostManaged ? "host-authorized" : "allowed") : "denied"]

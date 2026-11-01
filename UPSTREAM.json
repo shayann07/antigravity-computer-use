@@ -492,7 +492,7 @@
     },
     {
       "path": "HANDOFF.md",
-      "sha256": "9e29fb4f592e478e38d2c3181f840d339152581c39940fd32bb68a674c868443"
+      "sha256": "1ae9c259353bc224c14338e30c3ac27c775c770a61aca2446e9418131b83836c"
     },
     {
       "path": "tests/guardian-visibility.mjs",
@@ -572,7 +572,7 @@
     },
     {
       "path": "server/native/macos/MacGuardian.swift",
-      "sha256": "aa260299f74a934d9e48f52286d28ca2ab3649601016037f4db26d500ef5867d"
+      "sha256": "f46e34852f24f3a66b4f12ed8050d4592e5f2320f11a7d0cb7a3f650689d0299"
     },
     {
       "path": "server/native/macos/MacOperations.swift",
@@ -892,7 +892,7 @@
     },
     {
       "path": "docs/MACOS-CONSENT-TAKEOVER.md",
-      "sha256": "e50a419af364f1d202a45b86ed92d647bd346db1019d15d3b4ed3f6da73e69bc"
+      "sha256": "b0b0a15130e555ca7e19cae57bdd295e06116d6a6884b03bdb01bef9a542d8a8"
     }
   ],
   "external_files": [

@@ -27,6 +27,10 @@ Pause, Stop, expiration, changed session or cleanup uncertainty prevents
 publication. Stop writes its latch independently and is checked again before
 returning an approval. No desktop protocol flag creates this exemption,
 approval or resume authority. Existing host-managed policy remains unchanged.
+Before showing standalone consent, the guardian also releases its hidden-cursor
+ownership: hiding the custom pointer alone would leave the human with no visible
+cursor throughout the modal decision. Normal capture restoration reapplies the
+custom cursor only if active control is still valid and requested.
 
 Native contracts exercise changed/expired/latched approval refusal, a real
 takeover state transition while the input lock is held, preserved pause and
@@ -38,6 +42,8 @@ Required physical Mac acceptance on the exact candidate:
 1. In standalone Smart mode, approve the first app, then request an additional
    app and a harmless sensitive action during an active task. Actual Allow
    clicks and keyboard confirmation must not create an unwanted pause loop.
+   Verify the normal OS cursor is visible during consent and cursor ownership
+   is balanced afterward, including Deny, timeout and Stop.
 2. Deny and time out confirmations. No later task step may execute. Do not
    replace denial with an alternate input path or silently change policy.
 3. Click/type outside the dialog, including keyboard input while the pointer

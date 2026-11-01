@@ -41,6 +41,10 @@ held input so takeover can revoke a drag immediately. Native refusal and
 covering-window contracts accompany the repair; compilation and physical
 Allow/Deny/outside-input qualification remain pending. See
 [the exact behavior and acceptance matrix](docs/MACOS-CONSENT-TAKEOVER.md).
+Standalone confirmation also releases the normal cursor before showing the
+modal decision, then refreshes native pause/Stop/expiry before restoring visuals.
+This avoids leaving both the hidden OS cursor and hidden custom pointer absent
+while a human tries to approve. Actual cursor visibility still needs Mac testing.
 The subsequent macOS 26 Intel PR job failed its concurrent-source compiler test
 at the unchanged 120-second compiler deadline; the same-head push job passed.
 The candidate now coalesces same-stamp source builds using the existing native
