@@ -580,7 +580,7 @@
     },
     {
       "path": "server/native/macos/MacVisuals.swift",
-      "sha256": "f35d2d1065b4f81c6f66cc3f732192bdb648cbcdd456dfde7e793322e434c38f"
+      "sha256": "445c68dee93ddb340a5aefed263e003099cc2529cfa57e35f8ad4989bc9a769c"
     },
     {
       "path": "server/native/macos/PrivateStorage.swift",
@@ -612,7 +612,7 @@
     },
     {
       "path": "server/update-core.mjs",
-      "sha256": "91e1e451fd7647d012c459025784dcd47040be084f06ca41f0c38f911c94a7c3"
+      "sha256": "eb1cfda6a8c051639a9d4fd620178ffe181ea46a27e3e76b04263cf68a6be189"
     },
     {
       "path": "server/auto-update.mjs",
@@ -640,7 +640,7 @@
     },
     {
       "path": "tests/update-transaction.test.mjs",
-      "sha256": "7dceea36ea72cf07c7ac943399ef1b13e2e17e1a0f346b2a3a9f1d9bd83a1356"
+      "sha256": "93d3ce74cc807d11a9ae030b8de81009cb8512e40c06529ba8954e0d95250e1c"
     },
     {
       "path": "docs/RELIABILITY-IMPLEMENTATION.md",
@@ -848,7 +848,7 @@
     },
     {
       "path": "docs/MACOS-GLASS-MATERIAL.md",
-      "sha256": "58dec76850c9489d8907f6c16fd83584828d156751ba01410a04b7871a50cc89"
+      "sha256": "1cea7a9c9fa1f96123e494c198912c55b578e7bbb93052f423907b4e3648ce24"
     }
   ],
   "external_files": [

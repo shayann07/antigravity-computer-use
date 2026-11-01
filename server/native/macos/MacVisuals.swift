@@ -189,7 +189,7 @@ final class MacVisuals: NSObject {
         default:
             return MacHudStatePresentation(
                 resolvedState: "idle",
-                title: "Ready · awaiting a task",
+                title: "Antigravity is ready",
                 toggleTitle: "",
                 toggleSymbol: MacPhosphorIcon.playFill.rawValue,
                 toggleAccessibilityLabel: "Start or resume computer use",

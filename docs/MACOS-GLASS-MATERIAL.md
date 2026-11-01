@@ -1,5 +1,10 @@
 # Mac HUD material and icon correction
 
+Signed Mac packages on the new HUD line must include all five official icon
+resources. The updater refuses an incomplete package before stopping the current
+service or changing installation pointers. Older published beta.3 packages remain
+outside this new resource requirement.
+
 Apple documents [`NSGlassEffectView`](https://developer.apple.com/documentation/appkit/nsglasseffectview)
 as an **AppKit** view introduced in macOS 26. The earlier source comment claiming
 it was unavailable in AppKit was incorrect. Historical qualification reports
