@@ -58,6 +58,24 @@ fixtures cover both regular-file cleanup and preserved directory contents.
 Standalone consent-dialog input in Smart takeover is a separate source concern
 tracked in [#43](https://github.com/shayann07/antigravity-computer-use/issues/43).
 
+The macOS 26 Intel PR job at `3120237` failed the intentional concurrent-source
+build test: one of two optimized Swift compilers exceeded its existing
+120-second deadline. Its native compilation/contracts had passed, and the
+same-head push job passed; the failing job is retained as evidence:
+[job 124985095468](https://github.com/shayann07/antigravity-computer-use/actions/runs/41352353014/job/124985095468).
+Serial test files did not eliminate that within-test contention.
+
+Source builds now coordinate the expensive host compilation with the existing
+native kernel lease, keyed by the complete source/SDK stamp. A concurrent
+request waits for and verifies the signed bundle instead of starting a second
+compiler. A late request also reuses a newly published winner. Old cached
+bundles cannot masquerade as a new forced compilation. Reply files are separate
+from the dedicated lease directory; releasing a request removes its reply files
+and never removes the shared lock. The compiler's 120-second deadline and both
+concurrent test requests remain. Prebuilt installation startup is unchanged.
+Transport fixtures do not establish this repair: fresh Mac CI must compile the
+real host and confirm that the two requests start exactly one compiler.
+
 The source review used Apple's [motion guidance](https://developer.apple.com/design/human-interface-guidelines/motion)
 (`Providing feedback`: permit cancellation and avoid needless repeated motion)
 and [materials guidance](https://developer.apple.com/design/human-interface-guidelines/materials)

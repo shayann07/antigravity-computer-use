@@ -5,7 +5,7 @@
     {
       "path": "server/build.mjs",
       "upstream_sha256": "81260b378fffb46573cfe475a3a336930113c8abc465d3d278bbb0851d8a4377",
-      "local_sha256": "5a9ca0b38bb5e96a02051bbd5714bd30c050492984b9ee6f22930d8d86d6ffff",
+      "local_sha256": "10705d002dd842f47aa74e054ae1420e1a037692b260f417bbef3e52f2d5dbae",
       "modified": true
     },
     {
@@ -492,7 +492,7 @@
     },
     {
       "path": "HANDOFF.md",
-      "sha256": "c5a2bded33860dd4286e28c31da5ca071f64c621891da5062454418bcbdfbd46"
+      "sha256": "930abaecb0f0dd2158c5ca5577f8d2a26414984c73a9c05641204f20a199f894"
     },
     {
       "path": "tests/guardian-visibility.mjs",
@@ -552,7 +552,7 @@
     },
     {
       "path": "server/macos-build.mjs",
-      "sha256": "312307eea4018133fa25ba498a137a1c4f5deb4743a6a0876a65d117962dec37"
+      "sha256": "660c117023a5f88d23a344dd66944b105d33fc95f18c39089cd5d9bba7bbfd4d"
     },
     {
       "path": "tests/platform-contract.test.mjs",
@@ -676,7 +676,7 @@
     },
     {
       "path": "tests/macos-tool-probe.test.mjs",
-      "sha256": "df6beb65abeb654b188210bf5259a1fd4467f7e5a38b9fca26d584658be71752"
+      "sha256": "87c7ab50edde9c0454e7d3ddeb8d51264cd40b6d0bb8abfdbaf6663df57eb0d2"
     },
     {
       "path": "scripts/setup-release-signing.ps1",
@@ -848,7 +848,7 @@
     },
     {
       "path": "docs/MACOS-GLASS-MATERIAL.md",
-      "sha256": "bececebc5e059bae8b62ab0c68208237b2d2de128904dd7f596036a66aae04ef"
+      "sha256": "55318e484917e4efb9339a5774e6f71135a5af6b42145084c794978c7a9829ef"
     },
     {
       "path": "scripts/compare-runs.mjs",
@@ -885,6 +885,10 @@
     {
       "path": "tests/brief-reply.test.mjs",
       "sha256": "9f2b3a109d96b186184f37d4dbdcd42f0abf5b891afccc06729067d4d9f359c2"
+    },
+    {
+      "path": "tests/macos-compiler-lease.test.mjs",
+      "sha256": "10db0a2d5eac1d75c138ff3c549ea9a0cb5d35128e4d6abd450326fb8f59debd"
     }
   ],
   "external_files": [

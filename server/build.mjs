@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { macToolProbe, publishMacBundle, macSDKFlags, macHudIconFiles, copyMacHudIcons } from './macos-build.mjs';
+import { macToolProbe, publishMacBundle, macSDKFlags, macHudIconFiles, copyMacHudIcons, macCompilerLease, waitForMacCompilerWinner } from './macos-build.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const WIN_SOURCES = [
@@ -292,6 +292,20 @@ function ensureMacHost({ force = false, log = () => {} } = {}) {
   }
 
   fs.mkdirSync(binDir(), { recursive: true });
+  const cacheExistedBeforeLease=fs.existsSync(exe);
+  const lease=macCompilerLease(path.join(binDir(),'.compile-'+stamp));
+  try {
+  if(!lease.acquired&&force&&cacheExistedBeforeLease)throw new BuildError('A forced source build is already in progress. Inspect that build before retrying; the old cache is not new compilation evidence.',null);
+  if(!lease.acquired)return waitForMacCompilerWinner(()=>{
+    if(!fs.existsSync(exe))return null;verifyApp(app);
+    return {exe,rebuilt:false,compiler:swiftc};
+  });
+  lease.assertHeld();
+  // A peer may publish between our initial cache check and lease acquisition.
+  // A fresh-cache concurrent request must reuse that verified winner too.
+  if(!cacheExistedBeforeLease&&fs.existsSync(exe)){
+    verifyApp(app);return {exe,rebuilt:false,compiler:swiftc};
+  }
   log('compiling host with ' + swiftc);
   const stage=fs.mkdtempSync(path.join(binDir(),'.build-'));
   const stagedApp=path.join(stage,'AxonHost.app'),temp=path.join(stagedApp,'Contents','MacOS','AxonHost');
@@ -324,11 +338,13 @@ function ensureMacHost({ force = false, log = () => {} } = {}) {
   const signed=spawnSync('/usr/bin/codesign',['--force','--sign','-',stagedApp],{encoding:'utf8',timeout:30000});
   if(signed.status!==0)throw new BuildError('Ad-hoc signing of the native Mac helper failed.',signed.stderr||signed.stdout);
   verifyApp(stagedApp);
+  lease.assertHeld();
   const published=publishMacBundle(stagedApp,app,verifyApp);
   warmUp(exe, log);
   log('host built at ' + exe);
   return { exe, rebuilt: published, compiler: swiftc };
   } finally { fs.rmSync(stage,{recursive:true,force:true}); }
+  } finally { lease.release(); }
 }
 
 // Allow `node build.mjs` for a manual/diagnostic build.

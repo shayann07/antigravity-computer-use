@@ -16,7 +16,7 @@ test('Mac tool lookup distinguishes a timeout from unavailable tools',()=>{
 });
 test('concurrent macOS builds publish one verified signed bundle',{skip:process.platform!=='darwin',timeout:300000},async()=>{
  const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'mac-compile-race-'));
- const script=`import {ensureHost} from ${JSON.stringify(new URL('../server/build.mjs',import.meta.url).href)};console.log(JSON.stringify(ensureHost({force:true})));`;
+ const script=`import {ensureHost} from ${JSON.stringify(new URL('../server/build.mjs',import.meta.url).href)};const logs=[];const info=ensureHost({force:true,log:line=>logs.push(line)});console.log(JSON.stringify({...info,compile_requests:logs.filter(line=>line.startsWith('compiling host')).length}));`;
  const env={...process.env,AGCU_DATA_DIR:dir};delete env.CU_PLUGIN_DATA;delete env.CLAUDE_PLUGIN_DATA;
  const run=()=>new Promise((resolve,reject)=>{
   const child=spawn(process.execPath,['--input-type=module','-e',script],{env,stdio:['ignore','pipe','pipe']});let out='',err='';child.stdout.on('data',x=>out+=x);child.stderr.on('data',x=>err+=x);
@@ -25,6 +25,7 @@ test('concurrent macOS builds publish one verified signed bundle',{skip:process.
  try{
   const results=await Promise.allSettled([run(),run()]);for(const result of results)if(result.status==='rejected')throw result.reason;
   const [first,second]=results.map(result=>result.value);assert.equal(first.exe,second.exe);assert.notEqual(first.rebuilt,second.rebuilt);
+  assert.equal(first.compile_requests+second.compile_requests,1,'Concurrent same-stamp requests must not run two expensive optimized compilers');
   const app=path.dirname(path.dirname(path.dirname(first.exe)));const check=spawnSync('/usr/bin/codesign',['--verify','--strict',app],{encoding:'utf8',timeout:30000});assert.equal(check.status,0,check.stderr);
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });

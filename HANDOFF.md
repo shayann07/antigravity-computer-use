@@ -35,6 +35,17 @@ The local shared suite passed 503/516 tests with zero failures and 13 explicit
 skips; that Windows-host run does not compile or qualify the new Swift changes.
 Issue #43 records the separate Smart/standalone consent-dialog takeover concern;
 it is source-observed and still requires native reproduction and repair.
+The subsequent macOS 26 Intel PR job failed its concurrent-source compiler test
+at the unchanged 120-second compiler deadline; the same-head push job passed.
+The candidate now coalesces same-stamp source builds using the existing native
+kernel lease rather than running two optimized compilers. Reply-directory
+initialization, late cache publication and cleanup have focused regression
+coverage. Fresh Mac CI is required; this is not a confirmed Mac repair yet.
+The first local full run with that change recorded 520 tests: 506 passed, one
+failed and 13 skipped. The optional MCP startup test exceeded its five-second
+reply bound under the concurrent suite; an isolated rerun passed in 458 ms.
+Both records are retained. No timeout was raised and that isolated pass does
+not convert the failed full run into a passing run.
 
 The `codex/latency-evidence-validation` work selects the comparison utility from
 Antigravity's unmerged `a44e532` latency worktree, rather than merging its stale

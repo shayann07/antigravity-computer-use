@@ -3,8 +3,67 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHash, randomUUID} from 'node:crypto';
-import {spawnSync} from 'node:child_process';
+import {spawn,spawnSync} from 'node:child_process';
 const root=fileURLToPath(new URL('../',import.meta.url));
+const syncPause=ms=>Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,ms);
+// Source-build coordination only. Prebuilt installations never enter this path.
+// Reuse the native kernel lease instead of a removable/stale PID lock file.
+export function macCompilerLease(directory,{helper=buildMacStorage(),spawnProcess=spawn,startupMs=5000}={}){
+ if(!Number.isSafeInteger(startupMs)||startupMs<1||startupMs>15000)throw Error('Invalid source-build lease startup bound');
+ fs.mkdirSync(directory,{recursive:true,mode:0o700});
+ // Keep transport files outside the dedicated native lease directory. Its
+ // first initialization deliberately refuses unrelated existing contents.
+ const scratch=fs.mkdtempSync(path.join(path.dirname(directory),'.compiler-reply-'));
+ const output=path.join(scratch,'reply.jsonl'),error=path.join(scratch,'stderr.txt');
+ const out=fs.openSync(output,'wx',0o600),err=fs.openSync(error,'wx',0o600);
+ let child;
+ try{child=spawnProcess(helper,['lease',path.resolve(directory)],{stdio:['pipe',out,err],windowsHide:true});}
+ finally{fs.closeSync(out);fs.closeSync(err);}
+ child.on('error',()=>{});child.stdin?.on('error',()=>{});
+ const rootInfo=fs.lstatSync(directory);let released=false;
+ const live=()=>{
+  if(!Number.isSafeInteger(child.pid)||child.exitCode!==null||child.signalCode!=null)return false;
+  try{process.kill(child.pid,0);}catch{return false;}
+  if(process.platform==='darwin'){
+   const state=spawnSync('/bin/ps',['-o','stat=','-p',String(child.pid)],{encoding:'utf8',timeout:3000});
+   if(state.status!==0||!/^\s*[A-Z]/.test(state.stdout||'')||/^\s*Z/.test(state.stdout||''))return false;
+  }
+  return true;
+ };
+ const release=()=>{
+  if(released)return;released=true;try{child.stdin?.end();}catch{}
+  // This is only our disposable cache-lease helper, never a controller or
+  // compiler. Confirm kernel ownership ended even while Node is synchronous.
+  try{child.kill();}catch{}const deadline=performance.now()+2000;
+  while(live()&&performance.now()<deadline)syncPause(10);
+  child.unref();
+  if(live())throw Object.assign(Error('Build-cache lease cleanup is unconfirmed; inspect before another source build.'),{code:'macos_build_lease_cleanup_unconfirmed'});
+  // Remove only the two files created by this request, never the shared lock.
+  for(const file of [output,error])try{fs.unlinkSync(file);}catch{}
+  try{fs.rmdirSync(scratch);}catch{}
+ };
+ const fail=code=>{release();try{child.kill();}catch{}throw Object.assign(Error('Native source-build ownership could not be verified; no new host was published.'),{code});};
+ const deadline=performance.now()+startupMs;let reply;
+ while(performance.now()<deadline){
+  const bytes=fs.readFileSync(output,'utf8');if(bytes.length>8192)fail('macos_build_lease_invalid');
+  if(bytes.includes('\n')){try{reply=JSON.parse(bytes.split('\n')[0]);}catch{fail('macos_build_lease_invalid');}break;}
+  if(!live())fail('macos_build_lease_exited');syncPause(10);
+ }
+ if(!reply)fail('macos_build_lease_timeout');
+ if(reply.ok===false&&reply.error?.code==='service_already_running'){release();return {acquired:false,release};}
+ if(reply.ok!==true||reply.lease_acquired!==true||reply.private_storage_verified!==true||reply.pid!==child.pid)fail('macos_build_lease_refused');
+ return {acquired:true,release,assertHeld(){
+  if(released)fail('macos_build_lease_lost');
+  const current=fs.lstatSync(directory),lines=fs.readFileSync(output,'utf8').trim().split('\n');
+  if(released||!live()||current.isSymbolicLink()||current.dev!==rootInfo.dev||current.ino!==rootInfo.ino||lines.length!==1)fail('macos_build_lease_lost');
+ }};
+}
+export function waitForMacCompilerWinner(check,{timeoutMs=150000}={}){
+ if(!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>150000)throw Error('Invalid source-build winner bound');
+ const deadline=performance.now()+timeoutMs;
+ while(performance.now()<deadline){const winner=check();if(winner)return winner;syncPause(25);}
+ throw Object.assign(Error('Another source build did not publish a verified host within its bound. Inspect that build before retrying.'),{code:'macos_build_winner_timeout'});
+}
 export const macHudIconFiles=['sliders-horizontal-fill','pause-fill','play-fill','stop-fill','x-fill'].map(name=>path.join(root,'server/liquidglass-host/icons',name+'.svg'));
 export function macSDKFlags(version){
  if(typeof version!=='string'||!/^\d+\.\d+(?:\.\d+)?$/.test(version)||Number(version.split('.')[0])<14)
