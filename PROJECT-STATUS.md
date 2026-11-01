@@ -1,4 +1,11 @@
-# Current qualification status — 30 October 2026
+# Current qualification status — 1 November 2026
+
+Windows beta.4 is published and installed globally from verified GitHub bytes.
+PR #31 is merged; the real stable Upscaly PNG/JPEG tasks have decoded outputs,
+native process witnesses, restored settings and clean End. Speed remains open,
+as do updater timeout #32, overlay overlap #33 and current physical/Mac gates.
+Read [the current qualification record](docs/WINDOWS-BETA4-QUALIFICATION.md).
+The entries below are historical, with their original evidence boundaries.
 
 ## Final Intel Mac Space/capture & Liquid Glass HUD qualification — 30 October 2026
 

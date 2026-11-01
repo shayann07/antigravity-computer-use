@@ -492,7 +492,7 @@
     },
     {
       "path": "HANDOFF.md",
-      "sha256": "f74eb79c49afbbcbfcd21e86c3ecd73678eef186ba783b8c69101af9b2016a73"
+      "sha256": "ccd8875ebcc51f2c485214e6e5376f6fd6499f31372985c284a1d02805ed4834"
     },
     {
       "path": "tests/guardian-visibility.mjs",
@@ -612,7 +612,7 @@
     },
     {
       "path": "server/update-core.mjs",
-      "sha256": "9d74ebfcbe88e54549fc68d2bcb770f7a9a83541f46a9021225efd926333a11f"
+      "sha256": "91e1e451fd7647d012c459025784dcd47040be084f06ca41f0c38f911c94a7c3"
     },
     {
       "path": "server/auto-update.mjs",
@@ -829,6 +829,14 @@
     {
       "path": "docs/RELEASE.md",
       "sha256": "36fdfc3139bdeac6ea6d1429235b67b301d03f0b5814dc893b1a179b48acd94a"
+    },
+    {
+      "path": "tests/download-deadlines.test.mjs",
+      "sha256": "1f690e9052d979f4d327a9112da76b9d75ef754f1198e4422433f817ef23bc30"
+    },
+    {
+      "path": "docs/WINDOWS-BETA4-QUALIFICATION.md",
+      "sha256": "8efb0fa4a94163923984de7f8b95b72864a047f5a01c477a905736f86b78fd7d"
     }
   ],
   "external_files": [

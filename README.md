@@ -30,9 +30,10 @@ dialogs, and operate custom canvases through screenshots. It works in the
 **Antigravity Agent Manager App**. No separate LLM, extra model subscription,
 browser extension or required MCP server.
 
-> **Windows beta.** Version **v0.3.0-beta.4** is a Windows x64 release candidate.
+> **Windows beta.** Version **v0.3.0-beta.4** is a published Windows x64 prerelease.
 > Automated checks and earlier real desktop tests do not prove every workflow on
-> this build. See [what is verified](#status-and-limits) before installing.
+> this build. See [the current qualification record](docs/WINDOWS-BETA4-QUALIFICATION.md)
+> and [what is verified](#status-and-limits) before installing.
 
 **macOS experimental support:** Apple Silicon/Intel adapters share the same
 controller, tool schemas and `/computer-use` skill. Intel Mac physical
