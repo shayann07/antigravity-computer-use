@@ -488,11 +488,11 @@
     },
     {
       "path": "docs/PERFORMANCE.md",
-      "sha256": "c587c046f13ac1f642f14b7b23654f474c9ff53b5b231dd54bc5a90e351cb8c4"
+      "sha256": "ce2dc97ea4722ce6b222205e7d1cc6a7237e98371a2985948c4ce18af80eb943"
     },
     {
       "path": "HANDOFF.md",
-      "sha256": "6f74e641bf9c347d3ff52ce6c11769b738e87a5dfe8b2ec2ebacc38308966644"
+      "sha256": "5f28f9aeb3934c5097fcdb77f4ca597cad40f23158d9fbec3504f79fd9f3a1f4"
     },
     {
       "path": "tests/guardian-visibility.mjs",
@@ -504,7 +504,7 @@
     },
     {
       "path": "docs/BRANCHES.md",
-      "sha256": "1a5da62f8e7daffc07eab75a6403c4e2c76f4263887dd75d9b9dba61452ab660"
+      "sha256": "5e7aac38cb980b0fad0c902642cb96692b4ac9a16ac48c01d229cb85a516e43c"
     },
     {
       "path": "docs/media/hero.svg",
@@ -564,7 +564,7 @@
     },
     {
       "path": ".github/workflows/macos.yml",
-      "sha256": "3df1c1730b1ee81e54f8c703e7170525e45fc36b6c3168613080219b62c2c4c3"
+      "sha256": "4535f967e3a7d16847d4d0a74f884d3104615fa8a15dbd138b498b889eb3c575"
     },
     {
       "path": "server/native/macos/MacControl.swift",
@@ -849,6 +849,22 @@
       "sha256": "caa2b4268799417e80ec2993667457face38ad707e6dd9619f323460f2857685",
       "origin_revision": "a44e532a74fe6863e8c31fd612af99a80ee1273a",
       "modifications": "Qualification, trace validation and evidence preservation repairs"
+    },
+    {
+      "path": "tests/installed-qualification.mjs",
+      "sha256": "f3c7d2705e6e1cf1046ac20e56983681e8c11b964f33c1e3ccf88a1c9a39e548"
+    },
+    {
+      "path": "tests/installed-qualification.test.mjs",
+      "sha256": "fc530221ab61dbeef211371f1e2fe5225ed46d6a523222aea3e5755f390d0b76"
+    },
+    {
+      "path": "tests/installed-stop-resume.mjs",
+      "sha256": "abfefb66646d528ed24383dbb7f908f9b478f6e913170b60df39a46a0bc42f61"
+    },
+    {
+      "path": "docs/qualification.md",
+      "sha256": "6c106ef780da4501f02c2a063094f98cbd0f0f54f76f4c41f48432df859d6ee9"
     }
   ],
   "external_files": [

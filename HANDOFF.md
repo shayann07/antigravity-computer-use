@@ -18,6 +18,33 @@ Current installed status CLI median is 296.4 ms across seven read-only samples;
 the retained Flash task still has 10.6754-second median inter-call gaps. This is
 measurement support, not an actual host speed fix or release acceptance.
 
+The rest of the `a44e532` timing prototype remains unmerged. Inert subprocess
+tests reproduced incorrect timeout delivery flags and active-task detection;
+[issue #38](https://github.com/shayann07/antigravity-computer-use/issues/38) records
+the evidence and adoption requirements. No live desktop was used. Do not use
+that wrapper/scheduler for release qualification. The supported IPC client's
+seven unknown-delivery transport regressions passed; this finding is not a
+claim that the published controller replayed an action.
+
+The installed Stop qualification harness has also been repaired: exact build
+and policy binding, idle ownership preflight, fresh project-local evidence,
+strict current-task ledger checks, real Esc during the held drag and one
+explicitly visible local Re-arm. Its read-only `--check-only` path verified the
+published beta.4 installation without controls or app input. The interactive
+flow remains unrun while the owner is unavailable; see docs/qualification.md.
+The 15 qualification regressions and seven transport-failure regressions pass.
+Whole-procedure fixtures explicitly identify themselves as inert and exercise
+successful sequencing, refusal of another task and incomplete Stop evidence.
+They are not physical acceptance. The owner deferred desktop testing; no live
+installation, controls, policy or Stop latch was changed by these source checks.
+At `c8622ad`, the local full suite passed 497/509 with 12 explicit skips.
+Windows and the pull-request Intel/ARM jobs passed, but a duplicate push Intel
+job failed its concurrent native build at the existing 120-second Swift
+deadline. That failure is retained, not converted to a pass. The Mac workflow
+now serializes test files to avoid unrelated native compilers competing with
+the intentional two-builder race. That race and its deadlines are unchanged;
+verify the new exact-head CI before merging.
+
 PR #35 (Windows own-HUD avoidance) and PR #36 (Mac native glass/official icon
 assets) remain draft pending the live and physical checks the owner deferred.
 Their source/native CI passed, but neither candidate is installed over the

@@ -16,31 +16,87 @@ Exercise both semantic and screenshot-coordinate actions, an owned native dialog
 
 ## Installed Stop and physical re-arm
 
-The interactive source harness `tests/installed-stop-resume.mjs` loads the current installation pointer. It requires Windows, an explicitly host-managed installation and an already inspected, idle real app. Reserve the physical desktop; close unrelated work that could take focus.
+The interactive source harness `tests/installed-stop-resume.mjs` verifies an
+explicit installed release against its expected published build ID. It requires
+Windows, a host-managed installation and an operator-owned harmless real app.
+Reserve the physical desktop and keep other agents out of control. The initial
+service must be idle with no open/recovered task or grants; the harness refuses
+to take over another task. It never changes the installed permission policy.
 
 Create a private JSON file with:
 
 ```json
 {
-  "installation": "D:/Tools/AntigravityComputerUse/installation.json",
+  "installation": "D:/YOUR-PRIVATE-INSTALL/installation.json",
+  "expected_build_id": "REPLACE_WITH_THE_VERIFIED_PUBLISHED_BUILD_ID",
   "hwnd": 123456,
   "from": [100, 200],
   "to": [300, 200],
-  "evidence": "D:/private-evidence/stop-check"
+  "evidence": ".localdata/tests/installed-stop-resume/new-owner-run",
+  "close_owned_window": false
 }
 ```
 
-The HWND and coordinates above are examples. Replace them with a current discovered handle and harmless coordinates from its actual fresh screenshot. Use an empty canvas; do not drag over files, text or destructive controls. Then run:
+Use the installation printed by the supported installer and the identity from
+the verified signed release. Replace the example HWND and coordinates with
+observed values for a harmless test canvas; do not drag files, user content or
+destructive controls. Evidence paths are resolved from the checkout and must
+stay under ignored `.localdata/tests/`, regardless of the current directory.
+Use a new directory for every attempt; existing failed evidence is never
+overwritten. Omit `evidence` for an automatically unique directory. Closing the
+target window is off by default; enable it only for an explicitly owned
+disposable window, not a shared app containing the user's other tabs/documents.
+
+A read-only preflight can be run before the human is available:
 
 ```text
-node tests/installed-stop-resume.mjs D:/private-evidence/stop-config.json
+node tests/installed-stop-resume.mjs .localdata/tests/stop-config.json --check-only
 ```
 
-The harness compiles a test-only Stop chord sender. It observes an automation-held mouse button, sends the registered emergency chord, checks cleanup and seven skipped actions, and checks that service replacement cannot clear Stop. It never approves or re-arms control.
+This verifies sealed files, private installation, fixed policy and idle status.
+It does not show controls, inspect an app, send input or qualify a physical test.
 
-When prompted, the human must click local Re-arm, wait for active control, press physical Esc, and click local Re-arm again. The script verifies native state transitions and a fresh observation. Only run when that human is available. A timeout remains a failed/uncompleted check; it is not permission to clear the latch programmatically.
+For the interactive check, run without `--check-only` in a terminal session with
+stdin available. The harness reserves its task, returns an actual screenshot
+and waits for `BEGIN`. Open that image and check the harmless drag path before
+sending the start signal. `BEGIN` coordinates the test; it is not a permission
+approval, physical Esc event or re-arm. If the signal is absent, the test ends
+without a drag. A stale/moved frame or refused action is not replayed.
 
-The original dev7 run passed all five safety/human checkpoints but failed its final close call because the test supplied an unsupported argument. The single harness argument was corrected; close/end were recovered separately and the original failure retained. Physical checks were not repeated. Do not report that record as a clean whole-script exit.
+With the human ready, the harness performs one drag followed by seven queued
+harmless moves. The human presses **physical Esc while the selection is moving**.
+No Stop/Esc chord is injected. A short-lived sampler records the actual held
+ledger before Stop; missing, unreadable, linked or malformed ledgers do not
+prove cleanup. The current journal is selected from the durable task record,
+not the first filename matching a reusable PID. The check requires native
+`escape` reason, first-step interruption and seven skipped steps. If that event
+or held sample is missed, retain the failed/partial run rather than retrying it.
+
+After verifying refusal of software Resume/observation, End and a passive
+service restart must preserve Stop. The harness explicitly requests visible
+controls before asking for **one local Re-arm**; a passive restart alone does
+not show them. It reserves the continuation while awaiting the human and sends
+no app input during that wait. Then a fresh observation and harmless pointer
+move exercise a second session, followed by End and grant/cursor checks.
+
+The record separates scoped checks from complete release qualification.
+An empty ledger alone does not prove release delivery to the target app;
+independent target/cursor observation still needs review. Timeouts never permit
+programmatic latch deletion or manufactured re-arm. On failure the harness ends
+only its reserved task; uncertain in-flight input may request Stop for cleanup,
+and that cleanup request is never counted as physical Esc.
+
+`tests/installed-qualification.test.mjs` also exercises this procedure with an
+inert in-memory transport, including an already-owned task and incomplete Stop
+evidence. Those records carry `evidence_kind: inert_fixture`; no native process,
+physical input or human re-arm occurs. They check the harness's decisions, not
+desktop acceptance. CLI/configuration arguments cannot select that fixture.
+
+The original dev7 run used the older synthetic-hotkey plus human-Esc procedure.
+Its final close call failed because the test supplied an unsupported argument;
+close/end were recovered separately and the failure was retained. That record
+predates the new physical-held-drag procedure. It is neither a clean whole-script
+pass nor current-build physical qualification.
 
 ## Covered-window capture
 
