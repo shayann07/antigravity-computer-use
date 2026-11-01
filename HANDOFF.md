@@ -61,6 +61,23 @@ test now resolves the documented entrypoint against the real offline CLI
 schema instead; its bounded-handoff assertions remain. Retain the failed run
 and verify the corrected head's regressions/CI before merging.
 
+PR #40 subsequently passed all six Windows/Intel/ARM checks at `d6f2c07` and
+merged as `0c26101`. Read-only analysis then found a concrete host failure in the
+retained real Flash transcript: 14 tool results were truncated, including the
+skill read (17,675 bytes omitted), twelve controller replies and diagnostics.
+The new `codex/bounded-terminal-observations` candidate limits ordinary brief
+replies with explicit omissions, preserves native incompleteness and moves the
+skill's conditional detail into small linked pages. Full JSON and IPC remain
+lossless. See docs/PERFORMANCE.md for evidence and scope. No desktop input or
+installed-release modification was used; real task speed and model uptake
+remain pending rather than inferred from formatting tests.
+The local candidate suite completed 517 tests: 505 passed, zero failed and 12
+explicit skips. Provenance covers 213 files. Skill entrypoint/template/link
+checks and a real CLI with inert IPC cover the terminal-cap mechanism;
+word-matching guidance tests were replaced by those artifact/CLI contracts.
+Native handoff/permission/cancellation regressions remain in the full suite.
+Issue #41 tracks actual host acceptance; do not close it from synthetic results.
+
 PR #35 (Windows own-HUD avoidance) and PR #36 (Mac native glass/official icon
 assets) remain draft pending the live and physical checks the owner deferred.
 Their source/native CI passed, but neither candidate is installed over the

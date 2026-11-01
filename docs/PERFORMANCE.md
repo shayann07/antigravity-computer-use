@@ -1,5 +1,46 @@
 # Measuring desktop task latency
 
+## 1 November: real host output truncation
+
+Read-only inspection located the original Flash task transcript matching the
+first retained frame and receipt interval. Its SHA-256 is
+`e1ead287f7b18ab84f2f736d587439254564432a711da9bd415967dcdf472d49`.
+The private transcript has 97 rows, 48 planner responses and 47 tool calls
+(39 terminal calls and eight file/image reads). Fourteen result rows contain
+an explicit host truncation marker: the initial skill read, twelve controller
+replies, and one diagnostics read. The skill result says 17,675 bytes were
+omitted. Truncated controller JSON could not be decoded as a complete reply.
+Private structural analysis is in `.localdata/flash-host-summary.json`; do not
+publish raw prompts, application text, paths, images or model reasoning.
+
+This is a concrete presentation defect in the actual run, not a native-input
+speed measurement. Recorded row timestamps do not establish separate model,
+tool-dispatch and result-delivery durations; their semantics are unverified.
+The 471.574-second receipt interval and 37.683 service-seconds still do not prove
+which part of the remaining time an optimization will remove.
+
+The candidate keeps ordinary brief CLI replies within 3,500 ASCII wire bytes,
+including PowerShell Unicode escaping. It returns whole head/tail display rows
+with original indexes and explicit `tree_incomplete`/`terminal_tree_truncated`
+flags. Native incompleteness is preserved even for small trees; the previous
+brief formatter dropped that metadata. Oversized non-tree envelopes return an
+explicit incomplete-presentation result with retained delivery/Stop/error and
+batch-summary evidence rather than a clipped acknowledgement. No private reply
+archives are created. IPC and deliberate `COMMAND --json ...` reads remain
+lossless. Never repeat input merely to request a different output format.
+
+The shared skill now has a short entrypoint and conditional pages sized for a
+single read. Tests check both platform launcher expansions, reachable packaged
+references and a real CLI/inert-IPC round trip under the observed host cap.
+This follows [Antigravity's documented progressive skill disclosure](https://antigravity.google/docs/skills?app=antigravity).
+Native policy, Stop, permissions, frame resolution and batch execution are
+unchanged. Offline formatting tests do not prove faster Flash/Sonnet execution;
+the candidate remains uninstalled pending CI and actual host qualification.
+
+`describe` and `diagnostics` still have their explicit full-data output paths;
+the cap above describes ordinary brief action/observation output. Do not claim
+that every host tool or full schema dump is now bounded.
+
 ## Reviewed comparison utility
 
 The comparison tool reuses the Antigravity latency worktree's utility from

@@ -300,7 +300,7 @@
     },
     {
       "path": "scripts/desktop.mjs",
-      "sha256": "25e23b3c30ae6636d6c02db2800b54af177b1a9bcad0fb5e946aed7fa3a6259f"
+      "sha256": "01b56488cd6c1c640c55e50e47348dab7e1dcde49a3625609ddd01ce97610e4f"
     },
     {
       "path": "server/version.mjs",
@@ -476,7 +476,7 @@
     },
     {
       "path": "skills/computer-use/references/recovery.md",
-      "sha256": "77df37e69f48e8d3104d01691537ebd955e4d0293aff54300f36147ec378cdfe"
+      "sha256": "7bceb853a0952029527acea623559e40e81493aca07cf35f39a79c5112815317"
     },
     {
       "path": "scripts/measure-run.mjs",
@@ -488,11 +488,11 @@
     },
     {
       "path": "docs/PERFORMANCE.md",
-      "sha256": "ce2dc97ea4722ce6b222205e7d1cc6a7237e98371a2985948c4ce18af80eb943"
+      "sha256": "63434830dab64ad2cac340a8feeea81e7bf1cfec46ff4b327e48739cef8e01b7"
     },
     {
       "path": "HANDOFF.md",
-      "sha256": "d04ec1f14f0a97b2149467a76c07e1fb572b3d78605425fa3bb2ffcec8e2bfb6"
+      "sha256": "501b1e775d837ee3b0820bdda44403a63957e946673d202b946ba10ec771c2f9"
     },
     {
       "path": "tests/guardian-visibility.mjs",
@@ -604,7 +604,7 @@
     },
     {
       "path": "skills/computer-use/SKILL.md",
-      "sha256": "35888b141b5c251552bdbac1910bbcbbf2ff6534fc171e10b725a6618d7d481f"
+      "sha256": "6c62d80fa8a1ebe963af5b562c9d622d565c2c6c81978240dc8da030e413f069"
     },
     {
       "path": "docs/MACOS.md",
@@ -868,7 +868,39 @@
     },
     {
       "path": "tests/skill-guidance.test.mjs",
-      "sha256": "8633c828cbea9e89f3115f8d123c3693d5838d1a0ad2d76f7050ee219f569460"
+      "sha256": "ee20d0fdd25f65a57e4bb8f305d331d9c491bb70162d0d64599177c46cc64049"
+    },
+    {
+      "path": "scripts/terminal-reply.mjs",
+      "sha256": "90154da89bca4a1e17fac0331c261780b1e89f2c9781c1e99f9b5531f4bbfc12"
+    },
+    {
+      "path": "tests/terminal-reply.test.mjs",
+      "sha256": "15c247bc231324686e93038da10304c465210de46787b1803853164bc871516f"
+    },
+    {
+      "path": "skills/computer-use/references/startup.md",
+      "sha256": "e69889b26b6db88edbe6ef2faa0afce2a0523fa5c718e4bf0eda26dc3bec1bd2"
+    },
+    {
+      "path": "skills/computer-use/references/observations.md",
+      "sha256": "4ffdecaa650d0185bc4fc3654433ba918212e85362369bce42665e1ceef0fa7e"
+    },
+    {
+      "path": "skills/computer-use/references/batches-and-waits.md",
+      "sha256": "f9aefa811c4bf4448847866f5ba069fd8fe8f23fad4043f02b19dee416724aa9"
+    },
+    {
+      "path": "skills/computer-use/references/text-and-dialogs.md",
+      "sha256": "f62af1c66a5b0bf6f274db1eeade5c7c616cb1f030e5a677a37d89e7e63c2a3a"
+    },
+    {
+      "path": "skills/computer-use/references/control-and-feedback.md",
+      "sha256": "a2309d00bf772ac40ec8638f1358b49412615d96022f41cf20f27ae413993d0e"
+    },
+    {
+      "path": "skills/computer-use/references/window-recovery.md",
+      "sha256": "be94f47293a09b68b9f67ab415b9e30ada182d64469a2287e98322c29fd438cc"
     }
   ],
   "external_files": [
