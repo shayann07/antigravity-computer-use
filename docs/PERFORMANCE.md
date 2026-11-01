@@ -1,5 +1,70 @@
 # Measuring desktop task latency
 
+## Reviewed comparison utility
+
+The comparison tool reuses the Antigravity latency worktree's utility from
+`a44e532a74fe6863e8c31fd612af99a80ee1273a`, with qualification and input handling
+repaired. Its original comparison could report a qualified speedup when workload
+identity was missing or completion was a non-boolean value. That branch was not
+the published runtime. No wholesale merge of its older runtime or quick-start
+changes is implied by adopting this utility.
+
+```text
+node scripts/measure-run.mjs .localdata/receipts.jsonl PID ISO_TASK_START FINAL_RECEIPT .localdata/run-a.json --first FIRST_RECEIPT
+node scripts/compare-runs.mjs .localdata/run-a.json .localdata/run-b.json .localdata/comparison.json
+```
+
+Replace the boundaries with actual recorded values. `--first` verifies that the
+specified initial receipt exists; it cannot prove that an operator selected the
+true beginning of a task. Reports without that explicit boundary remain useful
+for inspection but cannot form an eligible pair. Missing sequences, unknown
+outcomes, unknown/mixed build IDs, overlaps or backwards timestamps also prevent
+pair eligibility. Selected malformed timestamps are rejected, not omitted.
+Inputs are bounded to 32 MiB and outputs must be new files: failed evidence is
+not overwritten. Precomputed reports cannot silently be filtered by raw-receipt
+boundary flags. Wall time uses recorded UTC timestamps; forward clock steps
+are not detected. An external monotonic host timer is still needed for strong
+end-to-end timing evidence.
+Receipt IDs can repeat after PID reuse; archive the bounded raw interval and
+never suppress duplicate-sequence errors to force a comparison.
+
+To assess a pair, annotate the bounded reports with independently checked
+`completed: true` (or `success: true`), `output_verified: true`, a shared `workload`
+identifier and `measurement_scope` (`receipt_interval` or `host_task`). Supply a
+`benchmark` object containing `platform`, `arch`, `agent_model`, `host_version`,
+and SHA-256 identities named `app_sha256`, `input_sha256`, `settings_sha256`,
+`hardware_sha256`, `engine_sha256` and `model_sha256`. Hash canonical settings
+including GPU/tile/preset/formats and the actual engine/model bytes; omit private
+paths from the specification. Use the empty-content hash for absent engine/model
+inputs in non-AI tasks. Keep the full source/build identities and failed runs.
+
+The comparator checks declared metadata; it does not inspect output files,
+reproduce inference or establish that an agent's completion claim is true.
+Perform those independent checks first. Its `pair_eligible` result is scoped to
+one reported matched pair. `release_speed_qualified` is always false: repetition,
+failure-rate review and actual Antigravity task evidence remain required. Shorter
+failed runs and fewer calls are not successful-workflow speed claims.
+
+### 1 November read-only calibration
+
+The exact installed beta.4 build `c93b8fcbd62e58c6ab0dd355dbaacf622d234ca95b2449e184ecbf2d9bee9b89`
+returned seven idle status replies, without starting or driving the desktop.
+Complete child-process wall times ranged from 120.1 to 1237.5 ms, median
+296.4 ms; median service time was 0.4 ms. This is a small warm-service CLI sample,
+not a host/model benchmark or a general startup/input measurement. It does not
+support reusing a historical 35–45 ms CLI claim as current evidence.
+
+Re-reading the retained real Flash Upscaly receipts `12880.4` through `12880.37`
+with an explicit first boundary gives 34 calls, 471574.3 ms including the final
+receipt's duration, 37683.3 service-ms and a median gap of 10675.4 ms. The
+433891.0 ms outside service includes inference between calls and host/model/file/
+image work; it is not model reasoning alone. One `obscured` refusal remains in
+the trace. There is no complete matched environment record for a new run, so
+these measurements do not establish an optimization. Private raw evidence is
+under ignored `.localdata/latency-comparison-audit/`.
+
+## Wait-path implementation and boundaries
+
 Text and change waits pass their remaining polling budget (at least 100 ms)
 to the native accessibility walk. Windows caps it by the existing configured
 walk budget; macOS caps it at its existing 4-second default. Truncated or unread

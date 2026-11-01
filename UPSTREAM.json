@@ -480,19 +480,19 @@
     },
     {
       "path": "scripts/measure-run.mjs",
-      "sha256": "6f401ffe5d80adcb1dbb9bece6e8396957cdcae9dd6e05f93c45eb40b3656025"
+      "sha256": "6e61a13babe9f76668d31a2ec3786950a0c25d7756342a17734174ebd2793f2c"
     },
     {
       "path": "tests/measure-run.test.mjs",
-      "sha256": "ff56adc47afb201c4f339ba8773c2a14687c50635c6d9c067e9582431aaa0630"
+      "sha256": "6a15e99791ccf9dbd23c884d28112737273a8c8688cfe93460a086997f806ade"
     },
     {
       "path": "docs/PERFORMANCE.md",
-      "sha256": "44c721526a8727a3b958a6c4a427b9c9753e7e5eb4b96d20fc8d0d5ae7bc7448"
+      "sha256": "c587c046f13ac1f642f14b7b23654f474c9ff53b5b231dd54bc5a90e351cb8c4"
     },
     {
       "path": "HANDOFF.md",
-      "sha256": "069fbb695a01c4aa2e94998c54b306fd6936608e7a8c33a7bd9d50339fc1fce8"
+      "sha256": "1b1a99d9bdd514a8549b5c1ca4a239efc6a664c7f0064c5e337dfcb12195a831"
     },
     {
       "path": "tests/guardian-visibility.mjs",
@@ -500,7 +500,7 @@
     },
     {
       "path": "docs/CLAUDE-CODE-HANDOFF-PROMPT.md",
-      "sha256": "6d655cd101d7185cdece6b1cf0632f7388812d6d7b2f7d21dba8eefe159b0473"
+      "sha256": "2c7834de05a7298dce7b1de47779e157d4447d9c884a693cdb344c0ecaee8646"
     },
     {
       "path": "docs/BRANCHES.md",
@@ -648,7 +648,7 @@
     },
     {
       "path": "docs/MAC-QUALIFICATION-PROMPT.md",
-      "sha256": "0198e78d5798684372be5e1e45d1bad489c84ddbe85109a4fe2c2ab342a35fdc"
+      "sha256": "7793a8a8a3538a719d85eec7db79c8deaa20c1ac2b42ccb3cf42fcfd52d38cb2"
     },
     {
       "path": "tests/reporting.test.mjs",
@@ -845,6 +845,18 @@
     {
       "path": "docs/HUD-AVOIDANCE.md",
       "sha256": "6853262ba4b574ea2a9258566208b766cb2a6a5d5a449bd5100bec44e7f0210c"
+    },
+    {
+      "path": "scripts/compare-runs.mjs",
+      "sha256": "428de5857301dfd614ad750593275fd9402b44d603ef877ae8b56e2d89c4639a",
+      "origin_revision": "a44e532a74fe6863e8c31fd612af99a80ee1273a",
+      "modifications": "Qualification, trace validation and evidence preservation repairs"
+    },
+    {
+      "path": "tests/compare-runs.test.mjs",
+      "sha256": "caa2b4268799417e80ec2993667457face38ad707e6dd9619f323460f2857685",
+      "origin_revision": "a44e532a74fe6863e8c31fd612af99a80ee1273a",
+      "modifications": "Qualification, trace validation and evidence preservation repairs"
     }
   ],
   "external_files": [

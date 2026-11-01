@@ -5,15 +5,27 @@ Do the engineering and real qualification; do not stop at a review or plan, and
 do not make premature completion claims.
 
 Scope: finish the remaining controller speed/reliability engineering and real
-Antigravity/Upscaly qualification. The repository presentation cleanup is separate
-and does not qualify the product. The current README labels the only public task
-recording as an older v0.2.0 fixture run; do not present it as current beta.2 or
-Upscaly evidence. Keep those labels and the short installation path accurate.
+Antigravity/Upscaly qualification. Presentation does not qualify the product.
+The README contains a real Upscaly recording from a development build; it is
+not an exact-release speed benchmark. Verify its current provenance labels.
 
 Repository: https://github.com/shayann07/antigravity-computer-use
 Current handoff: https://github.com/shayann07/antigravity-computer-use/blob/main/HANDOFF.md
-Release: https://github.com/shayann07/antigravity-computer-use/releases/tag/v0.3.0-beta.2
+Published Windows baseline: https://github.com/shayann07/antigravity-computer-use/releases/tag/v0.3.0-beta.4
 Local checkout: D:\Work\AntigravityComputerUse
+
+As of the 1 November checkpoint, beta.4 is installed globally and for Upscaly.
+Read docs/WINDOWS-BETA4-QUALIFICATION.md. PR #34 merged the download deadline
+repair but it is not in beta.4. Draft PR #35 contains own-HUD avoidance; draft
+PR #36 restores actual Mac native glass and official shared icon assets. Inspect
+their current heads and review state before reusing or integrating either.
+The real Flash PNG/JPEG task took 471.556 seconds with 34 calls; speed is not
+solved. The separate reduce_orchestration_latency worktree remains unmerged.
+Audit its implementation before selecting utilities; do not merge stale native
+code over the current safety, updater or UI repairs.
+Use the reviewed comparison methodology in docs/PERFORMANCE.md. A single
+metadata-matched pair is not a release-speed qualification, and output flags
+are declarations to check independently. Preserve the original failed evidence.
 
 This brief is for Claude Code. Use its available filesystem/shell tools and this
 repository's documented native CLI; do not assume Codex-only tools or @oai/sky
