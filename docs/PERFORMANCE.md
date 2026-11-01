@@ -9,6 +9,24 @@ identity was missing or completion was a non-boolean value. That branch was not
 the published runtime. No wholesale merge of its older runtime or quick-start
 changes is implied by adopting this utility.
 
+The remaining prototype helpers are explicitly **not adopted**. An inert audit
+of `time-call.mjs` and `benchmark-baseline.mjs` at that revision reproduced an
+after-effect timeout reported as `delivery_uncertain:false`, missing milestones
+reported as zero, and observations scheduled for `active`, `paused` and
+idle-but-open task states. See [issue #38](https://github.com/shayann07/antigravity-computer-use/issues/38).
+The audit used only fake child processes, file markers and fake status replies;
+no desktop input, installation, permission or Stop latch was touched.
+
+Do not run those unmerged helpers against live controls or use their output as
+release timing evidence. Before any adoption they need bounded confirmed child
+cleanup, truthful unknown delivery, explicit idle/task ownership checks, unknown
+rather than zero milestone values, and selection of the actual installed build.
+Killing a client does not prove that its action did not run. The supported direct
+IPC client already treats accepted-but-unacknowledged requests as uncertain;
+seven current transport regressions passed during this audit. The optional old
+helpers are not a required release component. Use the ordinary installed skill
+and the reviewed bounded receipt analysis for upcoming real task measurements.
+
 ```text
 node scripts/measure-run.mjs .localdata/receipts.jsonl PID ISO_TASK_START FINAL_RECEIPT .localdata/run-a.json --first FIRST_RECEIPT
 node scripts/compare-runs.mjs .localdata/run-a.json .localdata/run-b.json .localdata/comparison.json

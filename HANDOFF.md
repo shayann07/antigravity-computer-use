@@ -18,6 +18,14 @@ Current installed status CLI median is 296.4 ms across seven read-only samples;
 the retained Flash task still has 10.6754-second median inter-call gaps. This is
 measurement support, not an actual host speed fix or release acceptance.
 
+The rest of the `a44e532` timing prototype remains unmerged. Inert subprocess
+tests reproduced incorrect timeout delivery flags and active-task detection;
+[issue #38](https://github.com/shayann07/antigravity-computer-use/issues/38) records
+the evidence and adoption requirements. No live desktop was used. Do not use
+that wrapper/scheduler for release qualification. The supported IPC client's
+seven unknown-delivery transport regressions passed; this finding is not a
+claim that the published controller replayed an action.
+
 PR #35 (Windows own-HUD avoidance) and PR #36 (Mac native glass/official icon
 assets) remain draft pending the live and physical checks the owner deferred.
 Their source/native CI passed, but neither candidate is installed over the

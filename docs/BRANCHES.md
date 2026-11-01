@@ -4,11 +4,20 @@
 their release tags. Create a short-lived branch for an active change and remove
 it after integration; old work branches are not separate supported editions.
 
-The active Mac candidate uses `codex/macos-and-latency-review`; it shares the
-existing runtime and is not a second product edition. Antigravity's separate
-`reduce_orchestration_latency` worktree owns its unmerged speed revisions. Review
-the two changes independently; neither branch is evidence that the other's
-qualification is complete. Keep the Mac change draft until real hardware checks.
+The current UI candidates are `codex/guardian-hud-avoidance`
+([PR #35](https://github.com/shayann07/antigravity-computer-use/pull/35)) and
+`codex/mac-native-glass-assets`
+([PR #36](https://github.com/shayann07/antigravity-computer-use/pull/36)). They share
+the runtime and remain draft pending their live/physical checks. Inspect their
+current heads; neither candidate is a separately supported product edition.
+
+Antigravity's `reduce_orchestration_latency` worktree retains its unmerged
+revisions. PR #37 selectively reused and repaired the comparison utility; it did
+not merge that branch's older runtime, quick-start or timing harness. The
+remaining harness has reproduced qualification faults recorded in issue #38.
+Do not use it against live controls until repaired. Merged temporary branches
+are removed only after their ancestry and PR state have been verified; private
+worktrees and other agents' work are preserved.
 
 On 28 October 2026 the following historical branches were retired after checking
 their ancestry and open pull requests. There were no open pull requests using

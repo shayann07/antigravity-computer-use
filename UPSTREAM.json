@@ -488,11 +488,11 @@
     },
     {
       "path": "docs/PERFORMANCE.md",
-      "sha256": "c587c046f13ac1f642f14b7b23654f474c9ff53b5b231dd54bc5a90e351cb8c4"
+      "sha256": "ce2dc97ea4722ce6b222205e7d1cc6a7237e98371a2985948c4ce18af80eb943"
     },
     {
       "path": "HANDOFF.md",
-      "sha256": "6f74e641bf9c347d3ff52ce6c11769b738e87a5dfe8b2ec2ebacc38308966644"
+      "sha256": "e3c0ecad20b0c9ed09ee71069df2a986b1775f683e2f2d7d616798f9fd503f8b"
     },
     {
       "path": "tests/guardian-visibility.mjs",
@@ -504,7 +504,7 @@
     },
     {
       "path": "docs/BRANCHES.md",
-      "sha256": "1a5da62f8e7daffc07eab75a6403c4e2c76f4263887dd75d9b9dba61452ab660"
+      "sha256": "5e7aac38cb980b0fad0c902642cb96692b4ac9a16ac48c01d229cb85a516e43c"
     },
     {
       "path": "docs/media/hero.svg",
