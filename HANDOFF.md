@@ -1,5 +1,15 @@
 # Antigravity Computer Use: handoff
 
+## Latest checkpoint — 1 November 2026
+
+Windows beta.4 is published and the global installation now uses the exact
+GitHub-downloaded bundle. Read [the current qualification record](docs/WINDOWS-BETA4-QUALIFICATION.md)
+before relying on the historical entries below. PNG/JPEG outputs and native NCNN
+execution passed; the 471.556-second Flash workflow does not establish a speed
+fix. Public updater transfer timeout #32 and banner overlap #33 were found in
+real tests. The source download-deadline repair is a separate, unpublished change.
+Keep the full goal active; Mac and physical/hardware gates are still pending.
+
 ## 30 October final Intel Mac Space/capture & Liquid Glass HUD repair
 
 Branch `codex/argon-final-mac` (based on `v0.3.0-beta.3` commit

@@ -61,10 +61,30 @@ export function newerVersion(candidate,current){
  const x=a[3].split('.'),y=b[3].split('.');for(let i=0;i<Math.max(x.length,y.length);i++){if(x[i]===y[i])continue;if(x[i]===undefined)return false;if(y[i]===undefined)return true;const numeric=v=>/^\d+$/.test(v);if(numeric(x[i])&&numeric(y[i]))return Number(x[i])>Number(y[i]);if(numeric(x[i])!==numeric(y[i]))return !numeric(x[i]);return x[i]>y[i];}return false;
 }
 export async function downloadFile(url,destination,{size,hash,fetcher=fetch,io=fs}={}){
- const reply=await fetcher(url,{signal:AbortSignal.timeout(30000)});if(!reply.ok||!reply.body)throw Error('update_download_failed');
- const fd=io.openSync(destination+'.part','wx',0o600);let length=0;const digest=createHash('sha256');
- try{for await(const chunk of reply.body){length+=chunk.length;if(length>size)throw Error('update_download_size');digest.update(chunk);let offset=0;while(offset<chunk.length){const written=io.writeSync(fd,chunk,offset,chunk.length-offset);if(!Number.isInteger(written)||written<=0||written>chunk.length-offset)throw Error('update_download_write_failed');offset+=written;}}if(length!==size||digest.digest('hex')!==hash)throw Error('update_download_hash');io.closeSync(fd);io.renameSync(destination+'.part',destination);}
- catch(e){try{io.closeSync(fd);}catch{}try{io.unlinkSync(destination+'.part');}catch{}throw e;}
+ // Large native bundles routinely need more than 30 seconds on an ordinary
+ // connection. Bound headers, lack of progress and total transfer separately.
+ // None of these limits is configurable by a desktop action or environment.
+ const controller=new AbortController();let phaseTimer,fd,ownsPart=false;
+ const expire=()=>controller.abort(Error('update_download_timeout'));
+ const arm=ms=>{clearTimeout(phaseTimer);phaseTimer=setTimeout(expire,ms);};
+ const totalTimer=setTimeout(expire,600000);
+ try{
+  arm(15000);
+  const reply=await fetcher(url,{signal:controller.signal});if(!reply.ok||!reply.body)throw Error('update_download_failed');
+  arm(30000);
+  fd=io.openSync(destination+'.part','wx',0o600);ownsPart=true;let length=0;const digest=createHash('sha256');
+  for await(const chunk of reply.body){
+   if(controller.signal.aborted)throw controller.signal.reason;
+   length+=chunk.length;if(length>size)throw Error('update_download_size');
+   if(chunk.length)arm(30000);
+   digest.update(chunk);let offset=0;
+   while(offset<chunk.length){const written=io.writeSync(fd,chunk,offset,chunk.length-offset);if(!Number.isInteger(written)||written<=0||written>chunk.length-offset)throw Error('update_download_write_failed');offset+=written;}
+  }
+  if(controller.signal.aborted)throw controller.signal.reason;
+  if(length!==size||digest.digest('hex')!==hash)throw Error('update_download_hash');
+  io.closeSync(fd);fd=undefined;io.renameSync(destination+'.part',destination);ownsPart=false;
+ }catch(e){controller.abort(e);if(fd!==undefined)try{io.closeSync(fd);}catch{}if(ownsPart)try{io.unlinkSync(destination+'.part');}catch{}throw e;}
+ finally{clearTimeout(phaseTimer);clearTimeout(totalTimer);}
 }
 export async function readBoundedJSON(reply,maxBytes=262144){
  if(!reply.ok)throw Error('update_metadata_unavailable');

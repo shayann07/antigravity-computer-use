@@ -1,5 +1,9 @@
 # macOS candidate validation — 29 October 2026
 
+**Current Windows record:** [1 November beta.4 qualification](docs/WINDOWS-BETA4-QUALIFICATION.md).
+It supersedes older installed/published identities below without upgrading
+historical physical or Mac checks to current-build passes.
+
 On 29 October, the owner physically pressed Esc during a Windows Notepad drag
 on installed build `bc45734396d12837098b4cdcd046fd4d36e7c22da7eeeb6acec33fd023cedc9f`.
 The journal observed one held mouse button before Stop and none afterward; the
