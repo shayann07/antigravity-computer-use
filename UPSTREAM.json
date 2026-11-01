@@ -492,7 +492,7 @@
     },
     {
       "path": "HANDOFF.md",
-      "sha256": "b02f94121b852f10b610c33789800be6623ba78cb8b20f9527e322044d59006d"
+      "sha256": "d04ec1f14f0a97b2149467a76c07e1fb572b3d78605425fa3bb2ffcec8e2bfb6"
     },
     {
       "path": "tests/guardian-visibility.mjs",
@@ -865,6 +865,10 @@
     {
       "path": "docs/qualification.md",
       "sha256": "6c106ef780da4501f02c2a063094f98cbd0f0f54f76f4c41f48432df859d6ee9"
+    },
+    {
+      "path": "tests/skill-guidance.test.mjs",
+      "sha256": "8633c828cbea9e89f3115f8d123c3693d5838d1a0ad2d76f7050ee219f569460"
     }
   ],
   "external_files": [

@@ -55,6 +55,11 @@ match the supported Windows/Mac cleanup checks, ownership and visibility rules.
 No runtime policy, installed skill or Stop latch is changed by these source
 edits. Real model uptake and workflow timing remain unqualified until the owner
 releases the desktop; no speed improvement is inferred from wording changes.
+The first PR #40 Windows run at `a13b2f3` failed because the guidance test
+explicitly required the contradictory “do not open a terminal” wording. The
+test now resolves the documented entrypoint against the real offline CLI
+schema instead; its bounded-handoff assertions remain. Retain the failed run
+and verify the corrected head's regressions/CI before merging.
 
 PR #35 (Windows own-HUD avoidance) and PR #36 (Mac native glass/official icon
 assets) remain draft pending the live and physical checks the owner deferred.
