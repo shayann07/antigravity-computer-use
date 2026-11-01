@@ -41,8 +41,7 @@ file dialogs](references/text-and-dialogs.md) for exact Unicode/import/save.
 
 `input_completed:true` plus verification failure, `delivery_unknown:true`, or
 `input_outcome_unknown` means inspect the effect; never replay the input.
-Terminal omissions also require inspection, never resubmission. Follow
-[recovery](references/recovery.md) after errors. No desktop switching or safety bypasses.
+Follow [recovery](references/recovery.md) after errors. No desktop switching or safety bypasses.
 
 Coordinate one task/controller at a time. Never End another caller's task.
 Esc/Stop stays latched until local human Re-arm. Soft Resume needs explicit

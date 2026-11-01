@@ -62,21 +62,21 @@ schema instead; its bounded-handoff assertions remain. Retain the failed run
 and verify the corrected head's regressions/CI before merging.
 
 PR #40 subsequently passed all six Windows/Intel/ARM checks at `d6f2c07` and
-merged as `0c26101`. Read-only analysis then found a concrete host failure in the
-retained real Flash transcript: 14 tool results were truncated, including the
-skill read (17,675 bytes omitted), twelve controller replies and diagnostics.
-The new `codex/bounded-terminal-observations` candidate limits ordinary brief
-replies with explicit omissions, preserves native incompleteness and moves the
-skill's conditional detail into small linked pages. Full JSON and IPC remain
-lossless. See docs/PERFORMANCE.md for evidence and scope. No desktop input or
-installed-release modification was used; real task speed and model uptake
-remain pending rather than inferred from formatting tests.
-The local candidate suite completed 517 tests: 505 passed, zero failed and 12
-explicit skips. Provenance covers 213 files. Skill entrypoint/template/link
-checks and a real CLI with inert IPC cover the terminal-cap mechanism;
-word-matching guidance tests were replaced by those artifact/CLI contracts.
-Native handoff/permission/cancellation regressions remain in the full suite.
-Issue #41 tracks actual host acceptance; do not close it from synthetic results.
+merged as `0c26101`. The first PR #42 draft `f9dc519` misread compact-log
+truncation as lost tool/model input. The full transcript retains complete JSON
+and the full skill; the inferred 4 KB host cap is not established. Issue #41 is
+closed with this correction. Its automatic reply-size cap is removed to avoid
+discarding useful controls on that mistaken premise. The old 505/517 passing
+synthetic tests do not establish that diagnosis or qualify the revised head.
+
+The retained correction preserves native `tree_incomplete` in brief output
+without shortening the rendered tree. The smaller skill and linked references
+remain a context-reduction experiment; their chosen 3,500-byte page target is
+not a host transport limit. Exact Unicode, delivery/cancellation evidence,
+unchanged long trees and full JSON have actual CLI/inert-IPC regressions.
+See docs/PERFORMANCE.md for both source-log hashes and the evidence boundaries.
+No desktop input or installed-release modification was used. Revised full
+regressions, CI, real model uptake and task speed still require verification.
 
 PR #35 (Windows own-HUD avoidance) and PR #36 (Mac native glass/official icon
 assets) remain draft pending the live and physical checks the owner deferred.

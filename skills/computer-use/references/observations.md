@@ -19,19 +19,19 @@ section and its children, tree-only by default. Add `--image` for visual work.
 Queries are literal substrings, not regex. `--max-nodes 500` requests more rows;
 `--settle-ms 600` allows a known animation to settle, at most 2000 ms.
 
-`tree_incomplete:true` means known omissions in native/rendered/terminal output,
-not proof all errors or controls were seen. Brief replies keep whole head/tail
-rows and original indexes within a terminal budget. `terminal_tree_truncated`
-marks that display reduction. Query one relevant section rather than repeating
-full captures. A partial tree may still contain a valid specific target; it
-cannot establish absence of a failure or successful completion by itself.
+`tree_incomplete:true` means known omissions in the native walk or rendered
+view, not proof all errors/controls were seen. Brief replies preserve this flag
+and the complete rendered tree; they do not apply an extra byte cap. Query one
+relevant section rather than repeating full captures. A partial tree may still
+contain a valid specific target; it cannot establish absence of a failure or
+successful completion by itself.
 
-An oversized non-tree reply may return `terminal_reply_incomplete:true` and
-`terminal_reply_error`. Input may already have completed. Follow the retained
-delivery evidence and inspect the app; never rerun input to obtain `--json`.
-Intentional full CLI reads use `COMMAND --json ...` before execution; ordinary agent
-tasks use brief named arguments. Do not create per-action plan/result files or
-copy screenshots; the runtime already retains bounded receipts/images.
+Intentional full CLI reads use `COMMAND --json ...` before execution. Do not
+rerun an input merely to change its output format. Ordinary tasks use brief
+named arguments and automatic bounded receipts/images, without per-action
+plan/result files or copied screenshots. Compact host transcript previews may
+shorten long fields; inspect the corresponding full record before diagnosing
+lost model input. A log preview alone does not establish what the model saw.
 
 Clicks move the real animated pointer by default, even for named/index targets.
 Only use `--physical false` when a control needs a semantic action; it may leave

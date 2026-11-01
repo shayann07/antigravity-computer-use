@@ -1,45 +1,43 @@
 # Measuring desktop task latency
 
-## 1 November: real host output truncation
+## 1 November: full-record correction and context experiment
 
-Read-only inspection located the original Flash task transcript matching the
-first retained frame and receipt interval. Its SHA-256 is
+The compact Flash transcript has SHA-256
 `e1ead287f7b18ab84f2f736d587439254564432a711da9bd415967dcdf472d49`.
-The private transcript has 97 rows, 48 planner responses and 47 tool calls
-(39 terminal calls and eight file/image reads). Fourteen result rows contain
-an explicit host truncation marker: the initial skill read, twelve controller
-replies, and one diagnostics read. The skill result says 17,675 bytes were
-omitted. Truncated controller JSON could not be decoded as a complete reply.
-Private structural analysis is in `.localdata/flash-host-summary.json`; do not
-publish raw prompts, application text, paths, images or model reasoning.
+Its 14 shortened previews initially suggested a 4 KB model/tool delivery cap.
+That diagnosis was not supported. The corresponding `transcript_full.jsonl`
+(SHA-256 `2d1b1554207050ffd8d89a17d3045c16a37351fab42e7db2b97d86008d9b0935`)
+retains all twelve complete controller JSON results and their observation IDs,
+the complete diagnostics result, and a 21,751-character skill result including
+its command section. The 17,675-byte omission describes the compact log only.
+[Issue #41](https://github.com/shayann07/antigravity-computer-use/issues/41)
+is closed with the correction, not as a verified runtime repair.
 
-This is a concrete presentation defect in the actual run, not a native-input
-speed measurement. Recorded row timestamps do not establish separate model,
-tool-dispatch and result-delivery durations; their semantics are unverified.
-The 471.574-second receipt interval and 37.683 service-seconds still do not prove
-which part of the remaining time an optimization will remove.
+Private structural comparisons are in `.localdata/host-transcript-comparison.json`.
+Never publish raw prompts, application text, paths, images or model reasoning.
+The task has 97 rows, 48 planner responses and 47 tool calls (39 terminal calls
+and eight file/image reads). Its 471.574-second receipt interval includes
+37.683 service-seconds. Row timestamp semantics do not establish separate model,
+dispatch and result-delivery time. Do not infer lost model input or a speedup
+from compact log previews, token counts or these formatting tests.
 
-The candidate keeps ordinary brief CLI replies within 3,500 ASCII wire bytes,
-including PowerShell Unicode escaping. It returns whole head/tail display rows
-with original indexes and explicit `tree_incomplete`/`terminal_tree_truncated`
-flags. Native incompleteness is preserved even for small trees; the previous
-brief formatter dropped that metadata. Oversized non-tree envelopes return an
-explicit incomplete-presentation result with retained delivery/Stop/error and
-batch-summary evidence rather than a clipped acknowledgement. No private reply
-archives are created. IPC and deliberate `COMMAND --json ...` reads remain
-lossless. Never repeat input merely to request a different output format.
+The automatic byte cap introduced in the first draft `f9dc519` is removed.
+Its synthetic tests passed but did not justify discarding useful controls on
+an unproven host-limit premise. Default brief output keeps the complete rendered
+tree, and explicit full JSON/IPC content remains lossless.
 
-The shared skill now has a short entrypoint and conditional pages sized for a
-single read. Tests check both platform launcher expansions, reachable packaged
-references and a real CLI/inert-IPC round trip under the observed host cap.
-This follows [Antigravity's documented progressive skill disclosure](https://antigravity.google/docs/skills?app=antigravity).
-Native policy, Stop, permissions, frame resolution and batch execution are
-unchanged. Offline formatting tests do not prove faster Flash/Sonnet execution;
-the candidate remains uninstalled pending CI and actual host qualification.
+A separate source-proven correction preserves native `tree_incomplete` in brief
+CLI output; the old formatter removed it with the metadata object. Pure and
+actual CLI/inert-IPC tests verify completeness, exact Unicode, unchanged trees,
+input/delivery/cancellation evidence and full JSON. Native execution is unchanged.
 
-`describe` and `diagnostics` still have their explicit full-data output paths;
-the cap above describes ordinary brief action/observation output. Do not claim
-that every host tool or full schema dump is now bounded.
+The shorter shared skill and conditional pages remain a context-reduction
+experiment following [documented progressive disclosure](https://antigravity.google/docs/skills?app=antigravity).
+The 3,500-byte page target is this candidate's chosen context budget, not an
+Antigravity transport limit. Tests cover launcher expansion, reference links
+and available CLI commands; they cannot prove model compliance or task speed.
+Actual Flash/Sonnet acceptance, native hardware checks and release publication
+remain pending. The published installation has not been replaced.
 
 ## Reviewed comparison utility
 

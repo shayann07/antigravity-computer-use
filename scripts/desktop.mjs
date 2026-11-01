@@ -14,8 +14,6 @@ import {diagnostics} from './diagnostics.mjs';
 import {scheduleUpdates} from '../server/auto-update.mjs';
 import {Incidents} from '../server/incidents.mjs';
 import {recoveryAdvice} from '../server/recovery.mjs';
-import {encodeReply,briefReply} from './terminal-reply.mjs';
-export {encodeReply,briefReply} from './terminal-reply.mjs';
 const EMPTY_INPUT={type:'object',properties:{},required:[],additionalProperties:false};
 const LIFECYCLE=[
   {command:'start',description:'Start or reconnect to this exact installed build. No arguments. Never clears emergency Stop or changes the installed permission policy.',inputSchema:EMPTY_INPUT},
@@ -39,6 +37,16 @@ export function describeCommand(name){
 // Windows PowerShell can decode native stdout using its legacy OEM code page
 // before piping it to UTF-8. ASCII JSON preserves every Unicode code unit even
 // through that boundary; JSON.parse restores the original text exactly.
+export function encodeReply(value){return JSON.stringify(value).replace(/[^\x00-\x7f]/g,char=>'\\u'+char.charCodeAt(0).toString(16).padStart(4,'0'));}
+export function briefReply(value){
+ const out={...value};
+ if(out.metadata){const m=out.metadata;delete out.metadata;out.observation_id=m.observation_id;out.hwnd=m.hwnd;out.tree=m.tree;
+  if(typeof m.tree_incomplete==='boolean')out.tree_incomplete=m.tree_incomplete||out.tree_incomplete===true;
+ }
+ if(out.image){out.image={path:out.image.path,width:out.image.width,height:out.image.height};}
+ if(out.windows)out.windows=out.windows.map(({hwnd,title,process,minimized,hidden,fullscreen,other_desktop,foreground})=>({hwnd,title,process,minimized,...(hidden?{hidden:true}:{}),...(fullscreen?{fullscreen:true}:{}),...(other_desktop?{other_desktop:true}:{}),foreground}));
+ return out;
+}
 let replyMode='json';
 const printReply=value=>console.log(encodeReply(replyMode==='brief'?briefReply(value):value));
 export function failureReply(error){
