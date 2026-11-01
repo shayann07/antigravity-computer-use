@@ -24,6 +24,10 @@ solved. The separate reduce_orchestration_latency worktree remains unmerged.
 Audit its implementation before selecting utilities; do not merge stale native
 code over the current safety, updater or UI repairs.
 
+Use the reviewed comparison methodology in docs/PERFORMANCE.md. A single
+metadata-matched pair is not a release-speed qualification, and output flags
+are declarations to check independently. Preserve the original failed evidence.
+
 This brief is for Claude Code. Use its available filesystem/shell tools and this
 repository's documented native CLI; do not assume Codex-only tools or @oai/sky
 exist. The controller deliberately blocks assistant/host application windows,

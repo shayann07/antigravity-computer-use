@@ -480,19 +480,19 @@
     },
     {
       "path": "scripts/measure-run.mjs",
-      "sha256": "6f401ffe5d80adcb1dbb9bece6e8396957cdcae9dd6e05f93c45eb40b3656025"
+      "sha256": "6e61a13babe9f76668d31a2ec3786950a0c25d7756342a17734174ebd2793f2c"
     },
     {
       "path": "tests/measure-run.test.mjs",
-      "sha256": "ff56adc47afb201c4f339ba8773c2a14687c50635c6d9c067e9582431aaa0630"
+      "sha256": "6a15e99791ccf9dbd23c884d28112737273a8c8688cfe93460a086997f806ade"
     },
     {
       "path": "docs/PERFORMANCE.md",
-      "sha256": "44c721526a8727a3b958a6c4a427b9c9753e7e5eb4b96d20fc8d0d5ae7bc7448"
+      "sha256": "c587c046f13ac1f642f14b7b23654f474c9ff53b5b231dd54bc5a90e351cb8c4"
     },
     {
       "path": "HANDOFF.md",
-      "sha256": "73d8113d1b9cd3bd281c059afa85ba5b8186f37c093e7d88bcdaf38fb4f91df9"
+      "sha256": "0f3cb75d3893547785bca344208e0cfaab0e5fff541a55930788288cfffd73e6"
     },
     {
       "path": "tests/guardian-visibility.mjs",
@@ -500,7 +500,7 @@
     },
     {
       "path": "docs/CLAUDE-CODE-HANDOFF-PROMPT.md",
-      "sha256": "b5e76b1c63b7e7a1869ec4c9d305d4dd3fdf1321466bfbc6f874729c34780940"
+      "sha256": "2315a5b1cdc450cf12f23b4cf98c7c6839aa55bf2d6154f022a62e94a5ba21a5"
     },
     {
       "path": "docs/BRANCHES.md",
@@ -849,6 +849,18 @@
     {
       "path": "docs/MACOS-GLASS-MATERIAL.md",
       "sha256": "136809d3a8cf6cc918fcd2f0969aee7262d5385f3203c9492eec63237a2f5a9a"
+    },
+    {
+      "path": "scripts/compare-runs.mjs",
+      "sha256": "428de5857301dfd614ad750593275fd9402b44d603ef877ae8b56e2d89c4639a",
+      "origin_revision": "a44e532a74fe6863e8c31fd612af99a80ee1273a",
+      "modifications": "Qualification, trace validation and evidence preservation repairs"
+    },
+    {
+      "path": "tests/compare-runs.test.mjs",
+      "sha256": "caa2b4268799417e80ec2993667457face38ad707e6dd9619f323460f2857685",
+      "origin_revision": "a44e532a74fe6863e8c31fd612af99a80ee1273a",
+      "modifications": "Qualification, trace validation and evidence preservation repairs"
     }
   ],
   "external_files": [
