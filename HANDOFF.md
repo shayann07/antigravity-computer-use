@@ -1,6 +1,6 @@
 # Antigravity Computer Use: handoff
 
-## Latest checkpoint — 1 November 2026
+## Latest checkpoint — 2 November 2026
 
 Windows beta.4 is published and the global installation now uses the exact
 GitHub-downloaded bundle. Read [the current qualification record](docs/WINDOWS-BETA4-QUALIFICATION.md)
@@ -69,14 +69,22 @@ closed with this correction. Its automatic reply-size cap is removed to avoid
 discarding useful controls on that mistaken premise. The old 505/517 passing
 synthetic tests do not establish that diagnosis or qualify the revised head.
 
-The retained correction preserves native `tree_incomplete` in brief output
-without shortening the rendered tree. The smaller skill and linked references
-remain a context-reduction experiment; their chosen 3,500-byte page target is
-not a host transport limit. Exact Unicode, delivery/cancellation evidence,
-unchanged long trees and full JSON have actual CLI/inert-IPC regressions.
-See docs/PERFORMANCE.md for both source-log hashes and the evidence boundaries.
-No desktop input or installed-release modification was used. Revised full
-regressions, CI, real model uptake and task speed still require verification.
+PR #42 is narrowed to preserving native `tree_incomplete` in brief output
+without shortening the rendered tree or replacing the established skill.
+The short-guide experiment is preserved at public revision `0ab5f73` and in
+private `.localdata/short-skill-context-proposal.patch`; it is deferred until
+real model comparison, not described as a proven fix or discarded work.
+Actual CLI/inert-IPC tests cover exact Unicode, delivery/cancellation evidence,
+unchanged long trees and full JSON. Both platforms' native guards are unchanged.
+
+Read-only full-log header analysis now gives 47 completed tools: 39 terminal
+calls total a nominal 55 seconds, eight file/image reads total two seconds,
+and the first-to-final tool interval is 480 seconds. The remaining 423 seconds
+are between tools, including host/model work and possible background inference.
+Timestamps have one-second precision: these are rounded sums, not isolated
+model or native-engine timing. See docs/PERFORMANCE.md for limits and hashes.
+All six CI checks passed the earlier `0ab5f73` head; the narrowed head needs its
+own current checks. No desktop input or installed-release modification was used.
 
 PR #35 (Windows own-HUD avoidance) and PR #36 (Mac native glass/official icon
 assets) remain draft pending the live and physical checks the owner deferred.

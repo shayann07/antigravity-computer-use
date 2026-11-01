@@ -476,7 +476,7 @@
     },
     {
       "path": "skills/computer-use/references/recovery.md",
-      "sha256": "7bceb853a0952029527acea623559e40e81493aca07cf35f39a79c5112815317"
+      "sha256": "77df37e69f48e8d3104d01691537ebd955e4d0293aff54300f36147ec378cdfe"
     },
     {
       "path": "scripts/measure-run.mjs",
@@ -488,11 +488,11 @@
     },
     {
       "path": "docs/PERFORMANCE.md",
-      "sha256": "f23fb78c511a15ab19b476612026638dcfd8cbff591f5de2b634b653dfc74f05"
+      "sha256": "d3c0b852ce2d810131a9cd718e28af731d9d1e8fb84c5d6abaf329d8ed4c881c"
     },
     {
       "path": "HANDOFF.md",
-      "sha256": "6c6aefa6a11fa52ce62685b945b591e18f180e4554f13b6d46b64f5352b6f643"
+      "sha256": "23eaa2ee8abb470295af85f003640ad25de18341662c5fbe6891030840805ca6"
     },
     {
       "path": "tests/guardian-visibility.mjs",
@@ -604,7 +604,7 @@
     },
     {
       "path": "skills/computer-use/SKILL.md",
-      "sha256": "436b84e9d258784dd583d76e53ec73d71bf44260a5abecaaa512cbc3bc738fbf"
+      "sha256": "35888b141b5c251552bdbac1910bbcbbf2ff6534fc171e10b725a6618d7d481f"
     },
     {
       "path": "docs/MACOS.md",
@@ -868,31 +868,7 @@
     },
     {
       "path": "tests/skill-guidance.test.mjs",
-      "sha256": "f000125ac21a9042c35399ed397afd5729cd8d080a4902094b01e1bbc5e78607"
-    },
-    {
-      "path": "skills/computer-use/references/startup.md",
-      "sha256": "e69889b26b6db88edbe6ef2faa0afce2a0523fa5c718e4bf0eda26dc3bec1bd2"
-    },
-    {
-      "path": "skills/computer-use/references/observations.md",
-      "sha256": "ada22e4aaedafd4cf73934afdc5d5c4f26ddf573aa7f445854af048d508d0b3c"
-    },
-    {
-      "path": "skills/computer-use/references/batches-and-waits.md",
-      "sha256": "f9aefa811c4bf4448847866f5ba069fd8fe8f23fad4043f02b19dee416724aa9"
-    },
-    {
-      "path": "skills/computer-use/references/text-and-dialogs.md",
-      "sha256": "f62af1c66a5b0bf6f274db1eeade5c7c616cb1f030e5a677a37d89e7e63c2a3a"
-    },
-    {
-      "path": "skills/computer-use/references/control-and-feedback.md",
-      "sha256": "a2309d00bf772ac40ec8638f1358b49412615d96022f41cf20f27ae413993d0e"
-    },
-    {
-      "path": "skills/computer-use/references/window-recovery.md",
-      "sha256": "be94f47293a09b68b9f67ab415b9e30ada182d64469a2287e98322c29fd438cc"
+      "sha256": "8633c828cbea9e89f3115f8d123c3693d5838d1a0ad2d76f7050ee219f569460"
     },
     {
       "path": "tests/brief-reply.test.mjs",
