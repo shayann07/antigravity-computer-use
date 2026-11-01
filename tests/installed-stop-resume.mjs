@@ -6,7 +6,7 @@ import {spawnSync} from 'node:child_process';import {createInterface} from 'node
 import {pathToFileURL,fileURLToPath} from 'node:url';
 import {projectRoot} from './paths.mjs';
 import {writeAtomicJSON} from '../server/atomic-json.mjs';
-import {stopConfig,newStopEvidence,verifyQualificationRelease,qualificationIdle,qualificationRequest,currentInputJournal,qualificationLedger,finishQualification} from './installed-qualification.mjs';
+import {stopConfig,newStopEvidence,verifyQualificationRelease,qualificationIdle,qualificationRequest,currentInputJournal,qualificationLedger,finishQualification,physicalStopSteps} from './installed-qualification.mjs';
 
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function until(check,timeout){
@@ -78,7 +78,7 @@ export async function installedStopQualification(configFile,{checkOnly=false}={}
   const journal=currentInputJournal(directory,session.pid),latch=path.join(directory,'emergency.stop');
   let heldSeen=false,ledgerError;
   const sampler=setInterval(()=>{try{if(qualificationLedger(journal).split(/\r?\n/).includes('m:4'))heldSeen=true;}catch(error){ledgerError=error;}},5);
-  const steps=[{kind:'drag',from:config.from,to:config.to,steps:120,risk:'routine'},...Array.from({length:7},()=>({kind:'move',x:config.to[0],y:config.to[1],risk:'routine'}))];
+  const steps=physicalStopSteps(config.from,config.to);
   record.stage='awaiting_physical_escape_during_drag';save();
   console.log('Physical check starting: press Esc as soon as the selection moves. Do not click Re-arm yet.');
   let batch;try{batch=await input('run',{hwnd:config.hwnd,observation_id:moved.metadata.observation_id,steps,reason:'Physical Esc must stop the first drag and skip seven queued harmless moves'});}finally{clearInterval(sampler);}

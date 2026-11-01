@@ -50,6 +50,9 @@ export function qualificationRequest(request,session,policy,command,args={}){
  if(policy.permission_mode!=='host-managed')refuse('qualification_policy_mismatch','This harness cannot bypass standalone native approvals.');
  return request(session,command,args,['status','stop','resume','end','controls'].includes(command)?10000:100000,policy.permission_mode);
 }
+export function physicalStopSteps(from,to){
+ return [{kind:'drag',from,to,steps:120,risk:'routine'},...Array.from({length:7},()=>({kind:'move',x:to[0],y:to[1],risk:'routine'}))];
+}
 export function currentInputJournal(directory,pid){
  const record=readTaskRecord(path.join(directory,'task-state.json'));
  if(!Number.isSafeInteger(pid)||pid<1||!record.open||record.dispatched!==true||typeof record.guard!=='string'||!record.guard.startsWith('guard-'+pid+'-'))refuse('qualification_guard_unknown','The exact current task input fence could not be established.');

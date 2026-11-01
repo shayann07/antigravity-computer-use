@@ -2,9 +2,10 @@ import test from 'node:test';import assert from 'node:assert/strict';
 import fs from 'node:fs';import path from 'node:path';import net from 'node:net';
 import {createHash} from 'node:crypto';import {PassThrough} from 'node:stream';import {spawnSync} from 'node:child_process';
 import {testDirectory,testRoot} from './paths.mjs';
-import {stopConfig,newStopEvidence,verifyQualificationRelease,qualificationIdle,qualificationRequest,currentInputJournal,qualificationLedger,finishQualification} from './installed-qualification.mjs';
+import {stopConfig,newStopEvidence,verifyQualificationRelease,qualificationIdle,qualificationRequest,currentInputJournal,qualificationLedger,finishQualification,physicalStopSteps} from './installed-qualification.mjs';
 import {beginSignal} from './installed-stop-resume.mjs';
 import {request} from '../scripts/desktop.mjs';
+import {validate} from '../server/desktop-tools.mjs';
 const id='1'.repeat(64);
 const config=extra=>stopConfig({installation:path.resolve('inert-installation.json'),expected_build_id:id,hwnd:1,from:[10,20],to:[30,20],...extra});
 function folder(t){const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'installed-qualification-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));return dir;}
@@ -13,6 +14,12 @@ test('qualification needs an explicit build and screenshot coordinates; model po
  assert.equal(config({}).close_owned_window,false);
  for(const extra of [{expected_build_id:undefined},{installation:'relative.json'},{hwnd:0},{from:[-1,0]},{to:[1.5,2]},{confirmed:true},{permission_mode:'host-managed'}])assert.throws(()=>config(extra));
  assert.throws(()=>config({evidence:path.resolve(testRoot,'../../outside')}));
+});
+test('physical qualification queues exactly one drag and seven harmless moves using the real schema',()=>{
+ const steps=physicalStopSteps([10,20],[30,20]);
+ validate('computer_run',{hwnd:1,observation_id:'inspected-frame',steps,reason:'Owned harmless physical Stop test'});
+ assert.equal(steps.filter(step=>step.kind==='drag').length,1);assert.equal(steps.filter(step=>step.kind==='move').length,7);
+ assert(!steps.some(step=>['key','resume','grant'].includes(step.kind)));
 });
 test('qualification evidence is project-local, fresh and never overwrites a failed run',t=>{
  const dir=folder(t),dest=path.join(dir,'run'),c=config({evidence:dest});

@@ -852,15 +852,15 @@
     },
     {
       "path": "tests/installed-qualification.mjs",
-      "sha256": "3f8ebeb0c5bf7265c3dc4496f10c0d91d9ff3a00da217ed253e2450c60c82d52"
+      "sha256": "f3c7d2705e6e1cf1046ac20e56983681e8c11b964f33c1e3ccf88a1c9a39e548"
     },
     {
       "path": "tests/installed-qualification.test.mjs",
-      "sha256": "58695f78ff394b80f242010beaf22b6b711094ef80e92706b3cf497d8bd0adcb"
+      "sha256": "f1c7b780d77a8571c9ac779a3ac1d2448161246cebbceb614a2824697bf543c3"
     },
     {
       "path": "tests/installed-stop-resume.mjs",
-      "sha256": "85c8e3bcf1215eb13ea5b6621705b173453da2e68411f7a9ee84bc385f8de10b"
+      "sha256": "fadb24b773174f970d03b6873c8c2ef961963660a6331a349d7a6e331851f836"
     },
     {
       "path": "docs/qualification.md",
