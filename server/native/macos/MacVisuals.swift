@@ -3,6 +3,25 @@ import AppKit
 import CoreGraphics
 import Foundation
 import QuartzCore
+import Darwin
+
+// Requested visibility survives temporary capture hiding. A capture restore is
+// not a new entrance, and it must not undo a later explicit Hide or End.
+struct MacHudVisibility {
+    private(set) var requestedVisible = false
+    private(set) var captureHidden = false
+    mutating func requestShow() -> Bool {
+        let entrance = !requestedVisible && !captureHidden
+        requestedVisible = true
+        return entrance
+    }
+    mutating func requestHide() { requestedVisible = false }
+    mutating func beginCapture() { captureHidden = true }
+    mutating func endCapture() -> Bool {
+        captureHidden = false
+        return requestedVisible
+    }
+}
 
 struct MacHudStatePresentation: Equatable {
     let resolvedState: String
@@ -104,7 +123,9 @@ final class MacVisuals: NSObject {
     var rings: [NSPanel] = []
     var pointer: NSPanel?
     var hiddenDisplays: [CGDirectDisplayID] = []
-    var state = "idle", captureHidden = false
+    var state = "idle"
+    private var visibility = MacHudVisibility()
+    var captureHidden: Bool { visibility.captureHidden }
     var hoverChecked = Date.distantPast
     let origin = ProcessInfo.processInfo.systemUptime
     var visible: Bool { panel?.isVisible == true }
@@ -313,14 +334,14 @@ final class MacVisuals: NSObject {
         build()
         let latched = !MacFence.latch.isEmpty && MacFence.latchBlocks(MacFence.latch)
         let presentation = MacVisuals.statePresentation(for: next, latched: latched)
-        let wasVisible = panel?.isVisible == true
+        let animateEntrance = visibility.requestShow()
         state = presentation.resolvedState
         layoutControls(for: presentation)
         if state != "active" { releaseCursor(); rings.forEach { $0.orderOut(nil) }; pointer?.orderOut(nil) }
         if !captureHidden, let p = panel {
             writeHudBounds(p.frame)
             let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-            if !wasVisible && !reduceMotion {
+            if animateEntrance && !reduceMotion {
                 p.alphaValue = 0.0
                 if let layer = rootView?.layer {
                     layer.transform = CATransform3DMakeScale(0.96, 0.96, 1.0)
@@ -352,18 +373,28 @@ final class MacVisuals: NSObject {
         hiddenDisplays.removeAll(); pointer?.orderOut(nil)
     }
     func hide() {
+        visibility.requestHide()
         releaseCursor()
         panel?.alphaValue = 1.0
         rootView?.layer?.transform = CATransform3DIdentity
         panel?.orderOut(nil)
         rings.forEach { $0.orderOut(nil) }
         pointer?.orderOut(nil)
-        if !MacFence.file.isEmpty {
-            try? FileManager.default.removeItem(atPath: MacFence.file + ".hud")
-        }
+        clearHudBounds()
     }
-    func hideForCapture() { captureHidden = true; panel?.orderOut(nil); rings.forEach { $0.orderOut(nil) }; pointer?.orderOut(nil) }
-    func finishCapture(_ state: String) { captureHidden = false; if state == "active" || state == "paused" || state == "stopped" { show(state) } }
+    private func clearHudBounds() {
+        // Never recursively delete an entry at the auxiliary bounds path.
+        if !MacFence.file.isEmpty { _ = unlink(MacFence.file + ".hud") }
+    }
+    func hideForCapture() {
+        visibility.beginCapture(); panel?.orderOut(nil); rings.forEach { $0.orderOut(nil) }; pointer?.orderOut(nil)
+        clearHudBounds() // Hidden controls must not suppress real takeover input.
+    }
+    func finishCapture(_ state: String) {
+        let restore = visibility.endCapture()
+        if restore && (state == "active" || state == "paused" || state == "stopped") { show(state) }
+        else { hide() }
+    }
     func activity(_ action: String) { /* The persistent state label stays calm between actions. */ }
     func animate() {
         if captureHidden || state != "active" { return }

@@ -286,6 +286,47 @@ func macContractTest() throws {
         throw AxonError("contract_test_failed", "macOS Space and window capture failure classification differs.")
     }
     let activeHud = MacVisuals.statePresentation(for: "active", latched: false)
+    var hudVisibility = MacHudVisibility()
+    guard !hudVisibility.requestedVisible, !hudVisibility.captureHidden,
+          hudVisibility.requestShow() else {
+        throw AxonError("contract_test_failed", "Passive HUD visibility or first entrance differs.")
+    }
+    hudVisibility.beginCapture()
+    guard hudVisibility.captureHidden, !hudVisibility.requestShow(),
+          hudVisibility.endCapture(), !hudVisibility.requestShow() else {
+        throw AxonError("contract_test_failed", "Capture restoration must not replay the HUD entrance.")
+    }
+    hudVisibility.beginCapture()
+    hudVisibility.requestHide()
+    guard !hudVisibility.endCapture(), !hudVisibility.requestedVisible,
+          hudVisibility.requestShow() else {
+        throw AxonError("contract_test_failed", "Capture restoration undid Hide or blocked a later explicit show.")
+    }
+    hudVisibility.requestHide()
+    hudVisibility.beginCapture()
+    guard !hudVisibility.endCapture() else {
+        throw AxonError("contract_test_failed", "Passive capture restoration unexpectedly requested controls.")
+    }
+    _ = NSApplication.shared
+    let dormantHud = MacVisuals(), hudPath = MacFence.file + ".hud"
+    var existingHud = stat()
+    guard lstat(hudPath, &existingHud) != 0, errno == ENOENT else {
+        throw AxonError("contract_test_failed", "HUD fixture path was already occupied.")
+    }
+    try Data("[0,0,32,32]".utf8).write(to: URL(fileURLWithPath: hudPath), options: [.withoutOverwriting])
+    dormantHud.hideForCapture()
+    guard !FileManager.default.fileExists(atPath: hudPath) else {
+        throw AxonError("contract_test_failed", "Hidden HUD retained its takeover-exemption bounds.")
+    }
+    try FileManager.default.createDirectory(atPath: hudPath, withIntermediateDirectories: false)
+    dormantHud.hide()
+    var hudIsDirectory = ObjCBool(false)
+    guard FileManager.default.fileExists(atPath: hudPath, isDirectory: &hudIsDirectory), hudIsDirectory.boolValue else {
+        throw AxonError("contract_test_failed", "HUD cleanup recursively removed a directory.")
+    }
+    guard rmdir(hudPath) == 0 else { // This exact empty fixture only.
+        throw AxonError("contract_test_failed", "HUD fixture cleanup was not an empty directory.")
+    }
     let iconAssets = try MacPhosphorIcon.validateAssets()
     guard iconAssets == 5 else { throw AxonError("contract_test_failed", "Official HUD icon inventory differs.") }
     let material = MacVisuals.makeMaterial(frame: NSRect(x: 0, y: 0, width: 396, height: 44), content: NSView())
@@ -519,7 +560,7 @@ func macContractTest() throws {
     try Data("invalid journal".utf8).write(to:URL(fileURLWithPath:MacInputLedger.path))
     guard !MacInputLedger.recover() else { throw AxonError("contract_test_failed","Malformed input journal was accepted.") }
     try MacInputLedger.save(["keys":[Int](),"buttons":[Int]()])
-    emit(["ok": true, "control_contract": 1, "checks": ["shared state codec", "malformed state refusal", "canonical approval fingerprint", "sensitive action classification", "kernel process birth identity", "native idle/paused/stopped/expired/session/monitor/Stop refusals", "empty cleanup and malformed input-journal refusal", "official Phosphor resource rendering", "SDK and runtime material selection"], "hud_icon_assets": iconAssets, "hud_material": materialBackend, "native_glass_compiled": MacVisuals.nativeGlassCompiled, "desktop_input_sent": false])
+    emit(["ok": true, "control_contract": 1, "checks": ["shared state codec", "malformed state refusal", "canonical approval fingerprint", "sensitive action classification", "kernel process birth identity", "native idle/paused/stopped/expired/session/monitor/Stop refusals", "empty cleanup and malformed input-journal refusal", "official Phosphor resource rendering", "SDK and runtime material selection", "capture visibility and dismissal lifecycle"], "hud_icon_assets": iconAssets, "hud_material": materialBackend, "native_glass_compiled": MacVisuals.nativeGlassCompiled, "desktop_input_sent": false])
 }
 
 func macMoveCursor(_ point: CGPoint, _ args: [String: Any]) throws -> [String: Any] {

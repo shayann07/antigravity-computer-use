@@ -1,6 +1,6 @@
 # Antigravity Computer Use: handoff
 
-## Latest checkpoint — 1 November 2026
+## Latest checkpoint — 2 November 2026
 
 Windows beta.4 is published and the global installation now uses the exact
 GitHub-downloaded bundle. Read [the current qualification record](docs/WINDOWS-BETA4-QUALIFICATION.md)
@@ -11,8 +11,12 @@ real tests. The download-deadline repair is merged source, not included in beta.
 Keep the full goal active; Mac and physical/hardware gates are still pending.
 
 PR #34 merged the download-deadline repair after all source CI passed. PR #35
-contains the Windows own-HUD avoidance candidate (472 local tests: 460 pass,
-zero fail, 12 skips; Windows/Intel/ARM CI passed). It remains draft until the
+contains the frozen Windows beta.5 own-HUD candidate at `935c82d` (521 local
+tests: 509 pass, zero fail, 12 skips; all source CI and signed preparation run
+41343173485 passed). Build `0ffcc611…` and its 121 payloads/qualification ZIP
+were independently verified locally; the offline real-package helper probe
+passed with self-contained runtime tracing. Native fresh install remains
+skipped for `insecure_storage_ancestor`, with parent ACLs unchanged. It remains draft until the
 deferred live and physical checks can be performed. The installed skills remain
 the exact published beta.4 bytes.
 
@@ -23,6 +27,14 @@ SDK/runtime gate and shares Windows' official Phosphor SVG assets. See
 [the correction and qualification boundaries](docs/MACOS-GLASS-MATERIAL.md).
 Native Mac compilation/resource rendering and hardware appearance must be
 qualified; source edits alone do not establish native glass parity.
+The Mac branch now integrates main through `a02fabc` and fixes capture-restored
+controls replaying their entrance or overriding a dismissal. Fresh native CI
+must verify the merged source and lifecycle contract; earlier branch checks
+are historical. Windows's frozen candidate and the installed release are unchanged.
+The local shared suite passed 503/516 tests with zero failures and 13 explicit
+skips; that Windows-host run does not compile or qualify the new Swift changes.
+Issue #43 records the separate Smart/standalone consent-dialog takeover concern;
+it is source-observed and still requires native reproduction and repair.
 
 The `codex/latency-evidence-validation` work selects the comparison utility from
 Antigravity's unmerged `a44e532` latency worktree, rather than merging its stale
@@ -31,6 +43,74 @@ evidence-file preservation. See [performance methodology](docs/PERFORMANCE.md).
 Current installed status CLI median is 296.4 ms across seven read-only samples;
 the retained Flash task still has 10.6754-second median inter-call gaps. This is
 measurement support, not an actual host speed fix or release acceptance.
+
+The rest of the `a44e532` timing prototype remains unmerged. Inert subprocess
+tests reproduced incorrect timeout delivery flags and active-task detection;
+[issue #38](https://github.com/shayann07/antigravity-computer-use/issues/38) records
+the evidence and adoption requirements. No live desktop was used. Do not use
+that wrapper/scheduler for release qualification. The supported IPC client's
+seven unknown-delivery transport regressions passed; this finding is not a
+claim that the published controller replayed an action.
+
+The installed Stop qualification harness has also been repaired: exact build
+and policy binding, idle ownership preflight, fresh project-local evidence,
+strict current-task ledger checks, real Esc during the held drag and one
+explicitly visible local Re-arm. Its read-only `--check-only` path verified the
+published beta.4 installation without controls or app input. The interactive
+flow remains unrun while the owner is unavailable; see docs/qualification.md.
+The 15 qualification regressions and seven transport-failure regressions pass.
+Whole-procedure fixtures explicitly identify themselves as inert and exercise
+successful sequencing, refusal of another task and incomplete Stop evidence.
+They are not physical acceptance. The owner deferred desktop testing; no live
+installation, controls, policy or Stop latch was changed by these source checks.
+At `c8622ad`, the local full suite passed 497/509 with 12 explicit skips.
+Windows and the pull-request Intel/ARM jobs passed, but a duplicate push Intel
+job failed its concurrent native build at the existing 120-second Swift
+deadline. That failure is retained, not converted to a pass. The Mac workflow
+now serializes test files to avoid unrelated native compilers competing with
+the intentional two-builder race. That race and its deadlines are unchanged;
+all six exact-head checks at `10db3d0` passed, including both Intel runs. PR #39
+merged as `7e93d41`; its merged tree matches the reviewed head. The full local
+suite's 497 passes and 12 skips are not physical acceptance.
+
+A follow-up skill audit found instructions forbidding the terminal that its
+first command needs, incorrectly saying Mac recovered-task cleanup is always
+blocked, and recovery advice implying another caller's sidecar can be restarted
+or a bar is visible without confirmation. The shared entrypoint/reference now
+match the supported Windows/Mac cleanup checks, ownership and visibility rules.
+No runtime policy, installed skill or Stop latch is changed by these source
+edits. Real model uptake and workflow timing remain unqualified until the owner
+releases the desktop; no speed improvement is inferred from wording changes.
+The first PR #40 Windows run at `a13b2f3` failed because the guidance test
+explicitly required the contradictory “do not open a terminal” wording. The
+test now resolves the documented entrypoint against the real offline CLI
+schema instead; its bounded-handoff assertions remain. Retain the failed run
+and verify the corrected head's regressions/CI before merging.
+
+PR #40 subsequently passed all six Windows/Intel/ARM checks at `d6f2c07` and
+merged as `0c26101`. The first PR #42 draft `f9dc519` misread compact-log
+truncation as lost tool/model input. The full transcript retains complete JSON
+and the full skill; the inferred 4 KB host cap is not established. Issue #41 is
+closed with this correction. Its automatic reply-size cap is removed to avoid
+discarding useful controls on that mistaken premise. The old 505/517 passing
+synthetic tests do not establish that diagnosis or qualify the revised head.
+
+PR #42 is narrowed to preserving native `tree_incomplete` in brief output
+without shortening the rendered tree or replacing the established skill.
+The short-guide experiment is preserved at public revision `0ab5f73` and in
+private `.localdata/short-skill-context-proposal.patch`; it is deferred until
+real model comparison, not described as a proven fix or discarded work.
+Actual CLI/inert-IPC tests cover exact Unicode, delivery/cancellation evidence,
+unchanged long trees and full JSON. Both platforms' native guards are unchanged.
+
+Read-only full-log header analysis now gives 47 completed tools: 39 terminal
+calls total a nominal 55 seconds, eight file/image reads total two seconds,
+and the first-to-final tool interval is 480 seconds. The remaining 423 seconds
+are between tools, including host/model work and possible background inference.
+Timestamps have one-second precision: these are rounded sums, not isolated
+model or native-engine timing. See docs/PERFORMANCE.md for limits and hashes.
+All six CI checks passed the earlier `0ab5f73` head; the narrowed head needs its
+own current checks. No desktop input or installed-release modification was used.
 
 PR #35 (Windows own-HUD avoidance) and PR #36 (Mac native glass/official icon
 assets) remain draft pending the live and physical checks the owner deferred.

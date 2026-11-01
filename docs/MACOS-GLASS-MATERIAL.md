@@ -1,5 +1,11 @@
 # Mac HUD material and icon correction
 
+The branch now integrates shared core through main `a02fabc`, including the
+brief completeness fix and current qualification procedures. The established
+shared skill is retained. This remains a source-only Mac candidate; its package
+version does not identify a new published Mac release. The separately frozen
+Windows beta.5 candidate is not rebuilt or installed by this integration.
+
 Signed Mac packages on the new HUD line must include all five official icon
 resources. The updater refuses an incomplete package before stopping the current
 service or changing installation pointers. Older published beta.3 packages remain
@@ -38,6 +44,29 @@ was a design target, not a measured contrast ratio over real desktop content.
 The Mac guardian reports actual native panel visibility, rather than a hardcoded
 success. A successful `ready` reply can include `visual_material` with the known
 native/fallback backend, helping the agent distinguish them without source reads.
+
+Capture restore now preserves requested visibility separately from temporary
+hiding. Restoring a screenshot no longer requests a new entrance animation, and
+Hide/End during capture cannot be undone by a late restore. Native contract
+checks exercise passive startup, first show, repeated capture/state updates,
+explicit dismissal during capture and a subsequent explicit show. These are
+state-transition checks, not a recorded live-animation pass.
+Temporary hiding also removes the HUD takeover-exemption bounds; an invisible
+bar must not reserve a mouse region. Bounds cleanup uses file-scoped `unlink`
+and refuses to recursively remove a directory at that path. Native contract
+fixtures cover both regular-file cleanup and preserved directory contents.
+Standalone consent-dialog input in Smart takeover is a separate source concern
+tracked in [#43](https://github.com/shayann07/antigravity-computer-use/issues/43).
+
+The source review used Apple's [motion guidance](https://developer.apple.com/design/human-interface-guidelines/motion)
+(`Providing feedback`: permit cancellation and avoid needless repeated motion)
+and [materials guidance](https://developer.apple.com/design/human-interface-guidelines/materials)
+(`Liquid Glass`: regular material for legible foreground controls). The bar uses
+13-point system status text, labelled keyboard-focusable controls and fixed
+positions. Reduced Motion removes the entrance transform and makes the glow
+static. Actual contrast, text enlargement, preference changes and compositing
+over real light/dark content remain hardware acceptance items; source values
+and target ratios cannot establish them.
 
 Before shipping a Mac update, the Mac agent must verify the exact signed build
 on hardware, report the actual material backend, inspect active/paused/stopped
