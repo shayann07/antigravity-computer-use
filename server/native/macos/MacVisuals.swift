@@ -4,54 +4,6 @@ import CoreGraphics
 import Foundation
 import QuartzCore
 
-enum MacPhosphorIcon: String, Equatable {
-    case dotsThreeFill = "dots-three-fill"
-    case pauseFill = "pause-fill"
-    case playFill = "play-fill"
-    case stopFill = "stop-fill"
-    case xFill = "x-fill"
-
-    // Pure filled Phosphor Icons (@phosphor-icons/core 256x256 viewBox), zero strokes.
-    func drawFilled(in rect: NSRect, color: NSColor) {
-        guard let ctx = NSGraphicsContext.current?.cgContext else { return }
-        ctx.saveGState()
-        defer { ctx.restoreGState() }
-        color.setFill()
-        ctx.translateBy(x: rect.minX, y: rect.maxY)
-        ctx.scaleBy(x: rect.width / 256.0, y: -rect.height / 256.0)
-
-        switch self {
-        case .dotsThreeFill:
-            for cx: CGFloat in [60, 128, 196] {
-                NSBezierPath(ovalIn: NSRect(x: cx - 20, y: 108, width: 40, height: 40)).fill()
-            }
-        case .pauseFill:
-            NSBezierPath(roundedRect: NSRect(x: 48, y: 40, width: 56, height: 176), xRadius: 16, yRadius: 16).fill()
-            NSBezierPath(roundedRect: NSRect(x: 152, y: 40, width: 56, height: 176), xRadius: 16, yRadius: 16).fill()
-        case .playFill:
-            let p = NSBezierPath()
-            p.move(to: NSPoint(x: 72, y: 54))
-            p.curve(to: NSPoint(x: 96, y: 42), controlPoint1: NSPoint(x: 72, y: 40), controlPoint2: NSPoint(x: 84, y: 35))
-            p.line(to: NSPoint(x: 224, y: 114))
-            p.curve(to: NSPoint(x: 224, y: 142), controlPoint1: NSPoint(x: 236, y: 121), controlPoint2: NSPoint(x: 236, y: 135))
-            p.line(to: NSPoint(x: 96, y: 214))
-            p.curve(to: NSPoint(x: 72, y: 202), controlPoint1: NSPoint(x: 84, y: 221), controlPoint2: NSPoint(x: 72, y: 216))
-            p.close()
-            p.fill()
-        case .stopFill:
-            NSBezierPath(roundedRect: NSRect(x: 44, y: 44, width: 168, height: 168), xRadius: 24, yRadius: 24).fill()
-        case .xFill:
-            for angle: CGFloat in [.pi / 4.0, -.pi / 4.0] {
-                ctx.saveGState()
-                ctx.translateBy(x: 128, y: 128)
-                ctx.rotate(by: angle)
-                NSBezierPath(roundedRect: NSRect(x: -92, y: -14, width: 184, height: 28), xRadius: 14, yRadius: 14).fill()
-                ctx.restoreGState()
-            }
-        }
-    }
-}
-
 struct MacHudStatePresentation: Equatable {
     let resolvedState: String
     let title: String
@@ -62,7 +14,7 @@ struct MacHudStatePresentation: Equatable {
     let stopSymbol: String
     let stopAccessibilityLabel: String
     let isEmergency: Bool
-    let minimumContrast: Double
+    let contrastTarget: Double // A design target; not measured composited contrast.
 }
 
 final class MacControlPanel: NSPanel {
@@ -80,7 +32,7 @@ final class MacHudButton: NSButton {
     var isEmergencyAction = false
     var isPrimaryRearm = false
     var hudTitle: String = "" { didSet { needsDisplay = true } }
-    var hudIcon: MacPhosphorIcon = .dotsThreeFill { didSet { needsDisplay = true } }
+    var hudIcon: MacPhosphorIcon = .slidersHorizontalFill { didSet { needsDisplay = true } }
     var onEscape: (() -> Void)?
     override var acceptsFirstResponder: Bool { true }
     override var focusRingMaskBounds: NSRect { bounds.insetBy(dx: 1, dy: 1) }
@@ -122,7 +74,7 @@ final class MacHudButton: NSButton {
         if hudTitle.isEmpty {
             let iconSize: CGFloat = 15
             let iconRect = NSRect(x: (bounds.width - iconSize) / 2, y: (bounds.height - iconSize) / 2, width: iconSize, height: iconSize)
-            hudIcon.drawFilled(in: iconRect, color: fg)
+            if !hudIcon.drawFilled(in: iconRect) { drawFallbackLabel(in: bounds) }
         } else {
             let attrs: [NSAttributedString.Key: Any] = [
                 .font: NSFont.systemFont(ofSize: 12.5, weight: .semibold),
@@ -135,9 +87,14 @@ final class MacHudButton: NSButton {
             let totalWidth = iconSize + gap + textSize.width
             let startX = (bounds.width - totalWidth) / 2
             let iconRect = NSRect(x: startX, y: (bounds.height - iconSize) / 2, width: iconSize, height: iconSize)
-            hudIcon.drawFilled(in: iconRect, color: fg)
+            _ = hudIcon.drawFilled(in: iconRect)
             attrTitle.draw(at: NSPoint(x: startX + iconSize + gap, y: (bounds.height - textSize.height) / 2))
         }
+    }
+    private func drawFallbackLabel(in rect: NSRect) {
+        let text = NSAttributedString(string: hudIcon.fallbackLabel, attributes: [.font: NSFont.systemFont(ofSize: 10), .foregroundColor: NSColor.white])
+        let size = text.size()
+        text.draw(at: NSPoint(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2))
     }
 }
 
@@ -157,6 +114,40 @@ final class MacVisuals: NSObject {
     var visible: Bool { panel?.isVisible == true }
     var cursorApplied: Bool { !hiddenDisplays.isEmpty }
 
+    static var nativeGlassCompiled: Bool {
+        #if AGCU_MACOS26_SDK
+        return true
+        #else
+        return false
+        #endif
+    }
+    static func makeMaterial(frame: NSRect, content: NSView) -> NSView {
+        #if AGCU_MACOS26_SDK
+        if #available(macOS 26.0, *) {
+            let glass = NSGlassEffectView(frame: frame)
+            glass.style = .regular
+            glass.cornerRadius = frame.height / 2
+            glass.contentView = content
+            glass.appearance = NSAppearance(named: .darkAqua)
+            glass.wantsLayer = true
+            return glass
+        }
+        #endif
+        let effect = NSVisualEffectView(frame: frame)
+        effect.material = .hudWindow; effect.blendingMode = .behindWindow; effect.state = .active
+        effect.wantsLayer = true; effect.layer?.cornerRadius = frame.height / 2; effect.layer?.masksToBounds = true
+        effect.appearance = NSAppearance(named: .darkAqua)
+        effect.addSubview(content)
+        return effect
+    }
+    static func materialBackend(for view: NSView?) -> String {
+        guard let view = view else { return "not_created" }
+        #if AGCU_MACOS26_SDK
+        if #available(macOS 26.0, *), view is NSGlassEffectView { return "native_liquid_glass" }
+        #endif
+        return view is NSVisualEffectView ? "visual_effect_fallback" : "unknown"
+    }
+
     static func statePresentation(for requested: String, latched: Bool = false) -> MacHudStatePresentation {
         let effective = MacFence.resolvedState(requested, latched: latched)
         switch effective {
@@ -171,7 +162,7 @@ final class MacVisuals: NSObject {
                 stopSymbol: MacPhosphorIcon.stopFill.rawValue,
                 stopAccessibilityLabel: "Stop computer use immediately",
                 isEmergency: false,
-                minimumContrast: 8.5
+                contrastTarget: 8.5
             )
         case "paused":
             return MacHudStatePresentation(
@@ -184,7 +175,7 @@ final class MacVisuals: NSObject {
                 stopSymbol: MacPhosphorIcon.stopFill.rawValue,
                 stopAccessibilityLabel: "Stop computer use immediately",
                 isEmergency: false,
-                minimumContrast: 8.5
+                contrastTarget: 8.5
             )
         case "stopped":
             return MacHudStatePresentation(
@@ -197,7 +188,7 @@ final class MacVisuals: NSObject {
                 stopSymbol: MacPhosphorIcon.xFill.rawValue,
                 stopAccessibilityLabel: "Dismiss stopped controls",
                 isEmergency: true,
-                minimumContrast: 9.2
+                contrastTarget: 9.2
             )
         default:
             return MacHudStatePresentation(
@@ -210,7 +201,7 @@ final class MacVisuals: NSObject {
                 stopSymbol: MacPhosphorIcon.stopFill.rawValue,
                 stopAccessibilityLabel: "Stop computer use immediately",
                 isEmergency: false,
-                minimumContrast: 8.5
+                contrastTarget: 8.5
             )
         }
     }
@@ -248,15 +239,10 @@ final class MacVisuals: NSObject {
         let container = NSView(frame: NSRect(x: 0, y: 0, width: barWidth, height: barHeight))
         container.autoresizingMask = [.width, .height]
 
-        // AppKit's supported native glass surface is NSVisualEffectView. The
-        // newer SwiftUI glass type is not an AppKit symbol and cannot be used
-        // by this native host on the macOS SDKs used for Intel or ARM builds.
-        let effect = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: barWidth, height: barHeight))
-        effect.material = .hudWindow; effect.blendingMode = .behindWindow; effect.state = .active
-        effect.wantsLayer = true; effect.layer?.cornerRadius = barHeight / 2; effect.layer?.masksToBounds = true
-        effect.appearance = NSAppearance(named: .darkAqua)
-        effect.addSubview(container)
-        let hostRoot: NSView = effect
+        // NSGlassEffectView is AppKit's public macOS 26 material. The SDK gate
+        // keeps source builds working with older SDKs; runtime availability
+        // preserves the macOS 14 deployment target of prebuilt bundles.
+        let hostRoot = Self.makeMaterial(frame: NSRect(x: 0, y: 0, width: barWidth, height: barHeight), content: container)
 
         label.frame = NSRect(x: 18, y: 12, width: 206, height: 20)
         label.font = .systemFont(ofSize: 13, weight: .semibold)
@@ -275,7 +261,7 @@ final class MacVisuals: NSObject {
         }
         stop.isEmergencyAction = true
         stop.toolTip = "Stop immediately · Esc or Control+Option+F12"
-        more.hudIcon = .dotsThreeFill
+        more.hudIcon = .slidersHorizontalFill
         more.hudTitle = ""
         more.setAccessibilityLabel("Control settings")
         more.toolTip = "Takeover and interruption settings"
@@ -293,6 +279,13 @@ final class MacVisuals: NSObject {
         writeHudBounds(p.frame)
     }
     func layoutControls(for presentation: MacHudStatePresentation) {
+        #if AGCU_MACOS26_SDK
+        if #available(macOS 26.0, *), let glass = rootView as? NSGlassEffectView {
+            // Regular glass supplies adaptive contrast; avoid painting an
+            // opaque slab over the native material. Colour reinforces state.
+            glass.tintColor = presentation.isEmergency ? NSColor.systemRed.withAlphaComponent(0.18) : .clear
+        }
+        #endif
         if let glass = rootView as? NSVisualEffectView {
             if presentation.isEmergency {
                 glass.layer?.backgroundColor = NSColor(calibratedRed: 0.42, green: 0.06, blue: 0.08, alpha: 0.88).cgColor

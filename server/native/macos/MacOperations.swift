@@ -286,14 +286,27 @@ func macContractTest() throws {
         throw AxonError("contract_test_failed", "macOS Space and window capture failure classification differs.")
     }
     let activeHud = MacVisuals.statePresentation(for: "active", latched: false)
+    let iconAssets = try MacPhosphorIcon.validateAssets()
+    guard iconAssets == 5 else { throw AxonError("contract_test_failed", "Official HUD icon inventory differs.") }
+    let material = MacVisuals.makeMaterial(frame: NSRect(x: 0, y: 0, width: 396, height: 44), content: NSView())
+    let materialBackend = MacVisuals.materialBackend(for: material)
+    #if AGCU_MACOS26_SDK
+    if #available(macOS 26.0, *) {
+        guard materialBackend == "native_liquid_glass" else { throw AxonError("contract_test_failed", "The native glass view was not selected.") }
+    } else {
+        guard materialBackend == "visual_effect_fallback" else { throw AxonError("contract_test_failed", "The older-system material fallback differs.") }
+    }
+    #else
+    guard materialBackend == "visual_effect_fallback" else { throw AxonError("contract_test_failed", "The older-SDK material fallback differs.") }
+    #endif
     let pausedHud = MacVisuals.statePresentation(for: "paused", latched: false)
     let stoppedHud = MacVisuals.statePresentation(for: "stopped", latched: false)
     let latchedHud = MacVisuals.statePresentation(for: "active", latched: true)
     guard activeHud.title.contains("Working"), !activeHud.isEmergency,
           pausedHud.title.contains("Paused"), !pausedHud.isEmergency,
-          stoppedHud.title == "Stopped · Re-arm required", stoppedHud.isEmergency, stoppedHud.minimumContrast >= 8.5,
+          stoppedHud.title == "Stopped · Re-arm required", stoppedHud.isEmergency, stoppedHud.contrastTarget >= 8.5,
           latchedHud.resolvedState == "stopped", latchedHud.title == "Stopped · Re-arm required", latchedHud.isEmergency else {
-        throw AxonError("contract_test_failed", "Mac HUD state presentation or emergency contrast contract differs.")
+        throw AxonError("contract_test_failed", "Mac HUD state presentation or emergency contrast target differs.")
     }
     guard macRole("AXWebArea") == "Document",
           macRole("AXLink") == "Hyperlink",
@@ -506,7 +519,7 @@ func macContractTest() throws {
     try Data("invalid journal".utf8).write(to:URL(fileURLWithPath:MacInputLedger.path))
     guard !MacInputLedger.recover() else { throw AxonError("contract_test_failed","Malformed input journal was accepted.") }
     try MacInputLedger.save(["keys":[Int](),"buttons":[Int]()])
-    emit(["ok": true, "control_contract": 1, "checks": ["shared state codec", "malformed state refusal", "canonical approval fingerprint", "sensitive action classification", "kernel process birth identity", "native idle/paused/stopped/expired/session/monitor/Stop refusals", "empty cleanup and malformed input-journal refusal"], "desktop_input_sent": false])
+    emit(["ok": true, "control_contract": 1, "checks": ["shared state codec", "malformed state refusal", "canonical approval fingerprint", "sensitive action classification", "kernel process birth identity", "native idle/paused/stopped/expired/session/monitor/Stop refusals", "empty cleanup and malformed input-journal refusal", "official Phosphor resource rendering", "SDK and runtime material selection"], "hud_icon_assets": iconAssets, "hud_material": materialBackend, "native_glass_compiled": MacVisuals.nativeGlassCompiled, "desktop_input_sent": false])
 }
 
 func macMoveCursor(_ point: CGPoint, _ args: [String: Any]) throws -> [String: Any] {

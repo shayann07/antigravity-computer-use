@@ -5,7 +5,7 @@
     {
       "path": "server/build.mjs",
       "upstream_sha256": "81260b378fffb46573cfe475a3a336930113c8abc465d3d278bbb0851d8a4377",
-      "local_sha256": "e45a6e3c481075ef5c1e1845da7a74e7098e1484c3deda6e4795a40b08705c58",
+      "local_sha256": "5a9ca0b38bb5e96a02051bbd5714bd30c050492984b9ee6f22930d8d86d6ffff",
       "modified": true
     },
     {
@@ -492,7 +492,7 @@
     },
     {
       "path": "HANDOFF.md",
-      "sha256": "ccd8875ebcc51f2c485214e6e5376f6fd6499f31372985c284a1d02805ed4834"
+      "sha256": "73d8113d1b9cd3bd281c059afa85ba5b8186f37c093e7d88bcdaf38fb4f91df9"
     },
     {
       "path": "tests/guardian-visibility.mjs",
@@ -552,7 +552,7 @@
     },
     {
       "path": "server/macos-build.mjs",
-      "sha256": "963ce75e3df84f88ce93832b50fdad425ca9d0aabbee318d2bac8a0b9bc60f88"
+      "sha256": "312307eea4018133fa25ba498a137a1c4f5deb4743a6a0876a65d117962dec37"
     },
     {
       "path": "tests/platform-contract.test.mjs",
@@ -564,7 +564,7 @@
     },
     {
       "path": ".github/workflows/macos.yml",
-      "sha256": "3df1c1730b1ee81e54f8c703e7170525e45fc36b6c3168613080219b62c2c4c3"
+      "sha256": "008d1c82f3c4f5057052f176d8248e692066ea38821674ac0ee4ad30e60f8106"
     },
     {
       "path": "server/native/macos/MacControl.swift",
@@ -572,15 +572,15 @@
     },
     {
       "path": "server/native/macos/MacGuardian.swift",
-      "sha256": "fb29f3f9101e849d90eae48f2368b52bed1709a7cbac67eeb347762ec042804a"
+      "sha256": "2ff9d0fd8654894602f54e2567f9c5538f8af1088d647deb4f5927d62a2f12b1"
     },
     {
       "path": "server/native/macos/MacOperations.swift",
-      "sha256": "020f9719768f5bdb9db14862adf8af5d1a6094e81c0d1263e8efc867ba0ff4bb"
+      "sha256": "ac034b5a770dd11444e0675af26f5580039dc1fb5c698fbe87139d2422d1814d"
     },
     {
       "path": "server/native/macos/MacVisuals.swift",
-      "sha256": "d597497241eb1bfc88d3e4b1683473c3b89da9b4f7121f966997e070a3549cf4"
+      "sha256": "934f58a99697d794f670a7fb79ef367cf098c81a9608712d188ccf9832e61438"
     },
     {
       "path": "server/native/macos/PrivateStorage.swift",
@@ -708,7 +708,7 @@
     },
     {
       "path": ".github/workflows/prepare-signed-release.yml",
-      "sha256": "60d1a8ff906fcc3a65e14d74a8d9512d00d8d569335dbbc9e35b7c2c568601ac"
+      "sha256": "310bedacf4deb57864eee0f9a1c309e222722b28b4afa7bf113ecf0d5a4a4463"
     },
     {
       "path": "server/recovery.mjs",
@@ -764,7 +764,7 @@
     },
     {
       "path": "docs/MACOS-QUALIFICATION.md",
-      "sha256": "c028398afbb261bc4dec0f70bee0e4a651e47acbbb3a70fc859543f1fd701992"
+      "sha256": "ad1b0743d921db5742fcf6fca919a5d84b7ad376e530f85db6ac49b37fa8dc6d"
     },
     {
       "path": "tests/MacStorageMarkerWriter.swift",
@@ -824,7 +824,7 @@
     },
     {
       "path": "THIRD_PARTY_NOTICES.md",
-      "sha256": "53d285532a28557fda36bde3dd89e56a371dc1353a2cfeaf15932d734e1af3b9"
+      "sha256": "c9366a76bb2529d7a4d943db90ff9bda9aee85a95104f40544e70a138e647ed4"
     },
     {
       "path": "docs/RELEASE.md",
@@ -837,6 +837,18 @@
     {
       "path": "docs/WINDOWS-BETA4-QUALIFICATION.md",
       "sha256": "8efb0fa4a94163923984de7f8b95b72864a047f5a01c477a905736f86b78fd7d"
+    },
+    {
+      "path": "server/native/macos/MacPhosphorIcons.swift",
+      "sha256": "ef42a8e0e3a4fa6a2e7d839fd23e22788a2c17682353fd7847ce3e3671a6e7fb"
+    },
+    {
+      "path": "tests/macos-hud-assets.test.mjs",
+      "sha256": "b22c79f5537db715d116d6b90a0b2d31fd75e9dc56e3e9cd2fb55a674fc7a27f"
+    },
+    {
+      "path": "docs/MACOS-GLASS-MATERIAL.md",
+      "sha256": "856deb802844c6752e47f312717a862310acc7a31902bb03ef62ee2f06abc315"
     }
   ],
   "external_files": [

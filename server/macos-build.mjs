@@ -5,6 +5,16 @@ import {fileURLToPath} from 'node:url';
 import {createHash, randomUUID} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 const root=fileURLToPath(new URL('../',import.meta.url));
+export const macHudIconFiles=['sliders-horizontal-fill','pause-fill','play-fill','stop-fill','x-fill'].map(name=>path.join(root,'server/liquidglass-host/icons',name+'.svg'));
+export function macSDKFlags(version){
+ if(typeof version!=='string'||!/^\d+\.\d+(?:\.\d+)?$/.test(version)||Number(version.split('.')[0])<14)
+  throw Object.assign(Error('A supported macOS SDK version could not be established.'),{code:'macos_sdk_version_invalid'});
+ return Number(version.split('.')[0])>=26?['-D','AGCU_MACOS26_SDK']:[];
+}
+export function copyMacHudIcons(app){
+ const directory=path.join(app,'Contents/Resources/Phosphor');fs.mkdirSync(directory,{recursive:true});
+ for(const file of macHudIconFiles){if(!fs.lstatSync(file).isFile()||fs.lstatSync(file).isSymbolicLink())throw Error('Invalid Phosphor source asset');fs.copyFileSync(file,path.join(directory,path.basename(file)));}
+}
 // Publish only complete signed bundles. A competing builder must keep the
 // first completed bundle rather than overwrite an executable in use.
 export function publishMacBundle(stage,destination,verify){

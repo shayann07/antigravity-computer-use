@@ -10,6 +10,20 @@ fix. Public updater transfer timeout #32 and banner overlap #33 were found in
 real tests. The source download-deadline repair is a separate, unpublished change.
 Keep the full goal active; Mac and physical/hardware gates are still pending.
 
+PR #34 merged the download-deadline repair after all source CI passed. PR #35
+contains the Windows own-HUD avoidance candidate (472 local tests: 460 pass,
+zero fail, 12 skips; Windows/Intel/ARM CI passed). It remains draft until the
+deferred live and physical checks can be performed. The installed skills remain
+the exact published beta.4 bytes.
+
+A Mac material audit found the current source used the older visual-effect
+fallback and handwritten icon approximations. The `codex/mac-native-glass-assets`
+candidate restores Apple's public macOS 26 AppKit glass API under an explicit
+SDK/runtime gate and shares Windows' official Phosphor SVG assets. See
+[the correction and qualification boundaries](docs/MACOS-GLASS-MATERIAL.md).
+Native Mac compilation/resource rendering and hardware appearance must be
+qualified; source edits alone do not establish native glass parity.
+
 ## 30 October final Intel Mac Space/capture & Liquid Glass HUD repair
 
 Branch `codex/argon-final-mac` (based on `v0.3.0-beta.3` commit
