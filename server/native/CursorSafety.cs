@@ -186,6 +186,10 @@ namespace Axon {
                         long epoch;lock(watchGate){epoch=armed?armEpoch:-1;}
                         if(epoch>=0) {
                             string file=ControlFence.FileName;
+                            string stop=Environment.GetEnvironmentVariable("AGCU_STOP_LATCH");
+                            if(ControlFence.LatchBlocks(stop))lock(watchGate){
+                                if(armed&&armEpoch==epoch){CrashCleanup();armed=false;armEpoch++;return 3;}
+                            }
                             ulong now=NativeDeadline.GetTickCount64();string status,text="";
                             try {text=File.ReadAllText(file);status=WatchdogState(text,now);}catch {status="invalid";}
                             if(status=="active"){problem="";problemState="";problemSince=0;}

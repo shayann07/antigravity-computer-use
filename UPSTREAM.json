@@ -240,7 +240,7 @@
     },
     {
       "path": "tests/NativeWatchdogMetadataTests.cs",
-      "sha256": "ad579d5d20b86c4f3a9e0dd632e79b6a010446c390534ca9209fe7d0aba73dae"
+      "sha256": "35ba94735eaae49bddbb4115f3baea843ee22c4e035cfe79bc5965743e3aea06"
     },
     {
       "path": "tests/native-watchdog-metadata.test.mjs",
@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "cc2a7c64194720c1b2deb0ecca4b798ddc8cd888eaab084dc6f35c79cf747415"
+      "sha256": "51b388fd56b6685f92b7a2365479a90c8099bdc97e48987fd1783d1bda51b185"
     },
     {
       "path": "server/mcp.mjs",
@@ -268,11 +268,11 @@
     },
     {
       "path": "server/native/Guardian.cs",
-      "sha256": "c3aca4d78dcca0188c9dfcf2dffef5facca2deb90c6abb86238e2ed3d79d8209"
+      "sha256": "559eaf62a51f1000d961b60bfa799a4ffd447722f1e4a905de8c8bdbaa1a023f"
     },
     {
       "path": "server/native/CursorSafety.cs",
-      "sha256": "bbc775d084d6e1690e15b2590ff3eb389ca0b38af05bce13b422622541780553"
+      "sha256": "e8f4e6f28da96c11698899bf6ca1411f51f225b4b4f07d3d61c73463055f278b"
     },
     {
       "path": "server/native/DesktopVisuals.cs",
@@ -292,7 +292,7 @@
     },
     {
       "path": "server/desktop-service.mjs",
-      "sha256": "1db0205d008f390b3e0493473f2ecb02a39f360f721da94d65f45985ea3f4b97"
+      "sha256": "2de698caffaad9618639e0413c540039184ed881c3203e6746a036259bc75423"
     },
     {
       "path": "server/desktop-tools.mjs",
@@ -300,7 +300,7 @@
     },
     {
       "path": "scripts/desktop.mjs",
-      "sha256": "dd9da287ccffab6863fba42024f4034c67dedbb11bfc0eaa5b391055e1bb4e7c"
+      "sha256": "0b1d4f03619d1c11c5c565de7613af99467e807be659d95e29e81268b46d6aa8"
     },
     {
       "path": "server/version.mjs",
@@ -308,7 +308,7 @@
     },
     {
       "path": "tests/desktop-service.test.mjs",
-      "sha256": "b478f1e2da06c6cf028a50670437ab2f74237296a9f6da9647956707f7ef86d5"
+      "sha256": "6be90b537ad63867266363df4fcf6e1881f89ed611f9c5ff96291ce02b3eb5bf"
     },
     {
       "path": "tests/installed-direct-smoke.mjs",
@@ -348,11 +348,11 @@
     },
     {
       "path": "scripts/install.mjs",
-      "sha256": "ee7e190ccf71acf39dca1a5653398934d5b5a77389a4af75bcbb935d84fec578"
+      "sha256": "37d7817a912e16e61164548d4c5824f0f8699a4ee9c0ad041a8ca0960fe71ceb"
     },
     {
       "path": "scripts/rollback.mjs",
-      "sha256": "529517972540fc00cdd7c1e6d2a80413a6b5a7472ffd8bcb3b6b0d00fdf8790f"
+      "sha256": "e6fd70dceef271d168a64787794cdf4161f1e75d111ee9cd200bb4f61c9b4bba"
     },
     {
       "path": "scripts/verify-install.mjs",
@@ -372,7 +372,7 @@
     },
     {
       "path": "tests/workflow.test.mjs",
-      "sha256": "d60e913da49bb50107f351ee622372ba33aadb07efd0ea64779748c7251e121b"
+      "sha256": "52b3b4befd17d34341f4d8b136b4e8ed5a05496c4989bf852c3a5bf75b532022"
     },
     {
       "path": "tests/ProviderFailureTarget.cs",
@@ -384,7 +384,7 @@
     },
     {
       "path": "server/native/StorageGuard.cs",
-      "sha256": "5624cc2fe60013b8da3351deb94b6563288363247fdd603c85411e25d0f22704"
+      "sha256": "4c294dae39a0c86e29276ed0040b70dc6a520cb93e3bc3553030937fc0864b36"
     },
     {
       "path": "server/storage.mjs",
@@ -492,7 +492,7 @@
     },
     {
       "path": "HANDOFF.md",
-      "sha256": "23eaa2ee8abb470295af85f003640ad25de18341662c5fbe6891030840805ca6"
+      "sha256": "526b7a2a2b85ffe92e9049534e9e796fbfffd5bb332a871a41d5705207716928"
     },
     {
       "path": "tests/guardian-visibility.mjs",
@@ -568,15 +568,15 @@
     },
     {
       "path": "server/native/macos/MacControl.swift",
-      "sha256": "e0b55b81e051cc1e1cf752b3e253f2db57afdc311b2e8028567b7ece495a680e"
+      "sha256": "7687d921901cbbf8b2ef03d0228412b0248831b72446f40e913f64b501cee358"
     },
     {
       "path": "server/native/macos/MacGuardian.swift",
-      "sha256": "fb29f3f9101e849d90eae48f2368b52bed1709a7cbac67eeb347762ec042804a"
+      "sha256": "dc49592ec21292e632bc98b0ba37d36ddef73c578fd053117f557dfe24899b10"
     },
     {
       "path": "server/native/macos/MacOperations.swift",
-      "sha256": "020f9719768f5bdb9db14862adf8af5d1a6094e81c0d1263e8efc867ba0ff4bb"
+      "sha256": "07f5021438baf04e0cca914415b1a6ee72d4afddc3c68a01f9d90028809fb959"
     },
     {
       "path": "server/native/macos/MacVisuals.swift",
@@ -624,7 +624,7 @@
     },
     {
       "path": "scripts/update.mjs",
-      "sha256": "7b24721e9b5be7b8b066ee9d75fa5b1e7369fc04013ef961d696cd19c7043fa5"
+      "sha256": "e86c45f22e77f27c3a691580b066bf60146f749f65852a4bf41f3516380340cc"
     },
     {
       "path": "scripts/sign-update.mjs",
@@ -640,11 +640,11 @@
     },
     {
       "path": "tests/update-transaction.test.mjs",
-      "sha256": "7dceea36ea72cf07c7ac943399ef1b13e2e17e1a0f346b2a3a9f1d9bd83a1356"
+      "sha256": "5419d804a18fa79be654432687dbf8f14ab15935ad633881dbcdc91f98d45a3e"
     },
     {
       "path": "docs/RELIABILITY-IMPLEMENTATION.md",
-      "sha256": "70c5b206fd8cb695999aa17c31d498428747f25769ca4019abb9bade7e4b541b"
+      "sha256": "0be85a783c1794268d4c936c943f363c6f17a723d906e467b6fde61c5ee80edd"
     },
     {
       "path": "docs/MAC-QUALIFICATION-PROMPT.md",
@@ -712,7 +712,7 @@
     },
     {
       "path": "server/recovery.mjs",
-      "sha256": "bc09cb68926889dbf9f4765c553d550f2a8e15872676eb5865eca03c851354ae"
+      "sha256": "076e38fb880d232327628ed7990e411294082f3de36af5d8bcda3daffd735cb3"
     },
     {
       "path": "scripts/qualify-guardian-desktop.mjs",
@@ -873,6 +873,14 @@
     {
       "path": "tests/brief-reply.test.mjs",
       "sha256": "9f2b3a109d96b186184f37d4dbdcd42f0abf5b891afccc06729067d4d9f359c2"
+    },
+    {
+      "path": "tests/stop-latch.test.mjs",
+      "sha256": "52e0f2976e4264237f62ecc049f8e3c42890e422c8f7f6b48122caa0d4e1177a"
+    },
+    {
+      "path": "docs/STOP-UNCERTAINTY.md",
+      "sha256": "559f4f97dad7644543a78adced2a1978a6770cd7061eb951d1fa0a7c1fc9c164"
     }
   ],
   "external_files": [

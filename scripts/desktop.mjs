@@ -13,7 +13,7 @@ import {loadDeployment,applyDeployment} from '../server/deployment.mjs';
 import {diagnostics} from './diagnostics.mjs';
 import {scheduleUpdates} from '../server/auto-update.mjs';
 import {Incidents} from '../server/incidents.mjs';
-import {recoveryAdvice} from '../server/recovery.mjs';
+import {recoveryAdvice,persistStopLatch,readStopLatch} from '../server/recovery.mjs';
 const EMPTY_INPUT={type:'object',properties:{},required:[],additionalProperties:false};
 const LIFECYCLE=[
   {command:'start',description:'Start or reconnect to this exact installed build. No arguments. Never clears emergency Stop or changes the installed permission policy.',inputSchema:EMPTY_INPUT},
@@ -155,14 +155,14 @@ export async function main(){
     throw Error('Native session did not start; run the service in foreground for diagnostics.');
   }
   if(!fs.existsSync(file)){
-    if(command==='status'){printReply({ok:true,state:fs.existsSync(path.join(dataDir(),'emergency.stop'))?'stopped':'not_running',build_version:VERSION,build_id:BUILD_ID,reconnect_required:true});return;}
+    if(command==='status'){const latch=readStopLatch(path.join(dataDir(),'emergency.stop'));printReply({ok:true,state:latch?'stopped':'not_running',...(latch?.unconfirmed?{control_reason:'guardian_stop_unconfirmed'}:{}),...(latch?.invalid?{control_reason:'stop_persistence_failed'}:{}),build_version:VERSION,build_id:BUILD_ID,reconnect_required:true});return;}
     throw Object.assign(Error('No desktop session is running (it may have expired after15 idle minutes). Restart the installed App sidecar (or use its human starter on the normal Windows desktop), then discover apps and take a fresh observation. Antigravity does not need to restart; emergency Stop remains latched.'),{code:'no_session'});
   }
   const session=JSON.parse(fs.readFileSync(file));
   if(command==='shutdown'){
     const previous=await request(session,'status',{},100000,policy.permission_mode);
     // Preserve an old adapter's stop during migration, before that process exits.
-    if(previous.state==='stopped')fs.writeFileSync(path.join(dataDir(),'emergency.stop'),'stopped');
+    if(previous.state==='stopped')persistStopLatch(path.join(dataDir(),'emergency.stop'),{unconfirmed:previous.control_reason==='guardian_stop_unconfirmed'});
   }
   const result=await request(session,command,args,100000,policy.permission_mode);printReply(result);if(!result.ok)process.exitCode=1;
 }

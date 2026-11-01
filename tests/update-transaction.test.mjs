@@ -31,6 +31,35 @@ function fixture({omitFresh=null,badFreshHash=false}={}){
  const fetcher=async url=>{fetches++;if(url.includes('api.github.com'))return {ok:true,json:async()=>({assets:[{name:`update-${process.platform}-${process.arch}.json`,browser_download_url:'https://github.com/shayann07/antigravity-computer-use/releases/download/v1.1.0/metadata.json'}]})};if(url.endsWith('/metadata.json'))return {ok:true,text:async()=>JSON.stringify(envelope)};return {ok:true,body:(async function*(){yield payload[url];})()};};
  return {directory,target,home,old,fresh,adapters,fetcher,calls,setState:v=>state=v,setFailHealth:()=>failHealth=true,fetches:()=>fetches,cleanup:()=>fs.rmSync(directory,{recursive:true,force:true})};
 }
+test('uncertain Stop defers apply, rollback and recovery before service reservation or shutdown',async()=>{
+ const f=fixture();try{
+  await update(f.target,'check',f);const before=fs.readFileSync(path.join(f.target,'installation.json'),'utf8');
+  const pending=path.join(f.target,'data','emergency.stop.unconfirmed');fs.mkdirSync(path.dirname(pending),{recursive:true});fs.writeFileSync(pending,'unconfirmed:update-fixture');
+  let reservations=0;f.adapters.prepare=async()=>{reservations++;return {ok:true,prepared:true};};f.calls.length=0;
+  for(const command of ['apply','rollback','recover'])assert.deepEqual(await update(f.target,command,f),{deferred:true,next_action:'inspect_stop_recovery'});
+  assert.equal(reservations,0);assert(!f.calls.includes('shutdown'));assert.equal(fs.readFileSync(path.join(f.target,'installation.json'),'utf8'),before);assert.equal(fs.readFileSync(pending,'utf8'),'unconfirmed:update-fixture');
+  assert.throws(()=>f.adapters.install({bundle:f.fresh.bundle,target:f.target}),/stop_recovery_required_before_install/);
+  assert.equal(fs.readFileSync(path.join(f.target,'installation.json'),'utf8'),before);
+  fs.unlinkSync(pending);const cli=f.adapters.cli;
+  f.adapters.cli=(record,args)=>args[0]==='status'?{...cli(record,args),state:'stopped',control_reason:'guardian_stop_unconfirmed'}:cli(record,args);
+  assert.deepEqual(await update(f.target,'apply',f),{deferred:true,next_action:'inspect_stop_recovery'});
+  assert.equal(reservations,0);assert(!f.calls.includes('shutdown'));
+  f.adapters.cli=cli;fs.writeFileSync(path.join(f.target,'data','emergency.stop'),'owner-stop');
+  assert.deepEqual(await update(f.target,'apply',f),{deferred:true,next_action:'inspect_stop_recovery'});
+  assert.throws(()=>f.adapters.install({bundle:f.fresh.bundle,target:f.target}),/stop_recovery_required_before_install/);
+  assert.equal(fs.readFileSync(path.join(f.target,'data','emergency.stop'),'utf8'),'owner-stop');
+ }finally{f.cleanup();}
+});
+
+test('direct rollback refuses a companion-only uncertainty marker without changing pins',()=>{
+ const f=fixture();try{
+  const next=f.adapters.install({bundle:f.fresh.bundle,target:f.target});const before=fs.readFileSync(path.join(f.target,'installation.json'),'utf8');
+  const pending=path.join(f.target,'data','emergency.stop.unconfirmed');fs.mkdirSync(path.dirname(pending),{recursive:true});fs.writeFileSync(pending,'unconfirmed:rollback-fixture');
+  assert.throws(()=>rollback(path.join(next.backup,'rollback.json')),/stop_recovery_required_before_rollback/);
+  assert.equal(fs.readFileSync(path.join(f.target,'installation.json'),'utf8'),before);assert.equal(fs.readFileSync(pending,'utf8'),'unconfirmed:rollback-fixture');
+ }finally{f.cleanup();}
+});
+
 test('signed incomplete bundle is refused before shutdown or configuration changes',async()=>{
  const f=fixture({omitFresh:'server/runtime.mjs'});try{
   const before=fs.readFileSync(path.join(f.target,'installation.json'),'utf8');

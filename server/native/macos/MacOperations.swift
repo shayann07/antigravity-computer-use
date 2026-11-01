@@ -312,6 +312,23 @@ func macContractTest() throws {
     guard symlink(latchProbe + ".missing", latchProbe) == 0 else { throw AxonError("contract_test_failed", "Cannot create latch-link fixture.") }
     guard MacFence.latchBlocks(latchProbe) else { throw AxonError("contract_test_failed", "Dangling latch link was treated as absent.") }
     guard unlink(latchProbe) == 0 else { throw AxonError("contract_test_failed", "Cannot remove latch-link fixture.") }
+    guard MacFence.latchStop(latchProbe), try String(contentsOfFile:latchProbe,encoding:.utf8) == "stopped" else {
+        throw AxonError("contract_test_failed", "Native Stop marker creation failed.")
+    }
+    try Data("unconfirmed:native-regression".utf8).write(to:URL(fileURLWithPath:latchProbe))
+    guard MacFence.latchStop(latchProbe), MacFence.latchStop(latchProbe),
+          try String(contentsOfFile:latchProbe,encoding:.utf8) == "unconfirmed:native-regression" else {
+        throw AxonError("contract_test_failed", "Native Stop downgraded uncertain delivery.")
+    }
+    guard unlink(latchProbe) == 0, symlink(latchProbe + ".missing", latchProbe) == 0,
+          MacFence.latchStop(latchProbe), MacFence.latchBlocks(latchProbe),
+          unlink(latchProbe) == 0 else {
+        throw AxonError("contract_test_failed", "Native Stop replaced or followed a latch link.")
+    }
+    try Data("unconfirmed:companion".utf8).write(to:URL(fileURLWithPath:latchProbe + ".unconfirmed"))
+    guard MacFence.latchBlocks(latchProbe), unlink(latchProbe + ".unconfirmed") == 0 else {
+        throw AxonError("contract_test_failed", "Native Stop ignored a companion-only fence.")
+    }
     guard !MacDeadline.walkBudgetExceeded(start: 100, now: 200, budgetMs: 100),
           MacDeadline.walkBudgetExceeded(start: 100, now: 201, budgetMs: 100),
           MacDeadline.walkBudgetExceeded(start: 100, now: 0, budgetMs: 100),

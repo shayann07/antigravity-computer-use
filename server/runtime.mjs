@@ -16,7 +16,7 @@ import {storageOperation} from './storage.mjs';
 import {contract,nativePlatform,launchTarget,executableKey} from './platform.mjs';
 import {Incidents} from './incidents.mjs';
 import {updateNotice} from './update-notice.mjs';
-import {recoveryAdvice,priorWindowsCleanupVerified,priorMacCleanupVerified} from './recovery.mjs';
+import {recoveryAdvice,priorWindowsCleanupVerified,priorMacCleanupVerified,readStopLatch,persistStopLatch} from './recovery.mjs';
 import {writeAtomicJSON,readTaskRecord} from './atomic-json.mjs';
 
 const input=new Set(['move','click','type','set_value','key','scroll','drag','focus','fit_window','close_window','paste','paste_files','clipboard','open','file_dialog']);
@@ -39,8 +39,6 @@ function attachWaitMetrics(error,started,budget,observations){
   return error;
 }
 const persistenceFailure=reason=>['stop_persistence_failed','guard_persistence_failed'].includes(reason);
-const readStopLatch=file=>{try{const value=fs.readFileSync(file,'utf8');return {value,unconfirmed:value.startsWith('unconfirmed:')};}catch{return null;}};
-const stopLatchValue=unconfirmed=>unconfirmed?`unconfirmed:${randomUUID()}`:'stopped';
 function initializeInputLedger(guardFile){
   const ledger=guardFile+'.inputs';let fd;
   try{fd=fs.openSync(ledger,'wx',0o600);fs.writeFileSync(fd,process.platform==='darwin'?'{"keys":[],"buttons":[]}':'');fs.fsyncSync(fd);}
@@ -124,7 +122,11 @@ export class Runtime {
     this.sessions=sessions||new Sessions({sessionId:randomUUID(),onInputLeaseLost:()=>this.stop().catch(()=>{})});this.sessions.register();
     this.grants=new Map();this.frames=new Map();this.generation=0;this.state='idle';this.token='';this.taskOpen=priorTask;this.recoveredTask=priorTask;this.priorGuard=priorTask?prior.guard:null;this.priorChildren=priorTask?prior.children:null;this.priorDispatched=priorTask?prior.dispatched:null;this.priorWatchdogsComplete=priorTask?prior.watchdogs_complete:null;this.dispatchChildren=[];this.dispatchStarted=false;this.watchdogsComplete=true;this.taskDurable=true;this.remaining=contract.action_budget;
     this.lastControlReason='';
-    if(this.latchFile&&fs.existsSync(this.latchFile)){this.state='stopped';this.lastControlReason=readStopLatch(this.latchFile)?.unconfirmed?'guardian_stop_unconfirmed':'persisted_emergency_stop';}
+    if(this.latchFile){
+      const saved=readStopLatch(this.latchFile);if(saved){this.state='stopped';
+        this.lastControlReason=saved.unconfirmed?'guardian_stop_unconfirmed':saved.value==='stopped'?'persisted_emergency_stop':'stop_persistence_failed';
+      }
+    }
     this.guardian.on('state',(s,reason)=>{
       const previousState=this.state;
       // A delayed idle/active notification must never undo an emergency Stop.
@@ -135,7 +137,7 @@ export class Runtime {
       const priorStopUnconfirmed=previousState==='stopped'&&this.lastControlReason==='guardian_stop_unconfirmed';
       if((reason||s!==this.state)&&(!priorStopUnconfirmed||persistenceFailure(reason)))this.lastControlReason=reason||s;
       this.state=s;
-      if((reason==='guardian_exited'&&previousState!=='idle'||reason==='guardian_unresponsive')&&this.latchFile)try{fs.writeFileSync(this.latchFile,stopLatchValue(reason==='guardian_unresponsive'));}catch{}
+      if((reason==='guardian_exited'&&previousState!=='idle'||reason==='guardian_unresponsive')&&this.latchFile)try{persistStopLatch(this.latchFile,{unconfirmed:reason==='guardian_unresponsive'||priorStopUnconfirmed});}catch{}
       if(s==='stopped'&&this.latchFile){try{const latch=readStopLatch(this.latchFile);if(!latch||latch.value!=='stopped'&&!latch.unconfirmed)throw Error('invalid latch');if(latch.unconfirmed&&!persistenceFailure(reason))this.lastControlReason='guardian_stop_unconfirmed';}catch{this.lastControlReason='stop_persistence_failed';this.diagnosticError='stop_persistence_failed';}}
       if(reason==='guardian_unresponsive'&&!persistenceFailure(this.lastControlReason))this.lastControlReason='guardian_stop_unconfirmed';
       if(reason==='guardian_exited'&&this.privateDataStorage===true)new Incidents(dataDir()).recordSerialized('computer_guardian',{state:s,error:{code:'guardian_exited'},guardian_exit:this.guardian.lastExit}).catch(()=>{this.diagnosticError='private_diagnostic_storage_unavailable';});
@@ -148,7 +150,7 @@ export class Runtime {
     this.guardian.on('resume',(_state,source)=>{
       if(this.state==='stopped'){
         if(source!=='human_resume'||_state!=='idle'||persistenceFailure(this.lastControlReason)||this.lastControlReason==='guardian_stop_unconfirmed')return;
-        if(this.latchFile){try{fs.lstatSync(this.latchFile);return;}catch(error){if(error.code!=='ENOENT')return;}}
+        if(this.latchFile&&readStopLatch(this.latchFile))return;
         this.state='idle';
       }
       this.frames.clear();this.lastControlReason=source==='host_resume'?'host_authorized_resume':'human_resume';if(this.state==='active')this.deadline=Date.now()+contract.session_ms;
@@ -217,7 +219,7 @@ export class Runtime {
     }catch(error){this.recoveryVisibility=controls?.controls_visible===false?false:null;this.recoveryFailure={code:error.code||'guardian_unavailable',message:error.code==='desktop_context_unavailable'?'Start the installed local launcher on the visible desktop. No desktop was switched and Stop remains latched.':'Local controls failed to start. Run diagnostics; do not repeat launch commands.'};return unavailable();}
   }
   enforceStopLatch(){
-    if(this.latchFile){let latched=false;try{fs.lstatSync(this.latchFile);latched=true;}catch(error){if(error.code!=='ENOENT'){this.stop().catch(()=>{});fail('stop_persistence_failed','Cannot verify the emergency Stop latch; no input was sent.');}}if(latched){this.stop().catch(()=>{});fail('control_stopped','Emergency Stop remains latched; local human re-arm is required.');}}
+    if(this.latchFile){const latch=readStopLatch(this.latchFile);if(latch){this.stop().catch(()=>{});if(latch.invalid)fail('stop_persistence_failed','Cannot verify the emergency Stop latch; no input was sent.');fail('control_stopped','Emergency Stop remains latched; local human re-arm is required.');}}
   }
   check(){
     if(this.state!=='active')fail('control_inactive',`Control is ${this.state}. Use the local Resume/Re-arm control or request a new grant.`);
@@ -637,7 +639,19 @@ export class Runtime {
     this.state='active';this.check();this.lastControlReason='host_authorized_resume';this.deadline=Date.now()+contract.session_ms;
     return {resumed:true,fresh_observation_required:true,replayed_actions:0};
   }
-  async stop(){const priorUnconfirmed=this.lastControlReason==='guardian_stop_unconfirmed';this.generation++;this.frames.clear();this.grants.clear();this.state='stopped';this.lastControlReason='requested_stop';let deliveryFailed=false;try{const sent=this.guardian.send({op:'stop'});deliveryFailed=sent===false&&!!(this.guardian.proc||this.guardian.starting||this.guardian.cleanupFailed);}catch{deliveryFailed=true;}let persistenceFailed=false;try{if(this.latchFile)fs.writeFileSync(this.latchFile,stopLatchValue(deliveryFailed||priorUnconfirmed));}catch{persistenceFailed=true;this.lastControlReason='stop_persistence_failed';}if((deliveryFailed||priorUnconfirmed)&&!persistenceFailed)this.lastControlReason='guardian_stop_unconfirmed';await this.driver.abort?.();if(persistenceFailed)throw Object.assign(Error('Control is stopped, but the emergency Stop latch could not be saved. Do not restart the controller; inspect its private storage.'),{code:'stop_persistence_failed'});if(deliveryFailed||priorUnconfirmed)throw Object.assign(Error('The local Stop latch and cleanup were attempted, but delivery to native controls is unconfirmed. Inspect status; do not re-arm or replay.'),{code:'guardian_stop_unconfirmed'});return {stopped:true,human_rearm_required:true};}
+  async stop(){
+    let unconfirmed=this.lastControlReason==='guardian_stop_unconfirmed';
+    this.generation++;this.frames.clear();this.grants.clear();this.state='stopped';this.lastControlReason='requested_stop';
+    try{const sent=this.guardian.send({op:'stop'});unconfirmed=unconfirmed||sent===false&&!!(this.guardian.proc||this.guardian.starting||this.guardian.cleanupFailed);}catch{unconfirmed=true;}
+    let persistenceFailed=false;
+    try{if(this.latchFile)unconfirmed=persistStopLatch(this.latchFile,{unconfirmed}).unconfirmed;}
+    catch{persistenceFailed=true;this.lastControlReason='stop_persistence_failed';}
+    if(unconfirmed&&!persistenceFailed)this.lastControlReason='guardian_stop_unconfirmed';
+    await this.driver.abort?.();
+    if(persistenceFailed)throw Object.assign(Error('Control is stopped, but the emergency Stop latch could not be saved. Do not restart the controller; inspect its private storage.'),{code:'stop_persistence_failed'});
+    if(unconfirmed)throw Object.assign(Error('The local Stop latch and cleanup were attempted, but delivery to native controls is unconfirmed. Inspect status; do not re-arm or replay.'),{code:'guardian_stop_unconfirmed'});
+    return {stopped:true,human_rearm_required:true};
+  }
   status(){return {state:this.state,task_open:this.taskOpen===true,recovered_task:this.recoveredTask===true,remaining_actions:this.remaining,approved_apps:[...this.grants.values()].map(w=>({pid:w.pid,path:w.path})),runtime:nativePlatform().runtime,build_version:VERSION,build_id:BUILD_ID,private_data_storage:this.privateDataStorage,real_cursor:true,custom_cursor:this.guardian.customCursor??null,permission_mode:this.permissionMode,takeover_mode:this.guardian.takeoverMode||savedTakeoverMode(path.join(dataDir(),'control-preferences.json'),this.takeoverMode),control_reason:this.lastControlReason};}
   async close(){const normal=this.state==='idle';if(!normal)await this.stop();else await this.driver.abort?.();await this.guardian.close({normal});this.sessions.close();}
 }

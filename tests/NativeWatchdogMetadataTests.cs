@@ -12,6 +12,22 @@ class NativeWatchdogMetadataTests {
         try {
             var host=Assembly.LoadFrom(args[0]);var type=host.GetType("Axon.CursorSafety",true);
             var write=type.GetMethod("WriteWatchdogRecord",BindingFlags.Static|BindingFlags.NonPublic);
+            var nativeStop=host.GetType("Axon.ControlFence",true).GetMethod("LatchStop",BindingFlags.Static|BindingFlags.NonPublic);
+            string stop=Path.Combine(args[1],"emergency.stop");Environment.SetEnvironmentVariable("AGCU_STOP_LATCH",stop);
+            nativeStop.Invoke(null,null);if(File.ReadAllText(stop)!="stopped")throw new Exception("native Stop creation failed");
+            File.WriteAllText(stop,"unconfirmed:native-regression");nativeStop.Invoke(null,null);nativeStop.Invoke(null,null);
+            if(File.ReadAllText(stop)!="unconfirmed:native-regression")throw new Exception("native Stop downgraded uncertainty");
+            File.WriteAllText(stop,"invalid-evidence");nativeStop.Invoke(null,null);
+            if(File.ReadAllText(stop)!="invalid-evidence")throw new Exception("native Stop overwrote existing evidence");
+            File.Delete(stop);File.WriteAllText(stop+".unconfirmed","unconfirmed:companion");
+            var blocks=host.GetType("Axon.ControlFence",true).GetMethod("LatchBlocks",BindingFlags.Static|BindingFlags.NonPublic);
+            if(!(bool)blocks.Invoke(null,new object[]{stop}))throw new Exception("native Stop ignored a companion-only fence");
+            File.Delete(stop+".unconfirmed");
+            if((bool)blocks.Invoke(null,new object[]{stop}))throw new Exception("known absent Stop entries were blocked");
+            var entryBlocks=host.GetType("Axon.ControlFence",true).GetMethod("LatchEntryBlocks",BindingFlags.Static|BindingFlags.NonPublic);
+            string invalidParent=Path.Combine(args[1],"not-a-directory");File.WriteAllText(invalidParent,"fixture");
+            if(!(bool)entryBlocks.Invoke(null,new object[]{Path.Combine(invalidParent,"child")}))throw new Exception("invalid Stop parent was treated as absence");
+            Environment.SetEnvironmentVariable("AGCU_STOP_LATCH","");
             var check=host.GetType("Axon.ControlFence",true).GetMethod("CheckWatchdogIdentity",BindingFlags.Static|BindingFlags.NonPublic);
             var problem=host.GetType("Axon.ControlFence",true).GetMethod("WatchdogIdentityProblem",BindingFlags.Static|BindingFlags.NonPublic);
             var unchanged=host.GetType("Axon.ControlFence",true).GetMethod("GuardUnchanged",BindingFlags.Static|BindingFlags.NonPublic);

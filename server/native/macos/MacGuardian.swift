@@ -103,6 +103,9 @@ final class MacPanicMonitor {
             return
         }
         invalidSince = nil
+        if ["active", "paused"].contains(state.state), MacFence.latchBlocks(MacFence.latch) {
+            MacFence.emergency(MacFence.latchEntryBlocks(MacFence.latch + ".unconfirmed") ? "guardian_stop_unconfirmed" : "persisted_emergency_stop"); return
+        }
         guard let problem = Self.deadlineProblem(state, now: MacDeadline.now) else {
             expiredKey = nil; expiredSince = 0; return
         }
@@ -286,6 +289,10 @@ final class MacGuardian: NSObject {
         guard bootUntil > 0 else { return }
         if state == "stopped" {
             guard !MacFence.latch.isEmpty else { return }
+            if MacFence.latchEntryBlocks(MacFence.latch + ".unconfirmed") {
+                emit(["ev":"visual_warning", "message":"Stop delivery is unconfirmed; inspect prior input cleanup before re-arm"])
+                return
+            }
             if let text = try? String(contentsOfFile: MacFence.latch, encoding: .utf8), text.hasPrefix("unconfirmed:") {
                 emit(["ev":"visual_warning", "message":"Stop delivery is unconfirmed; inspect prior input cleanup before re-arm"])
                 return
@@ -297,6 +304,9 @@ final class MacGuardian: NSObject {
     }
     func tick() {
         if Date() > controlsUntil { visuals.hide(); controlsUntil = .distantFuture }
+        if (["active", "paused"].contains(state) || prompt != nil), MacFence.latchBlocks(MacFence.latch) {
+            if prompt != nil { NSApp.abortModal() }; stop(MacFence.latchEntryBlocks(MacFence.latch + ".unconfirmed") ? "guardian_stop_unconfirmed" : "persisted_emergency_stop"); return
+        }
         guard let stored = try? MacFence.read() else { if state == "active" { stop("state_unavailable") }; return }
         if stored.state == "stopped" && state != "stopped" { if prompt != nil { NSApp.abortModal() }; set("stopped", reason: "escape") }
         if stored.state == "paused" && state == "active" { set("paused", reason: "human_takeover") }

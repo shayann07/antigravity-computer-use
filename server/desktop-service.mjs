@@ -117,7 +117,7 @@ export async function serveDesktop({directory=dataDir(),runtime,idlePolicy='shut
           throw Object.assign(Error('This client and live service use different permission policies. Finish the owning task and shutdown before starting the intended policy.'),{code:'deployment_policy_mismatch'});
         if(name==='computer_prepare_update'){
           const state=runtime.status();
-          const allowed=!busy&&!closing&&state.task_open===false&&['idle','stopped'].includes(state.state)&&!state.approved_apps?.length;
+          const allowed=!busy&&!closing&&state.task_open===false&&['idle','stopped'].includes(state.state)&&!['guardian_stop_unconfirmed','stop_persistence_failed','guard_persistence_failed'].includes(state.control_reason)&&!state.approved_apps?.length;
           if(allowed)maintenanceUntil=Date.now()+30000;
           finished=true;socket.end(JSON.stringify({ok:allowed,prepared:allowed,next_action:allowed?'shutdown_for_update':'wait_for_task_end'})+'\n');return;
         }

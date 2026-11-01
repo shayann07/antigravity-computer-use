@@ -120,11 +120,14 @@ struct MacFenceState {
 }
 
 enum MacFence {
-    static func latchBlocks(_ path: String) -> Bool {
+    static func latchEntryBlocks(_ path: String) -> Bool {
         guard !path.isEmpty else { return true }
         var info = stat()
         if lstat(path, &info) == 0 { return true }
         return errno != ENOENT
+    }
+    static func latchBlocks(_ path: String) -> Bool {
+        path.isEmpty || latchEntryBlocks(path) || latchEntryBlocks(path + ".unconfirmed")
     }
     static func resolvedState(_ proposed: String, latched: Bool) -> String {
         latched ? "stopped" : proposed
@@ -271,8 +274,17 @@ enum MacFence {
         try Data(text.utf8).write(to: URL(fileURLWithPath: file), options: [.atomic])
         guard chmod(file, 0o600) == 0 else { throw AxonError("control_stopped", "Cannot protect native control state.") }
     }
+    @discardableResult static func latchStop(_ path: String) -> Bool {
+        guard !path.isEmpty else { return false }
+        let fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0o600)
+        guard fd >= 0 else { return errno == EEXIST } // Preserve every existing entry, including uncertainty.
+        defer { close(fd) }
+        let bytes = Array("stopped".utf8)
+        let written = bytes.withUnsafeBytes { Darwin.write(fd, $0.baseAddress, bytes.count) }
+        return written == bytes.count && fsync(fd) == 0
+    }
     static func emergency(_ reason: String) {
-        if !latch.isEmpty { try? Data("stopped".utf8).write(to: URL(fileURLWithPath: latch), options: [.atomic]) }
+        latchStop(latch)
         try? write("stopped||0||0|1")
         let workersStopped = macWaitForWorkers(), inputsRecovered = MacInputLedger.recover()
         if !workersStopped || !inputsRecovered { emit(["ev": "visual_warning", "message": "Input cleanup is incomplete; control stays stopped."]) }

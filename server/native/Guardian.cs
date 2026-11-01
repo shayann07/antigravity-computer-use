@@ -79,6 +79,16 @@ namespace Axon {
             return false;
         }
         internal static string FileName { get { return Environment.GetEnvironmentVariable("AGCU_GUARD_FILE"); } }
+        internal static bool LatchEntryBlocks(string file) {
+            if(String.IsNullOrEmpty(file))return true;
+            try {if(!Path.IsPathRooted(file)||!Directory.Exists(Path.GetDirectoryName(file)))return true;File.GetAttributes(file);return true;}
+            catch(FileNotFoundException){return false;}
+            catch(DirectoryNotFoundException){return true;}
+            catch{return true;}
+        }
+        internal static bool LatchBlocks(string file) {
+            return String.IsNullOrEmpty(file)||LatchEntryBlocks(file)||LatchEntryBlocks(file+".unconfirmed");
+        }
         internal static string Token;
         static long keyboardTarget;
         static long keyboardOwner;
@@ -129,7 +139,7 @@ namespace Axon {
         internal static void Check() {
             if (String.IsNullOrEmpty(FileName)) throw new AxonError("no_native_guard", "Native approval runtime required.", null);
             string latch=Environment.GetEnvironmentVariable("AGCU_STOP_LATCH");
-            if(!String.IsNullOrEmpty(latch)&&File.Exists(latch))throw new AxonError("control_stopped","Emergency Stop remains latched. Local human re-arm is required.",null);
+            if(LatchBlocks(latch))throw new AxonError("control_stopped","Emergency Stop remains latched. Local human re-arm is required.",null);
             string[] state;string original;
             try { original=File.ReadAllText(FileName);state = original.Split('|'); }
             catch { throw new AxonError("control_stopped", "Permission process is unavailable.", null); }
@@ -142,7 +152,7 @@ namespace Axon {
             // A Stop or state transition may occur while watchdog identity is
             // being revalidated. Never use the earlier state after it changed.
             try {
-                if(!GuardUnchanged(original,File.ReadAllText(FileName),!String.IsNullOrEmpty(latch)&&File.Exists(latch)))
+                if(!GuardUnchanged(original,File.ReadAllText(FileName),LatchBlocks(latch)))
                     throw new AxonError("control_stopped","Control changed during watchdog verification. No further input is allowed.",null);
             } catch(AxonError) { throw; }
               catch { throw new AxonError("control_stopped","Control state is unavailable. No further input is allowed.",null); }
@@ -224,7 +234,14 @@ namespace Axon {
         }
         internal static void LatchStop() {
             string file=Environment.GetEnvironmentVariable("AGCU_STOP_LATCH");
-            if(!String.IsNullOrEmpty(file))try {File.WriteAllText(file,"stopped");}catch {}
+            if(!String.IsNullOrEmpty(file))try {
+                // Never downgrade an existing unconfirmed marker. Delete sharing
+                // lets a stronger atomic publication replace this new inode
+                // even if our initial write has not yet finished.
+                using(var stream=new FileStream(file,FileMode.CreateNew,FileAccess.Write,FileShare.Read|FileShare.Delete)) {
+                    byte[] bytes=Encoding.UTF8.GetBytes("stopped");stream.Write(bytes,0,bytes.Length);stream.Flush(true);
+                }
+            }catch {}
         }
         internal static void WatchParent() {
             int pid;
@@ -323,6 +340,7 @@ namespace Axon {
                     if(bootDeadline==0){Emit(new {ev="error",message="Cannot establish the native session deadline; control stays paused/stopped"});return;}
                     if(Interlocked.Read(ref stopEpoch)!=humanEpoch)return;
                     if(state=="stopped"&&!String.IsNullOrEmpty(StopLatch)) {
+                        if(ControlFence.LatchEntryBlocks(StopLatch+".unconfirmed")) {Emit(new {ev="visual_warning",message="Stop delivery is unconfirmed; inspect prior input cleanup before re-arm"});return;}
                         try { if(File.ReadAllText(StopLatch).StartsWith("unconfirmed:",StringComparison.Ordinal)) { Emit(new {ev="visual_warning",message="Stop delivery is unconfirmed; inspect prior input cleanup before re-arm"}); return; } }
                         catch { Emit(new {ev="error",message="Cannot inspect the emergency latch; control stays stopped"}); return; }
                         try {File.Delete(StopLatch);}catch {Emit(new {ev="error",message="Cannot clear the emergency latch; control stays stopped"});return;}
@@ -354,7 +372,7 @@ namespace Axon {
                 if (!Presence.HooksOk) { Emit(new { ev="error", message="Physical-input monitoring unavailable" }); UnregisterHotKey(Handle,1);Presence.Stop();return false; }
                 Overlay.Configure(1, "Antigravity", 0); Overlay.Start(true);
                 Overlay.RecordVisuals(recordVisuals);
-                SetState(!String.IsNullOrEmpty(StopLatch)&&File.Exists(StopLatch)?"stopped":"idle");
+                SetState(ControlFence.LatchBlocks(StopLatch)?"stopped":"idle");
                 DismissControls();
                 initialized=true;
                 Emit(new {ev="settings",takeover_mode=takeover.Mode,record_visuals=recordVisuals});
@@ -456,7 +474,7 @@ namespace Axon {
         }
         void WriteState(long capturedStop=-1) { lock(stateLock) {
             if(capturedStop>=0) {
-                state=ResolveGuardState(state,capturedStop,Interlocked.Read(ref stopEpoch),!String.IsNullOrEmpty(StopLatch)&&File.Exists(StopLatch));
+                state=ResolveGuardState(state,capturedStop,Interlocked.Read(ref stopEpoch),ControlFence.LatchBlocks(StopLatch));
                 if(state=="stopped")grants.Clear();
             }
             string f = ControlFence.FileName;
@@ -521,6 +539,7 @@ namespace Axon {
         }
         void Tick(object sender, EventArgs e) {
             if(controlsRequested && DateTime.UtcNow>=controlsUntil)DismissControls();
+            if((state=="active"||state=="paused"||prompting)&&ControlFence.LatchBlocks(StopLatch)) {Emergency(ControlFence.LatchEntryBlocks(StopLatch+".unconfirmed")?"guardian_stop_unconfirmed":"persisted_emergency_stop");return;}
             if((state=="active"||state=="paused"||prompting)&&!(bool)DesktopContext.Inspect()["interactive"]) {Emergency("input_desktop_changed");DismissControls();return;}
             if (prompting || captureHidden) return;
             if(activity!="" && (DateTime.UtcNow-activityAt).TotalMilliseconds>1200) {activity="";RefreshHud();}

@@ -10,6 +10,34 @@ fix. Public updater transfer timeout #32 and banner overlap #33 were found in
 real tests. The download-deadline repair is merged source, not included in beta.4.
 Keep the full goal active; Mac and physical/hardware gates are still pending.
 
+The separate Stop-persistence candidate reproduces a native/shared writer
+downgrading `unconfirmed` to ordinary `stopped`, then repairs monotonic evidence
+with a durable uncertainty companion, native observation and conservative
+update/rollback gates. See [scope and remaining protocol work](docs/STOP-UNCERTAINTY.md).
+The first atomic-replacement prototype failed a Windows open-handle test; that
+failure was retained and motivated the separate marker. Focused current tests
+passed 190/190 before the final conservative parent-inspection adjustment;
+the native/file subset then passed 7/7. Full exact-head and native Mac CI are
+required. This is source-only: installed beta.4 and frozen beta.5 bytes remain
+unchanged and do not contain this repair. Issue #26 is not fully resolved.
+The first full run recorded 520 tests: 507 passed, one failed and 12 skipped.
+Its passive lifecycle fixture used the undefined `owner-stop` marker. The
+normal lifecycle case now uses `stopped`; a separate case preserves invalid
+legacy bytes, reports persistence failure and refuses shutdown without opening
+controls. The current workflow/native/file subset passed 52/52. The failure
+is retained; a fresh full run is required for the revised source.
+That revised full run passed 509/521, zero failures and 12 explicit skips.
+A final strict-reader adjustment also tags undefined marker contents as invalid
+for updater/install gates, with a focused follow-up required before commit.
+The strict-reader follow-up passed 146/146 tests. A final file-only case also
+checks that different existing primary/companion uncertainty records are both
+retained; no acknowledgement or recovery authorization is inferred from them.
+
+Mac UI/consent source `4dc7914` on draft PR #36 passed all ten exact-head CI
+jobs (Windows plus macOS 15/26 Intel/ARM, push and PR). Its actual modal,
+cursor/glass appearance and physical tests remain pending. Those source passes
+do not qualify the new common Stop change or a fresh release bundle.
+
 The `codex/latency-evidence-validation` work selects the comparison utility from
 Antigravity's unmerged `a44e532` latency worktree, rather than merging its stale
 runtime wholesale. It repairs false pair qualification, trace validation and

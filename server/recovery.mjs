@@ -1,5 +1,63 @@
-// Deterministic guidance accompanies errors; it never executes a retry.
-import fs from 'node:fs';import path from 'node:path';
+// Recovery guidance, bounded evidence inspection and monotonic Stop persistence.
+// These helpers never replay input, clear Stop or perform human re-arm.
+import fs from 'node:fs';import path from 'node:path';import {randomUUID} from 'node:crypto';
+import {writeAtomicText} from './atomic-json.mjs';
+
+// Stop is monotonic until trusted local recovery: an ordinary Stop never
+// replaces existing evidence of uncertain delivery. This does not acknowledge
+// native delivery or clear a latch.
+function stopRecord(file,io){
+ let fd;
+ try{
+  const info=io.lstatSync(file);
+  if(!info.isFile()||info.isSymbolicLink()||info.nlink!==1||info.size>4096)throw Error('invalid Stop entry');
+  fd=io.openSync(file,io.constants.O_RDONLY|(io.constants.O_NOFOLLOW||0));
+  const opened=io.fstatSync(fd);if(!opened.isFile()||opened.nlink!==1||opened.size>4096||opened.dev!==info.dev||opened.ino!==info.ino)throw Error('Stop entry changed');
+  const bytes=Buffer.alloc(4097);let used=0;
+  while(used<bytes.length){const n=io.readSync(fd,bytes,used,bytes.length-used,null);if(!n)break;used+=n;}
+  const after=io.fstatSync(fd),current=io.lstatSync(file);
+  if(used>4096||after.size!==opened.size||after.mtimeMs!==opened.mtimeMs||after.ctimeMs!==opened.ctimeMs||!current.isFile()||current.isSymbolicLink()||current.nlink!==1||current.dev!==opened.dev||current.ino!==opened.ino)throw Error('Stop entry changed');
+  const value=bytes.subarray(0,used).toString('utf8');return {value,unconfirmed:value.startsWith('unconfirmed:')};
+ }catch(error){if(error.code==='ENOENT'&&fd===undefined)return null;throw error;}
+ finally{if(fd!==undefined)io.closeSync(fd);}
+}
+export function readStopLatch(file,{io=fs}={}){
+ try{
+  const pending=stopRecord(file+'.unconfirmed',io),primary=stopRecord(file,io);
+  if(pending){if(!pending.unconfirmed)throw Error('Invalid uncertainty marker');return pending;}
+  if(primary&&primary.value!=='stopped'&&!primary.unconfirmed)throw Error('Invalid Stop marker');
+  return primary;
+ }catch{return {value:null,unconfirmed:false,invalid:true};}
+}
+export function persistStopLatch(file,{unconfirmed=false,io=fs}={}){
+ if(typeof file!=='string'||!path.isAbsolute(file)||typeof unconfirmed!=='boolean')throw Error('Invalid Stop persistence request');
+ const initial=readStopLatch(file,{io});unconfirmed=unconfirmed||initial?.unconfirmed===true;
+ if(unconfirmed){
+  const prior=readStopLatch(file,{io});
+  // A separate create-only marker survives Windows sharing violations and
+  // older handles still writing the primary file. Ordinary writers never
+  // modify it. Publication is atomic and flushed before it becomes visible.
+  try{writeAtomicText(file+'.unconfirmed',prior?.unconfirmed?prior.value:'unconfirmed:'+randomUUID(),{exclusive:true,io});}
+  catch(error){if(error.code!=='EEXIST')throw error;}
+  // Retain the primary marker for older readers when possible. Failure here
+  // cannot erase the already-published uncertainty marker.
+  const pending=stopRecord(file+'.unconfirmed',io);
+  if(!pending?.unconfirmed)throw Error('Uncertainty publication could not be verified');
+  try{const primary=stopRecord(file,io);if(!primary?.unconfirmed)writeAtomicText(file,pending.value,{io});}catch{}
+ }else{
+  try{writeAtomicText(file,'stopped',{exclusive:true,io});}
+  catch(error){if(error.code!=='EEXIST')throw error;}
+ }
+ const saved=readStopLatch(file,{io});
+ if(!unconfirmed&&saved?.unconfirmed)return persistStopLatch(file,{unconfirmed:true,io});
+ if(!saved||saved.value!=='stopped'&&!saved.unconfirmed||unconfirmed&&!saved.unconfirmed)throw Error('Stop persistence could not be verified');
+ return saved;
+}
+export function preserveStopLatch(source,destination,{io=fs}={}){
+ const prior=readStopLatch(source,{io});if(!prior)return false;
+ if(prior.value!=='stopped'&&!prior.unconfirmed)throw Error('Previous Stop evidence is invalid; inspect it before migration');
+ persistStopLatch(destination,{unconfirmed:prior.unconfirmed,io});return true;
+}
 export function safeWaitMetrics(value){
  if(!value||typeof value!=='object')return undefined;
  const {elapsed_ms,observations,polling_budget_ms}=value;
