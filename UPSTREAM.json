@@ -500,7 +500,7 @@
     },
     {
       "path": "docs/CLAUDE-CODE-HANDOFF-PROMPT.md",
-      "sha256": "6d655cd101d7185cdece6b1cf0632f7388812d6d7b2f7d21dba8eefe159b0473"
+      "sha256": "b5e76b1c63b7e7a1869ec4c9d305d4dd3fdf1321466bfbc6f874729c34780940"
     },
     {
       "path": "docs/BRANCHES.md",
@@ -648,7 +648,7 @@
     },
     {
       "path": "docs/MAC-QUALIFICATION-PROMPT.md",
-      "sha256": "0198e78d5798684372be5e1e45d1bad489c84ddbe85109a4fe2c2ab342a35fdc"
+      "sha256": "7793a8a8a3538a719d85eec7db79c8deaa20c1ac2b42ccb3cf42fcfd52d38cb2"
     },
     {
       "path": "tests/reporting.test.mjs",
