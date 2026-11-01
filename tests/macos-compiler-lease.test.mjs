@@ -1,6 +1,7 @@
 // Transport/ownership fixtures only: no compiler, native input or UI is run.
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import path from 'node:path';import {spawn} from 'node:child_process';
 import {testDirectory} from './paths.mjs';import {macCompilerLease,waitForMacCompilerWinner} from '../server/macos-build.mjs';
+import {EventEmitter} from 'node:events';
 
 function fixture(t,source){
  const base=fs.mkdtempSync(path.join(testDirectory('tmp'),'compiler-lease-'));const directory=path.join(base,'lease');fs.mkdirSync(directory);const script=path.join(base,'inert-helper.mjs');fs.writeFileSync(script,source);let child;
@@ -30,6 +31,27 @@ test('a competing source builder is reported busy without starting another compi
 test('missing acknowledgement has a bounded failure and cannot authorize compilation',t=>{
  const f=fixture(t,'process.stdin.resume();');
  assert.throws(()=>macCompilerLease(f.directory,{helper:'inert',spawnProcess:f.spawnProcess,startupMs:100}),e=>e.code==='macos_build_lease_timeout');
+});
+
+test('a final busy reply survives an immediate helper exit',t=>{
+ const f=fixture(t,"process.stdout.write(JSON.stringify({ok:false,error:{code:'service_already_running'}})+'\\n');process.exit(0);");
+ const lease=macCompilerLease(f.directory,{helper:'inert',spawnProcess:f.spawnProcess});
+ assert.equal(lease.acquired,false);lease.release();
+});
+
+test('an exit observed between two file reads still consumes the final refusal',t=>{
+ const f=fixture(t,'');let wrote=false;
+ // Inert transport schedule: the process inspection sees exit immediately
+ // after the first read, with the final reply now on disk. No process is run.
+ const child=new EventEmitter();child.pid=2147483647;child.signalCode=null;
+ child.stdin=new EventEmitter();child.stdin.end=()=>{};child.kill=()=>{};child.unref=()=>{};
+ Object.defineProperty(child,'exitCode',{get(){
+  if(!wrote){wrote=true;const request=fs.readdirSync(f.base).find(name=>name.startsWith('.compiler-reply-'));
+   fs.writeFileSync(path.join(f.base,request,'reply.jsonl'),JSON.stringify({ok:false,error:{code:'service_already_running'}})+'\n');}
+  return 0;
+ }});
+ const lease=macCompilerLease(f.directory,{helper:'inert',spawnProcess:()=>child});
+ assert.equal(wrote,true);assert.equal(lease.acquired,false);
 });
 
 test('winner waiting returns only an independently accepted cache entry and never widens its bound',()=>{

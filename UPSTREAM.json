@@ -492,7 +492,7 @@
     },
     {
       "path": "HANDOFF.md",
-      "sha256": "930abaecb0f0dd2158c5ca5577f8d2a26414984c73a9c05641204f20a199f894"
+      "sha256": "fd331e7edaad96414a59378f428978fd7cd287bb9b020e46f011ff448d3aeb99"
     },
     {
       "path": "tests/guardian-visibility.mjs",
@@ -552,7 +552,7 @@
     },
     {
       "path": "server/macos-build.mjs",
-      "sha256": "660c117023a5f88d23a344dd66944b105d33fc95f18c39089cd5d9bba7bbfd4d"
+      "sha256": "5890dd6013eca6128675dbc8b62d30e0858f6e3460884a93a5f020176d7e9453"
     },
     {
       "path": "tests/platform-contract.test.mjs",
@@ -888,7 +888,7 @@
     },
     {
       "path": "tests/macos-compiler-lease.test.mjs",
-      "sha256": "10db0a2d5eac1d75c138ff3c549ea9a0cb5d35128e4d6abd450326fb8f59debd"
+      "sha256": "0850d754dde72f423f75611e278562a90b20f7a3bee33c35da4b391eae6ac5d7"
     }
   ],
   "external_files": [

@@ -43,11 +43,19 @@ export function macCompilerLease(directory,{helper=buildMacStorage(),spawnProces
   try{fs.rmdirSync(scratch);}catch{}
  };
  const fail=code=>{release();try{child.kill();}catch{}throw Object.assign(Error('Native source-build ownership could not be verified; no new host was published.'),{code});};
+ const readReply=()=>{
+  const bytes=fs.readFileSync(output,'utf8');if(bytes.length>8192)fail('macos_build_lease_invalid');
+  if(!bytes.includes('\n'))return null;
+  try{return JSON.parse(bytes.split('\n')[0]);}catch{fail('macos_build_lease_invalid');}
+ };
  const deadline=performance.now()+startupMs;let reply;
  while(performance.now()<deadline){
-  const bytes=fs.readFileSync(output,'utf8');if(bytes.length>8192)fail('macos_build_lease_invalid');
-  if(bytes.includes('\n')){try{reply=JSON.parse(bytes.split('\n')[0]);}catch{fail('macos_build_lease_invalid');}break;}
-  if(!live())fail('macos_build_lease_exited');syncPause(10);
+  reply=readReply();if(reply)break;
+  // A busy/refused helper exits after writing its final reply. In particular,
+  // macOS ps can observe that exit after our preceding read saw an empty file.
+  // Re-read once after exit before declaring that no acknowledgement arrived.
+  if(!live()){reply=readReply();if(reply)break;fail('macos_build_lease_exited');}
+  syncPause(10);
  }
  if(!reply)fail('macos_build_lease_timeout');
  if(reply.ok===false&&reply.error?.code==='service_already_running'){release();return {acquired:false,release};}

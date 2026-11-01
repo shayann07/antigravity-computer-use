@@ -46,6 +46,16 @@ failed and 13 skipped. The optional MCP startup test exceeded its five-second
 reply bound under the concurrent suite; an isolated rerun passed in 458 ms.
 Both records are retained. No timeout was raised and that isolated pass does
 not convert the failed full run into a passing run.
+The serial full suite at `25884f6` passed 507/520, with zero failures and 13
+skips; both Windows CI jobs and macOS 26 ARM passed. The ARM job exercised the
+real concurrent build and confirmed exactly one compiler. The Intel macOS 15
+push job then failed with `macos_build_lease_exited`. Source review identified
+an acknowledgement/exit race compatible with that failure: a busy helper can
+write its final reply and exit between the caller's file read and process
+check. A deterministic inert schedule exercises this exact interleaving. The
+caller now reads the final reply once more before refusing an exited helper.
+Fresh Mac CI must test that diagnosis against the real native failure; the
+failed job and earlier logs remain retained. No installed build changed.
 
 The `codex/latency-evidence-validation` work selects the comparison utility from
 Antigravity's unmerged `a44e532` latency worktree, rather than merging its stale
