@@ -3,6 +3,14 @@
 This source change is not in published beta.4. It addresses the physical-click
 refusal recorded in [#33](https://github.com/shayann07/antigravity-computer-use/issues/33).
 
+The branch now integrates main through `a02fabc` and prepares version
+`0.3.0-beta.5` as an unpublished candidate. Current core, updater, qualification
+and brief-output fixes share the same source tree as the HUD change. The
+signed preparation workflow does not publish assets or alter the user's
+installed beta.4 deployment. Record its eventual source/build identities and
+fresh combined checks before any interactive qualification; older branch CI
+does not qualify the new integration.
+
 The runtime derives a target region from the consumed observation's native
 element bounds, or from its existing screenshot-to-desktop coordinate mapping.
 Only a native worker advertising `hud_avoidance` uses the extra handshake.
