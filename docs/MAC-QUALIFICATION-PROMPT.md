@@ -6,19 +6,34 @@ not the normal desktop-use skill. The report/PR is the handoff back to this repo
 ```text
 Qualify and repair Antigravity Computer Use on this Mac.
 Repository: https://github.com/shayann07/antigravity-computer-use
-Integration branch: `codex/review-intel-mac` in that repository.
+Qualification candidate: `codex/mac-native-glass-assets`, PR #36.
+Windows HUD avoidance is separate draft PR #35. Do not assume it is included.
 
 Fetch and inspect the current integration branch and CI checks. Record its full
 commit before testing. Preserve local changes and active work; do not reset or
 overwrite an existing checkout. Create a short-lived repair branch from that
 exact integration commit. Do not assume historical PR #1 is current. Read
-AGENTS.md, HANDOFF.md, docs/MACOS.md, docs/RELIABILITY-IMPLEMENTATION.md,
-VALIDATION.md and the shared skill. Documentation is not proof of functionality.
+AGENTS.md, HANDOFF.md, docs/MACOS.md, docs/MACOS-GLASS-MATERIAL.md,
+docs/RELIABILITY-IMPLEMENTATION.md, VALIDATION.md and the shared skill.
+Documentation is not proof of functionality. Refresh the exact PR head and its
+CI before testing; do not use an older commit from this prompt as a current pin.
 
 Keep one shared Node runtime, tool API, permission/observation/batch lifecycle,
 installer and /computer-use skill. Add no separate agent, model or required MCP.
 Record source/installed/running identities, architecture, macOS and Antigravity
 versions. Keep all probes and private evidence inside ignored .localdata.
+
+Verify the selected Xcode SDK using xcrun. Native Liquid Glass requires a macOS
+26+ SDK at build time and macOS 26+ at runtime. Older-SDK source builds deliberately
+use NSVisualEffectView; do not report that fallback as native Liquid Glass.
+The contract test must decode all five shared official Phosphor SVGs from the
+signed app Resources and report hud_material/native_glass_compiled. Inspect the
+actual live bar too: native-class selection alone does not prove compositing.
+Verify Settings, Pause/Resume/Re-arm and Stop/Hide keep fixed positions across
+states, icons have no drawn substitutes or status dot, and keyboard focus/labels
+remain usable. Check light/dark content and the human-selected Reduce Motion,
+Reduce Transparency and Increase Contrast states. Do not silently change global
+accessibility settings or manufacture OS approvals. Record unavailable cases.
 
 Run source/native checks, build and install the matching candidate in a private
 per-user path using the supported installer. Preserve settings, Stop and rollback.
@@ -72,7 +87,9 @@ checks, build identities, reproduction, changes and evidence references. Keep
 screenshots, recordings, personal paths and document content out of public data.
 
 With available GitHub authentication, push the repair branch and create a draft
-PR targeting `codex/review-intel-mac`. File deduplicated
+PR targeting `codex/mac-native-glass-assets` while PR #36 is open. If it has
+merged, use its reviewed integration successor on main and state that change.
+File deduplicated
 sanitized issues for unresolved reproducible defects. These project reports are
 authorized. Without auth, prepare commits/report/issue text locally and state
 what remains unsent. Do not self-merge or publish a general Mac release.
@@ -99,3 +116,7 @@ interactive or update acceptance remains unrun.
   Report those limits separately from real published-signature/download tests.
 - A current human starter uses passive `start` then `controls`. It can explicitly
   retry a cached `ready` failure; it never clears Stop or performs human re-arm.
+- Qualify actual signed update transport and rollback separately from installer
+  fixtures. Never add Mac assets to the existing Windows-only beta.4 release or
+  automatically install a CI artifact. A manual candidate/source build is test
+  evidence, not a published Mac upgrade. The maintainer owns release signing.
