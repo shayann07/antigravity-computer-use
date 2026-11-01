@@ -60,7 +60,7 @@
     {
       "path": "server/native/AxonHost.cs",
       "upstream_sha256": "bef101afecbdf8f75df2a1f8b45d224eade39f09e3c8e25cf7b450e3fa49a8ef",
-      "local_sha256": "9a0df61c987633e379bc7ea58c5c22fdf73ade577dc6f7d34e1d3bdb368874db",
+      "local_sha256": "8eea2212ffdc7d9242795b17e54c5ef9056802187273bec57d4b246ac7f51007",
       "modified": true
     },
     {
@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "cc2a7c64194720c1b2deb0ecca4b798ddc8cd888eaab084dc6f35c79cf747415"
+      "sha256": "4b5c2064ef3aaa1e0bc2841f528240b25d98647c12fb12ae2480c17cd674c01e"
     },
     {
       "path": "server/mcp.mjs",
@@ -268,7 +268,7 @@
     },
     {
       "path": "server/native/Guardian.cs",
-      "sha256": "c3aca4d78dcca0188c9dfcf2dffef5facca2deb90c6abb86238e2ed3d79d8209"
+      "sha256": "f25749419814cf98defe48a46c6db5b4a083d7610711c686d319995f99fc8155"
     },
     {
       "path": "server/native/CursorSafety.cs",
@@ -432,15 +432,15 @@
     },
     {
       "path": "server/native/WindowGeometry.cs",
-      "sha256": "2580f888a63b185e2123a927b9579adb757593bcc7cb55983cca8e6fbfade596"
+      "sha256": "957a142f8697c72147d776e7301a5d12efa599f7d81a6907a7bb9306d2afa810"
     },
     {
       "path": "tests/WindowGeometryTests.cs",
-      "sha256": "9b0aee5696115ae82fe67a84d5f32210707ce61db7506b2c1c0abc02e18b2d17"
+      "sha256": "e1309c76d8525ead103febb186f3b0481dc941af1d498a4eed9a45b2698d9d99"
     },
     {
       "path": "tests/window-geometry.test.mjs",
-      "sha256": "751ee459b0c8ee9019c545904e931dc1101501212896d1e208163e3af19c08eb"
+      "sha256": "b4882901fb846031110100de78c9b8522ee1fe0057b8833ded4ffcfc9e25fe22"
     },
     {
       "path": "tests/OffscreenWindowTarget.cs",
@@ -492,7 +492,7 @@
     },
     {
       "path": "HANDOFF.md",
-      "sha256": "ccd8875ebcc51f2c485214e6e5376f6fd6499f31372985c284a1d02805ed4834"
+      "sha256": "069fbb695a01c4aa2e94998c54b306fd6936608e7a8c33a7bd9d50339fc1fce8"
     },
     {
       "path": "tests/guardian-visibility.mjs",
@@ -837,6 +837,14 @@
     {
       "path": "docs/WINDOWS-BETA4-QUALIFICATION.md",
       "sha256": "8efb0fa4a94163923984de7f8b95b72864a047f5a01c477a905736f86b78fd7d"
+    },
+    {
+      "path": "tests/hud-avoidance.test.mjs",
+      "sha256": "feea7a6bcea45ebb6161b77fcf0eb8e6c13950bed6e1394f035510b376860236"
+    },
+    {
+      "path": "docs/HUD-AVOIDANCE.md",
+      "sha256": "6853262ba4b574ea2a9258566208b766cb2a6a5d5a449bd5100bec44e7f0210c"
     }
   ],
   "external_files": [

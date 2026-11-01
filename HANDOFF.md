@@ -10,6 +10,12 @@ fix. Public updater transfer timeout #32 and banner overlap #33 were found in
 real tests. The source download-deadline repair is a separate, unpublished change.
 Keep the full goal active; Mac and physical/hardware gates are still pending.
 
+The download deadline repair merged in PR #34 after Windows, Intel and Apple
+Silicon CI passed (local 463 tests: 451 pass, zero fail, 12 skips). It is not in
+published beta.4. The own-HUD avoidance source candidate is described in
+[its qualification procedure](docs/HUD-AVOIDANCE.md); live relocation, foreign
+overlay refusal and physical Stop tests must pass before it is shipped.
+
 ## 30 October final Intel Mac Space/capture & Liquid Glass HUD repair
 
 Branch `codex/argon-final-mac` (based on `v0.3.0-beta.3` commit
