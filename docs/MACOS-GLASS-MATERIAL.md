@@ -57,6 +57,9 @@ and refuses to recursively remove a directory at that path. Native contract
 fixtures cover both regular-file cleanup and preserved directory contents.
 Standalone consent-dialog input in Smart takeover is a separate source concern
 tracked in [#43](https://github.com/shayann07/antigravity-computer-use/issues/43).
+Its repair candidate and required physical qualification are documented in
+[native confirmation and takeover](MACOS-CONSENT-TAKEOVER.md); the capture fix
+alone does not establish correct consent behavior.
 
 The macOS 26 Intel PR job at `3120237` failed the intentional concurrent-source
 build test: one of two optimized Swift compilers exceeded its existing

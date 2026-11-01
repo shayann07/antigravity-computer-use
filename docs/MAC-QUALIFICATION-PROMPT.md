@@ -41,6 +41,8 @@ while a capture is in flight; a late restore must not reopen them. Explicit
 Show must still work afterward. Use actual screenshot/action observations;
 native state-policy tests alone do not prove smooth live compositing.
 Challenge issue #43 with an actual trusted confirmation in Smart takeover:
+review docs/MACOS-CONSENT-TAKEOVER.md and its candidate's native transition
+and approval-fence contracts first. They are not physical confirmation evidence.
 Allow/Deny interaction must not produce an unwanted takeover/repeated-approval
 loop. Keep physical Esc independent. Do not silently change global policy to
 obtain this case; use an authorized private qualification setup and report any

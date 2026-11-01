@@ -492,7 +492,7 @@
     },
     {
       "path": "HANDOFF.md",
-      "sha256": "fd331e7edaad96414a59378f428978fd7cd287bb9b020e46f011ff448d3aeb99"
+      "sha256": "9e29fb4f592e478e38d2c3181f840d339152581c39940fd32bb68a674c868443"
     },
     {
       "path": "tests/guardian-visibility.mjs",
@@ -568,15 +568,15 @@
     },
     {
       "path": "server/native/macos/MacControl.swift",
-      "sha256": "e0b55b81e051cc1e1cf752b3e253f2db57afdc311b2e8028567b7ece495a680e"
+      "sha256": "2c81f58db8aea0c30d3c9a85c23dfb7d52ff543338a57487b0afa103032ceb0c"
     },
     {
       "path": "server/native/macos/MacGuardian.swift",
-      "sha256": "f7fe1eaed0c92fd36ab50b7408e997b930861fd45ac461348fad6e85d9339143"
+      "sha256": "aa260299f74a934d9e48f52286d28ca2ab3649601016037f4db26d500ef5867d"
     },
     {
       "path": "server/native/macos/MacOperations.swift",
-      "sha256": "c1c9b6ade36e8ffa20c083b5aaa73d3fa3b5188a398a2e4148e21dc613177e4b"
+      "sha256": "19d143af580b6eccc877a5b8cc57b8cdc65353d755e6c1325d547f7a9bd0ae52"
     },
     {
       "path": "server/native/macos/MacVisuals.swift",
@@ -648,7 +648,7 @@
     },
     {
       "path": "docs/MAC-QUALIFICATION-PROMPT.md",
-      "sha256": "7f71caf4cabba4cf4c4eb5737606dc7281517af8e1e11f306d4115ed9ab66ded"
+      "sha256": "a193806592f21c7cb9ada79a0a284de01fa74f6d5ea90bbaf64c6c592e63e46a"
     },
     {
       "path": "tests/reporting.test.mjs",
@@ -848,7 +848,7 @@
     },
     {
       "path": "docs/MACOS-GLASS-MATERIAL.md",
-      "sha256": "55318e484917e4efb9339a5774e6f71135a5af6b42145084c794978c7a9829ef"
+      "sha256": "21a450eefbb2347c8e71c6e3e0de20d23404262a469e1e0e0bddbf6411218851"
     },
     {
       "path": "scripts/compare-runs.mjs",
@@ -889,6 +889,10 @@
     {
       "path": "tests/macos-compiler-lease.test.mjs",
       "sha256": "0850d754dde72f423f75611e278562a90b20f7a3bee33c35da4b391eae6ac5d7"
+    },
+    {
+      "path": "docs/MACOS-CONSENT-TAKEOVER.md",
+      "sha256": "e50a419af364f1d202a45b86ed92d647bd346db1019d15d3b4ed3f6da73e69bc"
     }
   ],
   "external_files": [

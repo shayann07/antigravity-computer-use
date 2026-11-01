@@ -33,8 +33,14 @@ must verify the merged source and lifecycle contract; earlier branch checks
 are historical. Windows's frozen candidate and the installed release are unchanged.
 The local shared suite passed 503/516 tests with zero failures and 13 explicit
 skips; that Windows-host run does not compile or qualify the new Swift changes.
-Issue #43 records the separate Smart/standalone consent-dialog takeover concern;
-it is source-observed and still requires native reproduction and repair.
+Issue #43 records the separate Smart/standalone consent-dialog takeover concern.
+The candidate now verifies the actual guardian-owned native modal in the
+independent monitor and fences approval completion against a changed session,
+pause, Stop, deadline or pending cleanup. The transition lock is separate from
+held input so takeover can revoke a drag immediately. Native refusal and
+covering-window contracts accompany the repair; compilation and physical
+Allow/Deny/outside-input qualification remain pending. See
+[the exact behavior and acceptance matrix](docs/MACOS-CONSENT-TAKEOVER.md).
 The subsequent macOS 26 Intel PR job failed its concurrent-source compiler test
 at the unchanged 120-second compiler deadline; the same-head push job passed.
 The candidate now coalesces same-stamp source builds using the existing native
@@ -56,6 +62,13 @@ check. A deterministic inert schedule exercises this exact interleaving. The
 caller now reads the final reply once more before refusing an exited helper.
 Fresh Mac CI must test that diagnosis against the real native failure; the
 failed job and earlier logs remain retained. No installed build changed.
+At `17fa01f`, both Windows jobs and the full Mac push matrix passed. Intel
+macOS 15/26 jobs verified one compiler for the two concurrent requests in
+57.880/69.417 seconds; each full Mac suite passed 485/522, zero failures and
+37 platform skips. These are source-build/headless checks, not desktop speed
+benchmarks. The subsequent consent patch's Windows-host shared suite passed
+509/522, zero failures and 13 skips; it cannot compile or qualify that Swift
+change. Fresh exact-head native CI remains required.
 
 The `codex/latency-evidence-validation` work selects the comparison utility from
 Antigravity's unmerged `a44e532` latency worktree, rather than merging its stale
