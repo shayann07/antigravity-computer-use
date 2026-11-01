@@ -857,6 +857,14 @@
     {
       "path": "tests/installed-qualification.test.mjs",
       "sha256": "58695f78ff394b80f242010beaf22b6b711094ef80e92706b3cf497d8bd0adcb"
+    },
+    {
+      "path": "tests/installed-stop-resume.mjs",
+      "sha256": "85c8e3bcf1215eb13ea5b6621705b173453da2e68411f7a9ee84bc385f8de10b"
+    },
+    {
+      "path": "docs/qualification.md",
+      "sha256": "d9ae995074bfd9174680e7722abf499e270a7c950da9c297857f0d5c82849868"
     }
   ],
   "external_files": [

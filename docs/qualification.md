@@ -86,7 +86,11 @@ programmatic latch deletion or manufactured re-arm. On failure the harness ends
 only its reserved task; uncertain in-flight input may request Stop for cleanup,
 and that cleanup request is never counted as physical Esc.
 
-The original dev7 run passed all five safety/human checkpoints but failed its final close call because the test supplied an unsupported argument. The single harness argument was corrected; close/end were recovered separately and the original failure retained. Physical checks were not repeated. Do not report that record as a clean whole-script exit.
+The original dev7 run used the older synthetic-hotkey plus human-Esc procedure.
+Its final close call failed because the test supplied an unsupported argument;
+close/end were recovered separately and the failure was retained. That record
+predates the new physical-held-drag procedure. It is neither a clean whole-script
+pass nor current-build physical qualification.
 
 ## Covered-window capture
 
