@@ -300,7 +300,7 @@
     },
     {
       "path": "scripts/desktop.mjs",
-      "sha256": "25e23b3c30ae6636d6c02db2800b54af177b1a9bcad0fb5e946aed7fa3a6259f"
+      "sha256": "dd9da287ccffab6863fba42024f4034c67dedbb11bfc0eaa5b391055e1bb4e7c"
     },
     {
       "path": "server/version.mjs",
@@ -488,11 +488,11 @@
     },
     {
       "path": "docs/PERFORMANCE.md",
-      "sha256": "ce2dc97ea4722ce6b222205e7d1cc6a7237e98371a2985948c4ce18af80eb943"
+      "sha256": "d3c0b852ce2d810131a9cd718e28af731d9d1e8fb84c5d6abaf329d8ed4c881c"
     },
     {
       "path": "HANDOFF.md",
-      "sha256": "d04ec1f14f0a97b2149467a76c07e1fb572b3d78605425fa3bb2ffcec8e2bfb6"
+      "sha256": "23eaa2ee8abb470295af85f003640ad25de18341662c5fbe6891030840805ca6"
     },
     {
       "path": "tests/guardian-visibility.mjs",
@@ -869,6 +869,10 @@
     {
       "path": "tests/skill-guidance.test.mjs",
       "sha256": "8633c828cbea9e89f3115f8d123c3693d5838d1a0ad2d76f7050ee219f569460"
+    },
+    {
+      "path": "tests/brief-reply.test.mjs",
+      "sha256": "9f2b3a109d96b186184f37d4dbdcd42f0abf5b891afccc06729067d4d9f359c2"
     }
   ],
   "external_files": [

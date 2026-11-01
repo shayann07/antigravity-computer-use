@@ -1,5 +1,73 @@
 # Measuring desktop task latency
 
+## 2 November: full-record correction and tool timing
+
+The compact Flash transcript has SHA-256
+`e1ead287f7b18ab84f2f736d587439254564432a711da9bd415967dcdf472d49`.
+Its 14 shortened previews initially suggested a 4 KB model/tool delivery cap.
+That diagnosis was not supported. The corresponding `transcript_full.jsonl`
+(SHA-256 `2d1b1554207050ffd8d89a17d3045c16a37351fab42e7db2b97d86008d9b0935`)
+retains all twelve complete controller JSON results and their observation IDs,
+the complete diagnostics result, and a 21,751-character skill result including
+its command section. The 17,675-byte omission describes the compact log only.
+[Issue #41](https://github.com/shayann07/antigravity-computer-use/issues/41)
+is closed with the correction, not as a verified runtime repair.
+
+Private structural comparisons are in `.localdata/host-transcript-comparison.json`.
+Never publish raw prompts, application text, paths, images or model reasoning.
+The task has 97 rows, 48 planner responses and 47 tool calls (39 terminal calls
+and eight file/image reads). Its 471.574-second receipt interval includes
+37.683 service-seconds. Row timestamp semantics do not establish separate model,
+dispatch and result-delivery time. Do not infer lost model input or a speedup
+from compact log previews, token counts or these formatting tests.
+
+The automatic byte cap introduced in the first draft `f9dc519` is removed.
+Its synthetic tests passed but did not justify discarding useful controls on
+an unproven host-limit premise. Default brief output keeps the complete rendered
+tree, and explicit full JSON/IPC content remains lossless.
+
+A separate source-proven correction preserves native `tree_incomplete` in brief
+CLI output; the old formatter removed it with the metadata object. Pure and
+actual CLI/inert-IPC tests verify completeness, exact Unicode, unchanged trees,
+input/delivery/cancellation evidence and full JSON. Native execution is unchanged.
+
+The shorter skill proposal is retained at
+[revision 0ab5f73](https://github.com/shayann07/antigravity-computer-use/tree/0ab5f7385a0aabd1349c440cfa274721d9a57daf/skills/computer-use)
+and in private `.localdata/short-skill-context-proposal.patch`, following
+[documented progressive disclosure](https://antigravity.google/docs/skills?app=antigravity).
+Its 3,500-byte page target was a chosen context budget, not a host transport
+limit. It is deferred from the correctness fix until actual model comparison.
+Passing template/link checks did not establish model compliance or task speed.
+The established shared skill remains in the narrowed candidate.
+
+The full tool results also contain `Created At` and `Completed At` headers.
+All 47 tools have matching ordered pairs and no negative inter-tool gaps.
+Their rounded durations are:
+
+| Recorded interval | Calls | Nominal seconds |
+| --- | ---: | ---: |
+| Terminal tools | 39 | 55 |
+| File/image readers | 8 | 2 |
+| First tool start through final tool completion | 47 | 480 |
+| Time between tools | 46 gaps | 423 |
+
+The 33 controller CLI tool calls account for 52 nominal terminal seconds; the
+ready command includes an internal status request, producing 34 controller
+receipts overall. Source SHA and raw interval remain unchanged. Headers have
+one-second precision: a conservative combined tool-duration range is 22–104
+seconds, assuming stable wall time and at most one second of interval rounding.
+This is not independent monotonic timing or a precise native/transport split.
+The 423-second rounded remainder includes model/host orchestration and possibly
+asynchronous application inference; it is not model reasoning alone. A zero-
+second displayed read does not prove zero elapsed time.
+
+Private analysis: `.localdata/host-tool-timing.json`. These records support
+investigating avoidable decision round trips rather than assuming all the
+delay is cursor travel or CLI startup. They do not establish that a daemon,
+shorter prompt, different model or batched workflow improves successful wall
+time. Actual Flash/Sonnet acceptance, native hardware checks and publication
+remain pending. The published installation has not been replaced.
+
 ## Reviewed comparison utility
 
 The comparison tool reuses the Antigravity latency worktree's utility from
