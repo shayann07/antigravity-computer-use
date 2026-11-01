@@ -35,6 +35,9 @@ checks. They do not prove live glass compositing, accessibility contrast, curren
 Mac permissions, physical Stop/re-arm, cursor cleanup or display behaviour.
 The former `minimumContrast` constant is now named `contrastTarget`; its value
 was a design target, not a measured contrast ratio over real desktop content.
+The Mac guardian reports actual native panel visibility, rather than a hardcoded
+success. A successful `ready` reply can include `visual_material` with the known
+native/fallback backend, helping the agent distinguish them without source reads.
 
 Before shipping a Mac update, the Mac agent must verify the exact signed build
 on hardware, report the actual material backend, inspect active/paused/stopped

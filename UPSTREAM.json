@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "cc2a7c64194720c1b2deb0ecca4b798ddc8cd888eaab084dc6f35c79cf747415"
+      "sha256": "43a7366dae7815ab9d858e74f0a44ddaa63f5d7656baa4057549941e3c7ba82b"
     },
     {
       "path": "server/mcp.mjs",
@@ -572,7 +572,7 @@
     },
     {
       "path": "server/native/macos/MacGuardian.swift",
-      "sha256": "2ff9d0fd8654894602f54e2567f9c5538f8af1088d647deb4f5927d62a2f12b1"
+      "sha256": "f7fe1eaed0c92fd36ab50b7408e997b930861fd45ac461348fad6e85d9339143"
     },
     {
       "path": "server/native/macos/MacOperations.swift",
@@ -636,7 +636,7 @@
     },
     {
       "path": "tests/recovery-update.test.mjs",
-      "sha256": "5246c9e593abad18de446577cf28b38cf200a4dec2e845b5ae4a76b6e287dafc"
+      "sha256": "02cf5fea3fd7445219406bd7323cf63b6850fab80ff023c1302615fb848bb4c6"
     },
     {
       "path": "tests/update-transaction.test.mjs",
@@ -848,7 +848,7 @@
     },
     {
       "path": "docs/MACOS-GLASS-MATERIAL.md",
-      "sha256": "1cea7a9c9fa1f96123e494c198912c55b578e7bbb93052f423907b4e3648ce24"
+      "sha256": "136809d3a8cf6cc918fcd2f0969aee7262d5385f3203c9492eec63237a2f5a9a"
     }
   ],
   "external_files": [
