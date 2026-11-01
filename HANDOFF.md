@@ -10,6 +10,14 @@ fix. Public updater transfer timeout #32 and banner overlap #33 were found in
 real tests. The source download-deadline repair is a separate, unpublished change.
 Keep the full goal active; Mac and physical/hardware gates are still pending.
 
+The `codex/latency-evidence-validation` work selects the comparison utility from
+Antigravity's unmerged `a44e532` latency worktree, rather than merging its stale
+runtime wholesale. It repairs false pair qualification, trace validation and
+evidence-file preservation. See [performance methodology](docs/PERFORMANCE.md).
+Current installed status CLI median is 296.4 ms across seven read-only samples;
+the retained Flash task still has 10.6754-second median inter-call gaps. This is
+measurement support, not an actual host speed fix or release acceptance.
+
 ## 30 October final Intel Mac Space/capture & Liquid Glass HUD repair
 
 Branch `codex/argon-final-mac` (based on `v0.3.0-beta.3` commit
