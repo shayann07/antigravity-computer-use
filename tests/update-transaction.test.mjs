@@ -14,6 +14,7 @@ function fixture({omitFresh=null,badFreshHash=false}={}){
   const data={[native.node]:'inert node fixture',['bin/'+native.host]:'inert host fixture',['bin/'+native.storage]:'inert storage fixture','skills/computer-use/SKILL.md':'Use {{DESKTOP_COMMAND}} ready '+version,'scripts/desktop.mjs':'inert CLI fixture'};
   for(const module of 'index desktop-service service-lease desktop-tools receipts incidents update-core storage deployment mcp runtime guardian driver build sessions policy render upstream-utils version platform macos-build auto-update recovery update-notice atomic-json'.split(' '))data['server/'+module+'.mjs']='inert fixture';
   for(const file of ['server/control-contract.json','scripts/arguments.mjs','scripts/diagnostics.mjs','scripts/install.mjs','scripts/update.mjs','scripts/rollback.mjs','scripts/sidecar.mjs','release-public-key.pem',...(process.platform==='win32'?['install.cmd']:['install.command','Setup.Mac.Permissions.command'])])data[file]='inert fixture';
+  if(process.platform==='win32'){data['liquidglass/LiquidGlass.Host.exe']='inert visual fixture';data['liquidglass/libSkiaSharp.dll']='inert visual library fixture';}
   if(name==='fresh'&&omitFresh)delete data[omitFresh];
   for(const [name,bytes]of Object.entries(data)){const file=path.join(bundle,name);fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,bytes);}
   const files=Object.fromEntries(Object.entries(data).map(([name,bytes])=>[name,sha256(bytes)]));if(name==='fresh'&&badFreshHash)files['server/runtime.mjs']='0'.repeat(64);const build_id=sha256(JSON.stringify(files));
@@ -35,6 +36,12 @@ test('signed incomplete bundle is refused before shutdown or configuration chang
   const before=fs.readFileSync(path.join(f.target,'installation.json'),'utf8');
   await assert.rejects(update(f.target,'check',f),/update_bundle_incomplete/);
   assert.equal(fs.readFileSync(path.join(f.target,'installation.json'),'utf8'),before);assert(!f.calls.includes('shutdown'));assert.equal((await update(f.target,'status',f)).available!==true,true);
+ }finally{f.cleanup();}
+});
+test('signed Windows update cannot omit the promised LiquidGlass helper',{skip:process.platform!=='win32'},async()=>{
+ const f=fixture({omitFresh:'liquidglass/LiquidGlass.Host.exe'});try{
+  await assert.rejects(update(f.target,'check',f),/update_bundle_incomplete/);
+  assert(!f.calls.includes('shutdown'));
  }finally{f.cleanup();}
 });
 test('signed payload with conflicting bundle inventory is refused before shutdown',async()=>{

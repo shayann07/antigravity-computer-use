@@ -1,6 +1,6 @@
 {
   "name": "antigravity-native-computer-use",
-  "version": "0.3.0-beta.3",
+  "version": "0.3.0-beta.4",
   "private": true,
   "type": "module",
   "description": "Shared native Windows and macOS desktop tools and /computer-use for Antigravity",

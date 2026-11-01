@@ -122,12 +122,12 @@ function Invoke-ComputerUseInstall {
         [Net.ServicePointManager]::SecurityProtocol = $oldTls -bor [Net.SecurityProtocolType]::Tls12
         Write-Host 'Installing Computer Use for Antigravity...' -ForegroundColor Cyan
         $archive = Join-Path $stage 'windows.zip'
-        Invoke-WebRequest -UseBasicParsing -Uri 'https://github.com/shayann07/antigravity-computer-use/releases/download/v0.3.0-beta.3/AntigravityComputerUse-0.3.0-beta.3-windows-x64.zip' -OutFile $archive
+        Invoke-WebRequest -UseBasicParsing -Uri 'https://github.com/shayann07/antigravity-computer-use/releases/download/v0.3.0-beta.4/AntigravityComputerUse-0.3.0-beta.4-windows-x64.zip' -OutFile $archive
         $checksums = Join-Path $stage 'SHA256SUMS.txt'
-        Invoke-WebRequest -UseBasicParsing -Uri 'https://github.com/shayann07/antigravity-computer-use/releases/download/v0.3.0-beta.3/SHA256SUMS.txt' -OutFile $checksums
-        $archiveName = 'AntigravityComputerUse-0.3.0-beta.3-windows-x64.zip'
+        Invoke-WebRequest -UseBasicParsing -Uri 'https://github.com/shayann07/antigravity-computer-use/releases/download/v0.3.0-beta.4/SHA256SUMS.txt' -OutFile $checksums
+        $archiveName = 'AntigravityComputerUse-0.3.0-beta.4-windows-x64.zip'
         $checksumLine = Get-Content -LiteralPath $checksums | Where-Object { $_ -match [Regex]::Escape($archiveName) } | Select-Object -First 1
-        if (!$checksumLine) { throw 'The beta3 release checksums do not contain the Windows archive.' }
+        if (!$checksumLine) { throw 'The release checksums do not contain the Windows archive.' }
         $expectedArchiveHash = ($checksumLine -split '\s+')[0]
         Assert-ComputerUseHash $archive $expectedArchiveHash
         $helper = Join-Path $stage 'quick-install.mjs'

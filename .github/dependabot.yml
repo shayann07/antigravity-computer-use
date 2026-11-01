@@ -1,0 +1,10 @@
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: /server/liquidglass-host
+    schedule:
+      interval: weekly
+    allow:
+      - dependency-name: LiquidGlass
+      - dependency-name: SkiaSharp
+    open-pull-requests-limit: 3

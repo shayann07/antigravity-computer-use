@@ -5,7 +5,7 @@
     {
       "path": "server/build.mjs",
       "upstream_sha256": "81260b378fffb46573cfe475a3a336930113c8abc465d3d278bbb0851d8a4377",
-      "local_sha256": "00ee279a2a67febb7054437bbefa9b733096cce2a6c958be74626621562f013e",
+      "local_sha256": "e45a6e3c481075ef5c1e1845da7a74e7098e1484c3deda6e4795a40b08705c58",
       "modified": true
     },
     {
@@ -268,7 +268,7 @@
     },
     {
       "path": "server/native/Guardian.cs",
-      "sha256": "502b51ba4c6725658bc9e68cc3689e14436b0aa3de16a1c6d2900c330029dbc1"
+      "sha256": "c3aca4d78dcca0188c9dfcf2dffef5facca2deb90c6abb86238e2ed3d79d8209"
     },
     {
       "path": "server/native/CursorSafety.cs",
@@ -276,7 +276,7 @@
     },
     {
       "path": "server/native/DesktopVisuals.cs",
-      "sha256": "074dd89957540cbc20f7ee984f344df72f6900b90eeaade63264bc91fc1fd4d2"
+      "sha256": "25595bae104d7f473efebd28a64ba89e93226f98677fddef106b1f1af63438f8"
     },
     {
       "path": "server/native/InputLedger.cs",
@@ -320,7 +320,7 @@
     },
     {
       "path": "scripts/check-provenance.mjs",
-      "sha256": "b3003740e3b7424484f279aadb32a598fd8ad5c21465040ec9eb96a5fa767885"
+      "sha256": "a59803762b7e647efb7f770842fdf81ef02b74ecf5aa86a193b8d03004b20002"
     },
     {
       "path": "server/native/KeyboardTargetPolicy.cs",
@@ -492,7 +492,7 @@
     },
     {
       "path": "HANDOFF.md",
-      "sha256": "10e183ec70c5fd362cc0476e91cad082b17d9cf9a2ccfaf2a0d52e1cd9fb738a"
+      "sha256": "f74eb79c49afbbcbfcd21e86c3ecd73678eef186ba783b8c69101af9b2016a73"
     },
     {
       "path": "tests/guardian-visibility.mjs",
@@ -524,7 +524,7 @@
     },
     {
       "path": "install.ps1",
-      "sha256": "6e6114a1edbcc67db48657ae477841915c00c32676298bd29343ea4a417a7d15"
+      "sha256": "b57290be6349ebe277d085c7408a0fe98387f0419a75025d2899a20849e24907"
     },
     {
       "path": "tests/bootstrap.test.mjs",
@@ -612,7 +612,7 @@
     },
     {
       "path": "server/update-core.mjs",
-      "sha256": "1f90101780536b20683c10dfc4570c9867bcd288b0d33183b0f1d54cd4310d0f"
+      "sha256": "9d74ebfcbe88e54549fc68d2bcb770f7a9a83541f46a9021225efd926333a11f"
     },
     {
       "path": "server/auto-update.mjs",
@@ -640,7 +640,7 @@
     },
     {
       "path": "tests/update-transaction.test.mjs",
-      "sha256": "9c2ad7b83126892a2c76fc29a5f8f376c22a1a43345b7fd03e06bb14f940a883"
+      "sha256": "7dceea36ea72cf07c7ac943399ef1b13e2e17e1a0f346b2a3a9f1d9bd83a1356"
     },
     {
       "path": "docs/RELIABILITY-IMPLEMENTATION.md",
@@ -660,7 +660,7 @@
     },
     {
       "path": "tests/lifecycle.test.mjs",
-      "sha256": "6abbc4ce97a677a6bc349c13ffe3584fd93a3e266a3019b405f5b6210a4cf28f"
+      "sha256": "a22ab0abf1d4504c667f319cf88622b9d55645cad0c67a2a15815243a5b7153e"
     },
     {
       "path": "server/native/GuardCleanup.cs",
@@ -708,7 +708,7 @@
     },
     {
       "path": ".github/workflows/prepare-signed-release.yml",
-      "sha256": "f57e787312c0c5b0365ca4ee4fcf0d9768069742692fcee2331bfd6c0fefabd7"
+      "sha256": "60d1a8ff906fcc3a65e14d74a8d9512d00d8d569335dbbc9e35b7c2c568601ac"
     },
     {
       "path": "server/recovery.mjs",
@@ -789,6 +789,136 @@
     {
       "path": "tests/native-snapshot-budget.test.mjs",
       "sha256": "984b0f58c2061bb0f2c60234a2e97488074bda8ff4a5f37c0860e2230d0f1a87"
+    },
+    {
+      "path": ".github/dependabot.yml",
+      "sha256": "46d787eb301940c60bd8868fbe632d7ef225b961c1364176cd323c32c405c3c8"
+    },
+    {
+      "path": "server/native/LiquidGlassPackageClient.cs",
+      "sha256": "350c78a92365936f3cf645beb0c5a175d90d92e199db56a33684307256d68b43"
+    },
+    {
+      "path": "server/liquidglass-host/Program.cs",
+      "sha256": "7147278fb822f901d2031adb5f8ff02bb2b5f493ccdf8019afeada32ed023ca4"
+    },
+    {
+      "path": "server/liquidglass-host/LiquidGlass.Host.csproj",
+      "sha256": "da834a4b3b554bb06f05f805172ae3794feb2870c2702d11bab117bd08cc4301"
+    },
+    {
+      "path": "tests/LiquidGlassClientProbe.cs",
+      "sha256": "c9f99929cef6be66e07c4374f3090396aeb17e824be0def26e1102e12cb1a724"
+    },
+    {
+      "path": "tests/LiquidGlassFakeHelper.cs",
+      "sha256": "319fc921382c0ad1cc7b68c08d1331614d3fe265e1865578e92574cdb3713705"
+    },
+    {
+      "path": "tests/liquidglass-client.test.mjs",
+      "sha256": "10ec62428cdafdc8900bba55a419b0fc04f833090fda4a5200c170ea8316b149"
+    },
+    {
+      "path": "docs/LIQUIDGLASS-WINDOWS.md",
+      "sha256": "05eb2298bf616f35e541f73431003d7b1b9b6bc85be62943ae6a8aa07c62c121"
+    },
+    {
+      "path": "THIRD_PARTY_NOTICES.md",
+      "sha256": "53d285532a28557fda36bde3dd89e56a371dc1353a2cfeaf15932d734e1af3b9"
+    },
+    {
+      "path": "docs/RELEASE.md",
+      "sha256": "36fdfc3139bdeac6ea6d1429235b67b301d03f0b5814dc893b1a179b48acd94a"
+    }
+  ],
+  "external_files": [
+    {
+      "path": "server/liquidglass-host/icons/sliders-horizontal-fill.svg",
+      "source": "https://github.com/phosphor-icons/core",
+      "revision": "2b75f3ad12b420c9504ef05df8d2564a28f8500e",
+      "upstream_sha256": "59fdf39771e7939dd315912702f3c8241a9dfeb1f5b6512a074525884765a76c",
+      "local_sha256": "59fdf39771e7939dd315912702f3c8241a9dfeb1f5b6512a074525884765a76c",
+      "modified": false
+    },
+    {
+      "path": "server/liquidglass-host/icons/play-fill.svg",
+      "source": "https://github.com/phosphor-icons/core",
+      "revision": "2b75f3ad12b420c9504ef05df8d2564a28f8500e",
+      "upstream_sha256": "6d2a75bc5700a68dec50516ebae121c307807e4e6fcca5c863e5b4af006df880",
+      "local_sha256": "6d2a75bc5700a68dec50516ebae121c307807e4e6fcca5c863e5b4af006df880",
+      "modified": false
+    },
+    {
+      "path": "server/liquidglass-host/icons/pause-fill.svg",
+      "source": "https://github.com/phosphor-icons/core",
+      "revision": "2b75f3ad12b420c9504ef05df8d2564a28f8500e",
+      "upstream_sha256": "156d3cdfa5cea803caec50b35f49bc635070c8bd84e7fe78df94b025017ccee1",
+      "local_sha256": "156d3cdfa5cea803caec50b35f49bc635070c8bd84e7fe78df94b025017ccee1",
+      "modified": false
+    },
+    {
+      "path": "server/liquidglass-host/icons/stop-fill.svg",
+      "source": "https://github.com/phosphor-icons/core",
+      "revision": "2b75f3ad12b420c9504ef05df8d2564a28f8500e",
+      "upstream_sha256": "7d9cb9f0bc3363ba8846cf915bc8a84e824804025defaba58eb9df8c21105bb1",
+      "local_sha256": "7d9cb9f0bc3363ba8846cf915bc8a84e824804025defaba58eb9df8c21105bb1",
+      "modified": false
+    },
+    {
+      "path": "server/liquidglass-host/icons/x-fill.svg",
+      "source": "https://github.com/phosphor-icons/core",
+      "revision": "2b75f3ad12b420c9504ef05df8d2564a28f8500e",
+      "upstream_sha256": "6ec0689770c1fb1dc7018039bef101079d2d20931c4661c3981cbe956f20c872",
+      "local_sha256": "6ec0689770c1fb1dc7018039bef101079d2d20931c4661c3981cbe956f20c872",
+      "modified": false
+    },
+    {
+      "path": "licenses/Phosphor-Icons.txt",
+      "source": "https://github.com/phosphor-icons/core",
+      "revision": "2b75f3ad12b420c9504ef05df8d2564a28f8500e",
+      "upstream_sha256": "b5b1f1da112d18ea2147decfd48ddc1bf2b5aeb6c265381579340e95b15a2bb2",
+      "local_sha256": "b5b1f1da112d18ea2147decfd48ddc1bf2b5aeb6c265381579340e95b15a2bb2",
+      "modified": false
+    },
+    {
+      "path": "licenses/LiquidGlass-NOTICE.txt",
+      "source": "NuGet LiquidGlass",
+      "revision": "1.0.0",
+      "upstream_sha256": "0333645b2dd3498f2095f4f426fe75918813e6ec9e441bc5b312f90fe759e812",
+      "local_sha256": "4349c26ca5d2fb53cbda3a822157477bd0731c0107b76c97d4f3663fa125cb4f",
+      "modified": true
+    },
+    {
+      "path": "licenses/SkiaSharp.txt",
+      "source": "NuGet SkiaSharp",
+      "revision": "4.153.1",
+      "upstream_sha256": "89101e35a8c66fd4d6dffc1763259161d35cb564c169714ec227a768c89f2938",
+      "local_sha256": "bc2eb4f37d574f9b1b67da2b17e14d151618850527d78f7323239e7518df5b77",
+      "modified": true
+    },
+    {
+      "path": "licenses/SkiaSharp-Third-Party.txt",
+      "source": "NuGet SkiaSharp.NativeAssets.Win32",
+      "revision": "4.153.1",
+      "upstream_sha256": "21504c46c4c58aa64c1055bd2dcbc5f9a136b4b8c412ed3cc6740e22c5b127f5",
+      "local_sha256": "98acf9d4d6083959988c884f630cdff760f94bfeb9acf57774653e08c23d1e45",
+      "modified": true
+    },
+    {
+      "path": "licenses/DotNet-Runtime.txt",
+      "source": "NuGet Microsoft.NETCore.App.Runtime.win-x64",
+      "revision": "10.0.14",
+      "upstream_sha256": "d7a68596ab69b06f51ca278a6545148e4269a9381c26d597c13df5d88e08cf5b",
+      "local_sha256": "cfc21f5e8bd655ae997eec916138b707b1d290b83272c02a95c9f821b8c87310",
+      "modified": true
+    },
+    {
+      "path": "licenses/DotNet-Runtime-Third-Party.txt",
+      "source": "NuGet Microsoft.NETCore.App.Runtime.win-x64",
+      "revision": "10.0.14",
+      "upstream_sha256": "6d15e10a101c6bfff2ab4429ed061bf76c456fc4b23ad6b03e0d0f8377148a21",
+      "local_sha256": "66f1d4e44973185519bb4aa8a9718eb22fc7af2cc532e3ae9cfc4c127ee7fc54",
+      "modified": true
     }
   ]
 }
