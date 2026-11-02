@@ -223,7 +223,12 @@ final class MacPanicMonitor {
         Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
             let parent = pid_t(ProcessInfo.processInfo.environment["AGCU_PARENT_PID"] ?? "0") ?? 0
             if (try? macProcessStart(guardian)) != birth || (try? macProcessStart(parent)) != MacFence.parentIdentity {
-                if (try? MacFence.read().state) != "idle" { MacFence.emergency("guardian_exited") }
+                if (try? MacFence.read().state) != "idle" {
+                    // The old owner is gone. Preserve the cleanup witness for
+                    // a replacement's read-only recovery instead of leaving a
+                    // permanently pending record after successful release.
+                    if MacFence.emergency("guardian_exited") { try? MacFence.write("stopped||0||0|0") }
+                }
                 else { let workersStopped = macWaitForWorkers(), inputsRecovered = MacInputLedger.recover(); if !workersStopped || !inputsRecovered { MacFence.emergency("input_cleanup_failed") } }
                 exit(0)
             }
@@ -327,7 +332,7 @@ final class MacGuardian: NSObject {
     func humanToggle() {
         if state == "active" { set("paused", reason: "requested_pause"); return }
         do { try ensureWatchdog() } catch { emit(["ev":"visual_warning", "message":String(describing:error)]); return }
-        guard MacInputLedger.recover() else { return }
+        guard macWaitForWorkers(), MacInputLedger.recover() else { return }
         until = MacFenceState.now + Int64(MacContract.value["session_ms"] as? Int ?? 600_000) * 10_000
         bootUntil = MacDeadline.create(requested: until, wallNow: MacFenceState.now, bootNow: MacDeadline.now, maximumMs: MacContract.value["session_ms"] as? Int ?? 600_000)
         guard bootUntil > 0 else { return }

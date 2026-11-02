@@ -568,11 +568,11 @@
     },
     {
       "path": "server/native/macos/MacControl.swift",
-      "sha256": "13e40d3fbfbac5e16e50fcd64a705acf65f28ea70ea2ea96fa4db32b498e6a90"
+      "sha256": "83dc0a5f58c4fdeee41b533a1d843d9aed1ebbfdcfdf0e556b1ad4f052b4d96e"
     },
     {
       "path": "server/native/macos/MacGuardian.swift",
-      "sha256": "bc70494d6afba5de476c982378015b03591ce7efe4bb5909a7115c86e2c6976a"
+      "sha256": "2c63a1fb73e2c9ed74f950983b17e21cf7b0a06c14df169c8c69a5c52dfef8c2"
     },
     {
       "path": "server/native/macos/MacOperations.swift",

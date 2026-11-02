@@ -349,11 +349,12 @@ enum MacFence {
         let written = bytes.withUnsafeBytes { Darwin.write(fd, $0.baseAddress, bytes.count) }
         return written == bytes.count && fsync(fd) == 0
     }
-    static func emergency(_ reason: String) {
+    @discardableResult static func emergency(_ reason: String) -> Bool {
         latchStop(latch)
         try? write("stopped||0||0|1")
         let workersStopped = macWaitForWorkers(), inputsRecovered = MacInputLedger.recover()
         if !workersStopped || !inputsRecovered { emit(["ev": "visual_warning", "message": "Input cleanup is incomplete; control stays stopped."]) }
+        return workersStopped && inputsRecovered
     }
 }
 
