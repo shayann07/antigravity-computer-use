@@ -109,7 +109,7 @@ export function safeWaitMetrics(value){
 }
 // Inspect only a recorded prior Windows guard. Never inject input, kill a PID,
 // clear Stop, or trust a PID that is still alive (including possible reuse).
-function readRecoveryFile(file,limit,io){
+export function readRecoveryFile(file,limit,io=fs){
   const info=io.lstatSync(file,{bigint:true});if(!info.isFile()||info.isSymbolicLink()||info.nlink!==1n||info.size>BigInt(limit))throw Error('untrusted recovery record');
   const fd=io.openSync(file,io.constants.O_RDONLY|(io.constants.O_NOFOLLOW||0));try{
    const opened=io.fstatSync(fd,{bigint:true});if(!opened.isFile()||opened.nlink!==1n||opened.size>BigInt(limit)||opened.dev!==info.dev||opened.ino!==info.ino)throw Error('recovery record replaced');

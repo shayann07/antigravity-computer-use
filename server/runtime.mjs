@@ -188,7 +188,9 @@ export class Runtime {
   }
   // A passive App sidecar must not open a HUD, install input hooks or acquire
   // cursor ownership just because a previous task left an emergency latch.
-  async prepare(){}
+  async prepare(){
+    if(this.taskFile&&!fs.existsSync(this.taskFile))try{writeAtomicJSON(this.taskFile,{schema:1,open:false},{exclusive:true});}catch(error){if(error.code!=='EEXIST')throw error;}
+  }
   async showControls(){
     if(this.recoveredTask)fail('recovered_cleanup_unverified','A previous task survived restart. Verify its native input cleanup before showing controls or re-arming. Do not replay the interrupted action.');
     if(this.state==='stopped'&&this.lastControlReason==='guardian_stop_unconfirmed')fail('guardian_stop_unconfirmed','Native Stop delivery is unconfirmed. Inspect diagnostics and input cleanup before showing controls; do not re-arm or replay.');

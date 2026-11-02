@@ -1,3 +1,4 @@
+import {TaskCoordinator} from './task-coordinator.mjs';
 import {TaskOwnership} from './task-ownership.mjs';
 // Local, capability-authenticated IPC for skill scripts. No MCP or model SDK.
 import net from 'node:net';
@@ -38,7 +39,7 @@ export function compact(result,dir){
   return value;
 }
 
-export async function serveDesktop({directory=dataDir(),runtime,idlePolicy='shutdown',idleTimeoutMs=15*60000,idleCheckMs=10000,requireTaskOwnership=runtime===undefined}={}){
+export async function serveDesktop({directory=dataDir(),runtime,idlePolicy='shutdown',idleTimeoutMs=15*60000,idleCheckMs=10000,requireTaskOwnership=runtime===undefined,requireGlobalCoordination=runtime===undefined,taskCoordinator}={}){
   if(!['release','shutdown'].includes(idlePolicy))throw Error('Invalid listener idle policy.');
   fs.mkdirSync(directory,{recursive:true});
   const ownership=await acquireServiceLease(directory);let ownershipLost=false,initialized=false;
@@ -57,6 +58,7 @@ export async function serveDesktop({directory=dataDir(),runtime,idlePolicy='shut
     if(ownership.lost)throw Object.assign(Error('Controller ownership was lost during startup.'),{code:'service_ownership_lost'});
   }catch(error){if(initialized)await Promise.resolve().then(()=>runtime.close?.()).catch(()=>{});await ownership.release();throw error;}
   const taskOwnership=requireTaskOwnership?new TaskOwnership():null;
+  const coordinator=taskCoordinator||(requireGlobalCoordination?new TaskCoordinator(directory,{onLost:()=>runtime.stop().catch(()=>{})}):null);
   const secret=randomBytes(32).toString('hex');
   let pipe=ipcEndpoint(directory,randomBytes(18).toString('hex'));
   let busy=false,closing=false,lastCall=Date.now(),expiry,shutdownPending,idleReleased=false;
@@ -71,7 +73,7 @@ export async function serveDesktop({directory=dataDir(),runtime,idlePolicy='shut
   const shutdown=()=>{
     if(shutdownPending)return shutdownPending;
     shutdownPending=(async()=>{closing=true;
-    try{await runtime.close();while(pendingIncidents.size)await Promise.allSettled([...pendingIncidents]);}catch(error){closing=false;throw error;}
+    try{await runtime.close();if(coordinator?.held)await coordinator.release();while(pendingIncidents.size)await Promise.allSettled([...pendingIncidents]);}catch(error){closing=false;throw error;}
     clearInterval(expiry);
     for(const socket of sockets)socket.end();server.close();
     try{const saved=JSON.parse(fs.readFileSync(file));if(saved.pid===process.pid&&saved.secret===secret)fs.unlinkSync(file);}catch{}
@@ -143,7 +145,9 @@ export async function serveDesktop({directory=dataDir(),runtime,idlePolicy='shut
         }
         if(!control){busy=true;executing=true;}
         try{
+          if(coordinator&&!['computer_status','computer_apps','computer_stop','computer_pause','computer_controls','computer_end'].includes(name))await coordinator.ensure();
           const raw=await call(runtime,name,request.args||{});
+          if(coordinator&&name==='computer_end'&&raw.ended===true)await coordinator.release();
           const result=compact(name==='computer_status'?{...raw,listener_idle_policy:idlePolicy,controller_ownership_lost:ownershipLost,...(request.expected_build_id!==BUILD_ID?{client_build_mismatch:true,next_action:'resolve_version_mismatch'}:{}),...(pendingIncidents.size?{diagnostic_pending:pendingIncidents.size}:{}),...(runtime.diagnosticError?{diagnostic_error:runtime.diagnosticError}:{})}:raw,directory);
           if(result.observation_valid===false)runtime.frames?.delete(result.metadata?.observation_id);
           if(taskOwnership&&name==='computer_end'&&result.ended===true&&runtime.status().task_open===false)taskOwnership.ended();
@@ -160,7 +164,7 @@ export async function serveDesktop({directory=dataDir(),runtime,idlePolicy='shut
   try{
     await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(pipe,resolve);});
     if(process.platform==='darwin')pipe={host:'127.0.0.1',port:server.address().port};
-    ownership.assertHeld();fs.writeFileSync(temporary,JSON.stringify({pid:process.pid,pipe,secret,...(taskOwnership?{task_protocol:1}:{})}),{mode:0o600});fs.renameSync(temporary,file);
+    ownership.assertHeld();fs.writeFileSync(temporary,JSON.stringify({pid:process.pid,pipe,secret,...(taskOwnership?{task_protocol:1}:{}),...(coordinator?{global_task_protocol:1}:{})}),{mode:0o600});fs.renameSync(temporary,file);
   }catch(error){try{if(fs.existsSync(temporary))fs.unlinkSync(temporary);}catch{}await shutdown();throw error;}
   expiry=setInterval(()=>{
     if(busy||closing||Date.now()-lastCall<=idleTimeoutMs)return;

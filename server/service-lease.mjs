@@ -24,7 +24,7 @@ export async function acquireServiceLease(directory,{spawnProcess=spawn,helper=e
    let wait;Promise.race([exited.then(()=>true),new Promise(resolve=>{wait=setTimeout(()=>resolve(false),cleanupTimeout);})]).then(closed=>{clearTimeout(wait);reject(closed?error:Object.assign(Error('Ownership helper termination could not be confirmed. Do not start another controller.'),{code:'service_lease_cleanup_unconfirmed',cause:error}));});};
   const timer=setTimeout(()=>fail(Object.assign(Error('Controller ownership helper did not answer; no controller was started.'),{code:'service_lease_timeout'})),startupTimeout);
   child.on('error',error=>fail(error));child.stderr.on('data',()=>{});
-  child.stdin.on('error',()=>{});
+  child.stdin.on('error',()=>{if(ready&&!releasing)markLost();});
   child.stdout.on('data',chunk=>{
    buffer+=chunk;if(buffer.length>8192){if(!ready)fail(Error('Invalid ownership-helper reply.'));else {markLost();try{child.kill();}catch{}}return;}
    while(buffer.includes('\n')){const index=buffer.indexOf('\n'),line=buffer.slice(0,index);buffer=buffer.slice(index+1);
@@ -43,13 +43,15 @@ export async function acquireServiceLease(directory,{spawnProcess=spawn,helper=e
   });
   child.once('close',()=>{if(!ready)fail(Object.assign(Error('Controller ownership helper exited before readiness.'),{code:'service_lease_exited'}));});
  });
- lease.publishIncidents=bytes=>{
+ const publish=(bytes,op='publish_incidents')=>{
   lease.assertHeld();if(publishPending)throw Error('Incident publication already pending.');
   if(!Buffer.isBuffer(bytes)||bytes.length>256*1024)throw Error('Incident journal exceeds limit.');
-  return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{publishPending=null;try{child.kill();}catch{}reject(Object.assign(Error('Incident publication outcome is unknown.'),{code:'incident_publish_outcome_unknown'}));},10000);
-   publishPending={resolve,reject,timer};child.stdin.write(JSON.stringify({op:'publish_incidents',data:bytes.toString('base64')})+'\n',error=>{if(error&&publishPending){const pending=publishPending;publishPending=null;clearTimeout(pending.timer);pending.reject(Object.assign(Error('Incident publication outcome is unknown.'),{code:'incident_publish_outcome_unknown'}));}});
+  return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{publishPending=null;markLost();try{child.kill();}catch{}reject(Object.assign(Error('Incident publication outcome is unknown.'),{code:'incident_publish_outcome_unknown'}));},10000);
+   publishPending={resolve,reject,timer};child.stdin.write(JSON.stringify({op,data:bytes.toString('base64')})+'\n',error=>{if(error)markLost();});
   });
  };
+ lease.publishIncidents=bytes=>publish(bytes);
+ lease.publishTaskOwner=bytes=>{if(!Buffer.isBuffer(bytes)||bytes.length>4096)throw Error('Task owner record exceeds limit');return publish(bytes,'publish_task_owner');};
  lease.release=()=>releasePending??=(async()=>{
   releasing=true;
   // A broken pipe can throw before signalling the helper. Still attempt

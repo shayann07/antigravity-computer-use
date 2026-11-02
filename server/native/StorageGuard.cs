@@ -59,9 +59,11 @@ internal static class StorageGuard {
                     Console.WriteLine(new JavaScriptSerializer().Serialize(new {ok=true,lease_acquired=true,private_storage_verified=true,pid=System.Diagnostics.Process.GetCurrentProcess().Id}));Console.Out.Flush();
                     string line;while((line=Console.In.ReadLine())!=null){
                         var request=new JavaScriptSerializer().DeserializeObject(line) as Dictionary<string,object>;
-                        if(request==null||!request.ContainsKey("op")||Convert.ToString(request["op"])!="publish_incidents"||Path.GetFileName(root)!="incident-writer-lease")throw new InvalidOperationException("Invalid lease operation.");
-                        string parent=Path.GetDirectoryName(root),target=Path.Combine(parent,"incidents.json"),temp=Path.Combine(parent,".incident-publish.tmp");
-                        byte[] bytes=Convert.FromBase64String(Convert.ToString(request["data"]));if(bytes.Length>256*1024)throw new InvalidOperationException("Incident journal exceeds limit.");
+                        string operation=request!=null&&request.ContainsKey("op")?Convert.ToString(request["op"]):"";
+                        bool taskOwner=operation=="publish_task_owner"&&Path.GetFileName(root)=="desktop-task-lease";
+                        if(!taskOwner&&(operation!="publish_incidents"||Path.GetFileName(root)!="incident-writer-lease"))throw new InvalidOperationException("Invalid lease operation.");
+                        string parent=taskOwner?root:Path.GetDirectoryName(root),target=Path.Combine(parent,taskOwner?"task-owner.json":"incidents.json"),temp=Path.Combine(parent,taskOwner?".task-owner-publish.tmp":".incident-publish.tmp");
+                        byte[] bytes=Convert.FromBase64String(Convert.ToString(request["data"]));if(bytes.Length>(taskOwner?4096:256*1024))throw new InvalidOperationException("Incident journal exceeds limit.");
                         Verify(parent,true);if(File.Exists(target))Verify(target,false);
                         // Only the lease holder may recover this reserved file.
                         if(File.Exists(temp)){Verify(temp,false);File.Delete(temp);}

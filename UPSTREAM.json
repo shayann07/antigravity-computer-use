@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "54ffb12ce520ad9540d2e6183143c9be6afe97bd63fcc08eceb2e4a4907b1cd0"
+      "sha256": "578ec02554c831978ea712f0e3653d79009a746424d3be81cea3a131c799be74"
     },
     {
       "path": "server/mcp.mjs",
@@ -292,7 +292,7 @@
     },
     {
       "path": "server/desktop-service.mjs",
-      "sha256": "2e625cfca2de06c1b00f0d98c4cc58628e4631dd1825d949a570c361df8bd709"
+      "sha256": "561c4d3b1d2c7f3115ec2b54b62813f6b36dc01469b4adf6d8348968ab349a5f"
     },
     {
       "path": "server/desktop-tools.mjs",
@@ -360,7 +360,7 @@
     },
     {
       "path": "scripts/bundle.mjs",
-      "sha256": "fe0fbe5409d4858c8cae560f07d8ae552768af31122dfbb080b7a89cc72a7011"
+      "sha256": "a49e016943a700917b43571b36cfc3ef9836e587edc8609f0acf07f1dace22ea"
     },
     {
       "path": "tests/install.test.mjs",
@@ -384,7 +384,7 @@
     },
     {
       "path": "server/native/StorageGuard.cs",
-      "sha256": "5848448ef946ed2a09a68bd18cfa1e6cc2d82f36b3cb3b5d9617fbd51955e176"
+      "sha256": "ed24057db043f23358edd59cf2b0645803e9a78452cf5b7eb6ca06e56f13bb84"
     },
     {
       "path": "server/storage.mjs",
@@ -424,7 +424,7 @@
     },
     {
       "path": "server/service-lease.mjs",
-      "sha256": "6e7d2224bf90733e0e062ee16bcff4c8cf3278ed899f4870a7f94f1fe6d0e3fe"
+      "sha256": "f8acab1770e1545d5745ffada73c2a5463f16552e9d6f20c90b32b7a4a3bffa7"
     },
     {
       "path": "tests/service-lease.test.mjs",
@@ -588,7 +588,7 @@
     },
     {
       "path": "server/native/macos/StorageMain.swift",
-      "sha256": "0865390ce3f2ae83ad98429f65a5c8b20aba9310be87317002f103fe761e6014"
+      "sha256": "918048f0852b81f179e7482a99985e14e0ae2618ccc78790191a8b915b49ad69"
     },
     {
       "path": "tests/macos-storage.test.mjs",
@@ -712,7 +712,7 @@
     },
     {
       "path": "server/recovery.mjs",
-      "sha256": "d7e10743e4a7f9d5d5ab6009d3774c58d03d9c04622fb167e2665453959c562b"
+      "sha256": "87465c3265aa2f606dfa2cfda4c9bd2fc5e86fa7872499a1a8912740396f0835"
     },
     {
       "path": "scripts/qualify-guardian-desktop.mjs",
@@ -860,7 +860,7 @@
     },
     {
       "path": "tests/installed-stop-resume.mjs",
-      "sha256": "abfefb66646d528ed24383dbb7f908f9b478f6e913170b60df39a46a0bc42f61"
+      "sha256": "5b2777a5db9574e01a1ca01d1a8cdca6257577f3e80ba97eee5e494fa724a2c2"
     },
     {
       "path": "docs/qualification.md",
@@ -901,6 +901,18 @@
     {
       "path": "tests/stop-context.test.mjs",
       "sha256": "9938658b2ae9c37313009b4eb1bce8fef5a049aef0c091675f00c2bbe41ac40e"
+    },
+    {
+      "path": "server/task-coordinator.mjs",
+      "sha256": "b9f3885edc246cc583cb99e0f151d6efcf0992835d3c5470bbe1e57c46c005f1"
+    },
+    {
+      "path": "tests/task-coordinator.test.mjs",
+      "sha256": "e54ed445790a33f9abe92180b5933228f4c559c85c0942e6720f4c6f5ac23f76"
+    },
+    {
+      "path": "docs/TASK-OWNERSHIP.md",
+      "sha256": "67d1eed20bf34b268a5e4525fcb5e89685d54c5c0a1071c13fecff092b3e15b8"
     }
   ],
   "external_files": [
