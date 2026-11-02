@@ -20,6 +20,20 @@ passed 190/190 before the final conservative parent-inspection adjustment;
 the native/file subset then passed 7/7. Full exact-head and native Mac CI are
 required. This is source-only: installed beta.4 and frozen beta.5 bytes remain
 unchanged and do not contain this repair. Issue #26 is not fully resolved.
+The follow-up now requests a nonce-/process-/guard-bound native Stop receipt
+and independently aborts the driver before settling only its own fresh marker.
+It never starts a replacement guardian to obtain acknowledgement, clears an old
+episode, or removes the primary Stop. Native Windows worker handles remain
+tracked until exit is confirmed; resume/re-arm refuses live workers. New inert
+pipe/file tests cover stale/foreign/incomplete/late replies and failed cleanup.
+The first ownership test exposed rounded Windows inode IDs; Stop records now
+use BigInt IDs and nanosecond timestamps. Focused native/transport tests passed
+94/94, and the final receipt/file subset passed 18/18. Fresh full/native Mac CI
+and physical acceptance remain required; old-controller recovery is still open.
+The full current-process acknowledgement suite passed 519/531 tests with zero
+failures and 12 explicit skips. The later End evidence-retention guard passed
+125 focused tests; its invalid-marker case explicitly refuses both End and
+shutdown without controls. Fresh exact-head CI must cover the combined source.
 The first full run recorded 520 tests: 507 passed, one failed and 12 skipped.
 Its passive lifecycle fixture used the undefined `owner-stop` marker. The
 normal lifecycle case now uses `stopped`; a separate case preserves invalid

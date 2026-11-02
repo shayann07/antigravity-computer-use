@@ -9,14 +9,14 @@ import {writeAtomicText} from './atomic-json.mjs';
 function stopRecord(file,io){
  let fd;
  try{
-  const info=io.lstatSync(file);
-  if(!info.isFile()||info.isSymbolicLink()||info.nlink!==1||info.size>4096)throw Error('invalid Stop entry');
+  const info=io.lstatSync(file,{bigint:true});
+  if(!info.isFile()||info.isSymbolicLink()||info.nlink!==1n||info.size>4096n)throw Error('invalid Stop entry');
   fd=io.openSync(file,io.constants.O_RDONLY|(io.constants.O_NOFOLLOW||0));
-  const opened=io.fstatSync(fd);if(!opened.isFile()||opened.nlink!==1||opened.size>4096||opened.dev!==info.dev||opened.ino!==info.ino)throw Error('Stop entry changed');
+  const opened=io.fstatSync(fd,{bigint:true});if(!opened.isFile()||opened.nlink!==1n||opened.size>4096n||opened.dev!==info.dev||opened.ino!==info.ino)throw Error('Stop entry changed');
   const bytes=Buffer.alloc(4097);let used=0;
   while(used<bytes.length){const n=io.readSync(fd,bytes,used,bytes.length-used,null);if(!n)break;used+=n;}
-  const after=io.fstatSync(fd),current=io.lstatSync(file);
-  if(used>4096||after.size!==opened.size||after.mtimeMs!==opened.mtimeMs||after.ctimeMs!==opened.ctimeMs||!current.isFile()||current.isSymbolicLink()||current.nlink!==1||current.dev!==opened.dev||current.ino!==opened.ino)throw Error('Stop entry changed');
+  const after=io.fstatSync(fd,{bigint:true}),current=io.lstatSync(file,{bigint:true});
+  if(used>4096||after.size!==opened.size||after.mtimeNs!==opened.mtimeNs||after.ctimeNs!==opened.ctimeNs||!current.isFile()||current.isSymbolicLink()||current.nlink!==1n||current.dev!==opened.dev||current.ino!==opened.ino)throw Error('Stop entry changed');
   const value=bytes.subarray(0,used).toString('utf8');return {value,unconfirmed:value.startsWith('unconfirmed:')};
  }catch(error){if(error.code==='ENOENT'&&fd===undefined)return null;throw error;}
  finally{if(fd!==undefined)io.closeSync(fd);}
@@ -29,15 +29,16 @@ export function readStopLatch(file,{io=fs}={}){
   return primary;
  }catch{return {value:null,unconfirmed:false,invalid:true};}
 }
-export function persistStopLatch(file,{unconfirmed=false,io=fs}={}){
+export function persistStopLatch(file,{unconfirmed=false,nonce,io=fs}={}){
  if(typeof file!=='string'||!path.isAbsolute(file)||typeof unconfirmed!=='boolean')throw Error('Invalid Stop persistence request');
+ if(nonce!==undefined&&(typeof nonce!=='string'||nonce.length!==32||!/^[a-f0-9]{32}$/.test(nonce)))throw Error('Invalid internal Stop nonce');
  const initial=readStopLatch(file,{io});unconfirmed=unconfirmed||initial?.unconfirmed===true;
  if(unconfirmed){
   const prior=readStopLatch(file,{io});
   // A separate create-only marker survives Windows sharing violations and
   // older handles still writing the primary file. Ordinary writers never
   // modify it. Publication is atomic and flushed before it becomes visible.
-  try{writeAtomicText(file+'.unconfirmed',prior?.unconfirmed?prior.value:'unconfirmed:'+randomUUID(),{exclusive:true,io});}
+  try{writeAtomicText(file+'.unconfirmed',prior?.unconfirmed?prior.value:'unconfirmed:'+(nonce||randomUUID()),{exclusive:true,io});}
   catch(error){if(error.code!=='EEXIST')throw error;}
   // Retain the primary marker for older readers when possible. Failure here
   // cannot erase the already-published uncertainty marker.
@@ -52,6 +53,22 @@ export function persistStopLatch(file,{unconfirmed=false,io=fs}={}){
  if(!unconfirmed&&saved?.unconfirmed)return persistStopLatch(file,{unconfirmed:true,io});
  if(!saved||saved.value!=='stopped'&&!saved.unconfirmed||unconfirmed&&!saved.unconfirmed)throw Error('Stop persistence could not be verified');
  return saved;
+}
+// Internal settlement after a validated current-process receipt and independent
+// driver cleanup. The primary Stop remains; this never re-arms control.
+export function settleFreshStopLatch(file,nonce,rootIdentity,{io=fs}={}){
+ if(!path.isAbsolute(file)||typeof nonce!=='string'||nonce.length!==32||!/^[a-f0-9]{32}$/.test(nonce))throw Error('Invalid Stop settlement');
+ const directory=path.dirname(file),pendingFile=file+'.unconfirmed',value='unconfirmed:'+nonce;
+ const rootMatches=()=>{const root=io.lstatSync(directory,{bigint:true});return root.isDirectory()&&!root.isSymbolicLink()&&root.dev===rootIdentity?.dev&&root.ino===rootIdentity?.ino;};
+ if(!rootMatches())throw Error('Stop storage ownership changed');
+ const identity=io.lstatSync(pendingFile,{bigint:true}),pending=stopRecord(pendingFile,io),primary=stopRecord(file,io);
+ if(pending?.value!==value||primary?.unconfirmed&&primary.value!==value)throw Error('Stop episode changed');
+ writeAtomicText(file,'stopped',{io});
+ const current=io.lstatSync(pendingFile,{bigint:true});
+ if(!rootMatches()||current.dev!==identity.dev||current.ino!==identity.ino||stopRecord(pendingFile,io)?.value!==value)throw Error('Stop episode changed');
+ io.unlinkSync(pendingFile);
+ const saved=readStopLatch(file,{io});if(saved?.value!=='stopped'||saved.unconfirmed||saved.invalid)throw Error('Stop settlement was not preserved');
+ return {stopped:true,human_rearm_required:true};
 }
 export function preserveStopLatch(source,destination,{io=fs}={}){
  const prior=readStopLatch(source,{io});if(!prior)return false;

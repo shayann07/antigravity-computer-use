@@ -37,7 +37,7 @@ test('invalid legacy evidence survives passive status and refused shutdown witho
  const {file}=location(t);fs.writeFileSync(file,'owner-stop');const {r,guardian}=runtime(file);let requests=0;
  guardian.start=async()=>{requests++;};guardian.request=async()=>{requests++;};guardian.close=async()=>{requests++;};
  assert.equal(r.status().state,'stopped');assert.equal(r.status().control_reason,'stop_persistence_failed');
- await r.prepare();await r.finish();await assert.rejects(r.close(),e=>e.code==='stop_persistence_failed');
+ await r.prepare();await assert.rejects(r.finish(),e=>e.code==='stop_persistence_failed');await assert.rejects(r.close(),e=>e.code==='stop_persistence_failed');
  assert.equal(requests,0);assert.equal(fs.readFileSync(file,'utf8'),'owner-stop');
 });
 

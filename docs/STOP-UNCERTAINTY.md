@@ -43,10 +43,30 @@ do not establish physical held-input cleanup, native pipe-loss behavior, or
 power-loss durability. Windows may not support flushing a directory handle;
 the existing atomic writer reports that limitation separately from file flush.
 
-This repair does **not** supply a correlated authenticated native Stop
-acknowledgement, and it does not create a new recovery/re-arm authorization.
-Uncertain delivery stays blocked. Completing a trustworthy recovery protocol
-for verified old-worker termination and held-input cleanup remains part of #26.
+## Current-process acknowledgement candidate
+
+The follow-up adds a private-child-pipe receipt bound to a fresh 128-bit nonce,
+the original spawned process PID and this guard's basename. Native handlers
+report worker exit and input-journal cleanup after stopping. A queued write,
+ordinary state event, foreign/incomplete receipt, timeout, replaced process or
+failed driver cleanup cannot settle the uncertainty marker. Stop never starts
+a replacement guardian merely to obtain a receipt.
+
+The shared runtime publishes uncertainty before requesting Stop and aborts its
+driver independently. It coalesces concurrent Stop requests. Only the marker
+created for that fresh request can be settled after both native acknowledgement
+and driver cleanup succeed. The primary `stopped` marker is written/flushed
+before removing the matching companion; input remains blocked and re-arm is
+still human-only. BigInt file identities avoid rounding Windows file IDs.
+Old/recovered uncertainty is never settled by a receipt from a new controller.
+End refuses to discard the durable task record while Stop uncertainty or
+persistence failure remains; those old actor/ledger identities are recovery
+evidence, not disposable bookkeeping.
+
+This is process-/request-bound transport evidence, not remote attestation or
+proof of physical delivery. Native compilation, actual pipe loss/hung UI and
+physical cleanup require fresh qualification. Trusted recovery of old-worker
+termination and held-input cleanup after restart remains part of #26.
 Do not delete a marker or manufacture a human click to force qualification.
 Real broken-pipe, hung-guardian, crash, restart and physical recovery checks on
 Windows and Mac remain release gates. Source/fixture passes cannot close them.

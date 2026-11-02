@@ -5,6 +5,10 @@ import CoreGraphics
 import Darwin
 import Foundation
 
+func macStopNonceValid(_ nonce: String) -> Bool {
+    nonce.utf8.count == 32 && nonce.range(of:"^[a-f0-9]{32}$", options:.regularExpression) != nil
+}
+
 enum MacWorkers {
     static var unreaped: Process?
     static func readReadyLine(_ handle: FileHandle) -> String? {
@@ -344,7 +348,16 @@ final class MacGuardian: NSObject {
                 set("active", reason: "host_authorized_resume")
                 emit(["ev": "host_resume", "state": state]); reply(["allowed": state == "active"])
             case "pause": set("paused", reason: "requested_pause")
-            case "stop": stop("request")
+            case "stop":
+                stop("request")
+                if let nonce = str(message["stop_nonce"]), macStopNonceValid(nonce) {
+                    let exited = macWaitForWorkers()
+                    let native = try? MacFence.read()
+                    let journal = try? MacInputLedger.read()
+                    let clean = exited && native?.state == "stopped" && native?.cleanupPending == false &&
+                        (journal?["keys"] as? [Int])?.isEmpty == true && (journal?["buttons"] as? [Int])?.isEmpty == true && MacFence.latchBlocks(MacFence.latch)
+                    reply(["stop_nonce":nonce,"guardian_pid":Int(getpid()),"guard_file":(MacFence.file as NSString).lastPathComponent,"workers_stopped":exited,"input_cleanup_confirmed":clean])
+                }
             case "end": grants.removeAll(); set(["stopped", "paused"].contains(state) ? state : "idle"); visuals.hide(); reply(["controls_visible": false])
             case "capture": visuals.hideForCapture(); reply(["allowed": true])
             case "capture_end": visuals.finishCapture(state)

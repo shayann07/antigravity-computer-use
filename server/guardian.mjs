@@ -2,6 +2,7 @@ import {spawn} from 'node:child_process';
 import {createInterface} from 'node:readline';
 import {EventEmitter} from 'node:events';
 import {ensureHost} from './build.mjs';
+import path from 'node:path';
 
 export class Guardian extends EventEmitter {
   constructor(env,{spawnProcess=spawn,host=ensureHost,bootTimeout=10000,shutdownGrace=3000,killTimeout=3000}={}) { super(); this.env=env; this.spawnProcess=spawnProcess;this.host=host;this.bootTimeout=bootTimeout;this.shutdownGrace=shutdownGrace;this.killTimeout=killTimeout; this.pending=new Map(); this.seq=0; this.state='idle'; }
@@ -14,6 +15,7 @@ export class Guardian extends EventEmitter {
   }
   async boot() {
     this.expectedIdleExit=false;
+    this.everStarted=true;
     const {exe}=this.host();
     const proc=this.spawnProcess(exe,['--guardian'],{windowsHide:true,env:{...process.env,...this.env,AGCU_GUARDIAN:'1'},stdio:['pipe','pipe','pipe']});this.proc=proc;this.initialized=false;
     this.stderr='';proc.stderr.on('data',d=>{if(this.proc===proc)this.stderr=(this.stderr+d).slice(-2048);});
@@ -52,8 +54,10 @@ export class Guardian extends EventEmitter {
     await boot;
   }
   send(m){if(!this.pipeFailed&&this.proc&&!this.proc.killed&&!this.proc.stdin.destroyed){this.proc.stdin.write(JSON.stringify(m)+'\n');return true;}return false;}
-  async request(m,{timeoutMs}={}){
-    await this.start();
+  async request(m,{timeoutMs,existingProcess}={}){
+    if(existingProcess){
+      if(this.proc!==existingProcess||!this.initialized||this.pipeFailed||this.closing)throw Object.assign(Error('The original native controls are not available; Stop remains unconfirmed.'),{code:'guardian_stop_unconfirmed'});
+    }else await this.start();
     const id=++this.seq;
     return new Promise((resolve,reject)=>{
       const defaultTimeout=m.op==='prompt'?95000:10000;
@@ -72,6 +76,19 @@ export class Guardian extends EventEmitter {
     });
   }
   async prompt(m){return this.request({op:'prompt',...m});}
+  get requiresStopAcknowledgement(){
+    if(!this.proc&&!this.starting&&!this.cleanupFailed&&!this.pipeFailed&&this.expectedIdleExit&&this.lastExit?.code===0&&this.lastExit.signal==null)return false;
+    return !!(this.everStarted||this.proc||this.starting||this.cleanupFailed||this.pipeFailed);
+  }
+  async stopAcknowledged(nonce,{timeoutMs=5000}={}){
+    if(typeof nonce!=='string'||nonce.length!==32||!/^[a-f0-9]{32}$/.test(nonce))throw Error('Invalid internal Stop nonce');
+    const proc=this.proc;
+    if(!proc||!this.initialized||this.pipeFailed||this.cleanupFailed||this.closing)throw Object.assign(Error('No original native controls can acknowledge Stop. No replacement was started.'),{code:'guardian_stop_unconfirmed'});
+    const reply=await this.request({op:'stop',stop_nonce:nonce},{timeoutMs,existingProcess:proc});
+    if(this.proc!==proc||this.pipeFailed||!this.initialized||reply.stop_nonce!==nonce||reply.state!=='stopped'||reply.guardian_pid!==proc.pid||reply.guard_file!==path.basename(this.env.AGCU_GUARD_FILE||'')||reply.workers_stopped!==true||reply.input_cleanup_confirmed!==true)
+      throw Object.assign(Error('Native Stop acknowledgement did not match this request, process and cleanup context.'),{code:'guardian_stop_unconfirmed'});
+    return reply;
+  }
   async close({normal=false}={}){
     if(this.closing)return this.closing;
     const proc=this.proc;if(!proc)return;

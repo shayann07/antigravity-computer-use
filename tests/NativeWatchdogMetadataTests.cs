@@ -12,6 +12,10 @@ class NativeWatchdogMetadataTests {
         try {
             var host=Assembly.LoadFrom(args[0]);var type=host.GetType("Axon.CursorSafety",true);
             var write=type.GetMethod("WriteWatchdogRecord",BindingFlags.Static|BindingFlags.NonPublic);
+            var receipt=host.GetType("Axon.NativeStopReceipt",true);
+            var nonceValid=receipt.GetMethod("ValidNonce",BindingFlags.Static|BindingFlags.NonPublic);
+            if(!(bool)nonceValid.Invoke(null,new object[]{new string('a',32)})||(bool)nonceValid.Invoke(null,new object[]{new string('a',32)+"\n"})||(bool)nonceValid.Invoke(null,new object[]{null}))throw new Exception("Stop receipt nonce validation differs");
+            var exited=receipt.GetMethod("WorkersExited",BindingFlags.Static|BindingFlags.NonPublic);
             var nativeStop=host.GetType("Axon.ControlFence",true).GetMethod("LatchStop",BindingFlags.Static|BindingFlags.NonPublic);
             string stop=Path.Combine(args[1],"emergency.stop");Environment.SetEnvironmentVariable("AGCU_STOP_LATCH",stop);
             nativeStop.Invoke(null,null);if(File.ReadAllText(stop)!="stopped")throw new Exception("native Stop creation failed");
@@ -88,7 +92,9 @@ class NativeWatchdogMetadataTests {
                     check.Invoke(null,new object[]{guard});
                     var timing=Stopwatch.StartNew();for(int i=0;i<100;i++)try{check.Invoke(null,new object[]{guard});}catch(TargetInvocationException){throw new Exception("valid child rejected during sample "+i+": "+((string)problem.Invoke(null,new object[]{guard})??"transient"));}timing.Stop();
                     Console.WriteLine("100 watchdog identity checks (ms): "+timing.Elapsed.TotalMilliseconds.ToString("F1"));
+                    if((bool)exited.Invoke(null,new object[]{new Process[]{child},0}))throw new Exception("live worker was acknowledged as exited");
                     child.Kill();child.WaitForExit();mustRefuse();
+                    if(!(bool)exited.Invoke(null,new object[]{new Process[]{child},0}))throw new Exception("confirmed exited worker was rejected");
                 }finally{if(!child.HasExited){child.Kill();child.WaitForExit();}}
             }
             Console.WriteLine("PASS watchdog metadata create, replace and failed replacement; no input APIs used");return 0;

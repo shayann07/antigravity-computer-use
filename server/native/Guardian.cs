@@ -276,6 +276,19 @@ namespace Axon {
         }
     }
 
+    internal static class NativeStopReceipt {
+        internal static bool ValidNonce(string nonce) {return nonce!=null&&nonce.Length==32&&System.Text.RegularExpressions.Regex.IsMatch(nonce,"^[a-f0-9]{32}$");}
+        internal static bool WorkersExited(Process[] workers,int timeoutMs) {
+            if(timeoutMs<0||timeoutMs>3000)throw new ArgumentOutOfRangeException("timeoutMs");
+            ulong start=NativeDeadline.GetTickCount64();
+            foreach(Process worker in workers)try {
+                if(worker.HasExited)continue;
+                ulong now=NativeDeadline.GetTickCount64();
+                if(now<start||now-start>=(ulong)timeoutMs||!worker.WaitForExit(timeoutMs-(int)(now-start)))return false;
+            }catch{return false;}
+            return true;
+        }
+    }
     internal sealed class Guardian : Form {
         [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h,int how);
         [DllImport("user32.dll")] static extern bool RegisterHotKey(IntPtr h, int id, uint modifiers, uint vk);
@@ -335,7 +348,7 @@ namespace Axon {
                 else {
                     long humanEpoch=Interlocked.Read(ref stopEpoch);
                     try {ControlFence.Recover();}catch {}
-                    if(InputLedger.HasHeld()){Emit(new {ev="visual_warning",message="Held-input cleanup is incomplete; control stays paused/stopped"});return;}
+                    if(InputLedger.HasHeld()||!WorkersExited(50)){Emit(new {ev="visual_warning",message="Worker/input cleanup is incomplete; control stays paused/stopped"});return;}
                     deadline=DateTime.UtcNow.AddMinutes(10).Ticks;bootDeadline=NativeDeadline.Create(deadline,DateTime.UtcNow.Ticks,NativeDeadline.GetTickCount64(),ControlContract.Number("session_ms",600000));
                     if(bootDeadline==0){Emit(new {ev="error",message="Cannot establish the native session deadline; control stays paused/stopped"});return;}
                     if(Interlocked.Read(ref stopEpoch)!=humanEpoch)return;
@@ -529,7 +542,16 @@ namespace Axon {
             try {if(InvokeRequired)BeginInvoke(cleanup);else cleanup();} catch { }
         }
         void StopWorkers() {
-            lock(workerLock) { foreach(Process p in workers) try { if(!p.HasExited)p.Kill(); } catch { } workers.Clear(); }
+            lock(workerLock) {
+                foreach(Process p in workers)try {if(!p.HasExited)p.Kill();}catch{}
+                // A submitted kill is not confirmed exit. Retain unresolved
+                // handles for acknowledgement and human-resume checks.
+                workers.RemoveAll(delegate(Process p){try{return p.HasExited;}catch{return false;}});
+            }
+        }
+        bool WorkersExited(int timeoutMs) {
+            Process[] snapshot;lock(workerLock){snapshot=workers.ToArray();}
+            return NativeStopReceipt.WorkersExited(snapshot,timeoutMs);
         }
         void WriteWorkers() {
             List<string> live=new List<string>();
@@ -590,12 +612,21 @@ namespace Axon {
                 // Soft takeover only. The host permission policy must authorize
                 // a chat-directed Resume. Emergency Stop remains human-only.
                 try {ControlFence.Recover();}catch {}
-                bool resumeAllowed=hostManaged && state=="paused" && !InputLedger.HasHeld();
+                bool resumeAllowed=hostManaged && state=="paused" && !InputLedger.HasHeld() && WorkersExited(0);
                 if(resumeAllowed) {deadline=DateTime.UtcNow.AddMinutes(10).Ticks;bootDeadline=NativeDeadline.Create(deadline,DateTime.UtcNow.Ticks,NativeDeadline.GetTickCount64(),ControlContract.Number("session_ms",600000));if(bootDeadline==0)resumeAllowed=false;else {SetState("active","host_authorized_resume");resumeAllowed=state=="active";if(resumeAllowed)Emit(new {ev="host_resume",state=state});}}
                 Emit(new {id=id,allowed=resumeAllowed,state=state});return;
             }
             if (op == "pause") { SetState("paused","requested_pause"); return; }
-            if (op == "stop") { Emergency(); return; }
+            if (op == "stop") {
+                Emergency();
+                string nonce=m.ContainsKey("stop_nonce")?Convert.ToString(m["stop_nonce"]):null;
+                if(NativeStopReceipt.ValidNonce(nonce)){
+                    bool exited=WorkersExited(2000),clean=false;
+                    try{clean=exited&&!InputLedger.HasHeld()&&File.ReadAllText(ControlFence.FileName).StartsWith("stopped|",StringComparison.Ordinal)&&ControlFence.LatchBlocks(StopLatch);}catch{}
+                    Emit(new {id=id,state="stopped",stop_nonce=nonce,guardian_pid=Process.GetCurrentProcess().Id,guard_file=Path.GetFileName(ControlFence.FileName),workers_stopped=exited,input_cleanup_confirmed=clean});
+                }
+                return;
+            }
             if (op == "shutdown") { normalClose=state=="idle";Close();return; }
             if (op == "end") { grants.Clear(); SetState(state=="stopped"||state=="paused"?state:"idle");DismissControls();Emit(new {id=id,state=state,controls_visible=Visible});return; }
             if (op == "capture") {

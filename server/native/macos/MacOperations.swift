@@ -236,6 +236,12 @@ func macSetup() {
 
 func macContractTest() throws {
     try MacContract.load()
+    guard macStopNonceValid(String(repeating:"a",count:32)),
+          !macStopNonceValid(String(repeating:"a",count:32)+"\n"),
+          !macStopNonceValid(String(repeating:"a",count:31)),
+          !macStopNonceValid(String(repeating:"G",count:32)) else {
+        throw AxonError("contract_test_failed", "Stop acknowledgement nonce validation differs.")
+    }
     let oldText = "old" as CFString, newText = "new" as CFString
     let zero = NSNumber(value: 0), one = NSNumber(value: 1)
     guard axValueDisposition(oldText, newText, newText) == "exact",

@@ -16,7 +16,7 @@ import {storageOperation} from './storage.mjs';
 import {contract,nativePlatform,launchTarget,executableKey} from './platform.mjs';
 import {Incidents} from './incidents.mjs';
 import {updateNotice} from './update-notice.mjs';
-import {recoveryAdvice,priorWindowsCleanupVerified,priorMacCleanupVerified,readStopLatch,persistStopLatch} from './recovery.mjs';
+import {recoveryAdvice,priorWindowsCleanupVerified,priorMacCleanupVerified,readStopLatch,persistStopLatch,settleFreshStopLatch} from './recovery.mjs';
 import {writeAtomicJSON,readTaskRecord} from './atomic-json.mjs';
 
 const input=new Set(['move','click','type','set_value','key','scroll','drag','focus','fit_window','close_window','paste','paste_files','clipboard','open','file_dialog']);
@@ -558,7 +558,12 @@ export class Runtime {
       try{await this.sessions.clearVerifiedStale(Number(/^guard-(\d+)-/.exec(this.priorGuard)[1]));}
       catch{fail('recovered_cleanup_unverified','Previous input ownership could not be safely cleared. Keep the task open; do not repeat input or force an update.');}
     }
-    if(!preserveTask){try{if(this.taskFile)writeAtomicJSON(this.taskFile,{schema:1,open:false});this.taskOpen=false;this.recoveredTask=false;this.dispatchChildren=[];this.dispatchStarted=false;this.watchdogsComplete=true;this.taskDurable=true;}catch{this.taskOpen=true;this.taskDurable=false;throw Object.assign(Error('Input cleanup finished, but task state could not be saved. Updates remain deferred.'),{code:'task_state_write_failed'});}}return {ended:true,state:this.state,restart_required:false};}
+    if(!preserveTask){
+      const stopped=this.latchFile?readStopLatch(this.latchFile):null;
+      if(stopped?.unconfirmed||this.lastControlReason==='guardian_stop_unconfirmed')fail('guardian_stop_unconfirmed','Stop remains unconfirmed. Keep the task recovery record; inspect prior actors and input cleanup without replay.');
+      if(stopped?.invalid||persistenceFailure(this.lastControlReason))fail('stop_persistence_failed','Stop storage is unverified. Keep the task recovery record and inspect private storage.');
+      try{if(this.taskFile)writeAtomicJSON(this.taskFile,{schema:1,open:false});this.taskOpen=false;this.recoveredTask=false;this.dispatchChildren=[];this.dispatchStarted=false;this.watchdogsComplete=true;this.taskDurable=true;}catch{this.taskOpen=true;this.taskDurable=false;throw Object.assign(Error('Input cleanup finished, but task state could not be saved. Updates remain deferred.'),{code:'task_state_write_failed'});}
+    }return {ended:true,state:this.state,restart_required:false};}
   async feedback(args){
     // Revalidate at the persistence boundary too; never store model text,
     // application content, screenshots, paths or arbitrary error messages.
@@ -640,8 +645,30 @@ export class Runtime {
     return {resumed:true,fresh_observation_required:true,replayed_actions:0};
   }
   async stop(){
-    let unconfirmed=this.lastControlReason==='guardian_stop_unconfirmed';
+    if(this.stopping)return this.stopping;
+    const priorUnconfirmed=this.lastControlReason==='guardian_stop_unconfirmed';
     this.generation++;this.frames.clear();this.grants.clear();this.state='stopped';this.lastControlReason='requested_stop';
+    const work=Promise.resolve().then(()=>this.stopTransaction(priorUnconfirmed));this.stopping=work;
+    try{return await work;}finally{if(this.stopping===work)this.stopping=null;}
+  }
+  async stopTransaction(priorUnconfirmed){
+    if(typeof this.guardian.stopAcknowledged==='function'&&this.guardian.requiresStopAcknowledgement){
+      const nonce=randomUUID().replaceAll('-','');let marker,rootIdentity,persistenceFailed=false;
+      const old=this.latchFile?readStopLatch(this.latchFile):null;
+      const maySettle=!priorUnconfirmed&&!old?.unconfirmed&&!old?.invalid&&!this.recoveredTask;
+      try{if(!this.latchFile)throw Error('Missing Stop path');rootIdentity=fs.lstatSync(path.dirname(this.latchFile),{bigint:true});marker=persistStopLatch(this.latchFile,{unconfirmed:true,nonce});}
+      catch{persistenceFailed=true;this.lastControlReason='stop_persistence_failed';}
+      const outcomes=await Promise.allSettled([Promise.resolve().then(()=>this.guardian.stopAcknowledged(nonce)),Promise.resolve().then(()=>this.driver.abort?.())]);
+      if(outcomes[1].status==='rejected'){this.lastControlReason='input_cleanup_failed';throw outcomes[1].reason;}
+      if(persistenceFailed||persistenceFailure(this.lastControlReason))throw Object.assign(Error('Stop persistence is unconfirmed. Inspect private storage; do not restart or re-arm.'),{code:'stop_persistence_failed'});
+      const receipt=outcomes[0].status==='fulfilled'?outcomes[0].value:null;
+      if(!maySettle||marker?.value!=='unconfirmed:'+nonce||receipt?.stop_nonce!==nonce||receipt.workers_stopped!==true||receipt.input_cleanup_confirmed!==true||this.driver.inputMayBeHeld!==false){
+        this.lastControlReason='guardian_stop_unconfirmed';throw Object.assign(Error('Native Stop or prior cleanup is unconfirmed. Inspect diagnostics; do not re-arm or replay.'),{code:'guardian_stop_unconfirmed'});
+      }
+      try{settleFreshStopLatch(this.latchFile,nonce,rootIdentity);}catch{this.lastControlReason='guardian_stop_unconfirmed';throw Object.assign(Error('Stop changed before confirmation could be persisted; control remains stopped.'),{code:'guardian_stop_unconfirmed'});}
+      this.lastControlReason='requested_stop';return {stopped:true,human_rearm_required:true,native_stop_confirmed:true};
+    }
+    let unconfirmed=priorUnconfirmed||this.privateDataStorage===true&&typeof this.guardian.stopAcknowledged!=='function';
     try{const sent=this.guardian.send({op:'stop'});unconfirmed=unconfirmed||sent===false&&!!(this.guardian.proc||this.guardian.starting||this.guardian.cleanupFailed);}catch{unconfirmed=true;}
     let persistenceFailed=false;
     try{if(this.latchFile)unconfirmed=persistStopLatch(this.latchFile,{unconfirmed}).unconfirmed;}
