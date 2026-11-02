@@ -97,13 +97,15 @@ test('idle cleanup defers if runtime task state cannot be read',async()=>{
  }
 });
 test('update reservation refuses an idle task and unavailable task state',async()=>{
- const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'agcu-task-fence-'));let taskOpen=true;
- const runtime={status:()=>({state:'idle',approved_apps:[],...(taskOpen===undefined?{}:{task_open:taskOpen})}),async close(){}};
+ const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'agcu-task-fence-'));let taskOpen=true,controlReason,state='idle';
+ const runtime={status:()=>({state,control_reason:controlReason,approved_apps:[],...(taskOpen===undefined?{}:{task_open:taskOpen})}),async close(){}};
  const service=await serveDesktop({directory:dir,runtime});const session=JSON.parse(fs.readFileSync(service.file));
  try{
   assert.equal((await request(session,'prepare_update')).prepared,false);
   taskOpen=undefined;assert.equal((await request(session,'prepare_update')).prepared,false);
-  taskOpen=false;assert.equal((await request(session,'prepare_update')).prepared,true);
+  taskOpen=false;state='stopped';
+  for(const reason of ['guardian_stop_unconfirmed','stop_persistence_failed','guard_persistence_failed']){controlReason=reason;assert.equal((await request(session,'prepare_update')).prepared,false);}
+  controlReason=undefined;state='idle';assert.equal((await request(session,'prepare_update')).prepared,true);
  }finally{await service.shutdown();fs.rmSync(dir,{recursive:true,force:true});}
 });
 test('direct IPC refuses replay and unverified cleanup after task recovery',async t=>{
@@ -231,8 +233,9 @@ test('diagnostic persistence does not delay an error reply and shutdown waits fo
 test('start refuses to replace a live but unresponsive service',async()=>{
  const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'agcu-start-'));const file=path.join(dir,'desktop-session.json');
  // Establish a dedicated native data root before populating a saved session.
- // macOS correctly refuses to adopt arbitrary nonempty, unmarked directories.
- if(process.platform==='darwin')storageOperation('data',dir);
+ // Reconnection verifies an already-private root on both platforms; it must
+ // not mutate a live service's ACL tree to make this fixture valid.
+ storageOperation('data',dir);
  const raw=JSON.stringify({pid:process.pid,pipe:process.platform==='win32'?'\\\\.\\pipe\\agcu-unresponsive-'+process.pid:path.join(dir,'missing.sock'),secret:'fixture'});fs.writeFileSync(file,raw);
  try{
   const result=await new Promise((resolve,reject)=>{

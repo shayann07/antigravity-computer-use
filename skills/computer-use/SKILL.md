@@ -19,6 +19,22 @@ The first controller call is always the installed command above. Run exactly one
 `.localdata` to decide how to operate the desktop. The `ready` reply is the
 runtime's authority.
 
+Keep the returned `task_token` private. Prefer copying `task_command_prefix`
+from the ready response and appending the next command to that prefix; it
+already includes the correct installed launcher and task context.
+Alternatively, append `--task <task_token>` to
+all subsequent task commands, including `ready` after a human handoff and
+`end`. The CLI obtains this token inside the first `ready` call; no separate
+model/tool round trip is needed. For example:
+
+`{{DESKTOP_COMMAND}} snapshot --task <task_token> --hwnd <observed-window>`
+
+On `task_owned`, wait for the owning task to finish. Never fetch another
+conversation's token or issue End on its behalf. Status, app discovery and
+emergency Stop remain available without the task token. After successful End,
+discard the old token; a new task starts with `ready` without `--task`.
+A lost response does not justify replaying an input action.
+
 - If `ready:true`, continue directly with `apps`/`launch`, then `snapshot`,
   action/verification and `end`.
 - If `ready:false`, perform only the returned `next_action` (for example

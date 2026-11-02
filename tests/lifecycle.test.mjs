@@ -85,9 +85,12 @@ test('recovered End waits for actual prior process exits and preserves Stop',{sk
   // do not retry input, weaken the predicate, or mark cleanup verified early.
   const record=JSON.parse(fs.readFileSync(file)),cleanupDeadline=performance.now()+5000;
   while(!priorWindowsCleanupVerified(dir,record)&&performance.now()<cleanupDeadline)await new Promise(resolve=>setTimeout(resolve,25));
-  storageOperation('verify-data-tree',dir);
-  assert.equal(priorWindowsCleanupVerified(dir,record),true,'Prior fixture processes or their ledger remain unverified');
-  assert.equal((await r.finish()).ended,true);assert.equal(r.state,'stopped');assert.equal(fs.readFileSync(latch,'utf8'),'stopped');assert.equal(JSON.parse(fs.readFileSync(file)).open,false);
+  // End performs its own native storage probe. That probe can reuse a released
+  // fixture PID; assert the authoritative End boundary, not a stale predicate
+  // separated from it by spawning another helper.
+  let ended,cleanupError;const endDeadline=performance.now()+5000;
+  do {try{ended=await r.finish();break;}catch(error){cleanupError=error;if(error.code!=='recovered_cleanup_unverified')throw error;await new Promise(resolve=>setTimeout(resolve,25));}}while(performance.now()<endDeadline);
+  assert.equal(ended?.ended,true,cleanupError?.message);assert.equal(r.state,'stopped');assert.equal(fs.readFileSync(latch,'utf8'),'stopped');assert.equal(JSON.parse(fs.readFileSync(file)).open,false);
  }finally{
   if(controller&&controller.exitCode===null&&controller.signalCode===null)controller.kill();if(controller)await controller.done;
   for(const child of children){if(child.exitCode===null&&child.signalCode===null)child.kill();await child.done;}

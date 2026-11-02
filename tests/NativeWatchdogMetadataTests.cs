@@ -9,9 +9,46 @@ using System.Threading.Tasks;
 class NativeWatchdogMetadataTests {
     static int Main(string[] args) {
         if(args.Length==1&&args[0]=="--hold") { Console.WriteLine("ready");Console.Out.Flush();Thread.Sleep(30000);return 0; }
+        if(args.Length==1&&args[0]=="--disarm-eof") { if(Console.ReadLine()!="disarm")return 12;Console.WriteLine("disarmed");Console.Out.Flush();return Console.ReadLine()==null?0:13; }
         try {
             var host=Assembly.LoadFrom(args[0]);var type=host.GetType("Axon.CursorSafety",true);
             var write=type.GetMethod("WriteWatchdogRecord",BindingFlags.Static|BindingFlags.NonPublic);
+            var disarm=type.GetMethod("DisarmWatchdog",BindingFlags.Static|BindingFlags.NonPublic);
+            foreach(bool retire in new[]{false,true}) {
+                var retirementInfo=new ProcessStartInfo(Process.GetCurrentProcess().MainModule.FileName,"--disarm-eof");retirementInfo.UseShellExecute=false;retirementInfo.CreateNoWindow=true;retirementInfo.RedirectStandardInput=true;retirementInfo.RedirectStandardOutput=true;
+                using(var retirementChild=Process.Start(retirementInfo))try {
+                    disarm.Invoke(null,new object[]{retirementChild,retire});
+                    var response=Task.Factory.StartNew(delegate{return retirementChild.StandardOutput.ReadLine();});
+                    if(!response.Wait(2000)||response.Result!="disarmed")throw new Exception("ordered watchdog disarm missing");
+                    if(!retire){if(retirementChild.WaitForExit(50))throw new Exception("healthy watchdog was retired");retirementChild.StandardInput.Close();}
+                    if(!retirementChild.WaitForExit(2000)||retirementChild.ExitCode!=0)throw new Exception("failed watchdog did not retire after disarm");
+                }finally{if(!retirementChild.HasExited){retirementChild.Kill();retirementChild.WaitForExit();}}
+            }
+            var armReceipt=type.GetMethod("ArmReceiptMatches",BindingFlags.Static|BindingFlags.NonPublic);
+            string armNonce=new string('a',32);
+            if(!(bool)armReceipt.Invoke(null,new object[]{"armed "+armNonce+" 101",armNonce,101}))throw new Exception("fresh arming receipt refused");
+            foreach(string wrong in new[]{"armed","armed "+new string('b',32)+" 101","armed "+armNonce+" 102","armed "+armNonce+" 101\n"})
+                if((bool)armReceipt.Invoke(null,new object[]{wrong,armNonce,101}))throw new Exception("stale or foreign arming receipt accepted");
+            var receipt=host.GetType("Axon.NativeStopReceipt",true);
+            var nonceValid=receipt.GetMethod("ValidNonce",BindingFlags.Static|BindingFlags.NonPublic);
+            if(!(bool)nonceValid.Invoke(null,new object[]{new string('a',32)})||(bool)nonceValid.Invoke(null,new object[]{new string('a',32)+"\n"})||(bool)nonceValid.Invoke(null,new object[]{null}))throw new Exception("Stop receipt nonce validation differs");
+            var exited=receipt.GetMethod("WorkersExited",BindingFlags.Static|BindingFlags.NonPublic);
+            var nativeStop=host.GetType("Axon.ControlFence",true).GetMethod("LatchStop",BindingFlags.Static|BindingFlags.NonPublic);
+            string stop=Path.Combine(args[1],"emergency.stop");Environment.SetEnvironmentVariable("AGCU_STOP_LATCH",stop);
+            nativeStop.Invoke(null,null);if(File.ReadAllText(stop)!="stopped")throw new Exception("native Stop creation failed");
+            File.WriteAllText(stop,"unconfirmed:native-regression");nativeStop.Invoke(null,null);nativeStop.Invoke(null,null);
+            if(File.ReadAllText(stop)!="unconfirmed:native-regression")throw new Exception("native Stop downgraded uncertainty");
+            File.WriteAllText(stop,"invalid-evidence");nativeStop.Invoke(null,null);
+            if(File.ReadAllText(stop)!="invalid-evidence")throw new Exception("native Stop overwrote existing evidence");
+            File.Delete(stop);File.WriteAllText(stop+".unconfirmed","unconfirmed:companion");
+            var blocks=host.GetType("Axon.ControlFence",true).GetMethod("LatchBlocks",BindingFlags.Static|BindingFlags.NonPublic);
+            if(!(bool)blocks.Invoke(null,new object[]{stop}))throw new Exception("native Stop ignored a companion-only fence");
+            File.Delete(stop+".unconfirmed");
+            if((bool)blocks.Invoke(null,new object[]{stop}))throw new Exception("known absent Stop entries were blocked");
+            var entryBlocks=host.GetType("Axon.ControlFence",true).GetMethod("LatchEntryBlocks",BindingFlags.Static|BindingFlags.NonPublic);
+            string invalidParent=Path.Combine(args[1],"not-a-directory");File.WriteAllText(invalidParent,"fixture");
+            if(!(bool)entryBlocks.Invoke(null,new object[]{Path.Combine(invalidParent,"child")}))throw new Exception("invalid Stop parent was treated as absence");
+            Environment.SetEnvironmentVariable("AGCU_STOP_LATCH","");
             var check=host.GetType("Axon.ControlFence",true).GetMethod("CheckWatchdogIdentity",BindingFlags.Static|BindingFlags.NonPublic);
             var problem=host.GetType("Axon.ControlFence",true).GetMethod("WatchdogIdentityProblem",BindingFlags.Static|BindingFlags.NonPublic);
             var unchanged=host.GetType("Axon.ControlFence",true).GetMethod("GuardUnchanged",BindingFlags.Static|BindingFlags.NonPublic);
@@ -72,7 +109,9 @@ class NativeWatchdogMetadataTests {
                     check.Invoke(null,new object[]{guard});
                     var timing=Stopwatch.StartNew();for(int i=0;i<100;i++)try{check.Invoke(null,new object[]{guard});}catch(TargetInvocationException){throw new Exception("valid child rejected during sample "+i+": "+((string)problem.Invoke(null,new object[]{guard})??"transient"));}timing.Stop();
                     Console.WriteLine("100 watchdog identity checks (ms): "+timing.Elapsed.TotalMilliseconds.ToString("F1"));
+                    if((bool)exited.Invoke(null,new object[]{new Process[]{child},0}))throw new Exception("live worker was acknowledged as exited");
                     child.Kill();child.WaitForExit();mustRefuse();
+                    if(!(bool)exited.Invoke(null,new object[]{new Process[]{child},0}))throw new Exception("confirmed exited worker was rejected");
                 }finally{if(!child.HasExited){child.Kill();child.WaitForExit();}}
             }
             Console.WriteLine("PASS watchdog metadata create, replace and failed replacement; no input APIs used");return 0;

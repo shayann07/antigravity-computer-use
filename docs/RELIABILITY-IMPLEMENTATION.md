@@ -1,5 +1,10 @@
 # Reliability and updates implementation log
 
+2 November source candidate: [Stop uncertainty preservation](STOP-UNCERTAINTY.md)
+records a reproduced native/shared marker downgrade and its monotonic repair.
+It is not a correlated native acknowledgement or completed physical recovery
+protocol. Existing installed/released bytes remain unchanged; #26 stays open.
+
 On 30 October the final Intel Mac qualification and repair pass on
 `codex/argon-final-mac` (from `v0.3.0-beta.3` baseline `b33940c`) reproduced and
 repaired the macOS Chrome/Space window capture failure (`_AXUIElementGetWindow`

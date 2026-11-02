@@ -37,9 +37,9 @@ test('prior macOS cleanup requires dead recorded processes and an empty JSON led
  const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'prior-mac-ledger-')),guard='guard-101-12345678-1234-1234-1234-123456789abc.state',file=path.join(dir,guard);
  const record={guard,children:[102,103,104],dispatched:true,watchdogs_complete:true},dead=()=>{throw Object.assign(Error('gone'),{code:'ESRCH'});};
  try{
-  fs.writeFileSync(file,'stopped||0|');fs.writeFileSync(file+'.watchdog','104|1793377319.476463');fs.writeFileSync(file+'.inputs','{"buttons":[],"keys":[]}');
+  fs.writeFileSync(file,'stopped||0||0|0');fs.writeFileSync(file+'.watchdog','104|1793377319.476463');fs.writeFileSync(file+'.inputs','{"buttons":[],"keys":[]}');
   const verify=(r=record,probe=dead,platform='darwin')=>priorMacCleanupVerified(dir,r,{platform,probe});
-  assert.equal(verify(),true);assert.equal(verify(record,()=>{},'darwin'),false);assert.equal(verify(record,dead,'win32'),false);
+  assert.equal(verify(),true);for(const incomplete of ['stopped||0||0|1','stopped||0|']){fs.writeFileSync(file,incomplete);assert.equal(verify(),false);}fs.writeFileSync(file,'stopped||0||0|0');assert.equal(verify(record,()=>{},'darwin'),false);assert.equal(verify(record,dead,'win32'),false);
   for(const pid of [101,102,103,104])assert.equal(verify(record,n=>{if(n===pid)return;return dead();}),false);
   fs.writeFileSync(file+'.inputs','{"buttons":[0],"keys":[]}');assert.equal(verify(),false);
   fs.writeFileSync(file+'.inputs','{"buttons":[],"keys":[42]}');assert.equal(verify(),false);
@@ -214,6 +214,15 @@ test('ready treats an invisible control reply as a bounded diagnostic failure',a
  try{const incidents=new Incidents(directory);assert(incidents.record('computer_ready',await Runtime.prototype.ready.call(runtime)));assert.equal(incidents.read()[0].code,'guardian_controls_not_visible');}
  finally{fs.rmSync(directory,{recursive:true});}
 });
+test('ready exposes only known native material states and drops arbitrary strings',async()=>{
+ for(const material of ['native_liquid_glass','visual_effect_fallback','private-untrusted-content']){
+  const runtime={state:'idle',status:()=>({state:'idle'}),guardian:{proc:{}},async showControls(){return {state:'idle',controls_visible:true,material_backend:material};}};
+  const result=await Runtime.prototype.ready.call(runtime);
+  assert.equal(result.ready,true);
+  assert.equal(result.visual_material,material==='private-untrusted-content'?undefined:material);
+ }
+});
+
 test('ready keeps the visible-desktop handoff explicit across repeated failed calls',async()=>{
  let calls=0;
  const runtime={state:'stopped',status:()=>({state:'stopped'}),guardian:{proc:null},async showControls(){calls++;throw Object.assign(Error('Isolated desktop'),{code:'desktop_context_unavailable'});}};
@@ -304,4 +313,21 @@ test('isolated-desktop guardian errors survive startup and never report visible 
 test('streamed release metadata refuses oversized bodies before buffering all chunks',async()=>{
  let chunks=0;const reply={ok:true,body:(async function*(){for(let i=0;i<20;i++){chunks++;yield Buffer.alloc(8);}})()};await assert.rejects(readBoundedJSON(reply,12),/update_metadata_size/);assert.equal(chunks,2);
  assert.deepEqual(await readBoundedJSON({ok:true,body:(async function*(){yield Buffer.from('{"ok":');yield Buffer.from('true}');})()},100),{ok:true});
+});
+
+test('prior cleanup rejects one-bit file identity and nanosecond changes on both platforms',()=>{
+ const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'prior-identity-')),guard='guard-101-12345678-1234-1234-1234-123456789abc.state',file=path.join(dir,guard);
+ const record={guard,children:[102,103,104],dispatched:true,watchdogs_complete:true},probe=()=>{throw Object.assign(Error('gone'),{code:'ESRCH'});};
+ try{
+  fs.writeFileSync(file,'stopped||0|');fs.writeFileSync(file+'.watchdog','104|123456');
+  for(const [platform,verify]of [['win32',priorWindowsCleanupVerified],['darwin',priorMacCleanupVerified]]){
+   fs.writeFileSync(file,platform==='win32'?'stopped||0|':'stopped||0||0|0');fs.writeFileSync(file+'.inputs',platform==='win32'?'':JSON.stringify({keys:[],buttons:[]}));
+   assert.equal(verify(dir,record,{platform,probe}),true);
+   for(const field of ['ino','mtimeNs','ctimeNs','size']){
+    const io=Object.create(fs);let reads=0;
+    io.lstatSync=(name,options)=>{assert.equal(options.bigint,true);const stat=fs.lstatSync(name,options);if(name===file+'.inputs'&&++reads===2)stat[field]+=1n;return stat;};
+    assert.equal(verify(dir,record,{platform,probe,io}),false,platform+': changed '+field+' must refuse');
+   }
+  }
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });

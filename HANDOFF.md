@@ -10,6 +10,57 @@ fix. Public updater transfer timeout #32 and banner overlap #33 were found in
 real tests. The download-deadline repair is merged source, not included in beta.4.
 Keep the full goal active; Mac and physical/hardware gates are still pending.
 
+The separate Stop-persistence candidate reproduces a native/shared writer
+downgrading `unconfirmed` to ordinary `stopped`, then repairs monotonic evidence
+with a durable uncertainty companion, native observation and conservative
+update/rollback gates. See [scope and remaining protocol work](docs/STOP-UNCERTAINTY.md).
+The first atomic-replacement prototype failed a Windows open-handle test; that
+failure was retained and motivated the separate marker. Focused current tests
+passed 190/190 before the final conservative parent-inspection adjustment;
+the native/file subset then passed 7/7. Full exact-head and native Mac CI are
+required. This is source-only: installed beta.4 and frozen beta.5 bytes remain
+unchanged and do not contain this repair. Issue #26 is not fully resolved.
+The follow-up now requests a nonce-/process-/guard-bound native Stop receipt
+and independently aborts the driver before settling only its own fresh marker.
+It never starts a replacement guardian to obtain acknowledgement, clears an old
+episode, or removes the primary Stop. Native Windows worker handles remain
+tracked until exit is confirmed; resume/re-arm refuses live workers. New inert
+pipe/file tests cover stale/foreign/incomplete/late replies and failed cleanup.
+The first ownership test exposed rounded Windows inode IDs; Stop records now
+use BigInt IDs and nanosecond timestamps. Focused native/transport tests passed
+94/94, and the final receipt/file subset passed 18/18. Fresh full/native Mac CI
+and physical acceptance remain required; old-controller recovery is still open.
+The full current-process acknowledgement suite passed 519/531 tests with zero
+failures and 12 explicit skips. The later End evidence-retention guard passed
+125 focused tests; its invalid-marker case explicitly refuses both End and
+shutdown without controls. Fresh exact-head CI must cover the combined source.
+At `bb425ea`, the Windows PR job and all four Mac jobs passed, while the
+Windows push job refused stale-owner cleanup with "Prior input owner is not
+confirmed gone." That failure is retained. Source review identified a PID-reuse
+window when recovery spawns a new helper. Cleanup now proves absence before
+acquisition and unchanged metadata afterward, allowing only the newly acquired
+verified helper to explain that reused PID. Already-live/foreign owners and
+changed metadata still refuse. Deterministic/native lease/receipt tests passed
+43/44 with zero failures and one Mac-only benchmark skip; fresh CI is required.
+The original failure's precise cause is not established by its old log.
+The first full run recorded 520 tests: 507 passed, one failed and 12 skipped.
+Its passive lifecycle fixture used the undefined `owner-stop` marker. The
+normal lifecycle case now uses `stopped`; a separate case preserves invalid
+legacy bytes, reports persistence failure and refuses shutdown without opening
+controls. The current workflow/native/file subset passed 52/52. The failure
+is retained; a fresh full run is required for the revised source.
+That revised full run passed 509/521, zero failures and 12 explicit skips.
+A final strict-reader adjustment also tags undefined marker contents as invalid
+for updater/install gates, with a focused follow-up required before commit.
+The strict-reader follow-up passed 146/146 tests. A final file-only case also
+checks that different existing primary/companion uncertainty records are both
+retained; no acknowledgement or recovery authorization is inferred from them.
+
+Mac UI/consent source `4dc7914` on draft PR #36 passed all ten exact-head CI
+jobs (Windows plus macOS 15/26 Intel/ARM, push and PR). Its actual modal,
+cursor/glass appearance and physical tests remain pending. Those source passes
+do not qualify the new common Stop change or a fresh release bundle.
+
 The `codex/latency-evidence-validation` work selects the comparison utility from
 Antigravity's unmerged `a44e532` latency worktree, rather than merging its stale
 runtime wholesale. It repairs false pair qualification, trace validation and
@@ -705,3 +756,9 @@ Beta.4 is intended as a Windows-only prerelease. The matching published bundle,
 real Antigravity task, installed identity, physical safety checks and production
 update transport still require acceptance. Mac assets and hardware acceptance
 remain separate; do not describe them as qualified by Windows results.
+
+## Integrated Windows HUD candidate
+
+The Windows HUD avoidance changes from PR35 are integrated into the safety branch alongside task capabilities, original-guard Stop recovery and cross-installation task leases. See docs/HUD-AVOIDANCE.md and docs/TASK-OWNERSHIP.md. This combined source requires its own native/CI and physical acceptance; the frozen earlier beta.5 artifact does not contain these repairs. The installed published beta.4 remains at D:\Apps\AntigravityComputerUse\ed035f9812.
+
+The Mac native-glass/official-icon, consent/takeover and compiler-lease changes from PR36 are also integrated. Read docs/MACOS-GLASS-MATERIAL.md and docs/MACOS-CONSENT-TAKEOVER.md. New shared task ownership and original-guard recovery must be qualified together with these platform changes. Historical separate-branch checks do not qualify the combined candidate or establish real-device visual parity.

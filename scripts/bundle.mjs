@@ -19,7 +19,7 @@ if(process.platform==='darwin')fs.cpSync(path.resolve(host.exe,'../../..'),path.
 else fs.copyFileSync(host.exe,path.join(out,'bin',platform.host));
 fs.copyFileSync(ensureStorageGuard(),path.join(out,'bin',platform.storage));
 fs.copyFileSync(process.execPath,path.join(out,platform.node));
-const modules=['index.mjs','desktop-service.mjs','service-lease.mjs','desktop-tools.mjs','receipts.mjs','incidents.mjs','update-core.mjs','storage.mjs','deployment.mjs','mcp.mjs','runtime.mjs','guardian.mjs','driver.mjs','build.mjs','sessions.mjs','policy.mjs','render.mjs','upstream-utils.mjs','version.mjs','platform.mjs','macos-build.mjs','control-contract.json'];
+const modules=['index.mjs','desktop-service.mjs','task-ownership.mjs','task-coordinator.mjs','service-lease.mjs','desktop-tools.mjs','receipts.mjs','incidents.mjs','update-core.mjs','storage.mjs','deployment.mjs','mcp.mjs','runtime.mjs','guardian.mjs','driver.mjs','build.mjs','sessions.mjs','policy.mjs','render.mjs','upstream-utils.mjs','version.mjs','platform.mjs','macos-build.mjs','control-contract.json'];
 fs.mkdirSync(path.join(out,'server'),{recursive:true});for(const f of modules)fs.copyFileSync(path.join(root,'server',f),path.join(out,'server',f));
 fs.copyFileSync(path.join(root,'server/auto-update.mjs'),path.join(out,'server/auto-update.mjs'));
 fs.copyFileSync(path.join(root,'server/recovery.mjs'),path.join(out,'server/recovery.mjs'));

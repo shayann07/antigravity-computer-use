@@ -218,11 +218,17 @@ export class Sessions {
 
   async clearVerifiedStale(pid){
     if(!Number.isSafeInteger(pid)||pid<=0||pid>4294967295)throw Error('Invalid prior input owner.');
+    let before;try{before=fs.readFileSync(this.lease,'utf8');}catch(error){if(error.code!=='ENOENT')throw error;}
+    // Establish absence BEFORE spawning the recovery fence helper. Windows can
+    // recycle that old PID for this new helper; its live handle then proves a
+    // different process, not resurrection of the old owner. No caller flag can
+    // supply that identity. Every other live PID remains a refusal.
+    if(this.alive(pid))throw Error('Prior input owner is not confirmed gone.');
     fs.mkdirSync(this.inputFence,{recursive:true});const fence=await this.acquireInputLease(this.inputFence);
     try{
       fence.assertHeld();let raw;try{raw=fs.readFileSync(this.lease,'utf8');}catch(error){if(error.code==='ENOENT')return {cleared:false};throw error;}
       let record;try{record=JSON.parse(raw);}catch{throw Error('Prior input lease metadata is invalid.');}
-      if(!Number.isSafeInteger(record?.pid)||record.pid!==pid||this.alive(pid))throw Error('Prior input owner is not confirmed gone.');
+      if(raw!==before||!Number.isSafeInteger(record?.pid)||record.pid!==pid||this.alive(pid)&&fence.pid!==pid)throw Error('Prior input owner is not confirmed gone.');
       fs.unlinkSync(this.lease);fence.assertHeld();return {cleared:true};
     }finally{await fence.release();}
   }

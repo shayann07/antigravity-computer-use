@@ -530,6 +530,7 @@ namespace Axon
             ready["dpi_mode"] = _dpiMode;
             ready["pid"] = System.Diagnostics.Process.GetCurrentProcess().Id;
             ready["desktop_context"] = DesktopContext.Inspect();
+            ready["hud_avoidance"] = true;
             ready["clr"] = Environment.Version.ToString();
             ready["presence"] = Presence.HooksOk;
             ready["overlay"] = Overlay.Enabled;
@@ -2685,8 +2686,8 @@ namespace Axon
                 if (Overlay.IsOwnWindow(owner)) owner = expectWindow;
                 else if (Overlay.IsAnyOverlayWindow(owner))
                     throw new AxonError("obscured",
-                        "Another Claude session's on-screen banner is over that control, so a real click would press their banner instead.",
-                        "Target it by index or selector - the pattern path clicks it where it sits, with nothing in the way.");
+                        "Another computer-use controller's overlay covers this target. No physical click was sent.",
+                        "Move that controller away or end its session, then observe again. Do not click through another controller.");
                 if (owner != IntPtr.Zero && owner != expectWindow)
                 {
                     // Only take/exclusive may raise a covered window - those are

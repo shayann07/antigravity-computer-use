@@ -1,3 +1,5 @@
+import {TaskCoordinator} from './task-coordinator.mjs';
+import {TaskOwnership} from './task-ownership.mjs';
 // Local, capability-authenticated IPC for skill scripts. No MCP or model SDK.
 import net from 'node:net';
 import fs from 'node:fs';
@@ -37,7 +39,7 @@ export function compact(result,dir){
   return value;
 }
 
-export async function serveDesktop({directory=dataDir(),runtime,idlePolicy='shutdown',idleTimeoutMs=15*60000,idleCheckMs=10000}={}){
+export async function serveDesktop({directory=dataDir(),runtime,idlePolicy='shutdown',idleTimeoutMs=15*60000,idleCheckMs=10000,requireTaskOwnership=runtime===undefined,requireGlobalCoordination=runtime===undefined,taskCoordinator}={}){
   if(!['release','shutdown'].includes(idlePolicy))throw Error('Invalid listener idle policy.');
   fs.mkdirSync(directory,{recursive:true});
   const ownership=await acquireServiceLease(directory);let ownershipLost=false,initialized=false;
@@ -55,10 +57,12 @@ export async function serveDesktop({directory=dataDir(),runtime,idlePolicy='shut
     runtime??=new Runtime();initialized=true;await runtime.prepare?.();
     if(ownership.lost)throw Object.assign(Error('Controller ownership was lost during startup.'),{code:'service_ownership_lost'});
   }catch(error){if(initialized)await Promise.resolve().then(()=>runtime.close?.()).catch(()=>{});await ownership.release();throw error;}
+  const taskOwnership=requireTaskOwnership?new TaskOwnership():null;
+  const coordinator=taskCoordinator||(requireGlobalCoordination?new TaskCoordinator(directory,{onLost:()=>runtime.stop().catch(()=>{})}):null);
   const secret=randomBytes(32).toString('hex');
   let pipe=ipcEndpoint(directory,randomBytes(18).toString('hex'));
   let busy=false,closing=false,lastCall=Date.now(),expiry,shutdownPending,idleReleased=false;
-  let maintenanceUntil=0;
+  let maintenanceUntil=0,humanEnding=null,humanEndError=null;
   const sockets=new Set();
   const receipts=new Receipts(directory);
   const incidents=new Incidents(directory);
@@ -69,7 +73,7 @@ export async function serveDesktop({directory=dataDir(),runtime,idlePolicy='shut
   const shutdown=()=>{
     if(shutdownPending)return shutdownPending;
     shutdownPending=(async()=>{closing=true;
-    try{await runtime.close();while(pendingIncidents.size)await Promise.allSettled([...pendingIncidents]);}catch(error){closing=false;throw error;}
+    try{await runtime.close();if(coordinator?.held)await coordinator.release();while(pendingIncidents.size)await Promise.allSettled([...pendingIncidents]);}catch(error){closing=false;throw error;}
     clearInterval(expiry);
     for(const socket of sockets)socket.end();server.close();
     try{const saved=JSON.parse(fs.readFileSync(file));if(saved.pid===process.pid&&saved.secret===secret)fs.unlinkSync(file);}catch{}
@@ -77,6 +81,13 @@ export async function serveDesktop({directory=dataDir(),runtime,idlePolicy='shut
     })().catch(error=>{shutdownPending=null;throw error;});
     return shutdownPending;
   };
+  runtime.guardian?.on?.('human_end',()=>{
+    if(humanEnding||closing)return;
+    humanEndError=null;
+    humanEnding=Promise.resolve().then(async()=>{
+      await runtime.stop();await runtime.finish();await coordinator?.release();taskOwnership?.ended();
+    }).catch(error=>{humanEndError=error.code||'human_end_cleanup_unconfirmed';}).finally(()=>{humanEnding=null;});
+  });
   const server=net.createServer(socket=>{
     socket.setEncoding('utf8');
     sockets.add(socket);let buffer='',received=false,executing=false,finished=false,stopOnDisconnect=true,ticket;
@@ -104,6 +115,7 @@ export async function serveDesktop({directory=dataDir(),runtime,idlePolicy='shut
         if(!closing)try{ownership.assertHeld();}catch{ownershipLost=true;}
         if(ownershipLost&&!['computer_status','computer_stop','computer_end','computer_shutdown'].includes(name))throw Object.assign(Error('Controller ownership was lost. Control is stopped; do not send or replay input.'),{code:'service_ownership_lost',hint:'End/shutdown for cleanup, then restart the App sidecar. A latched Stop still needs local human re-arm. Do not repeat the interrupted action.'});
         if(closing&&!['computer_status','computer_stop','computer_shutdown'].includes(name))throw Error('Desktop service is shutting down; no more actions are accepted.');
+        if(humanEnding&&!['computer_status','computer_stop','computer_pause'].includes(name))throw Object.assign(Error('Local End is confirming cleanup. Wait for its result.'),{code:'cleanup_in_progress'});
         const versionMismatch=request.expected_build_id!==BUILD_ID;
         const policyMismatch=['standalone','host-managed'].includes(runtime.permissionMode)&&request.expected_permission_mode!==runtime.permissionMode;
         let foreignShutdown=false;
@@ -117,11 +129,20 @@ export async function serveDesktop({directory=dataDir(),runtime,idlePolicy='shut
           throw Object.assign(Error('This client and live service use different permission policies. Finish the owning task and shutdown before starting the intended policy.'),{code:'deployment_policy_mismatch'});
         if(name==='computer_prepare_update'){
           const state=runtime.status();
-          const allowed=!busy&&!closing&&state.task_open===false&&['idle','stopped'].includes(state.state)&&!state.approved_apps?.length;
+          const allowed=!busy&&!closing&&!taskOwnership?.owner?.used&&state.task_open===false&&['idle','stopped'].includes(state.state)&&!['guardian_stop_unconfirmed','stop_persistence_failed','guard_persistence_failed'].includes(state.control_reason)&&!state.approved_apps?.length;
           if(allowed)maintenanceUntil=Date.now()+30000;
           finished=true;socket.end(JSON.stringify({ok:allowed,prepared:allowed,next_action:allowed?'shutdown_for_update':'wait_for_task_end'})+'\n');return;
         }
         if(maintenanceUntil>Date.now()&&!['computer_status','computer_stop','computer_shutdown'].includes(name))throw Object.assign(Error('An installation update is preparing. No new input was accepted.'),{code:'update_in_progress'});
+        if(taskOwnership){
+          const state=runtime.status();
+          if(name==='computer_claim'){
+            if(busy)throw Object.assign(Error('A desktop operation is pending.'),{code:'task_owned'});
+            const task_token=taskOwnership.claim(state);finished=true;socket.end(JSON.stringify({ok:true,task_token})+'\n');return;
+          }
+          taskOwnership.authorize(name,request.task_token,state);
+          if(name==='computer_shutdown'&&(busy||state.task_open!==false))throw Object.assign(Error('End the owned task and await cleanup before shutdown.'),{code:'task_requires_end'});
+        }
         const control=['computer_status','computer_stop','computer_pause','computer_shutdown'].includes(name);
         if(busy&&!control)throw Error('Desktop operation pending; send one action at a time.');
         if(name==='computer_shutdown'){
@@ -132,9 +153,12 @@ export async function serveDesktop({directory=dataDir(),runtime,idlePolicy='shut
         }
         if(!control){busy=true;executing=true;}
         try{
+          if(coordinator&&!['computer_status','computer_apps','computer_stop','computer_pause','computer_controls','computer_end'].includes(name))await coordinator.ensure();
           const raw=await call(runtime,name,request.args||{});
-          const result=compact(name==='computer_status'?{...raw,listener_idle_policy:idlePolicy,controller_ownership_lost:ownershipLost,...(request.expected_build_id!==BUILD_ID?{client_build_mismatch:true,next_action:'resolve_version_mismatch'}:{}),...(pendingIncidents.size?{diagnostic_pending:pendingIncidents.size}:{}),...(runtime.diagnosticError?{diagnostic_error:runtime.diagnosticError}:{})}:raw,directory);
+          if(coordinator&&name==='computer_end'&&raw.ended===true)await coordinator.release();
+          const result=compact(name==='computer_status'?{...raw,listener_idle_policy:idlePolicy,controller_ownership_lost:ownershipLost,cleanup_in_progress:!!humanEnding,...(humanEndError?{human_end_error:humanEndError}:{}),...(request.expected_build_id!==BUILD_ID?{client_build_mismatch:true,next_action:'resolve_version_mismatch'}:{}),...(pendingIncidents.size?{diagnostic_pending:pendingIncidents.size}:{}),...(runtime.diagnosticError?{diagnostic_error:runtime.diagnosticError}:{})}:raw,directory);
           if(result.observation_valid===false)runtime.frames?.delete(result.metadata?.observation_id);
+          if(taskOwnership&&name==='computer_end'&&result.ended===true&&runtime.status().task_open===false)taskOwnership.ended();
           const reply={ok:true,...result};reply.receipt=receipts.finish(ticket,reply);
           if(reply.error||reply.verification_error)Object.assign(reply,recoveryAdvice(reply));
           queueIncident(name,reply);
@@ -148,10 +172,10 @@ export async function serveDesktop({directory=dataDir(),runtime,idlePolicy='shut
   try{
     await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(pipe,resolve);});
     if(process.platform==='darwin')pipe={host:'127.0.0.1',port:server.address().port};
-    ownership.assertHeld();fs.writeFileSync(temporary,JSON.stringify({pid:process.pid,pipe,secret}),{mode:0o600});fs.renameSync(temporary,file);
+    ownership.assertHeld();fs.writeFileSync(temporary,JSON.stringify({pid:process.pid,pipe,secret,...(taskOwnership?{task_protocol:1}:{}),...(coordinator?{global_task_protocol:1}:{})}),{mode:0o600});fs.renameSync(temporary,file);
   }catch(error){try{if(fs.existsSync(temporary))fs.unlinkSync(temporary);}catch{}await shutdown();throw error;}
   expiry=setInterval(()=>{
-    if(busy||closing||Date.now()-lastCall<=idleTimeoutMs)return;
+    if(busy||closing||humanEnding||Date.now()-lastCall<=idleTimeoutMs)return;
     // A long host/model decision gap is not task completion. In particular,
     // never clear grants, close the service, or disturb a human pause while an
     // explicitly open task awaits its next call.

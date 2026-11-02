@@ -7,6 +7,7 @@ import {spawnSync} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
 import {writeAtomicJSON,writeAtomicText,flushPreparedTree,flushPreparedFile,readTaskState} from '../server/atomic-json.mjs';
 import {deploymentPinned} from '../server/update-core.mjs';
+import {preserveStopLatch,readStopLatch} from '../server/recovery.mjs';
 const here=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 export function mergeConfig(file,entry){
  const text=fs.existsSync(file)?fs.readFileSync(file,'utf8').replace(/^\uFEFF/,'').trim():'';
@@ -114,13 +115,21 @@ export function install({bundle=here,target,home=os.homedir(),workspace=null,leg
  for(const root of previousRoots)if(root!==target)prepareStorage(root,storageHelper,'legacy');
  const preserveControl=()=>{
   const data=path.join(target,'data'),taskFile=path.join(data,'task-state.json');
+  for(const root of new Set([target,...previousRoots])){
+   const stop=readStopLatch(path.join(root,'data','emergency.stop'));
+   if(stop?.unconfirmed||stop?.invalid)throw Error('stop_recovery_required_before_install');
+  }
+  let dataPrepared=false;
+  const ensureData=()=>{if(!dataPrepared){fs.mkdirSync(data,{recursive:true,mode:0o700});prepareStorage(data,storageHelper,'data');dataPrepared=true;}};
   let open=readTaskState(taskFile);
   for(const root of previousRoots)if(root!==target){
    const previousData=path.join(root,'data');
    if(readTaskState(path.join(previousData,'task-state.json')))open=true;
-   if(fs.existsSync(path.join(previousData,'emergency.stop'))){fs.mkdirSync(data,{recursive:true});fs.writeFileSync(path.join(data,'emergency.stop'),'stopped');}
+   const priorStop=path.join(previousData,'emergency.stop');let hasStop=false;
+   for(const entry of [priorStop,priorStop+'.unconfirmed'])try{fs.lstatSync(entry);hasStop=true;}catch(error){if(error.code!=='ENOENT')throw error;}
+   if(hasStop){ensureData();preserveStopLatch(priorStop,path.join(data,'emergency.stop'));}
    const preferences=path.join(previousData,'control-preferences.json'),destination=path.join(data,'control-preferences.json');
-   if(!fs.existsSync(destination)&&fs.existsSync(preferences)){const saved=JSON.parse(fs.readFileSync(preferences,'utf8'));if(['manual','smart'].includes(saved.takeover_mode)){fs.mkdirSync(data,{recursive:true});fs.writeFileSync(destination,JSON.stringify({takeover_mode:saved.takeover_mode},null,2));}}
+   if(!fs.existsSync(destination)&&fs.existsSync(preferences)){const saved=JSON.parse(fs.readFileSync(preferences,'utf8'));if(['manual','smart'].includes(saved.takeover_mode)){ensureData();fs.writeFileSync(destination,JSON.stringify({takeover_mode:saved.takeover_mode},null,2));}}
   }
   if(open)throw Error('task_open_finish_before_install');
  };

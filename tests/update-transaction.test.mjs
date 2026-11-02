@@ -15,6 +15,7 @@ function fixture({omitFresh=null,badFreshHash=false}={}){
   for(const module of 'index desktop-service service-lease desktop-tools receipts incidents update-core storage deployment mcp runtime guardian driver build sessions policy render upstream-utils version platform macos-build auto-update recovery update-notice atomic-json'.split(' '))data['server/'+module+'.mjs']='inert fixture';
   for(const file of ['server/control-contract.json','scripts/arguments.mjs','scripts/diagnostics.mjs','scripts/install.mjs','scripts/update.mjs','scripts/rollback.mjs','scripts/sidecar.mjs','release-public-key.pem',...(process.platform==='win32'?['install.cmd']:['install.command','Setup.Mac.Permissions.command'])])data[file]='inert fixture';
   if(process.platform==='win32'){data['liquidglass/LiquidGlass.Host.exe']='inert visual fixture';data['liquidglass/libSkiaSharp.dll']='inert visual library fixture';}
+  if(process.platform==='darwin')for(const name of ['sliders-horizontal-fill','pause-fill','play-fill','stop-fill','x-fill'])data['bin/AxonHost.app/Contents/Resources/Phosphor/'+name+'.svg']='inert icon fixture';
   if(name==='fresh'&&omitFresh)delete data[omitFresh];
   for(const [name,bytes]of Object.entries(data)){const file=path.join(bundle,name);fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,bytes);}
   const files=Object.fromEntries(Object.entries(data).map(([name,bytes])=>[name,sha256(bytes)]));if(name==='fresh'&&badFreshHash)files['server/runtime.mjs']='0'.repeat(64);const build_id=sha256(JSON.stringify(files));
@@ -31,6 +32,35 @@ function fixture({omitFresh=null,badFreshHash=false}={}){
  const fetcher=async url=>{fetches++;if(url.includes('api.github.com'))return {ok:true,json:async()=>({assets:[{name:`update-${process.platform}-${process.arch}.json`,browser_download_url:'https://github.com/shayann07/antigravity-computer-use/releases/download/v1.1.0/metadata.json'}]})};if(url.endsWith('/metadata.json'))return {ok:true,text:async()=>JSON.stringify(envelope)};return {ok:true,body:(async function*(){yield payload[url];})()};};
  return {directory,target,home,old,fresh,adapters,fetcher,calls,setState:v=>state=v,setFailHealth:()=>failHealth=true,fetches:()=>fetches,cleanup:()=>fs.rmSync(directory,{recursive:true,force:true})};
 }
+test('uncertain Stop defers apply, rollback and recovery before service reservation or shutdown',async()=>{
+ const f=fixture();try{
+  await update(f.target,'check',f);const before=fs.readFileSync(path.join(f.target,'installation.json'),'utf8');
+  const pending=path.join(f.target,'data','emergency.stop.unconfirmed');fs.mkdirSync(path.dirname(pending),{recursive:true});fs.writeFileSync(pending,'unconfirmed:update-fixture');
+  let reservations=0;f.adapters.prepare=async()=>{reservations++;return {ok:true,prepared:true};};f.calls.length=0;
+  for(const command of ['apply','rollback','recover'])assert.deepEqual(await update(f.target,command,f),{deferred:true,next_action:'inspect_stop_recovery'});
+  assert.equal(reservations,0);assert(!f.calls.includes('shutdown'));assert.equal(fs.readFileSync(path.join(f.target,'installation.json'),'utf8'),before);assert.equal(fs.readFileSync(pending,'utf8'),'unconfirmed:update-fixture');
+  assert.throws(()=>f.adapters.install({bundle:f.fresh.bundle,target:f.target}),/stop_recovery_required_before_install/);
+  assert.equal(fs.readFileSync(path.join(f.target,'installation.json'),'utf8'),before);
+  fs.unlinkSync(pending);const cli=f.adapters.cli;
+  f.adapters.cli=(record,args)=>args[0]==='status'?{...cli(record,args),state:'stopped',control_reason:'guardian_stop_unconfirmed'}:cli(record,args);
+  assert.deepEqual(await update(f.target,'apply',f),{deferred:true,next_action:'inspect_stop_recovery'});
+  assert.equal(reservations,0);assert(!f.calls.includes('shutdown'));
+  f.adapters.cli=cli;fs.writeFileSync(path.join(f.target,'data','emergency.stop'),'owner-stop');
+  assert.deepEqual(await update(f.target,'apply',f),{deferred:true,next_action:'inspect_stop_recovery'});
+  assert.throws(()=>f.adapters.install({bundle:f.fresh.bundle,target:f.target}),/stop_recovery_required_before_install/);
+  assert.equal(fs.readFileSync(path.join(f.target,'data','emergency.stop'),'utf8'),'owner-stop');
+ }finally{f.cleanup();}
+});
+
+test('direct rollback refuses a companion-only uncertainty marker without changing pins',()=>{
+ const f=fixture();try{
+  const next=f.adapters.install({bundle:f.fresh.bundle,target:f.target});const before=fs.readFileSync(path.join(f.target,'installation.json'),'utf8');
+  const pending=path.join(f.target,'data','emergency.stop.unconfirmed');fs.mkdirSync(path.dirname(pending),{recursive:true});fs.writeFileSync(pending,'unconfirmed:rollback-fixture');
+  assert.throws(()=>rollback(path.join(next.backup,'rollback.json')),/stop_recovery_required_before_rollback/);
+  assert.equal(fs.readFileSync(path.join(f.target,'installation.json'),'utf8'),before);assert.equal(fs.readFileSync(pending,'utf8'),'unconfirmed:rollback-fixture');
+ }finally{f.cleanup();}
+});
+
 test('signed incomplete bundle is refused before shutdown or configuration changes',async()=>{
  const f=fixture({omitFresh:'server/runtime.mjs'});try{
   const before=fs.readFileSync(path.join(f.target,'installation.json'),'utf8');
@@ -44,6 +74,17 @@ test('signed Windows update cannot omit the promised LiquidGlass helper',{skip:p
   assert(!f.calls.includes('shutdown'));
  }finally{f.cleanup();}
 });
+test('signed Mac updates cannot omit any official HUD icon',{skip:process.platform!=='darwin'},async()=>{
+ for(const name of ['sliders-horizontal-fill','pause-fill','play-fill','stop-fill','x-fill']){
+  const f=fixture({omitFresh:'bin/AxonHost.app/Contents/Resources/Phosphor/'+name+'.svg'});
+  try{
+   const before=fs.readFileSync(path.join(f.target,'installation.json'),'utf8');
+   await assert.rejects(update(f.target,'check',f),/update_bundle_incomplete/);
+   assert(!f.calls.includes('shutdown'));assert.equal(fs.readFileSync(path.join(f.target,'installation.json'),'utf8'),before);
+  }finally{f.cleanup();}
+ }
+});
+
 test('signed payload with conflicting bundle inventory is refused before shutdown',async()=>{
  const f=fixture({badFreshHash:true});try{
   await assert.rejects(update(f.target,'check',f),/update_bundle_inventory_mismatch/);
