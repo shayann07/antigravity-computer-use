@@ -1,9 +1,10 @@
 import fs from 'node:fs';import path from 'node:path';import os from 'node:os';import assert from 'node:assert/strict';import {createHash} from 'node:crypto';
 import {launcherSource,controllerStartSource,desktopCommand} from './install.mjs';
 import {nativePlatform} from '../server/platform.mjs';
-import {storageOperation} from '../server/storage.mjs';
+import {storageOperation,defaultInstallationRoot} from '../server/storage.mjs';
 import {SIDECAR_ID,sidecarDefinition} from './sidecar.mjs';
-const target=path.resolve(process.argv[2]||(process.platform==='darwin'?path.join(os.homedir(),'Library/Application Support/AntigravityComputerUse'):'D:/Tools/AntigravityComputerUse'));
+const pointer=path.join(os.homedir(),'.gemini/config/skills/computer-use/deployment.json');
+const target=path.resolve(process.argv[2]||(fs.existsSync(pointer)?JSON.parse(fs.readFileSync(pointer,'utf8')).target:defaultInstallationRoot({home:os.homedir(),localAppData:process.env.LOCALAPPDATA})));
 const platform=nativePlatform();
 const install=JSON.parse(fs.readFileSync(path.join(target,'installation.json')));
 const manifest=JSON.parse(fs.readFileSync(path.join(install.release,'bundle-manifest.json')));
