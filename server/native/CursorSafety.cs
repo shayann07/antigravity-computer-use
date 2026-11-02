@@ -32,6 +32,9 @@ namespace Axon {
         static bool applied,monitoring;
         static readonly object gate=new object();
         internal static bool Applied { get { lock(gate)return applied; } }
+        internal static bool ArmReceiptMatches(string receipt,string nonce,int pid) {
+            return NativeStopReceipt.ValidNonce(nonce)&&pid>0&&receipt=="armed "+nonce+" "+pid;
+        }
         internal static int WatchdogPid {get {lock(gate)return watchdog!=null&&!watchdog.HasExited?watchdog.Id:0;}}
         internal static void WriteWatchdogRecord(string file,int pid,long started) {
             if(String.IsNullOrEmpty(file)||pid<=0||started<=0)throw new ArgumentException("Invalid watchdog identity.");
@@ -48,7 +51,8 @@ namespace Axon {
                 "--cursor-watchdog "+Process.GetCurrentProcess().Id+" "+Process.GetCurrentProcess().StartTime.ToUniversalTime().Ticks);
             info.UseShellExecute=false;info.CreateNoWindow=true;info.RedirectStandardInput=true;info.RedirectStandardOutput=true;
             watchdog=Process.Start(info);
-            Task<string> ready=Task.Factory.StartNew(delegate {return watchdog.StandardOutput.ReadLine();});
+            Process startingWatchdog=watchdog;
+            Task<string> ready=Task.Factory.StartNew(delegate {return startingWatchdog.StandardOutput.ReadLine();});
             if(!ready.Wait(5000) || ready.Result!="cursor-watchdog-ready") {
                 try {watchdog.Kill();}catch {}watchdog=null;return false;
             }
@@ -65,9 +69,10 @@ namespace Axon {
                     monitoring=false;
                     if(!EnsureWatchdog())return false;
                     // The watchdog must be armed BEFORE changing shared cursors.
-                    watchdog.StandardInput.WriteLine("arm");watchdog.StandardInput.Flush();
-                    Task<string> acknowledgement=Task.Factory.StartNew(delegate {return watchdog.StandardOutput.ReadLine();});
-                    if(!acknowledgement.Wait(2000)||acknowledgement.Result!="armed")throw new InvalidOperationException("Cursor watchdog did not arm");
+                    Process armProcess=watchdog;string armNonce=Guid.NewGuid().ToString("N");
+                    armProcess.StandardInput.WriteLine("arm "+armNonce);armProcess.StandardInput.Flush();
+                    Task<string> acknowledgement=Task.Factory.StartNew(delegate {return armProcess.StandardOutput.ReadLine();});
+                    if(!acknowledgement.Wait(2000)||watchdog!=armProcess||armProcess.HasExited||!ArmReceiptMatches(acknowledgement.Result,armNonce,armProcess.Id))throw new InvalidOperationException("Cursor watchdog did not acknowledge this arming request");
                     monitoring=true;
                     if(!File.ReadAllText(ControlFence.FileName).StartsWith("active|")){Restore();return false;}
                     int size=Math.Max(32,GetSystemMetrics(13));
@@ -174,7 +179,7 @@ namespace Axon {
                 Thread input=new Thread(delegate() {
                     try {
                         string line;while((line=Console.ReadLine())!=null) {
-                            if(line=="arm") {lock(watchGate){armed=true;armEpoch++;}Console.WriteLine("armed");Console.Out.Flush();}
+                            if(line.StartsWith("arm ",StringComparison.Ordinal)&&NativeStopReceipt.ValidNonce(line.Substring(4))) {lock(watchGate){armed=true;armEpoch++;}Console.WriteLine("armed "+line.Substring(4)+" "+Process.GetCurrentProcess().Id);Console.Out.Flush();}
                             if(line=="disarm") {lock(watchGate){if(armed)SystemParametersInfo(0x57,0,IntPtr.Zero,0);armed=false;armEpoch++;}}
                         }
                     }finally {finished=true;}

@@ -240,7 +240,7 @@
     },
     {
       "path": "tests/NativeWatchdogMetadataTests.cs",
-      "sha256": "bf09a055856d5dda13d262e5db31d9b78e7680dec2e5f8b0b1f9e66f6998eee4"
+      "sha256": "293fb819105c3291d5ecf89af9240573e28b6f573e0dfe3a54920727fb96bd9c"
     },
     {
       "path": "tests/native-watchdog-metadata.test.mjs",
@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "755837221cf02764fce72dbaea3d3912dba746584e2f453069d3d141b32704a1"
+      "sha256": "6044d6a5403e0d1b8d84da620cc1e46f00383dfb5ed995c6cf075041f4d50803"
     },
     {
       "path": "server/mcp.mjs",
@@ -264,15 +264,15 @@
     },
     {
       "path": "server/guardian.mjs",
-      "sha256": "89be98fc25f03e4aff0f1a9ba529a1d62c9c7d1d582119334743268960fe43e5"
+      "sha256": "8201513441544c61b6b7e691e69df1a8ca427551a9d0de740701cdcb70cba8e9"
     },
     {
       "path": "server/native/Guardian.cs",
-      "sha256": "c612f7ad0d98727fe2ececac24027e46191ab24b96dddda65fb3a69a984b9ae3"
+      "sha256": "54d1647beb9107d4eedc28bfea0720d73b0c496e415e1ca39fcbc5ee01d8312a"
     },
     {
       "path": "server/native/CursorSafety.cs",
-      "sha256": "e8f4e6f28da96c11698899bf6ca1411f51f225b4b4f07d3d61c73463055f278b"
+      "sha256": "70db5d99a80a3614705728d16e3f22d54ac68ed8de30b3e6fce1ab042c164642"
     },
     {
       "path": "server/native/DesktopVisuals.cs",
@@ -572,7 +572,7 @@
     },
     {
       "path": "server/native/macos/MacGuardian.swift",
-      "sha256": "f709a173126518fb6a2c401f9343b41e34560b60a7b04953cd68dd825403981a"
+      "sha256": "2bd49ad4f81ea57a4b57e431232b422b05091c5742b09e09e8a46bebc0884e99"
     },
     {
       "path": "server/native/macos/MacOperations.swift",
@@ -712,7 +712,7 @@
     },
     {
       "path": "server/recovery.mjs",
-      "sha256": "d45a4be583219abdd1e0697022cb378010dc6af89c2e0c6d2764d4ee8ededa9b"
+      "sha256": "f5d2b5f9437cd44ab40b0f5c22a08e1e0b2c089a20e477b0335054d517096470"
     },
     {
       "path": "scripts/qualify-guardian-desktop.mjs",
@@ -884,7 +884,7 @@
     },
     {
       "path": "tests/stop-acknowledgement.test.mjs",
-      "sha256": "f5844aeda5cfbd15c696b57297a897e3572a2e3945fcd09649b727902fe19109"
+      "sha256": "f50271fed9fa37efd5a3c0be23e35c58b6f8473e862952418988b7de9af40ddd"
     }
   ],
   "external_files": [

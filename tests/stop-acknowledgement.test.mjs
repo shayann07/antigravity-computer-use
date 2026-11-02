@@ -78,10 +78,47 @@ test('old uncertainty, held inputs and failed driver cleanup cannot be settled b
 
 test('End retains durable task evidence after Stop acknowledgement fails',async t=>{
  const f=fixture(t);f.guardian.send=()=>true;f.guardian.stopAcknowledged=async()=>{throw Error('inert lost receipt');};
+ f.guardian.endAcknowledged=async()=>({state:'stopped'});
  f.r.taskFile=path.join(f.dir,'task-state.json');f.r.beginTask();const before=fs.readFileSync(f.r.taskFile,'utf8');
  await assert.rejects(f.r.stop(),e=>e.code==='guardian_stop_unconfirmed');
  await assert.rejects(f.r.finish(),e=>e.code==='guardian_stop_unconfirmed');
  assert.equal(fs.readFileSync(f.r.taskFile,'utf8'),before);assert.equal(f.r.taskOpen,true);assert(readStopLatch(f.file).unconfirmed);
+});
+
+test('End validates original process, cleanup, inactive state and hidden controls',async t=>{
+ const receipt=(m,child)=>({id:m.id,end_nonce:m.end_nonce,state:'idle',guardian_pid:child.pid,guard_file:'guard-protocol-only.state',workers_stopped:true,input_cleanup_confirmed:true,controls_visible:false});
+ const f=await transport(t,(m,child)=>{if(m.end_nonce)child.stdout.write(JSON.stringify(receipt(m,child))+'\n');});
+ assert.equal((await f.g.endAcknowledged(nonce)).state,'idle');assert.equal(f.starts(),1);
+ for(const bad of [null,nonce+'\n','G'.repeat(32),'a'.repeat(31)])await assert.rejects(f.g.endAcknowledged(bad),/nonce/);
+ for(const patch of [{end_nonce:'b'.repeat(32)},{guardian_pid:999},{guard_file:'foreign.state'},{workers_stopped:false},{input_cleanup_confirmed:false},{controls_visible:true},{state:'active'}]){
+  const bad=await transport(t,(m,child)=>{if(m.end_nonce)child.stdout.write(JSON.stringify({...receipt(m,child),...patch})+'\n');});
+  await assert.rejects(bad.g.endAcknowledged(nonce),e=>e.code==='guardian_end_unconfirmed');assert.equal(bad.starts(),1);
+ }
+ f.child.emit('close',1);await assert.rejects(f.g.endAcknowledged(nonce),e=>e.code==='guardian_end_unconfirmed');assert.equal(f.starts(),1);
+});
+
+test('End waits for driver and native cleanup before closing task evidence',async t=>{
+ const f=fixture(t);let release,called=false,calls=0;const gate=new Promise(resolve=>release=resolve);
+ f.r.taskFile=path.join(f.dir,'task-state.json');f.r.beginTask();
+ f.driver.abort=async()=>{await gate;};
+ f.guardian.endAcknowledged=async()=>{calls++;called=true;assert.equal(f.r.taskOpen,true);return {state:'idle'};};
+ const pending=f.r.finish(),duplicate=f.r.finish();await new Promise(resolve=>setTimeout(resolve,0));assert.equal(called,false);assert.equal(f.r.taskOpen,true);
+ assert.throws(()=>f.r.beginTask(),e=>e.code==='cleanup_in_progress');
+ release();assert.equal((await pending).ended,true);await duplicate;assert.equal(calls,1);assert.equal(f.r.taskOpen,false);assert.equal(JSON.parse(fs.readFileSync(f.r.taskFile)).open,false);
+});
+
+test('End timeout cannot be settled by a late receipt or a replacement process',async t=>{
+ let message;const f=await transport(t,m=>{if(m.end_nonce)message=m;});
+ await assert.rejects(f.g.endAcknowledged(nonce,{timeoutMs:100}),e=>e.code==='guardian_request_timeout');
+ f.child.stdout.write(JSON.stringify({id:message.id,end_nonce:nonce,state:'idle',guardian_pid:f.child.pid,guard_file:'guard-protocol-only.state',workers_stopped:true,input_cleanup_confirmed:true,controls_visible:false})+'\n');
+ assert.equal(f.g.pending.size,0);assert.equal(f.starts(),1);
+});
+
+test('failed End retains task record and latches Stop instead of reporting completion',async t=>{
+ const f=fixture(t);f.r.taskFile=path.join(f.dir,'task-state.json');f.r.beginTask();const before=fs.readFileSync(f.r.taskFile,'utf8');
+ f.guardian.endAcknowledged=async()=>{throw Error('lost End receipt');};
+ f.guardian.stopAcknowledged=async n=>({stop_nonce:n,workers_stopped:true,input_cleanup_confirmed:true});
+ await assert.rejects(f.r.finish(),e=>e.code==='guardian_end_unconfirmed');assert.equal(f.r.state,'stopped');assert.equal(f.r.taskOpen,true);assert.equal(fs.readFileSync(f.r.taskFile,'utf8'),before);assert.equal(readStopLatch(f.file).value,'stopped');
 });
 
 test('settlement refuses another episode or replaced storage and always leaves a primary Stop',t=>{

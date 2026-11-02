@@ -12,6 +12,11 @@ class NativeWatchdogMetadataTests {
         try {
             var host=Assembly.LoadFrom(args[0]);var type=host.GetType("Axon.CursorSafety",true);
             var write=type.GetMethod("WriteWatchdogRecord",BindingFlags.Static|BindingFlags.NonPublic);
+            var armReceipt=type.GetMethod("ArmReceiptMatches",BindingFlags.Static|BindingFlags.NonPublic);
+            string armNonce=new string('a',32);
+            if(!(bool)armReceipt.Invoke(null,new object[]{"armed "+armNonce+" 101",armNonce,101}))throw new Exception("fresh arming receipt refused");
+            foreach(string wrong in new[]{"armed","armed "+new string('b',32)+" 101","armed "+armNonce+" 102","armed "+armNonce+" 101\n"})
+                if((bool)armReceipt.Invoke(null,new object[]{wrong,armNonce,101}))throw new Exception("stale or foreign arming receipt accepted");
             var receipt=host.GetType("Axon.NativeStopReceipt",true);
             var nonceValid=receipt.GetMethod("ValidNonce",BindingFlags.Static|BindingFlags.NonPublic);
             if(!(bool)nonceValid.Invoke(null,new object[]{new string('a',32)})||(bool)nonceValid.Invoke(null,new object[]{new string('a',32)+"\n"})||(bool)nonceValid.Invoke(null,new object[]{null}))throw new Exception("Stop receipt nonce validation differs");

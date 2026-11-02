@@ -1,7 +1,7 @@
 // Antigravity adapter over the MIT ridelink native host and input-lease implementation.
 import fs from 'node:fs';
 import path from 'node:path';
-import {randomUUID} from 'node:crypto';
+import {randomUUID,randomBytes} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {Driver,HostError} from './driver.mjs';
@@ -158,6 +158,7 @@ export class Runtime {
   }
   stamp(){return {__session:this.token};}
   beginTask(){
+    if(this.finishing)fail('cleanup_in_progress','Task cleanup is still pending. Wait for its result before starting another task.');
     if(this.taskOpen&&this.taskDurable)return;
     this.taskOpen=true;this.taskDurable=false;
     try{
@@ -542,7 +543,28 @@ export class Runtime {
       this.frames.delete(latest.metadata.observation_id);
     }while(true);
   }
-  async finish({preserveTask=false}={}){this.generation++;this.frames.clear();this.grants.clear();this.guardian.send({op:'end'});if(!['stopped','paused'].includes(this.state)){this.state='idle';this.lastControlReason='completed';}this.token='';await this.driver.abort?.();
+  async finish(options={}){
+    if(this.finishing)return this.finishing;
+    this.finishing=Promise.resolve().then(()=>Runtime.prototype.finishTransaction.call(this,options));
+    try{return await this.finishing;}finally{this.finishing=null;}
+  }
+  async finishTransaction({preserveTask=false}={}){this.generation++;this.frames.clear();this.grants.clear();this.token='';
+    try{
+      await this.driver.abort?.();
+      if(this.guardian.requiresStopAcknowledgement){
+        if(typeof this.guardian.endAcknowledged!=='function')fail('guardian_end_unconfirmed','Native End cleanup acknowledgement is unavailable.');
+        const receipt=await this.guardian.endAcknowledged(randomBytes(16).toString('hex'));
+        if(this.driver.inputMayBeHeld===true)fail('guardian_end_unconfirmed','Input cleanup remains uncertain.');
+        if(receipt.state==='stopped'||receipt.state==='paused')this.state=receipt.state;
+      }else this.guardian.send({op:'end'});
+    }catch(error){
+      // Keep the durable task record open. A failed End is never a successful
+      // completion, and Stop must not replay the uncertain operation.
+      try{await this.stop();}catch{}
+      if(error?.code==='input_cleanup_failed')throw error;
+      throw Object.assign(Error('End cleanup is unconfirmed; task evidence was retained. Inspect status without replaying input.'),{code:'guardian_end_unconfirmed',cause:error});
+    }
+    if(!['stopped','paused'].includes(this.state)){this.state='idle';this.lastControlReason='completed';}
     // The replacement's new guard file is not the previous process's input
     // ledger. Its cleanup cannot establish what the crashed process held.
     if(this.recoveredTask&&!preserveTask){

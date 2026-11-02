@@ -358,7 +358,17 @@ final class MacGuardian: NSObject {
                         (journal?["keys"] as? [Int])?.isEmpty == true && (journal?["buttons"] as? [Int])?.isEmpty == true && MacFence.latchBlocks(MacFence.latch)
                     reply(["stop_nonce":nonce,"guardian_pid":Int(getpid()),"guard_file":(MacFence.file as NSString).lastPathComponent,"workers_stopped":exited,"input_cleanup_confirmed":clean])
                 }
-            case "end": grants.removeAll(); set(["stopped", "paused"].contains(state) ? state : "idle"); visuals.hide(); reply(["controls_visible": false])
+            case "end":
+                grants.removeAll(); set(["stopped", "paused"].contains(state) ? state : "idle"); visuals.hide()
+                if let nonce = str(message["end_nonce"]), macStopNonceValid(nonce) {
+                    let exited = macWaitForWorkers()
+                    let native = try? MacFence.read()
+                    let journal = try? MacInputLedger.read()
+                    let clean = exited && native?.state == state && native?.cleanupPending == false && state != "active" && !visuals.visible &&
+                        (journal?["keys"] as? [Int])?.isEmpty == true && (journal?["buttons"] as? [Int])?.isEmpty == true
+                    if !clean { stop("end_cleanup_unconfirmed"); visuals.hide() }
+                    reply(["end_nonce":nonce,"guardian_pid":Int(getpid()),"guard_file":(MacFence.file as NSString).lastPathComponent,"workers_stopped":exited,"input_cleanup_confirmed":clean,"controls_visible":visuals.visible])
+                } else { reply(["controls_visible": visuals.visible]) }
             case "capture": visuals.hideForCapture(); reply(["allowed": true])
             case "capture_end": visuals.finishCapture(state)
             case "activity": visuals.activity(str(message["action"]) ?? "Checking")

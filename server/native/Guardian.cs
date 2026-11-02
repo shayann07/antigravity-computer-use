@@ -628,7 +628,17 @@ namespace Axon {
                 return;
             }
             if (op == "shutdown") { normalClose=state=="idle";Close();return; }
-            if (op == "end") { grants.Clear(); SetState(state=="stopped"||state=="paused"?state:"idle");DismissControls();Emit(new {id=id,state=state,controls_visible=Visible});return; }
+            if (op == "end") {
+                grants.Clear(); SetState(state=="stopped"||state=="paused"?state:"idle");DismissControls();
+                string nonce=m.ContainsKey("end_nonce")?Convert.ToString(m["end_nonce"]):null;
+                if(NativeStopReceipt.ValidNonce(nonce)){
+                    bool exited=WorkersExited(2000),clean=false;
+                    try{clean=exited&&!InputLedger.HasHeld()&&File.ReadAllText(ControlFence.FileName).StartsWith(state+"|",StringComparison.Ordinal)&&state!="active"&&!Visible;}catch{}
+                    if(!clean){Emergency();DismissControls();}
+                    Emit(new {id=id,state=state,end_nonce=nonce,guardian_pid=Process.GetCurrentProcess().Id,guard_file=Path.GetFileName(ControlFence.FileName),workers_stopped=exited,input_cleanup_confirmed=clean,controls_visible=Visible});
+                }else Emit(new {id=id,state=state,controls_visible=Visible});
+                return;
+            }
             if (op == "capture") {
                 captureHidden=true;
                 if(!captureExcluded || !Overlay.CaptureExcluded) { Overlay.HideImmediate(); Hide(); }

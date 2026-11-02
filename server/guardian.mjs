@@ -89,6 +89,15 @@ export class Guardian extends EventEmitter {
       throw Object.assign(Error('Native Stop acknowledgement did not match this request, process and cleanup context.'),{code:'guardian_stop_unconfirmed'});
     return reply;
   }
+  async endAcknowledged(nonce,{timeoutMs=5000}={}){
+    if(typeof nonce!=='string'||nonce.length!==32||!/^[a-f0-9]{32}$/.test(nonce))throw Error('Invalid internal End nonce');
+    const proc=this.proc;
+    const unconfirmed=()=>Object.assign(Error('Native End cleanup was not confirmed by the original controls process.'),{code:'guardian_end_unconfirmed'});
+    if(!proc||!this.initialized||this.pipeFailed||this.cleanupFailed||this.closing)throw unconfirmed();
+    const reply=await this.request({op:'end',end_nonce:nonce},{timeoutMs,existingProcess:proc});
+    if(this.proc!==proc||this.pipeFailed||!this.initialized||reply.end_nonce!==nonce||!['idle','paused','stopped'].includes(reply.state)||reply.guardian_pid!==proc.pid||reply.guard_file!==path.basename(this.env.AGCU_GUARD_FILE||'')||reply.workers_stopped!==true||reply.input_cleanup_confirmed!==true||reply.controls_visible!==false)throw unconfirmed();
+    return reply;
+  }
   async close({normal=false}={}){
     if(this.closing)return this.closing;
     const proc=this.proc;if(!proc)return;
