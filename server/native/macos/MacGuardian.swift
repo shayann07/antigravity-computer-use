@@ -130,8 +130,12 @@ final class MacPanicMonitor {
                                eventsOfInterest: CGEventMask(mask), callback: { _, type, event, pointer in
             let monitor = Unmanaged<MacPanicMonitor>.fromOpaque(pointer!).takeUnretainedValue()
             if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-                if let tap = monitor.tap { CGEvent.tapEnable(tap: tap, enable: true) }
-                MacFence.emergency("event_tap_disabled")
+                // An idle monitor losing its tap must not summon a stopped HUD
+                // while the user works normally. Retire it; activation creates
+                // a fresh, acknowledged monitor. Active/unknown state still stops.
+                let state = try? MacFence.read()
+                if state?.state != "idle" || state?.cleanupPending != false { MacFence.emergency("event_tap_disabled") }
+                exit(0)
             } else { monitor.receive(type, event) }
             return Unmanaged.passUnretained(event)
         }, userInfo: Unmanaged.passUnretained(self).toOpaque())

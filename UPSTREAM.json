@@ -572,7 +572,7 @@
     },
     {
       "path": "server/native/macos/MacGuardian.swift",
-      "sha256": "3097c9e65e656824aba81ff21b51e3a78c21b12e7b7d84e454c56b2e31d8e806"
+      "sha256": "58ae014e22822931cb5a69a04ef01aa0ef17eba15bca4ea37e8b3c247c7ec6ac"
     },
     {
       "path": "server/native/macos/MacOperations.swift",
