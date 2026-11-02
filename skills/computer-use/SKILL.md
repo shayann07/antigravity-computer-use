@@ -19,7 +19,10 @@ The first controller call is always the installed command above. Run exactly one
 `.localdata` to decide how to operate the desktop. The `ready` reply is the
 runtime's authority.
 
-Keep the returned `task_token` private. Append `--task <task_token>` to
+Keep the returned `task_token` private. Prefer copying `task_command_prefix`
+from the ready response and appending the next command to that prefix; it
+already includes the correct installed launcher and task context.
+Alternatively, append `--task <task_token>` to
 all subsequent task commands, including `ready` after a human handoff and
 `end`. The CLI obtains this token inside the first `ready` call; no separate
 model/tool round trip is needed. For example:

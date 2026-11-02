@@ -11,7 +11,7 @@ export class TaskCoordinator {
    const pin=JSON.parse(readRecoveryFile(pointer,4096));if(typeof pin.target!=='string'||!path.isAbsolute(pin.target))refuse('global_owner_unverified','Registered installation is invalid.');roots.push(pin.target);
    const registry=path.join(pin.target,'deployments.json');if(fs.existsSync(registry)){const entries=Object.values(JSON.parse(readRecoveryFile(registry,65536)));if(entries.length>64)refuse('global_owner_unverified','Too many registered deployments to verify safely.');for(const entry of entries)if(entry.workspace){const project=path.join(entry.workspace,'.agents/skills/computer-use/deployment.json');if(fs.existsSync(project)){const p=JSON.parse(readRecoveryFile(project,4096));if(typeof p.target!=='string'||!path.isAbsolute(p.target))refuse('global_owner_unverified','Registered project installation is invalid.');roots.push(p.target);}}}
   }}
-  for(const root of new Set(roots)){const directory=path.join(root,'data');if(path.resolve(directory)===this.directory)continue;const file=path.join(directory,'desktop-session.json');if(!fs.existsSync(file))continue;await this.verify('verify-tree',directory);const session=JSON.parse(readRecoveryFile(file,4096));if(!Number.isSafeInteger(session.pid)||session.pid<=0)refuse('global_owner_unverified','Registered legacy controller identity is invalid.');if(this.isAlive(session.pid)&&session.global_task_protocol!==1)refuse('legacy_controller_running','A registered older controller is running. End and shut down that controller before using this installation.');}
+  for(const root of new Set(roots)){const directory=path.join(root,'data');if(path.resolve(directory)===this.directory)continue;const file=path.join(directory,'desktop-session.json');if(!fs.existsSync(file))continue;await this.verify('verify-tree',directory);const session=JSON.parse(readRecoveryFile(file,4096));if(!Number.isSafeInteger(session.pid)||session.pid<=0)refuse('global_owner_unverified','Registered legacy controller identity is invalid.');if(this.isAlive(session.pid)&&session.global_task_protocol!==1)refuse('legacy_controller_running','A registered older controller at '+root+' is running. Its owner must end and shut it down before this installation can take control.');}
  }
  async ensure(){
   if(this.held){this.held.assertHeld();return;}
@@ -20,7 +20,7 @@ export class TaskCoordinator {
   try{
    await this.verify('verify-tree',this.root);lease.assertHeld();const prior=this.readOwner();
    if(prior){await this.verify('verify-tree',prior.directory);if(!fs.existsSync(path.join(prior.directory,'task-state.json')))refuse('global_owner_unverified','Prior task evidence is missing.');const task=readTaskRecord(path.join(prior.directory,'task-state.json'));const stop=readStopLatch(path.join(prior.directory,'emergency.stop'));
-    if(stop)refuse('global_stop_latched','The previous owning installation still has Stop latched or unverified. Recover and re-arm that installation locally before starting another task.');
+    if(stop)refuse('global_stop_latched','The owning installation at '+path.dirname(prior.directory)+' still has Stop latched or unverified. Use its local human launcher to inspect and re-arm after recovery; this installation cannot clear its Stop.');
     if(task.open||!prior.closed&&this.isAlive(prior.pid))refuse('global_owner_unverified','The previous installation has not confirmed task cleanup. Recover its task before taking control.');
    }
    this.record={schema:1,pid:process.pid,directory:this.directory,nonce:randomBytes(16).toString('hex'),closed:false};

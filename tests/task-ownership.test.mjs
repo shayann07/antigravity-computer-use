@@ -19,7 +19,8 @@ test('two authenticated IPC clients cannot share grants or end another task',asy
   const env={...process.env,AGCU_DATA_DIR:dir,AGCU_PERMISSION_MODE:'standalone'};delete env.CU_PLUGIN_DATA;delete env.CLAUDE_PLUGIN_DATA;
   const cli=async args=>JSON.parse((await promisify(execFile)(process.execPath,[fileURLToPath(new URL('../scripts/desktop.mjs',import.meta.url)),...args],{env,windowsHide:true,timeout:10000})).stdout);
   const cliReady=await cli(['ready']);assert.match(cliReady.task_token,/^[a-f0-9]{64}$/);assert.equal(cliReady.ready,true);
-  assert.equal((await cli(['end','--task',cliReady.task_token])).ended,true);
+  assert(cliReady.task_command_prefix.endsWith('--task '+cliReady.task_token));
+  assert.equal((await cli(['--task',cliReady.task_token,'end'])).ended,true);
 
   assert(!fs.readFileSync(path.join(dir,'desktop-receipts.jsonl'),'utf8').includes(ready.task_token),'task capability must not be logged');
  }finally{await service.shutdown();fs.rmSync(dir,{recursive:true,force:true});}

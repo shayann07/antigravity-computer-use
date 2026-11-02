@@ -598,7 +598,10 @@ export class Runtime {
         const record=readTaskRecord(this.taskFile);
         if(record.open&&record.guard===this.priorGuard&&record.dispatched===this.priorDispatched&&record.watchdogs_complete===this.priorWatchdogsComplete&&JSON.stringify(record.children)===JSON.stringify(this.priorChildren)&&record.guard&&record.dispatched===true){
           const directory=path.dirname(this.taskFile);storageOperation('verify-data-tree',directory);
-          verified=priorWindowsCleanupVerified(directory,record)||priorMacCleanupVerified(directory,record);
+          // The verification helper itself can briefly reuse an old numeric
+          // PID. Wait only for read-only proof; never ignore a live identity.
+          const cleanupDeadline=performance.now()+500;
+          do {verified=priorWindowsCleanupVerified(directory,record)||priorMacCleanupVerified(directory,record);if(verified)break;await new Promise(resolve=>setTimeout(resolve,25));}while(performance.now()<cleanupDeadline);
         }
       }catch{}
       if(!verified)fail('recovered_cleanup_unverified','Prior-session input cleanup is unverified. Keep the task open and inspect the previous native ledger; do not repeat input or force an update.');

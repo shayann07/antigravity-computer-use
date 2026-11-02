@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "2b9cf90872d9fec08af921bbd0429cf150640d493fdb5fa1a377944e2b09b9a0"
+      "sha256": "7d6f97dc3a07106657b14d988e4b05be346a032052dd5b3e80a124230c161cfa"
     },
     {
       "path": "server/mcp.mjs",
@@ -300,7 +300,7 @@
     },
     {
       "path": "scripts/desktop.mjs",
-      "sha256": "4fc68b7e47cb815481c0aa087cb9d377dde52eeef397f3cacb61556633d5b2a1"
+      "sha256": "7e7191aed02f4ff1e7feb94728307d7b44152b806097c90bacb17123ecd43b5e"
     },
     {
       "path": "server/version.mjs",
@@ -604,7 +604,7 @@
     },
     {
       "path": "skills/computer-use/SKILL.md",
-      "sha256": "95c2ec9a1f659150809a11b29be1b2f1b1051871a9ab2beb9786fd11b5e73f66"
+      "sha256": "261e7e83d64440dee68fa7476e73d56e4f25538dea3780f18e69ac408a7201d5"
     },
     {
       "path": "docs/MACOS.md",
@@ -660,7 +660,7 @@
     },
     {
       "path": "tests/lifecycle.test.mjs",
-      "sha256": "a22ab0abf1d4504c667f319cf88622b9d55645cad0c67a2a15815243a5b7153e"
+      "sha256": "616b722ff4403f214a0a4c643b9271bfb8bdc6ed7fc21a54403048574291a0bd"
     },
     {
       "path": "server/native/GuardCleanup.cs",
@@ -712,7 +712,7 @@
     },
     {
       "path": "server/recovery.mjs",
-      "sha256": "87465c3265aa2f606dfa2cfda4c9bd2fc5e86fa7872499a1a8912740396f0835"
+      "sha256": "8b8a20315663a065116dae8af4261b249ffe22bb473d26bd0387e4e0dfb163a5"
     },
     {
       "path": "scripts/qualify-guardian-desktop.mjs",
@@ -892,7 +892,7 @@
     },
     {
       "path": "tests/task-ownership.test.mjs",
-      "sha256": "9f97389856a6da23cfa1a1131d72480f1813ad8f97b5fb8e235801ca97c6be67"
+      "sha256": "6634ea60569e9d075649204da6f0b9bc2f0d832cbaa3c8f244d1ec588180772d"
     },
     {
       "path": "tests/installation-location.test.mjs",
@@ -904,7 +904,7 @@
     },
     {
       "path": "server/task-coordinator.mjs",
-      "sha256": "b9f3885edc246cc583cb99e0f151d6efcf0992835d3c5470bbe1e57c46c005f1"
+      "sha256": "76c50c3bc7c323adda2ca84f7d31fb9915bd7612d9064f43c032ca3588012295"
     },
     {
       "path": "tests/task-coordinator.test.mjs",

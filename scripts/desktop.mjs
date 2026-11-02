@@ -13,6 +13,7 @@ import {loadDeployment,applyDeployment} from '../server/deployment.mjs';
 import {diagnostics} from './diagnostics.mjs';
 import {scheduleUpdates} from '../server/auto-update.mjs';
 import {Incidents} from '../server/incidents.mjs';
+import {desktopCommand} from './install.mjs';
 import {recoveryAdvice,persistStopLatch,readStopLatch} from '../server/recovery.mjs';
 const EMPTY_INPUT={type:'object',properties:{},required:[],additionalProperties:false};
 const LIFECYCLE=[
@@ -48,7 +49,10 @@ export function briefReply(value){
  return out;
 }
 let replyMode='json';
-const printReply=value=>console.log(encodeReply(replyMode==='brief'?briefReply(value):value));
+const printReply=value=>{
+  if(typeof value.task_token==='string'&&value.task_token.length===64&&/^[a-f0-9]{64}$/.test(value.task_token))value={...value,task_command_prefix:desktopCommand(process.execPath,process.argv[1])+' --task '+value.task_token};
+  console.log(encodeReply(replyMode==='brief'?briefReply(value):value));
+};
 export function failureReply(error){
  const result={ok:false,error:{code:error.code||'refused',message:error.message},next_action:'inspect_diagnostics'};
   if(typeof error.task_token==='string'&&error.task_token.length===64&&/^[a-f0-9]{64}$/.test(error.task_token))result.task_token=error.task_token;
@@ -68,6 +72,7 @@ export async function request(session,command,args={},timeout=100000,expectedPer
   if(session.task_protocol===1&&command==='ready'&&!session.task_token){
     const claim=await request(session,'claim',{},timeout,expectedPermissionMode);
     if(!claim.ok)return claim;
+    if(typeof claim.task_token!=='string'||claim.task_token.length!==64||!/^[a-f0-9]{64}$/.test(claim.task_token))throw Object.assign(Error('Task reservation did not return valid context; no desktop action was requested.'),{code:'task_claim_unconfirmed'});
     session.task_token=claim.task_token;
   }
   return new Promise((resolve,reject)=>{
@@ -100,7 +105,9 @@ export async function request(session,command,args={},timeout=100000,expectedPer
 }
 
 export async function main(){
-  const [rawCommand,...rest]=process.argv.slice(2);const command=rawCommand?.replace(/^computer_/,'');
+  const words=process.argv.slice(2);
+  if(words[0]==='--task'){const prefix=words.splice(0,2);if(words.length===0)throw Error('--task needs a token and command');words.splice(1,0,...prefix);}
+  const [rawCommand,...rest]=words;const command=rawCommand?.replace(/^computer_/,'');
   let taskToken;const taskIndex=rest.indexOf('--task');
   if(taskIndex>=0){taskToken=rest[taskIndex+1];if(typeof taskToken!=='string'||taskToken.length!==64||!/^[a-f0-9]{64}$/.test(taskToken)||rest.lastIndexOf('--task')!==taskIndex)throw Error('Invalid --task capability');rest.splice(taskIndex,2);}
   if(command==='diagnostics'){applyDeployment(loadDeployment());if(rest.some(a=>a!=='--submit'))throw Error('Use diagnostics [--submit]');printReply(await diagnostics(dataDir(),{submit:rest.includes('--submit')}));return;}
