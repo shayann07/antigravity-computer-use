@@ -308,7 +308,7 @@
     },
     {
       "path": "tests/desktop-service.test.mjs",
-      "sha256": "6be90b537ad63867266363df4fcf6e1881f89ed611f9c5ff96291ce02b3eb5bf"
+      "sha256": "0a454e7a09146417309a98f39cfaab66ad20500c7c81d701ec6f8edfce6aae8c"
     },
     {
       "path": "tests/installed-direct-smoke.mjs",
@@ -564,7 +564,7 @@
     },
     {
       "path": ".github/workflows/macos.yml",
-      "sha256": "7c2293cc99dbbcb696ecb7f0cdc8ea0da26d0da89fef97b4caa377c6c587d498"
+      "sha256": "84a7c5a70741c35f0b03394db5f7e104ce9264dfcaeaeeb4e04faa7a05492e70"
     },
     {
       "path": "server/native/macos/MacControl.swift",
@@ -696,7 +696,7 @@
     },
     {
       "path": ".github/workflows/windows.yml",
-      "sha256": "def29b3b7d2f02e4bce71bf20e2cbd34f36411783846f57716774c3b3156b76a"
+      "sha256": "bb61bf51773884ddfe8386b3ff15a243d5b5b457b84a42ffa6974b1cd8044e67"
     },
     {
       "path": "release-public-key.pem",

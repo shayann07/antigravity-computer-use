@@ -233,8 +233,9 @@ test('diagnostic persistence does not delay an error reply and shutdown waits fo
 test('start refuses to replace a live but unresponsive service',async()=>{
  const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'agcu-start-'));const file=path.join(dir,'desktop-session.json');
  // Establish a dedicated native data root before populating a saved session.
- // macOS correctly refuses to adopt arbitrary nonempty, unmarked directories.
- if(process.platform==='darwin')storageOperation('data',dir);
+ // Reconnection verifies an already-private root on both platforms; it must
+ // not mutate a live service's ACL tree to make this fixture valid.
+ storageOperation('data',dir);
  const raw=JSON.stringify({pid:process.pid,pipe:process.platform==='win32'?'\\\\.\\pipe\\agcu-unresponsive-'+process.pid:path.join(dir,'missing.sock'),secret:'fixture'});fs.writeFileSync(file,raw);
  try{
   const result=await new Promise((resolve,reject)=>{
