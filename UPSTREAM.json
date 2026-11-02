@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "6044d6a5403e0d1b8d84da620cc1e46f00383dfb5ed995c6cf075041f4d50803"
+      "sha256": "3b4c819a2ddbd94e8f8e1c3ae8b90dd393a85472b565caa4e441e964362492a2"
     },
     {
       "path": "server/mcp.mjs",
@@ -884,7 +884,7 @@
     },
     {
       "path": "tests/stop-acknowledgement.test.mjs",
-      "sha256": "f50271fed9fa37efd5a3c0be23e35c58b6f8473e862952418988b7de9af40ddd"
+      "sha256": "3a97d308078a768255d2578b8ae62a45f67e86d7ff5fbcdf39b281124a56370a"
     }
   ],
   "external_files": [

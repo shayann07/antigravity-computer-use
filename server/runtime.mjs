@@ -545,10 +545,11 @@ export class Runtime {
   }
   async finish(options={}){
     if(this.finishing)return this.finishing;
+    this.generation++;this.frames.clear();this.grants.clear();this.token='';
     this.finishing=Promise.resolve().then(()=>Runtime.prototype.finishTransaction.call(this,options));
     try{return await this.finishing;}finally{this.finishing=null;}
   }
-  async finishTransaction({preserveTask=false}={}){this.generation++;this.frames.clear();this.grants.clear();this.token='';
+  async finishTransaction({preserveTask=false}={}){
     try{
       await this.driver.abort?.();
       if(this.guardian.requiresStopAcknowledgement){

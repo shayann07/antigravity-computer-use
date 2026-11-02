@@ -102,7 +102,9 @@ test('End waits for driver and native cleanup before closing task evidence',asyn
  f.r.taskFile=path.join(f.dir,'task-state.json');f.r.beginTask();
  f.driver.abort=async()=>{await gate;};
  f.guardian.endAcknowledged=async()=>{calls++;called=true;assert.equal(f.r.taskOpen,true);return {state:'idle'};};
- const pending=f.r.finish(),duplicate=f.r.finish();await new Promise(resolve=>setTimeout(resolve,0));assert.equal(called,false);assert.equal(f.r.taskOpen,true);
+ f.r.frames.set('old',{});const generation=f.r.generation;
+ const pending=f.r.finish(),duplicate=f.r.finish();assert.equal(f.r.frames.size,0);assert.equal(f.r.generation,generation+1);
+ await new Promise(resolve=>setTimeout(resolve,0));assert.equal(called,false);assert.equal(f.r.taskOpen,true);
  assert.throws(()=>f.r.beginTask(),e=>e.code==='cleanup_in_progress');
  release();assert.equal((await pending).ended,true);await duplicate;assert.equal(calls,1);assert.equal(f.r.taskOpen,false);assert.equal(JSON.parse(fs.readFileSync(f.r.taskFile)).open,false);
 });
