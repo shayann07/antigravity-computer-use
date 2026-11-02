@@ -356,7 +356,7 @@
     },
     {
       "path": "scripts/verify-install.mjs",
-      "sha256": "54f6b9d8ef3362b6a3663a8182a68914724b9ec6136f1a56ca8d0d24fcaee3cc"
+      "sha256": "e8591509c682a094d0d72efa8db91f6adeaeee7b74e0c8eb60f660d96131afc5"
     },
     {
       "path": "scripts/bundle.mjs",
@@ -384,11 +384,11 @@
     },
     {
       "path": "server/native/StorageGuard.cs",
-      "sha256": "4c294dae39a0c86e29276ed0040b70dc6a520cb93e3bc3553030937fc0864b36"
+      "sha256": "88545639ff164cb078a39a8b29d3e1ef679fc3ea15164bf6ffa05d3a7ec936a4"
     },
     {
       "path": "server/storage.mjs",
-      "sha256": "e11471ead11f0e481e897ed83c920a4bee5d9ef7f74f13dbeffc54530d641fa3"
+      "sha256": "04517a4e5c8079f6e215ac8b6e6c0118f87482a9ee64bf4f985155702622f184"
     },
     {
       "path": "tests/storage.test.mjs",
@@ -524,7 +524,7 @@
     },
     {
       "path": "install.ps1",
-      "sha256": "b57290be6349ebe277d085c7408a0fe98387f0419a75025d2899a20849e24907"
+      "sha256": "a725e7e0fc724ee60818a31b3e6aed8213a4cb509d996b615bd6891c7ca8ec24"
     },
     {
       "path": "tests/bootstrap.test.mjs",

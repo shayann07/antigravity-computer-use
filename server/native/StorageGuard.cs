@@ -200,11 +200,15 @@ internal static class StorageGuard {
         string audit;
         if(Directory.Exists("D:\\")){
             string suffix;using(var hash=SHA256.Create())suffix=BitConverter.ToString(hash.ComputeHash(Encoding.UTF8.GetBytes(Me.Value))).Replace("-","").ToLowerInvariant().Substring(0,10);
-            audit=Path.Combine("D:\\","AntigravityComputerUse-"+suffix);
+            audit=Path.Combine("D:\\","Apps","AntigravityComputerUse",suffix);
         }else audit=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"AntigravityComputerUse");
         audit=Canonical(audit);Ancestors(audit);
         if(Directory.Exists(audit)){Owner(audit);if(!OwnInstall(audit))Refuse("storage_not_dedicated",audit,"The private audit/installation anchor belongs to unrelated data.");}
-        else Directory.CreateDirectory(audit,DirectoryAcl(true));
+        else {
+            var missing=new Stack<string>();string next=audit;
+            while(!Directory.Exists(next)){missing.Push(next);next=Path.GetDirectoryName(next);}
+            while(missing.Count>0)Directory.CreateDirectory(missing.Pop(),DirectoryAcl(true));
+        }
         Protect(audit);Verify(audit,true);
         string marker=Path.Combine(audit,Marker);File.WriteAllText(marker,"antigravity-computer-use-private-storage-v1\n",new UTF8Encoding(false));Protect(marker);
         string backups=Path.Combine(audit,"backups");Directory.CreateDirectory(backups,DirectoryAcl(true));Protect(backups);

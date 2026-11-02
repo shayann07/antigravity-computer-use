@@ -45,12 +45,6 @@ function New-ComputerUseStaging {
     param([string]$CacheDirectory)
     if (!$CacheDirectory) {
         $candidates = @()
-        if (Test-Path -LiteralPath 'D:\') {
-            $hasher = [Security.Cryptography.SHA256]::Create()
-            try { $sidHash = [BitConverter]::ToString($hasher.ComputeHash([Text.Encoding]::UTF8.GetBytes([Security.Principal.WindowsIdentity]::GetCurrent().User.Value))).Replace('-', '').ToLowerInvariant().Substring(0, 10) }
-            finally { $hasher.Dispose() }
-            $candidates += 'D:\AntigravityComputerUseBootstrap-' + $sidHash
-        }
         $candidates += Join-Path ([Environment]::GetFolderPath('UserProfile')) '.gemini/AntigravityComputerUseBootstrap'
         $candidates += Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'AntigravityComputerUseBootstrap'
         $rejected = @()
@@ -115,6 +109,18 @@ function Invoke-ComputerUseInstall {
     if ([Environment]::OSVersion.Platform -ne 'Win32NT' -or ![Environment]::Is64BitOperatingSystem) { throw 'Computer Use currently requires Windows x64.' }
     $ErrorActionPreference = 'Stop'
     $ProgressPreference = 'SilentlyContinue'
+    if (!$Target) {
+        $pointer = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.gemini/config/skills/computer-use/deployment.json'
+        if (Test-Path -LiteralPath $pointer) {
+            $Target = (Get-Content -LiteralPath $pointer -Raw | ConvertFrom-Json).target
+            if (!$Target -or ![IO.Path]::IsPathRooted($Target)) { throw 'Invalid existing installation pointer.' }
+        } elseif (Test-Path -LiteralPath 'D:\') {
+            $hasher = [Security.Cryptography.SHA256]::Create()
+            try { $sidHash = [BitConverter]::ToString($hasher.ComputeHash([Text.Encoding]::UTF8.GetBytes([Security.Principal.WindowsIdentity]::GetCurrent().User.Value))).Replace('-', '').ToLowerInvariant().Substring(0, 10) }
+            finally { $hasher.Dispose() }
+            $Target = Join-Path 'D:\Apps\AntigravityComputerUse' $sidHash
+        }
+    }
     $stage = New-ComputerUseStaging $CacheDirectory
     $completed = $false
     $oldTls = [Net.ServicePointManager]::SecurityProtocol
