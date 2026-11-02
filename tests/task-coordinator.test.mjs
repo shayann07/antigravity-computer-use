@@ -13,6 +13,7 @@ test('different installation task coordinators exclude input, retain abandoned o
   fs.writeFileSync(path.join(ad,'task-state.json'),JSON.stringify({schema:1,open:false}));await a.release();
   await b.ensure();await b.release();
   await a.ensure();fs.writeFileSync(path.join(ad,'emergency.stop'),'stopped');await a.release();await assert.rejects(b.ensure(),{code:'global_stop_latched'});
+  await a.ensure();assert.equal(fs.readFileSync(path.join(ad,'emergency.stop'),'utf8'),'stopped','showing the owning controls must not clear Stop');await a.release();
   // Remove only this synthetic fixture marker, never an installed human Stop.
   fs.unlinkSync(path.join(ad,'emergency.stop'));await b.ensure();await b.release();
  }finally{for(const c of [a,b])if(c.held)await c.held.release();fs.rmSync(dir,{recursive:true,force:true});}

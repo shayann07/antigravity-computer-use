@@ -904,11 +904,11 @@
     },
     {
       "path": "server/task-coordinator.mjs",
-      "sha256": "0f6a1e8cd44dcda96558d4f0b32d4b469ea1946506439c2dae0355d5aa6ed242"
+      "sha256": "917301f8f04d22e6b42fc3c2e15c8b5017b31d2a96dd7ec998e4041ad368ab08"
     },
     {
       "path": "tests/task-coordinator.test.mjs",
-      "sha256": "e54ed445790a33f9abe92180b5933228f4c559c85c0942e6720f4c6f5ac23f76"
+      "sha256": "41c741eb2ad325c33e66fee8be8f876b302f869a94b713c0467453826937fa68"
     },
     {
       "path": "docs/TASK-OWNERSHIP.md",

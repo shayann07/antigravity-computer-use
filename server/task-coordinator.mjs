@@ -21,7 +21,10 @@ export class TaskCoordinator {
   try{
    await this.verify('verify-tree',this.root);lease.assertHeld();const prior=this.readOwner();
    if(prior){await this.verify('verify-tree',prior.directory);if(!fs.existsSync(path.join(prior.directory,'task-state.json')))refuse('global_owner_unverified','Prior task evidence is missing.');const task=readTaskRecord(path.join(prior.directory,'task-state.json'));const stop=readStopLatch(path.join(prior.directory,'emergency.stop'));
-    if(stop)refuse('global_stop_latched','The owning installation at '+path.dirname(prior.directory)+' still has Stop latched or unverified. Use its local human launcher to inspect and re-arm after recovery; this installation cannot clear its Stop.');
+    // The same installation may reacquire exclusive ownership to SHOW its
+    // stopped controls. Native readiness still requires local human re-arm.
+    // Other installations must not evade that Stop by changing data roots.
+    if(stop&&path.resolve(prior.directory)!==this.directory)refuse('global_stop_latched','The owning installation at '+path.dirname(prior.directory)+' still has Stop latched or unverified. Use its local human launcher to inspect and re-arm after recovery; this installation cannot clear its Stop.');
     if(task.open||!prior.closed&&this.isAlive(prior.pid))refuse('global_owner_unverified','The previous installation has not confirmed task cleanup. Recover its task before taking control.');
    }
    this.record={schema:1,pid:process.pid,directory:this.directory,nonce:randomBytes(16).toString('hex'),closed:false};
