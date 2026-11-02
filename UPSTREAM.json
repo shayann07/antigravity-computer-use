@@ -888,11 +888,11 @@
     },
     {
       "path": "server/task-ownership.mjs",
-      "sha256": "d899f802343c997fdee73b501e9285969a63fef7b489db464456516f95a2f617"
+      "sha256": "7957401eada5bd239392e9a17ee2a70e9d91b904090ed4b1cf9abe9e9a1f2e5a"
     },
     {
       "path": "tests/task-ownership.test.mjs",
-      "sha256": "6634ea60569e9d075649204da6f0b9bc2f0d832cbaa3c8f244d1ec588180772d"
+      "sha256": "967a0d3644fbd37835e5aa7d5cb9cee9ca31b89dc29c3658132eb6418bd4af86"
     },
     {
       "path": "tests/installation-location.test.mjs",

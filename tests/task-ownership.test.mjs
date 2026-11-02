@@ -1,6 +1,12 @@
 import {execFile} from 'node:child_process';import {promisify} from 'node:util';import {fileURLToPath} from 'node:url';import {BUILD_ID,VERSION} from '../server/version.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import path from 'node:path';
 import {TaskOwnership} from '../server/task-ownership.mjs';import {serveDesktop} from '../server/desktop-service.mjs';import {request} from '../scripts/desktop.mjs';import {testDirectory} from './paths.mjs';
+test('passive End is idempotent but cannot revoke an open task or grant',()=>{
+ const owner=new TaskOwnership();owner.authorize('computer_end',undefined,{state:'idle',task_open:false,approved_apps:[]});
+ owner.authorize('computer_end',undefined,{state:'stopped',task_open:false,approved_apps:[]});
+ for(const state of [{state:'active',task_open:false},{state:'idle',task_open:true},{state:'idle',task_open:false,approved_apps:['app']}])assert.throws(()=>owner.authorize('computer_end',undefined,state),{code:'task_required'});
+ owner.claim({state:'idle',task_open:false});assert.throws(()=>owner.authorize('computer_end',undefined,{state:'idle',task_open:false}),{code:'task_owned'});
+});
 test('unused claims expire; used claims never expire or transfer by age',()=>{
  let now=0;const owner=new TaskOwnership({now:()=>now}),idle={state:'idle',task_open:false};const old=owner.claim(idle);now=30001;const token=owner.claim(idle);assert.notEqual(token,old);assert.throws(()=>owner.authorize('computer_end',old,idle),{code:'task_owned'});owner.authorize('computer_ready',token,idle);now+=86400000;assert.throws(()=>owner.claim(idle),{code:'task_owned'});owner.authorize('computer_stop',null,idle);owner.ended();assert(owner.claim(idle));
 });

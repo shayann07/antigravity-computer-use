@@ -14,6 +14,9 @@ export class TaskOwnership {
  authorize(name,token,state){
   if(readOnly.has(name))return;
   if(name==='computer_shutdown'&&state?.task_open===false&&!this.owner?.used)return;
+  // Idempotent passive cleanup is safe when there is no task reservation,
+  // open task, active control or grant to revoke. Never apply this to an owner.
+  if(name==='computer_end'&&!this.owner&&state?.task_open===false&&['idle','stopped'].includes(state?.state)&&!state?.approved_apps?.length)return;
   // Recovery is evidence verification only; no new task may adopt an old grant.
   if(name==='computer_end'&&!this.owner&&state?.recovered_task===true)return;
   if(this.owner&&!this.owner.used&&this.now()>this.owner.until)this.owner=null;
