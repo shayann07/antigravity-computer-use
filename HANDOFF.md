@@ -34,6 +34,15 @@ The full current-process acknowledgement suite passed 519/531 tests with zero
 failures and 12 explicit skips. The later End evidence-retention guard passed
 125 focused tests; its invalid-marker case explicitly refuses both End and
 shutdown without controls. Fresh exact-head CI must cover the combined source.
+At `bb425ea`, the Windows PR job and all four Mac jobs passed, while the
+Windows push job refused stale-owner cleanup with "Prior input owner is not
+confirmed gone." That failure is retained. Source review identified a PID-reuse
+window when recovery spawns a new helper. Cleanup now proves absence before
+acquisition and unchanged metadata afterward, allowing only the newly acquired
+verified helper to explain that reused PID. Already-live/foreign owners and
+changed metadata still refuse. Deterministic/native lease/receipt tests passed
+43/44 with zero failures and one Mac-only benchmark skip; fresh CI is required.
+The original failure's precise cause is not established by its old log.
 The first full run recorded 520 tests: 507 passed, one failed and 12 skipped.
 Its passive lifecycle fixture used the undefined `owner-stop` marker. The
 normal lifecycle case now uses `stopped`; a separate case preserves invalid

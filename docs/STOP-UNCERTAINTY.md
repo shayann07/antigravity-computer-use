@@ -63,6 +63,14 @@ End refuses to discard the durable task record while Stop uncertainty or
 persistence failure remains; those old actor/ledger identities are recovery
 evidence, not disposable bookkeeping.
 
+Stale input-owner cleanup separately establishes PID absence before spawning its
+recovery fence helper and requires unchanged metadata afterward. If Windows
+reuses that PID for the newly acquired verified helper, its live handle can
+explain the new identity; every other live owner still blocks cleanup. There is
+no caller-provided identity override. A Windows CI refusal motivated this case,
+but the initial log did not establish PID reuse as its cause. Deterministic
+tests cover the distinction; retain and investigate any further native failure.
+
 This is process-/request-bound transport evidence, not remote attestation or
 proof of physical delivery. Native compilation, actual pipe loss/hung UI and
 physical cleanup require fresh qualification. Trusted recovery of old-worker

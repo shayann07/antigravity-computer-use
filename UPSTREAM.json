@@ -48,7 +48,7 @@
     {
       "path": "server/sessions.mjs",
       "upstream_sha256": "09563923bcd19974f2882855c8b23883038e13942c6583c861b4e22cc274ebe0",
-      "local_sha256": "fad7e782980f0d9add3d66fedd2d15c476c766814b96ceb7d5b4cd50275b05fa",
+      "local_sha256": "a5730f4762243ff325369d73dbf21c35a83e0dd176f23d6f1b3470c03215089b",
       "modified": true
     },
     {
@@ -248,7 +248,7 @@
     },
     {
       "path": "tests/session-safety.test.mjs",
-      "sha256": "03b234936eebbf626a39eaf8951ba21957cc2bb2260fcce355acca8b9dcceb13"
+      "sha256": "3bc641c075b8a35f22fae4fafc01f26b3d3ed22e83d82587978ee363c209562a"
     },
     {
       "path": "tests/recording-visuals-live.mjs",
@@ -492,7 +492,7 @@
     },
     {
       "path": "HANDOFF.md",
-      "sha256": "a6e36f66cfea897df136b9512b42f6d8b3f2e5cb0069d4d32839ac5dcca6f8ff"
+      "sha256": "f7d3686d3198733c36b8743e61e4c491b6f8088f521f4af9ff3f392dbd3b5b1e"
     },
     {
       "path": "tests/guardian-visibility.mjs",
@@ -880,7 +880,7 @@
     },
     {
       "path": "docs/STOP-UNCERTAINTY.md",
-      "sha256": "4d2e75c603990e7e886350aa7b7f38e3525d944efe8bc52c99d9fca50a6e0e04"
+      "sha256": "0c3f25b56c0333e180f098d98d5884275037fdf2fac85b6e3e4b15afea916579"
     },
     {
       "path": "tests/stop-acknowledgement.test.mjs",
