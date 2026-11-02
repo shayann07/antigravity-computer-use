@@ -29,7 +29,7 @@ namespace Axon {
         [DllImport("gdi32.dll")] static extern bool DeleteObject(IntPtr obj);
         [DllImport("user32.dll")] static extern bool SystemParametersInfo(uint action,uint value,IntPtr data,uint flags);
         static Process watchdog;
-        static bool applied,monitoring;
+        static bool applied,monitoring,armingFailed;
         static readonly object gate=new object();
         internal static bool Applied { get { lock(gate)return applied; } }
         internal static bool ArmReceiptMatches(string receipt,string nonce,int pid) {
@@ -46,7 +46,9 @@ namespace Axon {
             } finally {try{if(File.Exists(temp))File.Delete(temp);}catch{}}
         }
         static bool EnsureWatchdog() {
-            if(watchdog!=null && !watchdog.HasExited)return true;
+            // A timed-out stdout reader still belongs to this child. Never
+            // start another arming read on that process or reuse a late reply.
+            if(watchdog!=null && !watchdog.HasExited)return !armingFailed;
             ProcessStartInfo info=new ProcessStartInfo(Process.GetCurrentProcess().MainModule.FileName,
                 "--cursor-watchdog "+Process.GetCurrentProcess().Id+" "+Process.GetCurrentProcess().StartTime.ToUniversalTime().Ticks);
             info.UseShellExecute=false;info.CreateNoWindow=true;info.RedirectStandardInput=true;info.RedirectStandardOutput=true;
@@ -70,10 +72,11 @@ namespace Axon {
                     if(!EnsureWatchdog())return false;
                     // The watchdog must be armed BEFORE changing shared cursors.
                     Process armProcess=watchdog;string armNonce=Guid.NewGuid().ToString("N");
+                    armingFailed=true;
                     armProcess.StandardInput.WriteLine("arm "+armNonce);armProcess.StandardInput.Flush();
                     Task<string> acknowledgement=Task.Factory.StartNew(delegate {return armProcess.StandardOutput.ReadLine();});
                     if(!acknowledgement.Wait(2000)||watchdog!=armProcess||armProcess.HasExited||!ArmReceiptMatches(acknowledgement.Result,armNonce,armProcess.Id))throw new InvalidOperationException("Cursor watchdog did not acknowledge this arming request");
-                    monitoring=true;
+                    monitoring=true;armingFailed=false;
                     if(!File.ReadAllText(ControlFence.FileName).StartsWith("active|")){Restore();return false;}
                     int size=Math.Max(32,GetSystemMetrics(13));
                     foreach(uint role in new uint[]{32512,32649,32513,32650})
@@ -111,9 +114,15 @@ namespace Axon {
                 // Do not abandon independent cleanup while the journal is
                 // missing, unreadable, or still contains a held input.
                 if(InputLedger.HasHeld())return;
-                try {if(watchdog!=null&&!watchdog.HasExited){watchdog.StandardInput.WriteLine("disarm");watchdog.StandardInput.Flush();}}catch {}
+                try {if(watchdog!=null&&!watchdog.HasExited)DisarmWatchdog(watchdog,armingFailed);}catch {}
                 monitoring=false;
             }
+        }
+        internal static void DisarmWatchdog(Process process,bool retire) {
+            // Called only after input recovery. FIFO disarm then EOF lets the
+            // original watchdog retire itself; do not kill protection early.
+            process.StandardInput.WriteLine("disarm");process.StandardInput.Flush();
+            if(retire)process.StandardInput.Close();
         }
         internal static bool CheckWatchdog() {
             lock(gate) {if(!monitoring||watchdog==null||watchdog.HasExited){Restore();return false;}return true;}
@@ -121,6 +130,9 @@ namespace Axon {
         internal static void Close() {
             lock(gate) {
                 Restore();
+                // Leave independent recovery alive when release is uncertain.
+                // Parent exit/EOF still triggers its own crash-cleanup path.
+                if(InputLedger.HasHeld())return;
                 try {if(watchdog!=null&&!watchdog.HasExited){watchdog.StandardInput.Close();if(!watchdog.WaitForExit(1500))watchdog.Kill();}}catch {}
                 if(watchdog!=null)watchdog.Dispose();watchdog=null;
             }

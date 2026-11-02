@@ -9,9 +9,21 @@ using System.Threading.Tasks;
 class NativeWatchdogMetadataTests {
     static int Main(string[] args) {
         if(args.Length==1&&args[0]=="--hold") { Console.WriteLine("ready");Console.Out.Flush();Thread.Sleep(30000);return 0; }
+        if(args.Length==1&&args[0]=="--disarm-eof") { if(Console.ReadLine()!="disarm")return 12;Console.WriteLine("disarmed");Console.Out.Flush();return Console.ReadLine()==null?0:13; }
         try {
             var host=Assembly.LoadFrom(args[0]);var type=host.GetType("Axon.CursorSafety",true);
             var write=type.GetMethod("WriteWatchdogRecord",BindingFlags.Static|BindingFlags.NonPublic);
+            var disarm=type.GetMethod("DisarmWatchdog",BindingFlags.Static|BindingFlags.NonPublic);
+            foreach(bool retire in new[]{false,true}) {
+                var retirementInfo=new ProcessStartInfo(Process.GetCurrentProcess().MainModule.FileName,"--disarm-eof");retirementInfo.UseShellExecute=false;retirementInfo.CreateNoWindow=true;retirementInfo.RedirectStandardInput=true;retirementInfo.RedirectStandardOutput=true;
+                using(var retirementChild=Process.Start(retirementInfo))try {
+                    disarm.Invoke(null,new object[]{retirementChild,retire});
+                    var response=Task.Factory.StartNew(delegate{return retirementChild.StandardOutput.ReadLine();});
+                    if(!response.Wait(2000)||response.Result!="disarmed")throw new Exception("ordered watchdog disarm missing");
+                    if(!retire){if(retirementChild.WaitForExit(50))throw new Exception("healthy watchdog was retired");retirementChild.StandardInput.Close();}
+                    if(!retirementChild.WaitForExit(2000)||retirementChild.ExitCode!=0)throw new Exception("failed watchdog did not retire after disarm");
+                }finally{if(!retirementChild.HasExited){retirementChild.Kill();retirementChild.WaitForExit();}}
+            }
             var armReceipt=type.GetMethod("ArmReceiptMatches",BindingFlags.Static|BindingFlags.NonPublic);
             string armNonce=new string('a',32);
             if(!(bool)armReceipt.Invoke(null,new object[]{"armed "+armNonce+" 101",armNonce,101}))throw new Exception("fresh arming receipt refused");

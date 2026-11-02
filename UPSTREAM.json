@@ -240,7 +240,7 @@
     },
     {
       "path": "tests/NativeWatchdogMetadataTests.cs",
-      "sha256": "293fb819105c3291d5ecf89af9240573e28b6f573e0dfe3a54920727fb96bd9c"
+      "sha256": "fc64c7fba4416efc2a96cfc3329071f88e7fd0e9eef4fd9d38cf7243bceac01f"
     },
     {
       "path": "tests/native-watchdog-metadata.test.mjs",
@@ -272,7 +272,7 @@
     },
     {
       "path": "server/native/CursorSafety.cs",
-      "sha256": "70db5d99a80a3614705728d16e3f22d54ac68ed8de30b3e6fce1ab042c164642"
+      "sha256": "04bb4e718ab482c91b2dd8cdff217707f8c701438f2b28bf9007b26e65e9ba2d"
     },
     {
       "path": "server/native/DesktopVisuals.cs",
@@ -636,7 +636,7 @@
     },
     {
       "path": "tests/recovery-update.test.mjs",
-      "sha256": "d59f5dff21f7b8debe52a9835a01094d76db14a4c357272d41e6dac5e666c110"
+      "sha256": "909715b727bbffd8f98c51faf1259408903977173a4672b1d100a33c63935f91"
     },
     {
       "path": "tests/update-transaction.test.mjs",
@@ -712,7 +712,7 @@
     },
     {
       "path": "server/recovery.mjs",
-      "sha256": "fa9a9c9a2e4e1741d8e62e743df7e9bab764de0d449260a61d543363820eea57"
+      "sha256": "af40a4f8989bcbd1db391c670b0637e46eec27f195b4d4a83b8a3ec31b6be532"
     },
     {
       "path": "scripts/qualify-guardian-desktop.mjs",

@@ -115,7 +115,7 @@ export function priorMacCleanupVerified(directory,record,{platform=process.platf
   const guard=path.join(directory,record.guard),parent=Number(/^guard-(\d+)-/.exec(record.guard)[1]);
   const watchdog=/^([1-9][0-9]{0,9})\|([1-9][0-9]{0,19}(?:\.[0-9]{1,9})?)$/.exec(read(guard+'.watchdog',128));if(!watchdog||!record.children.includes(Number(watchdog[1])))return false;
   const pids=[parent,...record.children,Number(watchdog[1])];if(!pids.every(gone))return false;
-  const fields=read(guard,4096).split('|');if(fields.length<4||!['idle','stopped'].includes(fields[0]))return false;
+  const fields=read(guard,4096).split('|');if(fields.length!==6||fields[5]!=='0'||!['idle','stopped'].includes(fields[0]))return false;
   const ledger=JSON.parse(read(guard+'.inputs',65536));
   if(!ledger||typeof ledger!=='object'||Array.isArray(ledger)||Object.keys(ledger).sort().join(',')!=='buttons,keys'||!Array.isArray(ledger.keys)||ledger.keys.length!==0||!Array.isArray(ledger.buttons)||ledger.buttons.length!==0)return false;
   return pids.every(gone);

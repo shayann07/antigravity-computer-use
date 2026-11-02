@@ -37,9 +37,9 @@ test('prior macOS cleanup requires dead recorded processes and an empty JSON led
  const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'prior-mac-ledger-')),guard='guard-101-12345678-1234-1234-1234-123456789abc.state',file=path.join(dir,guard);
  const record={guard,children:[102,103,104],dispatched:true,watchdogs_complete:true},dead=()=>{throw Object.assign(Error('gone'),{code:'ESRCH'});};
  try{
-  fs.writeFileSync(file,'stopped||0|');fs.writeFileSync(file+'.watchdog','104|1793377319.476463');fs.writeFileSync(file+'.inputs','{"buttons":[],"keys":[]}');
+  fs.writeFileSync(file,'stopped||0||0|0');fs.writeFileSync(file+'.watchdog','104|1793377319.476463');fs.writeFileSync(file+'.inputs','{"buttons":[],"keys":[]}');
   const verify=(r=record,probe=dead,platform='darwin')=>priorMacCleanupVerified(dir,r,{platform,probe});
-  assert.equal(verify(),true);assert.equal(verify(record,()=>{},'darwin'),false);assert.equal(verify(record,dead,'win32'),false);
+  assert.equal(verify(),true);for(const incomplete of ['stopped||0||0|1','stopped||0|']){fs.writeFileSync(file,incomplete);assert.equal(verify(),false);}fs.writeFileSync(file,'stopped||0||0|0');assert.equal(verify(record,()=>{},'darwin'),false);assert.equal(verify(record,dead,'win32'),false);
   for(const pid of [101,102,103,104])assert.equal(verify(record,n=>{if(n===pid)return;return dead();}),false);
   fs.writeFileSync(file+'.inputs','{"buttons":[0],"keys":[]}');assert.equal(verify(),false);
   fs.writeFileSync(file+'.inputs','{"buttons":[],"keys":[42]}');assert.equal(verify(),false);
@@ -312,7 +312,7 @@ test('prior cleanup rejects one-bit file identity and nanosecond changes on both
  try{
   fs.writeFileSync(file,'stopped||0|');fs.writeFileSync(file+'.watchdog','104|123456');
   for(const [platform,verify]of [['win32',priorWindowsCleanupVerified],['darwin',priorMacCleanupVerified]]){
-   fs.writeFileSync(file+'.inputs',platform==='win32'?'':JSON.stringify({keys:[],buttons:[]}));
+   fs.writeFileSync(file,platform==='win32'?'stopped||0|':'stopped||0||0|0');fs.writeFileSync(file+'.inputs',platform==='win32'?'':JSON.stringify({keys:[],buttons:[]}));
    assert.equal(verify(dir,record,{platform,probe}),true);
    for(const field of ['ino','mtimeNs','ctimeNs','size']){
     const io=Object.create(fs);let reads=0;
