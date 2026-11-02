@@ -305,3 +305,20 @@ test('streamed release metadata refuses oversized bodies before buffering all ch
  let chunks=0;const reply={ok:true,body:(async function*(){for(let i=0;i<20;i++){chunks++;yield Buffer.alloc(8);}})()};await assert.rejects(readBoundedJSON(reply,12),/update_metadata_size/);assert.equal(chunks,2);
  assert.deepEqual(await readBoundedJSON({ok:true,body:(async function*(){yield Buffer.from('{"ok":');yield Buffer.from('true}');})()},100),{ok:true});
 });
+
+test('prior cleanup rejects one-bit file identity and nanosecond changes on both platforms',()=>{
+ const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'prior-identity-')),guard='guard-101-12345678-1234-1234-1234-123456789abc.state',file=path.join(dir,guard);
+ const record={guard,children:[102,103,104],dispatched:true,watchdogs_complete:true},probe=()=>{throw Object.assign(Error('gone'),{code:'ESRCH'});};
+ try{
+  fs.writeFileSync(file,'stopped||0|');fs.writeFileSync(file+'.watchdog','104|123456');
+  for(const [platform,verify]of [['win32',priorWindowsCleanupVerified],['darwin',priorMacCleanupVerified]]){
+   fs.writeFileSync(file+'.inputs',platform==='win32'?'':JSON.stringify({keys:[],buttons:[]}));
+   assert.equal(verify(dir,record,{platform,probe}),true);
+   for(const field of ['ino','mtimeNs','ctimeNs','size']){
+    const io=Object.create(fs);let reads=0;
+    io.lstatSync=(name,options)=>{assert.equal(options.bigint,true);const stat=fs.lstatSync(name,options);if(name===file+'.inputs'&&++reads===2)stat[field]+=1n;return stat;};
+    assert.equal(verify(dir,record,{platform,probe,io}),false,platform+': changed '+field+' must refuse');
+   }
+  }
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});

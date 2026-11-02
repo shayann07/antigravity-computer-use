@@ -83,18 +83,19 @@ export function safeWaitMetrics(value){
 }
 // Inspect only a recorded prior Windows guard. Never inject input, kill a PID,
 // clear Stop, or trust a PID that is still alive (including possible reuse).
-export function priorWindowsCleanupVerified(directory,record,{platform=process.platform,probe=process.kill}={}){
- if(platform!=='win32'||record?.dispatched!==true||record.watchdogs_complete!==true||!Array.isArray(record.children)||record.children.length<3||typeof record.guard!=='string'||!/^guard-[1-9][0-9]{0,9}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.state$/.test(record.guard))return false;
- const read=(file,limit)=>{
-  const info=fs.lstatSync(file);if(!info.isFile()||info.isSymbolicLink()||info.nlink!==1||info.size>limit)throw Error('untrusted recovery record');
-  const fd=fs.openSync(file,fs.constants.O_RDONLY|(fs.constants.O_NOFOLLOW||0));try{
-   const opened=fs.fstatSync(fd);if(!opened.isFile()||opened.nlink!==1||opened.size>limit||opened.dev!==info.dev||opened.ino!==info.ino)throw Error('recovery record replaced');
-   const bytes=Buffer.alloc(limit+1);let used=0;while(used<bytes.length){const n=fs.readSync(fd,bytes,used,bytes.length-used,null);if(!n)break;used+=n;}
-   const after=fs.fstatSync(fd),current=fs.lstatSync(file);
-   if(used>limit||used!==opened.size||after.size!==opened.size||after.mtimeMs!==opened.mtimeMs||after.ctimeMs!==opened.ctimeMs||!current.isFile()||current.isSymbolicLink()||current.nlink!==1||current.dev!==opened.dev||current.ino!==opened.ino)throw Error('recovery record changed');
+function readRecoveryFile(file,limit,io){
+  const info=io.lstatSync(file,{bigint:true});if(!info.isFile()||info.isSymbolicLink()||info.nlink!==1n||info.size>BigInt(limit))throw Error('untrusted recovery record');
+  const fd=io.openSync(file,io.constants.O_RDONLY|(io.constants.O_NOFOLLOW||0));try{
+   const opened=io.fstatSync(fd,{bigint:true});if(!opened.isFile()||opened.nlink!==1n||opened.size>BigInt(limit)||opened.dev!==info.dev||opened.ino!==info.ino)throw Error('recovery record replaced');
+   const bytes=Buffer.alloc(limit+1);let used=0;while(used<bytes.length){const n=io.readSync(fd,bytes,used,bytes.length-used,null);if(!n)break;used+=n;}
+   const after=io.fstatSync(fd,{bigint:true}),current=io.lstatSync(file,{bigint:true});
+   if(used>limit||BigInt(used)!==opened.size||after.size!==opened.size||after.mtimeNs!==opened.mtimeNs||after.ctimeNs!==opened.ctimeNs||!current.isFile()||current.isSymbolicLink()||current.nlink!==1n||current.dev!==opened.dev||current.ino!==opened.ino||current.size!==opened.size||current.mtimeNs!==opened.mtimeNs||current.ctimeNs!==opened.ctimeNs)throw Error('recovery record changed');
    return bytes.subarray(0,used).toString('utf8');
-  }finally{fs.closeSync(fd);}
- };
+  }finally{io.closeSync(fd);}
+}
+export function priorWindowsCleanupVerified(directory,record,{platform=process.platform,probe=process.kill,io=fs}={}){
+ if(platform!=='win32'||record?.dispatched!==true||record.watchdogs_complete!==true||!Array.isArray(record.children)||record.children.length<3||typeof record.guard!=='string'||!/^guard-[1-9][0-9]{0,9}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.state$/.test(record.guard))return false;
+ const read=(file,limit)=>readRecoveryFile(file,limit,io);
  const gone=pid=>{if(!Number.isSafeInteger(pid)||pid<=0||pid>4294967295)return false;try{probe(pid,0);return false;}catch(error){return error.code==='ESRCH';}};
  try{
   const guard=path.join(directory,record.guard),parent=Number(/^guard-(\d+)-/.exec(record.guard)[1]);
@@ -106,18 +107,9 @@ export function priorWindowsCleanupVerified(directory,record,{platform=process.p
   return pids.every(gone);
  }catch{return false;}
 }
-export function priorMacCleanupVerified(directory,record,{platform=process.platform,probe=process.kill}={}){
+export function priorMacCleanupVerified(directory,record,{platform=process.platform,probe=process.kill,io=fs}={}){
  if(platform!=='darwin'||record?.dispatched!==true||record.watchdogs_complete!==true||!Array.isArray(record.children)||record.children.length<3||typeof record.guard!=='string'||!/^guard-[1-9][0-9]{0,9}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.state$/.test(record.guard))return false;
- const read=(file,limit)=>{
-  const info=fs.lstatSync(file);if(!info.isFile()||info.isSymbolicLink()||info.nlink!==1||info.size>limit)throw Error('untrusted recovery record');
-  const fd=fs.openSync(file,fs.constants.O_RDONLY|(fs.constants.O_NOFOLLOW||0));try{
-   const opened=fs.fstatSync(fd);if(!opened.isFile()||opened.nlink!==1||opened.size>limit||opened.dev!==info.dev||opened.ino!==info.ino)throw Error('recovery record replaced');
-   const bytes=Buffer.alloc(limit+1);let used=0;while(used<bytes.length){const n=fs.readSync(fd,bytes,used,bytes.length-used,null);if(!n)break;used+=n;}
-   const after=fs.fstatSync(fd),current=fs.lstatSync(file);
-   if(used>limit||used!==opened.size||after.size!==opened.size||after.mtimeMs!==opened.mtimeMs||after.ctimeMs!==opened.ctimeMs||!current.isFile()||current.isSymbolicLink()||current.nlink!==1||current.dev!==opened.dev||current.ino!==opened.ino)throw Error('recovery record changed');
-   return bytes.subarray(0,used).toString('utf8');
-  }finally{fs.closeSync(fd);}
- };
+ const read=(file,limit)=>readRecoveryFile(file,limit,io);
  const gone=pid=>{if(!Number.isSafeInteger(pid)||pid<=0||pid>4294967295)return false;try{probe(pid,0);return false;}catch(error){return error.code==='ESRCH';}};
  try{
   const guard=path.join(directory,record.guard),parent=Number(/^guard-(\d+)-/.exec(record.guard)[1]);

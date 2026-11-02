@@ -636,7 +636,7 @@
     },
     {
       "path": "tests/recovery-update.test.mjs",
-      "sha256": "5246c9e593abad18de446577cf28b38cf200a4dec2e845b5ae4a76b6e287dafc"
+      "sha256": "d59f5dff21f7b8debe52a9835a01094d76db14a4c357272d41e6dac5e666c110"
     },
     {
       "path": "tests/update-transaction.test.mjs",
@@ -712,7 +712,7 @@
     },
     {
       "path": "server/recovery.mjs",
-      "sha256": "f5d2b5f9437cd44ab40b0f5c22a08e1e0b2c089a20e477b0335054d517096470"
+      "sha256": "fa9a9c9a2e4e1741d8e62e743df7e9bab764de0d449260a61d543363820eea57"
     },
     {
       "path": "scripts/qualify-guardian-desktop.mjs",
