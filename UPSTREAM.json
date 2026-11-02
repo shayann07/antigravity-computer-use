@@ -5,7 +5,7 @@
     {
       "path": "server/build.mjs",
       "upstream_sha256": "81260b378fffb46573cfe475a3a336930113c8abc465d3d278bbb0851d8a4377",
-      "local_sha256": "10705d002dd842f47aa74e054ae1420e1a037692b260f417bbef3e52f2d5dbae",
+      "local_sha256": "b648eac68a1f09aa3f65fee4bcadb48e8bfddc77a38b4963d0ab3d1b29ceb5c5",
       "modified": true
     },
     {
@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "7d6f97dc3a07106657b14d988e4b05be346a032052dd5b3e80a124230c161cfa"
+      "sha256": "7372eadfea558469f35a8c34ea87147520118df1a898be100a419106132be06e"
     },
     {
       "path": "server/mcp.mjs",
@@ -264,11 +264,11 @@
     },
     {
       "path": "server/guardian.mjs",
-      "sha256": "8201513441544c61b6b7e691e69df1a8ca427551a9d0de740701cdcb70cba8e9"
+      "sha256": "f9c5262525aa3182b6a9523d406d12c15b874c892a4d9db182f773d528ab157d"
     },
     {
       "path": "server/native/Guardian.cs",
-      "sha256": "bf0fcfc77ab6765f9e5be9ebd7ce49516a314235e07da29a3a6accba35ceeb88"
+      "sha256": "5e98a84bb92faf224916ee34b111084d9f359d5cef81d0858948a0a290d3b2d4"
     },
     {
       "path": "server/native/CursorSafety.cs",
@@ -292,7 +292,7 @@
     },
     {
       "path": "server/desktop-service.mjs",
-      "sha256": "561c4d3b1d2c7f3115ec2b54b62813f6b36dc01469b4adf6d8348968ab349a5f"
+      "sha256": "8eb2beaba3d9dd44b27377bb5ec663c42c3764d9ca71e7af1ff92445edaa91de"
     },
     {
       "path": "server/desktop-tools.mjs",
@@ -300,7 +300,7 @@
     },
     {
       "path": "scripts/desktop.mjs",
-      "sha256": "7e7191aed02f4ff1e7feb94728307d7b44152b806097c90bacb17123ecd43b5e"
+      "sha256": "2ce4d88f697771577e45747c07c2eb3b62f9bf0200185f418d5c91cb5b7f9585"
     },
     {
       "path": "server/version.mjs",
@@ -572,7 +572,7 @@
     },
     {
       "path": "server/native/macos/MacGuardian.swift",
-      "sha256": "2c63a1fb73e2c9ed74f950983b17e21cf7b0a06c14df169c8c69a5c52dfef8c2"
+      "sha256": "3097c9e65e656824aba81ff21b51e3a78c21b12e7b7d84e454c56b2e31d8e806"
     },
     {
       "path": "server/native/macos/MacOperations.swift",
@@ -580,7 +580,7 @@
     },
     {
       "path": "server/native/macos/MacVisuals.swift",
-      "sha256": "4e0f892d365ff37ed54b788879661bf4b1236efd206de603d1111a0e7d8c5d51"
+      "sha256": "dccfb92814670061f998465e7615d6a4556dddfc38a27c1ccdcc2b58f1754e3a"
     },
     {
       "path": "server/native/macos/PrivateStorage.swift",
@@ -712,7 +712,7 @@
     },
     {
       "path": "server/recovery.mjs",
-      "sha256": "8b8a20315663a065116dae8af4261b249ffe22bb473d26bd0387e4e0dfb163a5"
+      "sha256": "3774c161ca6f72d9a6a27214aedf1f43c62fe951483fc5033b2ef3dd146ef1db"
     },
     {
       "path": "scripts/qualify-guardian-desktop.mjs",
@@ -880,11 +880,11 @@
     },
     {
       "path": "docs/STOP-UNCERTAINTY.md",
-      "sha256": "0c3f25b56c0333e180f098d98d5884275037fdf2fac85b6e3e4b15afea916579"
+      "sha256": "b8ee851b9bc50f20296d4d7b7b161b2cbaa29751afcb0db13cad39e16a36a737"
     },
     {
       "path": "tests/stop-acknowledgement.test.mjs",
-      "sha256": "3a97d308078a768255d2578b8ae62a45f67e86d7ff5fbcdf39b281124a56370a"
+      "sha256": "4cb469b5f0a9f79d79111b90dc34a11381a8c60e0eca96c7ca0feb1c00d489fb"
     },
     {
       "path": "server/task-ownership.mjs",
@@ -892,7 +892,7 @@
     },
     {
       "path": "tests/task-ownership.test.mjs",
-      "sha256": "967a0d3644fbd37835e5aa7d5cb9cee9ca31b89dc29c3658132eb6418bd4af86"
+      "sha256": "3888eb384685f54c9cfa16856f780c9b6797905e28dbec616fc7aeaffac37d26"
     },
     {
       "path": "tests/installation-location.test.mjs",
@@ -904,7 +904,7 @@
     },
     {
       "path": "server/task-coordinator.mjs",
-      "sha256": "76c50c3bc7c323adda2ca84f7d31fb9915bd7612d9064f43c032ca3588012295"
+      "sha256": "0f6a1e8cd44dcda96558d4f0b32d4b469ea1946506439c2dae0355d5aa6ed242"
     },
     {
       "path": "tests/task-coordinator.test.mjs",
@@ -912,7 +912,7 @@
     },
     {
       "path": "docs/TASK-OWNERSHIP.md",
-      "sha256": "67d1eed20bf34b268a5e4525fcb5e89685d54c5c0a1071c13fecff092b3e15b8"
+      "sha256": "252cbd2dac3deba33721d173f5aec3515fd9d1a151c0329c230820e049fcc341"
     },
     {
       "path": "tests/hud-avoidance.test.mjs",

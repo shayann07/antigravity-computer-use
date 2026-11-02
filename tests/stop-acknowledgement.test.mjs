@@ -138,3 +138,18 @@ test('settlement never removes a replacement episode and unlink failure retains 
  fs.writeFileSync(f.file+'.unconfirmed','unconfirmed:another-episode');
  assert.throws(()=>settleFreshStopLatch(f.file,nonce,root),/episode/);assert.equal(fs.readFileSync(f.file+'.unconfirmed','utf8'),'unconfirmed:another-episode');
 });
+
+test('a fresh Stop receipt from the same original guard can settle its earlier uncertain nonce',async t=>{
+ const f=fixture(t);let original;f.guardian.stopAcknowledged=async n=>{original=n;throw Error('lost first receipt');};
+ await assert.rejects(f.r.stop(),{code:'guardian_stop_unconfirmed'});assert(readStopLatch(f.file).unconfirmed);
+ f.guardian.stopAcknowledged=async n=>{assert.equal(n,original);return {stop_nonce:n,workers_stopped:true,input_cleanup_confirmed:true};};
+ const result=await f.r.stop();assert(result.native_stop_confirmed);assert.equal(readStopLatch(f.file).value,'stopped');assert.equal(f.r.state,'stopped');
+});
+test('End can verify exited native actors of this bound current task without a replacement guardian',{skip:process.platform!=='win32'},async t=>{
+ const {storageOperation}=await import('../server/storage.mjs');const f=fixture(t);storageOperation('data',f.dir);
+ f.r.guardFile=path.join(f.dir,path.basename(f.r.guardFile));f.r.taskFile=path.join(f.dir,'task-state.json');f.r.beginTask();
+ fs.writeFileSync(f.r.guardFile,'stopped||0|');fs.writeFileSync(f.r.guardFile+'.inputs','');fs.writeFileSync(f.r.guardFile+'.watchdog','2147483644|12345');
+ f.guardian.pid=2147483647;f.driver.info={pid:2147483646};f.r.recordDispatch();
+ f.guardian.endAcknowledged=async()=>{throw Error('original guardian exited');};f.guardian.stopAcknowledged=async()=>{throw Error('original guardian exited');};
+ assert.equal((await f.r.finish()).ended,true);assert.equal(f.r.taskOpen,false);assert.equal(f.r.state,'stopped');assert.equal(readStopLatch(f.file).value,'stopped');
+});

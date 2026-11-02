@@ -274,7 +274,7 @@ function ensureMacHost({ force = false, log = () => {} } = {}) {
   const h = createHash('sha256');
   for (const f of SOURCES) h.update(fs.readFileSync(f));
   for (const f of macHudIconFiles)h.update(path.basename(f)+'\0').update(fs.readFileSync(f));
-  h.update('\0' + swiftc + '\0mac-guard-v1\0'+process.arch+'\0'+sdk+'\0'+sdkVersion);
+  h.update('\0' + swiftc + '\0mac-guard-v2-wmo\0'+process.arch+'\0'+sdk+'\0'+sdkVersion);
   const stamp = h.digest('hex');
   const app=path.join(binDir(),'AxonHost-'+stamp.slice(0,16)+'.app');
   const exe=path.join(app,'Contents','MacOS','AxonHost');
@@ -313,8 +313,9 @@ function ensureMacHost({ force = false, log = () => {} } = {}) {
 
   try {
 
+  const compilationStarted=performance.now();
   const res = spawnSync(swiftc, [
-    '-O', '-parse-as-library','-sdk',sdk,'-target',process.arch==='arm64'?'arm64-apple-macos14.0':'x86_64-apple-macos14.0', '-o', temp,
+    '-O', '-whole-module-optimization', '-parse-as-library','-sdk',sdk,'-target',process.arch==='arm64'?'arm64-apple-macos14.0':'x86_64-apple-macos14.0', '-o', temp,
     ...sdkFlags,
     '-framework', 'AppKit',
     '-framework', 'ApplicationServices',
@@ -324,6 +325,7 @@ function ensureMacHost({ force = false, log = () => {} } = {}) {
     ...SOURCES,
   ], { encoding: 'utf8', timeout: 120000 });
 
+  log('macOS host compiler elapsed_ms=' + Math.round(performance.now()-compilationStarted));
   if (res.error) throw new BuildError('Could not run swiftc: ' + res.error.message, null);
   if (res.status !== 0 || !fs.existsSync(temp)) {
     const out = ((res.stdout || '') + (res.stderr || '')).trim();

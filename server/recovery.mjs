@@ -90,6 +90,12 @@ export function persistRecoveryStop(file,guard,{unconfirmed=false,nonce=randomUU
  if(contextError)throw contextError;
  return result;
 }
+export function currentStopNonce(file,guard){
+ try{const context=JSON.parse(readRecoveryFile(file+'.context.json',1024));const stop=readStopLatch(file);
+  if(context?.schema===1&&context.guard===guard&&guardName.test(guard)&&typeof context.nonce==='string'&&context.nonce.length===32&&/^[a-f0-9]{32}$/.test(context.nonce)&&stop?.unconfirmed&&stop.value==='unconfirmed:'+context.nonce)return context.nonce;
+ }catch{}
+ return null;
+}
 // Requires native old-actor/ledger verification again at this boundary. It
 // settles only uncertainty, retaining ordinary Stop for local human re-arm.
 export function settlePriorStop(file,record,{platform=process.platform,probe=process.kill}={}){

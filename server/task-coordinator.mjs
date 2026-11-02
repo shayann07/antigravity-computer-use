@@ -14,6 +14,7 @@ export class TaskCoordinator {
   for(const root of new Set(roots)){const directory=path.join(root,'data');if(path.resolve(directory)===this.directory)continue;const file=path.join(directory,'desktop-session.json');if(!fs.existsSync(file))continue;await this.verify('verify-tree',directory);const session=JSON.parse(readRecoveryFile(file,4096));if(!Number.isSafeInteger(session.pid)||session.pid<=0)refuse('global_owner_unverified','Registered legacy controller identity is invalid.');if(this.isAlive(session.pid)&&session.global_task_protocol!==1)refuse('legacy_controller_running','A registered older controller at '+root+' is running. Its owner must end and shut it down before this installation can take control.');}
  }
  async ensure(){
+  if(this.releasing)refuse('cleanup_in_progress','Shared task cleanup is still pending.');
   if(this.held){this.held.assertHeld();return;}
   await this.checkLegacy();fs.mkdirSync(this.root,{recursive:true,mode:0o700});
   let lease;try{lease=await this.acquire(this.root);}catch(e){if(e.code==='service_already_running')refuse('another_session_busy','Another installation owns desktop control. Wait for its task to end.');throw e;}
@@ -29,6 +30,11 @@ export class TaskCoordinator {
   }catch(e){await lease.release();throw e;}
  }
  async release(){
+  if(this.releasing)return this.releasing;
+  this.releasing=Promise.resolve().then(()=>this.releaseTransaction());
+  try{return await this.releasing;}finally{this.releasing=null;}
+ }
+ async releaseTransaction(){
   if(!this.held&&!this.record)return;
   let lease=this.held;
   let valid=false;try{lease?.assertHeld();valid=!!lease;}catch{}

@@ -255,6 +255,7 @@ final class MacGuardian: NSObject {
         chmod(MacFence.file + ".guardian", 0o600)
         visuals.onToggle = { [weak self] in self?.humanToggle() }
         visuals.onStop = { [weak self] in self?.stop("button") }
+        visuals.onEnd = { [weak self] in guard let self = self else { return }; self.stop("human_end"); self.visuals.hide(); emit(["ev":"human_end","state":self.state]) }
         visuals.onMode = { [weak self] mode in self?.saveMode(mode) }
         state = MacFence.latchBlocks(MacFence.latch) ? "stopped" : "idle"
         try writeState(); visuals.hide()
@@ -375,7 +376,7 @@ final class MacGuardian: NSObject {
         do {
             switch op {
             case "visual_status": reply(["controls_visible": visuals.visible, "cursor": state == "active", "takeover_mode": takeoverMode(), "material_backend": MacVisuals.materialBackend(for: visuals.rootView)])
-            case "show_controls": visuals.show(state); controlsUntil = Date().addingTimeInterval(state == "idle" || state == "stopped" ? 30 : 600); reply(["controls_visible": visuals.visible, "human_rearm_required": state == "stopped", "material_backend": MacVisuals.materialBackend(for: visuals.rootView)])
+            case "show_controls": visuals.show(state); controlsUntil = .distantFuture; reply(["controls_visible": visuals.visible, "human_rearm_required": state == "stopped", "material_backend": MacVisuals.materialBackend(for: visuals.rootView)])
             case "dismiss_controls": if ["active", "paused"].contains(state) { stop("dismiss") }; visuals.hide(); reply(["controls_visible": false])
             case "attach": reply(["registered": true]) // worker self-registers before reporting ready
             case "activate":

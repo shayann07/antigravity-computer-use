@@ -139,7 +139,10 @@ export async function main(){
   const policy=applyDeployment(loadDeployment());
   const file=path.join(dataDir(),'desktop-session.json');
   if(command==='start'||command==='serve'||command==='ready'){
-    storageOperation('data',dataDir());
+    // A live service already owns/prepared its private directory. Reapplying
+    // ACLs across that tree races its atomic diagnostic journal publication.
+    // Verify the private root when reconnecting; the service owns initialization.
+    storageOperation(fs.existsSync(file)?'verify':'data',dataDir());
     let existing,saved;
     try{saved=JSON.parse(fs.readFileSync(file));saved.task_token=taskToken;existing=await request(saved,'status',{},1500,policy.permission_mode);}catch{}
     if(existing?.ok){

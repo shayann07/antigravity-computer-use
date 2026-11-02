@@ -463,7 +463,7 @@ namespace Axon {
             modeMenu.Items.Add(manual);modeMenu.Items.Add(smart);modeMenu.Items.Add(new ToolStripSeparator());
             ToolStripMenuItem recording=new ToolStripMenuItem("Show glow and controls in screen recordings");recording.Checked=recordVisuals;recording.Click+=delegate {ChangeRecordingPreference();};modeMenu.Items.Add(recording);
             ToolStripMenuItem hint=new ToolStripMenuItem("Esc always stops immediately");hint.Enabled=false;modeMenu.Items.Add(hint);
-            ToolStripMenuItem dismiss=new ToolStripMenuItem("Dismiss controls and keep stopped");dismiss.Click+=delegate {if(state!="stopped")Emergency("dismiss");DismissControls();};modeMenu.Items.Add(dismiss);
+            ToolStripMenuItem dismiss=new ToolStripMenuItem("End session and hide");dismiss.Click+=delegate {if(state!="stopped")Emergency("human_end");DismissControls();Emit(new {ev="human_end",state=state});};modeMenu.Items.Add(dismiss);
             modeMenu.Show(modeButton,new Point(0,modeButton.Height));
             SetPropW(modeMenu.Handle,"ComputerUseOverlayWindow",new IntPtr(1));SetWindowDisplayAffinity(modeMenu.Handle,0x11);
         }
@@ -608,7 +608,7 @@ namespace Axon {
             if(op=="show_controls") {
                 var context=DesktopContext.Inspect();
                 if(!(bool)context["interactive"]) {DismissControls();Emit(new {id=id,state=state,controls_visible=false,desktop_context=context,error=new {code="desktop_context_unavailable",message="Controls cannot be shown on the visible input desktop. Use the installed local launcher; no desktop was switched."}});return;}
-                ShowControls(state=="stopped"||state=="idle"?30000:0);Emit(new {id=id,state=state,controls_visible=Visible,desktop_context=context,human_rearm_required=state=="stopped"});return;
+                ShowControls(0);Emit(new {id=id,state=state,controls_visible=Visible,desktop_context=context,human_rearm_required=state=="stopped"});return;
             }
             if(op=="dismiss_controls") {if(state=="active"||state=="paused")Emergency("dismiss");DismissControls();Emit(new {id=id,state=state,controls_visible=Visible});return;}
             if(op=="activity" && state=="active") {

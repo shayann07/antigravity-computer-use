@@ -31,3 +31,14 @@ test('two authenticated IPC clients cannot share grants or end another task',asy
   assert(!fs.readFileSync(path.join(dir,'desktop-receipts.jsonl'),'utf8').includes(ready.task_token),'task capability must not be logged');
  }finally{await service.shutdown();fs.rmSync(dir,{recursive:true,force:true});}
 });
+import {EventEmitter} from 'node:events';
+test('trusted local End releases an abandoned capability only after cleanup, keeping Stop',async()=>{
+ const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'local-end-owner-'));let open=false,state='idle';const guardian=new EventEmitter();
+ const runtime={guardian,status:()=>({state,task_open:open}),async ready(){open=true;return {ready:state!=='stopped',state};},async stop(){state='stopped';return {stopped:true};},async finish(){open=false;return {ended:true,state};},async close(){}};
+ const service=await serveDesktop({directory:dir,runtime,requireTaskOwnership:true});
+ try{const session=JSON.parse(fs.readFileSync(service.file)),a={...session},b={...session};const first=await request(a,'ready');
+  // Inert protocol event only: no native UI click or physical re-arm is simulated.
+  guardian.emit('human_end');for(let i=0;i<40&&open;i++)await new Promise(r=>setTimeout(r,5));assert.equal(open,false);assert.equal(state,'stopped');
+  const next=await request(b,'ready');assert.equal(next.ready,false);assert.equal(next.state,'stopped');assert.notEqual(next.task_token,first.task_token);assert.equal((await request(a,'end')).error.code,'task_owned');await request(b,'end');
+ }finally{await service.shutdown();fs.rmSync(dir,{recursive:true,force:true});}
+});

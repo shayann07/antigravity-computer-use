@@ -41,6 +41,7 @@ export class Guardian extends EventEmitter {
       if(m.ev==='error'){clearTimeout(this.bootTimer);this.bootReject(failure(m.code==='desktop_context_unavailable'?m.code:'guardian_start_failed',m.message));proc.kill();}
       if(m.ev==='state'){this.state=m.state;this.customCursor=m.custom_cursor;this.emit('state',m.state,m.reason);}
       if(m.ev==='human_resume'||m.ev==='host_resume')this.emit('resume',m.state,m.ev);
+      if(m.ev==='human_end'&&m.state==='stopped')this.emit('human_end');
       if(m.ev==='settings'){this.takeoverMode=m.takeover_mode;this.emit('settings',m);}
       const p=this.pending.get(m.id);if(p){this.pending.delete(m.id);clearTimeout(p.timer);p.resolve(m);}
     });

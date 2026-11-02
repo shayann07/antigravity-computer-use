@@ -114,7 +114,7 @@ final class MacHudButton: NSButton {
 }
 
 final class MacVisuals: NSObject {
-    var onToggle: (() -> Void)?, onStop: (() -> Void)?, onMode: ((String) -> Void)?
+    var onToggle: (() -> Void)?, onStop: (() -> Void)?, onEnd: (() -> Void)?, onMode: ((String) -> Void)?
     var panel: MacControlPanel?
     var rootView: NSView?
     var contentContainer: NSView?
@@ -431,6 +431,7 @@ final class MacVisuals: NSObject {
     }
     @objc func toggleControl() { onToggle?() }
     @objc func stopControl() { if state == "stopped" { hide() } else { onStop?() } }
+    @objc func endControl() { onEnd?() }
     @objc func menu() {
         let menu = NSMenu()
         for (title, value) in [("Keep working — Pause or Esc to interrupt", "manual"), ("Yield on deliberate input", "smart")] {
@@ -439,6 +440,8 @@ final class MacVisuals: NSObject {
         }
         menu.addItem(.separator()); let hint = NSMenuItem(title: "Esc always stops immediately", action: nil, keyEquivalent: "")
         hint.isEnabled = false; menu.addItem(hint)
+        let end = NSMenuItem(title: "End session and hide", action: #selector(endControl), keyEquivalent: "")
+        end.target = self; menu.addItem(end)
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: 0), in: more)
     }
     @objc func changeMode(_ item: NSMenuItem) { if let mode = item.representedObject as? String { onMode?(mode) } }

@@ -78,3 +78,7 @@ termination and held-input cleanup after restart remains part of #26.
 Do not delete a marker or manufacture a human click to force qualification.
 Real broken-pipe, hung-guardian, crash, restart and physical recovery checks on
 Windows and Mac remain release gates. Source/fixture passes cannot close them.
+
+## Bound recovery and local task closure
+
+New uncertain Stops persist a nonce and original guard binding. A fresh correlated receipt from that same original guardian can settle its prior uncertain nonce. A current controller whose native actors have exited can instead verify its exact recorded actor set and empty native ledger; it cannot use this path while a replacement process is starting or alive. After controller restart, settlement requires the recorded original parent and native actors to be gone, matching guard context, and verified old cleanup records. All settlement leaves ordinary Stop latched for human re-arm. Missing legacy context or incomplete actor coverage remains blocked for inspection. The local End-session menu uses these same proofs; it does not bypass them.
