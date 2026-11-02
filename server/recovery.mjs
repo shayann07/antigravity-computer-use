@@ -139,7 +139,9 @@ export function recoveryAdvice(result){
  if(code==='desktop_context_unavailable')return {...extra,next_action:'human_start_on_visible_desktop',replay_allowed:false};
  if(code==='version_mismatch')return {...extra,next_action:'resolve_version_mismatch',replay_allowed:false};
  if(code==='recovered_task_requires_end')return {...extra,next_action:'inspect_recovered_task',replay_allowed:false};
- if(['another_session_busy','cleanup_in_progress'].includes(code))return {...extra,next_action:'wait_for_controller_then_observe',replay_allowed:false};
+ if(code==='task_required')return {...extra,next_action:'ready_then_use_task_token',replay_allowed:false};
+ if(code==='task_requires_end')return {...extra,next_action:'end_owned_task_then_shutdown',replay_allowed:false};
+ if(['another_session_busy','cleanup_in_progress','task_owned'].includes(code))return {...extra,next_action:'wait_for_controller_then_observe',replay_allowed:false};
  if(code==='session_limit')return {...extra,next_action:'end_owned_task_then_reauthorize',replay_allowed:false};
  if(['recovered_cleanup_unverified','input_lease_stale'].includes(code))return {...extra,next_action:'inspect_prior_input_cleanup',replay_allowed:false};
  if(['stop_persistence_failed','guard_persistence_failed'].includes(code))return {...extra,next_action:'inspect_stop_persistence_without_restart',replay_allowed:false};

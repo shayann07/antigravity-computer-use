@@ -51,6 +51,7 @@ let replyMode='json';
 const printReply=value=>console.log(encodeReply(replyMode==='brief'?briefReply(value):value));
 export function failureReply(error){
  const result={ok:false,error:{code:error.code||'refused',message:error.message},next_action:'inspect_diagnostics'};
+  if(typeof error.task_token==='string'&&error.task_token.length===64&&/^[a-f0-9]{64}$/.test(error.task_token))result.task_token=error.task_token;
  for(const field of ['delivery_unknown','observe_before_continuing','cancellation_requested','repeated_failure'])if(error[field]===true)result[field]=true;
  if(Number.isSafeInteger(error.recovery_attempts_remaining))result.recovery_attempts_remaining=error.recovery_attempts_remaining;
  Object.assign(result,recoveryAdvice(result));
@@ -63,17 +64,22 @@ export async function recordedFailureReply(error){
  return result;
 }
 
-export function request(session,command,args={},timeout=100000,expectedPermissionMode){
+export async function request(session,command,args={},timeout=100000,expectedPermissionMode){
+  if(session.task_protocol===1&&command==='ready'&&!session.task_token){
+    const claim=await request(session,'claim',{},timeout,expectedPermissionMode);
+    if(!claim.ok)return claim;
+    session.task_token=claim.task_token;
+  }
   return new Promise((resolve,reject)=>{
     let buffer='',settled=false,connected=false;
     const socket=net.createConnection(session.pipe);
     socket.setEncoding('utf8');
     const transportFailure=(code,message)=>Object.assign(Error(message),{code,...(connected?{delivery_unknown:true,observe_before_continuing:true,cancellation_requested:true}:{})});
-    const done=(error,result)=>{if(settled)return;settled=true;clearTimeout(deadline);socket.destroy();error?reject(error):resolve(result);};
+    const done=(error,result)=>{if(settled)return;settled=true;clearTimeout(deadline);socket.destroy();if(error&&session.task_token)error.task_token=session.task_token;error?reject(error):resolve(command==='ready'&&session.task_token?{...result,task_token:session.task_token}:result);};
     // Absolute deadline: partial bytes cannot keep a hung action alive forever.
     // Closing the connection requests server cancellation, not proof of cleanup.
     const deadline=setTimeout(()=>done(transportFailure('request_timeout','Desktop request timed out. Cancellation was requested; completion is unconfirmed. Inspect status and the actual app before continuing; do not replay the action.')),timeout);
-    socket.on('connect',()=>{connected=true;socket.write(JSON.stringify({secret:session.secret,command,args,expected_build_id:BUILD_ID,expected_permission_mode:expectedPermissionMode})+'\n');});
+    socket.on('connect',()=>{connected=true;socket.write(JSON.stringify({secret:session.secret,task_token:session.task_token,command,args,expected_build_id:BUILD_ID,expected_permission_mode:expectedPermissionMode})+'\n');});
     socket.on('data',chunk=>{
       buffer+=chunk;
       if(Buffer.byteLength(buffer)>4*1024*1024)return done(transportFailure('service_response_too_large','Desktop response exceeded its limit. Completion is unconfirmed; inspect the app without replaying the action.'));
@@ -95,6 +101,8 @@ export function request(session,command,args={},timeout=100000,expectedPermissio
 
 export async function main(){
   const [rawCommand,...rest]=process.argv.slice(2);const command=rawCommand?.replace(/^computer_/,'');
+  let taskToken;const taskIndex=rest.indexOf('--task');
+  if(taskIndex>=0){taskToken=rest[taskIndex+1];if(typeof taskToken!=='string'||taskToken.length!==64||!/^[a-f0-9]{64}$/.test(taskToken)||rest.lastIndexOf('--task')!==taskIndex)throw Error('Invalid --task capability');rest.splice(taskIndex,2);}
   if(command==='diagnostics'){applyDeployment(loadDeployment());if(rest.some(a=>a!=='--submit'))throw Error('Use diagnostics [--submit]');printReply(await diagnostics(dataDir(),{submit:rest.includes('--submit')}));return;}
   if(command==='update'){
     const deployment=applyDeployment(loadDeployment());if(!deployment.installed)throw Error('Updates require a supported installation.');
@@ -126,7 +134,7 @@ export async function main(){
   if(command==='start'||command==='serve'||command==='ready'){
     storageOperation('data',dataDir());
     let existing,saved;
-    try{saved=JSON.parse(fs.readFileSync(file));existing=await request(saved,'status',{},1500,policy.permission_mode);}catch{}
+    try{saved=JSON.parse(fs.readFileSync(file));saved.task_token=taskToken;existing=await request(saved,'status',{},1500,policy.permission_mode);}catch{}
     if(existing?.ok){
       if(existing.build_id!==BUILD_ID||existing.build_version!==VERSION)throw Object.assign(Error('This skill and the running service use different builds. Do not interrupt an active task or change a pinned deployment. Inspect the intended scope and use a matching installed version.'),{code:'version_mismatch'});
       if(existing.permission_mode!==policy.permission_mode)throw Object.assign(Error('A different permission policy owns the live session. Finish and shutdown its task before using this installed policy; no override was applied.'),{code:'deployment_policy_mismatch'});
@@ -150,7 +158,7 @@ export async function main(){
     const child=spawn(process.execPath,[fileURLToPath(new URL('../server/desktop-service.mjs',import.meta.url)),'--serve'],{detached:true,windowsHide:true,stdio:'ignore',env:{...process.env,AGCU_PERMISSION_MODE:policy.permission_mode}});child.unref();
     for(let i=0;i<100;i++){
       await new Promise(resolve=>setTimeout(resolve,100));
-      try{const session=JSON.parse(fs.readFileSync(file));const found=await request(session,'status',{},1500,policy.permission_mode);if(found.ok&&found.build_id===BUILD_ID&&found.permission_mode===policy.permission_mode){printReply(command==='ready'?await request(session,'ready',{},15000,policy.permission_mode):found);return;}}catch(error){if(command==='ready'&&error.code!=='session_unavailable')throw error;}
+      try{const session=JSON.parse(fs.readFileSync(file));session.task_token=taskToken;const found=await request(session,'status',{},1500,policy.permission_mode);if(found.ok&&found.build_id===BUILD_ID&&found.permission_mode===policy.permission_mode){printReply(command==='ready'?await request(session,'ready',{},15000,policy.permission_mode):found);return;}}catch(error){if(command==='ready'&&error.code!=='session_unavailable')throw error;}
     }
     throw Error('Native session did not start; run the service in foreground for diagnostics.');
   }
@@ -158,7 +166,7 @@ export async function main(){
     if(command==='status'){const latch=readStopLatch(path.join(dataDir(),'emergency.stop'));printReply({ok:true,state:latch?'stopped':'not_running',...(latch?.unconfirmed?{control_reason:'guardian_stop_unconfirmed'}:{}),...(latch?.invalid?{control_reason:'stop_persistence_failed'}:{}),build_version:VERSION,build_id:BUILD_ID,reconnect_required:true});return;}
     throw Object.assign(Error('No desktop session is running (it may have expired after15 idle minutes). Restart the installed App sidecar (or use its human starter on the normal Windows desktop), then discover apps and take a fresh observation. Antigravity does not need to restart; emergency Stop remains latched.'),{code:'no_session'});
   }
-  const session=JSON.parse(fs.readFileSync(file));
+  const session=JSON.parse(fs.readFileSync(file));session.task_token=taskToken;
   if(command==='shutdown'){
     const previous=await request(session,'status',{},100000,policy.permission_mode);
     // Preserve an old adapter's stop during migration, before that process exits.
