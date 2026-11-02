@@ -760,3 +760,5 @@ remain separate; do not describe them as qualified by Windows results.
 ## Integrated Windows HUD candidate
 
 The Windows HUD avoidance changes from PR35 are integrated into the safety branch alongside task capabilities, original-guard Stop recovery and cross-installation task leases. See docs/HUD-AVOIDANCE.md and docs/TASK-OWNERSHIP.md. This combined source requires its own native/CI and physical acceptance; the frozen earlier beta.5 artifact does not contain these repairs. The installed published beta.4 remains at D:\Apps\AntigravityComputerUse\ed035f9812.
+
+The Mac native-glass/official-icon, consent/takeover and compiler-lease changes from PR36 are also integrated. Read docs/MACOS-GLASS-MATERIAL.md and docs/MACOS-CONSENT-TAKEOVER.md. New shared task ownership and original-guard recovery must be qualified together with these platform changes. Historical separate-branch checks do not qualify the combined candidate or establish real-device visual parity.

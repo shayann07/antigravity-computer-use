@@ -24,6 +24,8 @@ runtime. Their licenses and notices are retained in
 `licenses/`. The companion renders a caller-owned surface and does not capture
 foreign desktop pixels.
 
-The Windows HUD uses unmodified fill icons from `phosphor-icons/core`, revision
+The Windows and Mac HUDs use unmodified fill icons from `phosphor-icons/core`, revision
 `2b75f3ad12b420c9504ef05df8d2564a28f8500e`, under MIT. Their source SVGs are in
 `server/liquidglass-host/icons/` and the license is in `licenses/Phosphor-Icons.txt`.
+Mac builds copy those same source SVGs into the native app's signed resources;
+only the display fill colour is changed while loading.

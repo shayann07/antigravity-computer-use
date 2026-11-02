@@ -5,7 +5,7 @@
     {
       "path": "server/build.mjs",
       "upstream_sha256": "81260b378fffb46573cfe475a3a336930113c8abc465d3d278bbb0851d8a4377",
-      "local_sha256": "e45a6e3c481075ef5c1e1845da7a74e7098e1484c3deda6e4795a40b08705c58",
+      "local_sha256": "10705d002dd842f47aa74e054ae1420e1a037692b260f417bbef3e52f2d5dbae",
       "modified": true
     },
     {
@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "bb81d648217953db8de68be05b6eed0090a6527de8e4cf8f9e1b010a9b568334"
+      "sha256": "2b9cf90872d9fec08af921bbd0429cf150640d493fdb5fa1a377944e2b09b9a0"
     },
     {
       "path": "server/mcp.mjs",
@@ -492,7 +492,7 @@
     },
     {
       "path": "HANDOFF.md",
-      "sha256": "03b9a153641cf4fdcb658f5e77dfadce8d820cf94f3adbc8db9e1dec45bff118"
+      "sha256": "d007b04a52bd6c9417b1d1b8206739d33d506abee6b8eb1162e51f64b8f881ad"
     },
     {
       "path": "tests/guardian-visibility.mjs",
@@ -500,7 +500,7 @@
     },
     {
       "path": "docs/CLAUDE-CODE-HANDOFF-PROMPT.md",
-      "sha256": "2c7834de05a7298dce7b1de47779e157d4447d9c884a693cdb344c0ecaee8646"
+      "sha256": "2315a5b1cdc450cf12f23b4cf98c7c6839aa55bf2d6154f022a62e94a5ba21a5"
     },
     {
       "path": "docs/BRANCHES.md",
@@ -552,7 +552,7 @@
     },
     {
       "path": "server/macos-build.mjs",
-      "sha256": "963ce75e3df84f88ce93832b50fdad425ca9d0aabbee318d2bac8a0b9bc60f88"
+      "sha256": "5890dd6013eca6128675dbc8b62d30e0858f6e3460884a93a5f020176d7e9453"
     },
     {
       "path": "tests/platform-contract.test.mjs",
@@ -564,23 +564,23 @@
     },
     {
       "path": ".github/workflows/macos.yml",
-      "sha256": "4535f967e3a7d16847d4d0a74f884d3104615fa8a15dbd138b498b889eb3c575"
+      "sha256": "7c2293cc99dbbcb696ecb7f0cdc8ea0da26d0da89fef97b4caa377c6c587d498"
     },
     {
       "path": "server/native/macos/MacControl.swift",
-      "sha256": "7687d921901cbbf8b2ef03d0228412b0248831b72446f40e913f64b501cee358"
+      "sha256": "13e40d3fbfbac5e16e50fcd64a705acf65f28ea70ea2ea96fa4db32b498e6a90"
     },
     {
       "path": "server/native/macos/MacGuardian.swift",
-      "sha256": "2bd49ad4f81ea57a4b57e431232b422b05091c5742b09e09e8a46bebc0884e99"
+      "sha256": "bc70494d6afba5de476c982378015b03591ce7efe4bb5909a7115c86e2c6976a"
     },
     {
       "path": "server/native/macos/MacOperations.swift",
-      "sha256": "61a762ddc2f127944c90224352227091d7e8a2a764ef76d6272b7794e14e3185"
+      "sha256": "294ab9e2ed36742c762eec683a12f10f6e2149623b6d704bd50e59b03618b3c5"
     },
     {
       "path": "server/native/macos/MacVisuals.swift",
-      "sha256": "d597497241eb1bfc88d3e4b1683473c3b89da9b4f7121f966997e070a3549cf4"
+      "sha256": "4e0f892d365ff37ed54b788879661bf4b1236efd206de603d1111a0e7d8c5d51"
     },
     {
       "path": "server/native/macos/PrivateStorage.swift",
@@ -612,7 +612,7 @@
     },
     {
       "path": "server/update-core.mjs",
-      "sha256": "91e1e451fd7647d012c459025784dcd47040be084f06ca41f0c38f911c94a7c3"
+      "sha256": "eb1cfda6a8c051639a9d4fd620178ffe181ea46a27e3e76b04263cf68a6be189"
     },
     {
       "path": "server/auto-update.mjs",
@@ -636,11 +636,11 @@
     },
     {
       "path": "tests/recovery-update.test.mjs",
-      "sha256": "909715b727bbffd8f98c51faf1259408903977173a4672b1d100a33c63935f91"
+      "sha256": "75b109832ba8c00215878c86339db32e852c40605431c030af777e16deaf368a"
     },
     {
       "path": "tests/update-transaction.test.mjs",
-      "sha256": "5419d804a18fa79be654432687dbf8f14ab15935ad633881dbcdc91f98d45a3e"
+      "sha256": "eccc64a5b1be45e5a5597ace0838a38aedbe1cc3fa5a637a14890758d13b741d"
     },
     {
       "path": "docs/RELIABILITY-IMPLEMENTATION.md",
@@ -648,7 +648,7 @@
     },
     {
       "path": "docs/MAC-QUALIFICATION-PROMPT.md",
-      "sha256": "7793a8a8a3538a719d85eec7db79c8deaa20c1ac2b42ccb3cf42fcfd52d38cb2"
+      "sha256": "a193806592f21c7cb9ada79a0a284de01fa74f6d5ea90bbaf64c6c592e63e46a"
     },
     {
       "path": "tests/reporting.test.mjs",
@@ -676,7 +676,7 @@
     },
     {
       "path": "tests/macos-tool-probe.test.mjs",
-      "sha256": "df6beb65abeb654b188210bf5259a1fd4467f7e5a38b9fca26d584658be71752"
+      "sha256": "87c7ab50edde9c0454e7d3ddeb8d51264cd40b6d0bb8abfdbaf6663df57eb0d2"
     },
     {
       "path": "scripts/setup-release-signing.ps1",
@@ -708,7 +708,7 @@
     },
     {
       "path": ".github/workflows/prepare-signed-release.yml",
-      "sha256": "60d1a8ff906fcc3a65e14d74a8d9512d00d8d569335dbbc9e35b7c2c568601ac"
+      "sha256": "310bedacf4deb57864eee0f9a1c309e222722b28b4afa7bf113ecf0d5a4a4463"
     },
     {
       "path": "server/recovery.mjs",
@@ -764,7 +764,7 @@
     },
     {
       "path": "docs/MACOS-QUALIFICATION.md",
-      "sha256": "c028398afbb261bc4dec0f70bee0e4a651e47acbbb3a70fc859543f1fd701992"
+      "sha256": "ad1b0743d921db5742fcf6fca919a5d84b7ad376e530f85db6ac49b37fa8dc6d"
     },
     {
       "path": "tests/MacStorageMarkerWriter.swift",
@@ -824,7 +824,7 @@
     },
     {
       "path": "THIRD_PARTY_NOTICES.md",
-      "sha256": "53d285532a28557fda36bde3dd89e56a371dc1353a2cfeaf15932d734e1af3b9"
+      "sha256": "c9366a76bb2529d7a4d943db90ff9bda9aee85a95104f40544e70a138e647ed4"
     },
     {
       "path": "docs/RELEASE.md",
@@ -925,6 +925,26 @@
     {
       "path": "package.json",
       "sha256": "a6410753529b5879e2305900b886f86305b0c91fe9d19d59d0ad007e33b97372"
+    },
+    {
+      "path": "server/native/macos/MacPhosphorIcons.swift",
+      "sha256": "ef42a8e0e3a4fa6a2e7d839fd23e22788a2c17682353fd7847ce3e3671a6e7fb"
+    },
+    {
+      "path": "tests/macos-hud-assets.test.mjs",
+      "sha256": "b22c79f5537db715d116d6b90a0b2d31fd75e9dc56e3e9cd2fb55a674fc7a27f"
+    },
+    {
+      "path": "docs/MACOS-GLASS-MATERIAL.md",
+      "sha256": "21a450eefbb2347c8e71c6e3e0de20d23404262a469e1e0e0bddbf6411218851"
+    },
+    {
+      "path": "tests/macos-compiler-lease.test.mjs",
+      "sha256": "0850d754dde72f423f75611e278562a90b20f7a3bee33c35da4b391eae6ac5d7"
+    },
+    {
+      "path": "docs/MACOS-CONSENT-TAKEOVER.md",
+      "sha256": "b0b0a15130e555ca7e19cae57bdd295e06116d6a6884b03bdb01bef9a542d8a8"
     }
   ],
   "external_files": [

@@ -1,5 +1,10 @@
 # Intel Mac qualification: reported device results and review limits
 
+Current material audit: see [Mac HUD material and icon correction](MACOS-GLASS-MATERIAL.md).
+The later fallback-only source did not use native macOS 26 glass, and its icons
+were approximations. Historical reports below retain their original context;
+they do not qualify the corrected material/resource candidate.
+
 The on-device agent submitted [PR #4](https://github.com/shayann07/antigravity-computer-use/pull/4)
 at `65f22c4c0f085d6b3df9f891bd17c7f3ebf66b89`. This is useful partial device
 qualification, not a general Mac release or proof that every acceptance gate

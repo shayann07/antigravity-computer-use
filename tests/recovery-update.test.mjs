@@ -214,6 +214,15 @@ test('ready treats an invisible control reply as a bounded diagnostic failure',a
  try{const incidents=new Incidents(directory);assert(incidents.record('computer_ready',await Runtime.prototype.ready.call(runtime)));assert.equal(incidents.read()[0].code,'guardian_controls_not_visible');}
  finally{fs.rmSync(directory,{recursive:true});}
 });
+test('ready exposes only known native material states and drops arbitrary strings',async()=>{
+ for(const material of ['native_liquid_glass','visual_effect_fallback','private-untrusted-content']){
+  const runtime={state:'idle',status:()=>({state:'idle'}),guardian:{proc:{}},async showControls(){return {state:'idle',controls_visible:true,material_backend:material};}};
+  const result=await Runtime.prototype.ready.call(runtime);
+  assert.equal(result.ready,true);
+  assert.equal(result.visual_material,material==='private-untrusted-content'?undefined:material);
+ }
+});
+
 test('ready keeps the visible-desktop handoff explicit across repeated failed calls',async()=>{
  let calls=0;
  const runtime={state:'stopped',status:()=>({state:'stopped'}),guardian:{proc:null},async showControls(){calls++;throw Object.assign(Error('Isolated desktop'),{code:'desktop_context_unavailable'});}};
