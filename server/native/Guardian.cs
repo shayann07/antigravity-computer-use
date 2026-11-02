@@ -586,7 +586,25 @@ namespace Axon {
         }
         void Receive(Dictionary<string, object> m) {
             string op = Convert.ToString(m["op"]); object id=m.ContainsKey("id")?m["id"]:null;
-            if(op=="visual_status") {Emit(new {id=id,state=state,controls_visible=Visible,cursor=CursorSafety.Applied,watchdog_pid=CursorSafety.WatchdogPid,glow_opacity=Overlay.GlowOpacity,takeover_mode=takeover.Mode,record_visuals=recordVisuals});return;}
+            if(op=="visual_status") {Emit(new {id=id,state=state,controls_visible=Visible,bounds=new int[]{Left,Top,Width,Height},cursor=CursorSafety.Applied,watchdog_pid=CursorSafety.WatchdogPid,glow_opacity=Overlay.GlowOpacity,takeover_mode=takeover.Mode,record_visuals=recordVisuals});return;}
+            if(op=="avoid_input") {
+                bool canAvoid=state=="active"&&m.ContainsKey("token")&&Convert.ToString(m["token"])==token;
+                bool moved=false;
+                try {
+                    object[] values=m.ContainsKey("rect")?m["rect"] as object[]:null;
+                    int[] rect=new int[4];
+                    if(values==null||values.Length!=4)canAvoid=false;
+                    else for(int i=0;i<4;i++)if(!Int32.TryParse(Convert.ToString(values[i]),out rect[i])||Math.Abs((long)rect[i])>10000000)canAvoid=false;
+                    if(rect[2]<=0||rect[3]<=0)canAvoid=false;
+                    if(canAvoid&&Visible) {
+                        Rectangle placement;
+                        canAvoid=WindowGeometry.AvoidHud(Bounds,new Rectangle(rect[0],rect[1],rect[2],rect[3]),Screen.FromRectangle(Bounds).WorkingArea,(int)Math.Ceiling(12*visualScale),out placement);
+                        if(canAvoid&&placement!=Bounds){Location=placement.Location;moved=true;}
+                    }
+                }catch{canAvoid=false;}
+                // This operation never changes Stop, state, grants or visibility.
+                Emit(new {id=id,allowed=canAvoid,moved=moved,state=state});return;
+            }
             if(op=="show_controls") {
                 var context=DesktopContext.Inspect();
                 if(!(bool)context["interactive"]) {DismissControls();Emit(new {id=id,state=state,controls_visible=false,desktop_context=context,error=new {code="desktop_context_unavailable",message="Controls cannot be shown on the visible input desktop. Use the installed local launcher; no desktop was switched."}});return;}

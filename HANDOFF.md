@@ -756,3 +756,7 @@ Beta.4 is intended as a Windows-only prerelease. The matching published bundle,
 real Antigravity task, installed identity, physical safety checks and production
 update transport still require acceptance. Mac assets and hardware acceptance
 remain separate; do not describe them as qualified by Windows results.
+
+## Integrated Windows HUD candidate
+
+The Windows HUD avoidance changes from PR35 are integrated into the safety branch alongside task capabilities, original-guard Stop recovery and cross-installation task leases. See docs/HUD-AVOIDANCE.md and docs/TASK-OWNERSHIP.md. This combined source requires its own native/CI and physical acceptance; the frozen earlier beta.5 artifact does not contain these repairs. The installed published beta.4 remains at D:\Apps\AntigravityComputerUse\ed035f9812.

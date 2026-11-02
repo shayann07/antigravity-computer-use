@@ -406,6 +406,7 @@ export class Runtime {
     }
     const generation=this.generation;
     const payload={...args,...this.stamp(),mode:'take',__risk:args.risk==='routine'?'routine':'sensitive'};
+    let hudRegion;
     delete payload.risk;delete payload.reason;delete payload.observation_id;delete payload.observe;
     if(w){
       payload.hwnd=Number(w.hwnd);payload.__pid=w.pid;payload.__started=w.started;
@@ -422,6 +423,14 @@ export class Runtime {
           if(!f.image)fail('no_image','Observe with_image first.');
           payload.from=imagePoint(f.image,...args.from);payload.to=imagePoint(f.image,...args.to);
         }
+        if(op==='click'&&(payload.point||payload.physical!==false)){
+          if(payload.point)hudRegion=[...payload.point,1,1];
+          else {
+            const rect=f.elements?.find(node=>node.i===payload.index)?.rect;
+            if(Array.isArray(rect)&&rect.length===4&&rect.every(Number.isSafeInteger)&&rect[2]>0&&rect[3]>0)
+              hudRegion=rect[2]<=512&&rect[3]<=192?[...rect]:[Math.round(rect[0]+rect[2]/2),Math.round(rect[1]+rect[3]/2),1,1];
+          }
+        }
       }
     }
     // Visible real-pointer clicks are the default for both semantic selectors
@@ -435,6 +444,16 @@ export class Runtime {
     // Window-free clipboard work and first-launch/restarted workers also need
     // independent guardian registration. Never replace a frame's older epoch.
     if(payload.__worker_epoch==null)payload.__worker_epoch=this.driver.epoch;
+    const avoidHud=async()=>{
+      if(!hudRegion||this.driver.info?.hud_avoidance!==true)return;
+      const avoided=await this.guardian.request({op:'avoid_input',token:this.token,rect:hudRegion});
+      this.check();if(generation!==this.generation)fail('control_changed','Control changed while positioning the controls. Observe again.');
+      if(avoided.allowed!==true)fail('hud_target_obscured','Local controls could not move safely away from this target. No app input was sent.');
+    };
+    // Pixel risk classification must see the app beneath our HUD, rather than
+    // accidentally classifying one of our own buttons. The native click still
+    // independently verifies the actual topmost target before sending input.
+    await avoidHud();
     const preview=(await this.driver.call('authorize',{action_op:op,action_args:payload})).result;
     if(preview.sensitive){
       const filenameClipboard=op==='file_dialog'&&args.entry_method==='clipboard'?'\r\nFilename entry explicitly uses the local clipboard temporarily and restores preservable formats.\r\n':'';
@@ -447,6 +466,9 @@ export class Runtime {
     const result=await this.sessions.withInput(op,{hwnd:w?.hwnd,title:w?.title},async()=>{
       this.check();if(generation!==this.generation)fail('control_changed','Cancelled before execution.');
       if(Date.now()>=this.deadline||this.remaining<=0)fail('session_limit','Session expired or action budget exhausted. End and obtain a new human grant.');
+      // Recheck after a sensitive prompt or a wait for the shared input lease.
+      await avoidHud();
+      if(Date.now()>=this.deadline||this.remaining<=0)fail('session_limit','Session expired while positioning local controls. No app input was sent.');
       Runtime.prototype.recordDispatch.call(this);
       // Count an attempted dispatch, including uncertain delivery, but not a
       // rejected lease or a cancellation that never reached the native worker.

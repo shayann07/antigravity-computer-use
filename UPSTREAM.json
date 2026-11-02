@@ -60,7 +60,7 @@
     {
       "path": "server/native/AxonHost.cs",
       "upstream_sha256": "bef101afecbdf8f75df2a1f8b45d224eade39f09e3c8e25cf7b450e3fa49a8ef",
-      "local_sha256": "9a0df61c987633e379bc7ea58c5c22fdf73ade577dc6f7d34e1d3bdb368874db",
+      "local_sha256": "8eea2212ffdc7d9242795b17e54c5ef9056802187273bec57d4b246ac7f51007",
       "modified": true
     },
     {
@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "578ec02554c831978ea712f0e3653d79009a746424d3be81cea3a131c799be74"
+      "sha256": "bb81d648217953db8de68be05b6eed0090a6527de8e4cf8f9e1b010a9b568334"
     },
     {
       "path": "server/mcp.mjs",
@@ -268,7 +268,7 @@
     },
     {
       "path": "server/native/Guardian.cs",
-      "sha256": "54d1647beb9107d4eedc28bfea0720d73b0c496e415e1ca39fcbc5ee01d8312a"
+      "sha256": "bf0fcfc77ab6765f9e5be9ebd7ce49516a314235e07da29a3a6accba35ceeb88"
     },
     {
       "path": "server/native/CursorSafety.cs",
@@ -432,15 +432,15 @@
     },
     {
       "path": "server/native/WindowGeometry.cs",
-      "sha256": "2580f888a63b185e2123a927b9579adb757593bcc7cb55983cca8e6fbfade596"
+      "sha256": "957a142f8697c72147d776e7301a5d12efa599f7d81a6907a7bb9306d2afa810"
     },
     {
       "path": "tests/WindowGeometryTests.cs",
-      "sha256": "9b0aee5696115ae82fe67a84d5f32210707ce61db7506b2c1c0abc02e18b2d17"
+      "sha256": "e1309c76d8525ead103febb186f3b0481dc941af1d498a4eed9a45b2698d9d99"
     },
     {
       "path": "tests/window-geometry.test.mjs",
-      "sha256": "751ee459b0c8ee9019c545904e931dc1101501212896d1e208163e3af19c08eb"
+      "sha256": "b4882901fb846031110100de78c9b8522ee1fe0057b8833ded4ffcfc9e25fe22"
     },
     {
       "path": "tests/OffscreenWindowTarget.cs",
@@ -492,7 +492,7 @@
     },
     {
       "path": "HANDOFF.md",
-      "sha256": "f7d3686d3198733c36b8743e61e4c491b6f8088f521f4af9ff3f392dbd3b5b1e"
+      "sha256": "03b9a153641cf4fdcb658f5e77dfadce8d820cf94f3adbc8db9e1dec45bff118"
     },
     {
       "path": "tests/guardian-visibility.mjs",
@@ -913,6 +913,18 @@
     {
       "path": "docs/TASK-OWNERSHIP.md",
       "sha256": "67d1eed20bf34b268a5e4525fcb5e89685d54c5c0a1071c13fecff092b3e15b8"
+    },
+    {
+      "path": "tests/hud-avoidance.test.mjs",
+      "sha256": "feea7a6bcea45ebb6161b77fcf0eb8e6c13950bed6e1394f035510b376860236"
+    },
+    {
+      "path": "docs/HUD-AVOIDANCE.md",
+      "sha256": "34afd568ac139720491bfa073ef72f92a32de5018706d085c52143854ddb3021"
+    },
+    {
+      "path": "package.json",
+      "sha256": "a6410753529b5879e2305900b886f86305b0c91fe9d19d59d0ad007e33b97372"
     }
   ],
   "external_files": [
