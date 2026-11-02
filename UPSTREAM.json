@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "3b4c819a2ddbd94e8f8e1c3ae8b90dd393a85472b565caa4e441e964362492a2"
+      "sha256": "54ffb12ce520ad9540d2e6183143c9be6afe97bd63fcc08eceb2e4a4907b1cd0"
     },
     {
       "path": "server/mcp.mjs",
@@ -384,7 +384,7 @@
     },
     {
       "path": "server/native/StorageGuard.cs",
-      "sha256": "88545639ff164cb078a39a8b29d3e1ef679fc3ea15164bf6ffa05d3a7ec936a4"
+      "sha256": "5848448ef946ed2a09a68bd18cfa1e6cc2d82f36b3cb3b5d9617fbd51955e176"
     },
     {
       "path": "server/storage.mjs",
@@ -712,7 +712,7 @@
     },
     {
       "path": "server/recovery.mjs",
-      "sha256": "d558c4bbcdd166d326364020e7c120d4b5468853020fdd1cb5670c362efbf8f8"
+      "sha256": "d7e10743e4a7f9d5d5ab6009d3774c58d03d9c04622fb167e2665453959c562b"
     },
     {
       "path": "scripts/qualify-guardian-desktop.mjs",
@@ -736,7 +736,7 @@
     },
     {
       "path": "server/atomic-json.mjs",
-      "sha256": "450ae6fad9992a3a7080edde5341c2cf27c2a2f1665bd2d055567923cbe24da4"
+      "sha256": "528f2f0a61db6086b11f2dc7337c32d727617b85f97cb06b4138c36fa755fc2b"
     },
     {
       "path": "tests/atomic-json.test.mjs",
@@ -897,6 +897,10 @@
     {
       "path": "tests/installation-location.test.mjs",
       "sha256": "1d46de0c9807bfe9ef9d450e9ec5184ccce288935254e0e86409cdff345f0ccc"
+    },
+    {
+      "path": "tests/stop-context.test.mjs",
+      "sha256": "9938658b2ae9c37313009b4eb1bce8fef5a049aef0c091675f00c2bbe41ac40e"
     }
   ],
   "external_files": [

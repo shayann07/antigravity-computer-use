@@ -183,7 +183,7 @@ internal static class StorageGuard {
         foreach(string path in Directory.EnumerateFileSystemEntries(root)){
             string name=Path.GetFileName(path);
             if(name=="desktop-session.json"||System.Text.RegularExpressions.Regex.IsMatch(name,@"^guard-\d+-[a-f0-9-]+\.state$"))runtimeEvidence=true;
-            if(name=="desktop-session.json"||name=="observations"||name=="sessions"||name=="bin"||name=="control-preferences.json"||name=="emergency.stop"||name=="emergency.stop.unconfirmed"||name=="task-state.json"||name=="desktop-receipts.jsonl"||name=="desktop-receipts.jsonl.previous"||System.Text.RegularExpressions.Regex.IsMatch(name,@"^guard-\d+-[a-f0-9-]+\.state(?:\..+)?$"))continue;
+            if(name=="desktop-session.json"||name=="observations"||name=="sessions"||name=="bin"||name=="control-preferences.json"||name=="emergency.stop"||name=="emergency.stop.unconfirmed"||name=="emergency.stop.context.json"||name=="task-state.json"||name=="desktop-receipts.jsonl"||name=="desktop-receipts.jsonl.previous"||System.Text.RegularExpressions.Regex.IsMatch(name,@"^guard-\d+-[a-f0-9-]+\.state(?:\..+)?$"))continue;
             onlyRuntime=false;
         }
         if(runtimeEvidence&&onlyRuntime)return true;

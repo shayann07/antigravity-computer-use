@@ -75,6 +75,32 @@ export function preserveStopLatch(source,destination,{io=fs}={}){
  if(prior.value!=='stopped'&&!prior.unconfirmed)throw Error('Previous Stop evidence is invalid; inspect it before migration');
  persistStopLatch(destination,{unconfirmed:prior.unconfirmed,io});return true;
 }
+const guardName=/^guard-[1-9][0-9]{0,9}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.state$/;
+export function bindStopRecovery(file,nonce,guard){
+ if(!path.isAbsolute(file)||typeof nonce!=='string'||nonce.length!==32||!/^[a-f0-9]{32}$/.test(nonce)||!guardName.test(guard))throw Error('Invalid internal Stop recovery context');
+ const prior=readStopLatch(file);
+ if(prior?.unconfirmed||prior?.invalid)throw Error('Cannot replace an unresolved Stop context');
+ writeAtomicText(file+'.context.json',JSON.stringify({schema:1,nonce,guard})+'\n');
+}
+export function persistRecoveryStop(file,guard,{unconfirmed=false,nonce=randomUUID().replaceAll('-','')}={}){
+ const old=readStopLatch(file);let contextError;
+ if(unconfirmed&&!old?.unconfirmed&&!old?.invalid)try{bindStopRecovery(file,nonce,guard);}catch(error){contextError=error;}
+ const result=persistStopLatch(file,{unconfirmed,nonce});
+ // Missing context prevents later settlement, but must never prevent Stop.
+ if(contextError)throw contextError;
+ return result;
+}
+// Requires native old-actor/ledger verification again at this boundary. It
+// settles only uncertainty, retaining ordinary Stop for local human re-arm.
+export function settlePriorStop(file,record,{platform=process.platform,probe=process.kill}={}){
+ const directory=path.dirname(file),root=fs.lstatSync(directory,{bigint:true});
+ const context=JSON.parse(readRecoveryFile(file+'.context.json',1024,fs));
+ if(!context||context.schema!==1||context.guard!==record?.guard||!guardName.test(context.guard)||Object.keys(context).sort().join(',')!=='guard,nonce,schema')throw Error('Prior Stop context is missing or differs');
+ const verify=()=>priorWindowsCleanupVerified(directory,record,{platform,probe})||priorMacCleanupVerified(directory,record,{platform,probe});
+ if(!verify())throw Error('Prior actors or ledger remain unverified');
+ const result=settleFreshStopLatch(file,context.nonce,root);
+ return {...result,prior_cleanup_verified:true};
+}
 export function safeWaitMetrics(value){
  if(!value||typeof value!=='object')return undefined;
  const {elapsed_ms,observations,polling_budget_ms}=value;

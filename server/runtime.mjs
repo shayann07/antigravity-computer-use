@@ -16,7 +16,7 @@ import {storageOperation} from './storage.mjs';
 import {contract,nativePlatform,launchTarget,executableKey} from './platform.mjs';
 import {Incidents} from './incidents.mjs';
 import {updateNotice} from './update-notice.mjs';
-import {recoveryAdvice,priorWindowsCleanupVerified,priorMacCleanupVerified,readStopLatch,persistStopLatch,settleFreshStopLatch} from './recovery.mjs';
+import {persistRecoveryStop,settlePriorStop,recoveryAdvice,priorWindowsCleanupVerified,priorMacCleanupVerified,readStopLatch,persistStopLatch,settleFreshStopLatch} from './recovery.mjs';
 import {writeAtomicJSON,readTaskRecord} from './atomic-json.mjs';
 
 const input=new Set(['move','click','type','set_value','key','scroll','drag','focus','fit_window','close_window','paste','paste_files','clipboard','open','file_dialog']);
@@ -137,7 +137,7 @@ export class Runtime {
       const priorStopUnconfirmed=previousState==='stopped'&&this.lastControlReason==='guardian_stop_unconfirmed';
       if((reason||s!==this.state)&&(!priorStopUnconfirmed||persistenceFailure(reason)))this.lastControlReason=reason||s;
       this.state=s;
-      if((reason==='guardian_exited'&&previousState!=='idle'||reason==='guardian_unresponsive')&&this.latchFile)try{persistStopLatch(this.latchFile,{unconfirmed:reason==='guardian_unresponsive'||priorStopUnconfirmed});}catch{}
+      if((reason==='guardian_exited'&&previousState!=='idle'||reason==='guardian_unresponsive')&&this.latchFile)try{persistRecoveryStop(this.latchFile,this.recoveredTask&&this.priorGuard?this.priorGuard:path.basename(this.guardFile),{unconfirmed:reason==='guardian_unresponsive'||priorStopUnconfirmed});}catch{}
       if(s==='stopped'&&this.latchFile){try{const latch=readStopLatch(this.latchFile);if(!latch||latch.value!=='stopped'&&!latch.unconfirmed)throw Error('invalid latch');if(latch.unconfirmed&&!persistenceFailure(reason))this.lastControlReason='guardian_stop_unconfirmed';}catch{this.lastControlReason='stop_persistence_failed';this.diagnosticError='stop_persistence_failed';}}
       if(reason==='guardian_unresponsive'&&!persistenceFailure(this.lastControlReason))this.lastControlReason='guardian_stop_unconfirmed';
       if(reason==='guardian_exited'&&this.privateDataStorage===true)new Incidents(dataDir()).recordSerialized('computer_guardian',{state:s,error:{code:'guardian_exited'},guardian_exit:this.guardian.lastExit}).catch(()=>{this.diagnosticError='private_diagnostic_storage_unavailable';});
@@ -580,6 +580,10 @@ export class Runtime {
       if(!verified)fail('recovered_cleanup_unverified','Prior-session input cleanup is unverified. Keep the task open and inspect the previous native ledger; do not repeat input or force an update.');
       try{await this.sessions.clearVerifiedStale(Number(/^guard-(\d+)-/.exec(this.priorGuard)[1]));}
       catch{fail('recovered_cleanup_unverified','Previous input ownership could not be safely cleared. Keep the task open; do not repeat input or force an update.');}
+      if(this.latchFile&&readStopLatch(this.latchFile)?.unconfirmed){
+        try{const record=readTaskRecord(this.taskFile);if(record.guard!==this.priorGuard||JSON.stringify(record.children)!==JSON.stringify(this.priorChildren))throw Error('Prior task changed');settlePriorStop(this.latchFile,record);this.state='stopped';this.lastControlReason='prior_cleanup_verified';}
+        catch{fail('guardian_stop_unconfirmed','Prior Stop context or native cleanup is unverified. Keep the recovery record and do not re-arm or replay.');}
+      }
     }
     if(!preserveTask){
       const stopped=this.latchFile?readStopLatch(this.latchFile):null;
@@ -679,7 +683,7 @@ export class Runtime {
       const nonce=randomUUID().replaceAll('-','');let marker,rootIdentity,persistenceFailed=false;
       const old=this.latchFile?readStopLatch(this.latchFile):null;
       const maySettle=!priorUnconfirmed&&!old?.unconfirmed&&!old?.invalid&&!this.recoveredTask;
-      try{if(!this.latchFile)throw Error('Missing Stop path');rootIdentity=fs.lstatSync(path.dirname(this.latchFile),{bigint:true});marker=persistStopLatch(this.latchFile,{unconfirmed:true,nonce});}
+      try{if(!this.latchFile)throw Error('Missing Stop path');rootIdentity=fs.lstatSync(path.dirname(this.latchFile),{bigint:true});marker=persistRecoveryStop(this.latchFile,this.recoveredTask&&this.priorGuard?this.priorGuard:path.basename(this.guardFile),{unconfirmed:true,nonce});}
       catch{persistenceFailed=true;this.lastControlReason='stop_persistence_failed';}
       const outcomes=await Promise.allSettled([Promise.resolve().then(()=>this.guardian.stopAcknowledged(nonce)),Promise.resolve().then(()=>this.driver.abort?.())]);
       if(outcomes[1].status==='rejected'){this.lastControlReason='input_cleanup_failed';throw outcomes[1].reason;}
@@ -694,7 +698,7 @@ export class Runtime {
     let unconfirmed=priorUnconfirmed||this.privateDataStorage===true&&typeof this.guardian.stopAcknowledged!=='function';
     try{const sent=this.guardian.send({op:'stop'});unconfirmed=unconfirmed||sent===false&&!!(this.guardian.proc||this.guardian.starting||this.guardian.cleanupFailed);}catch{unconfirmed=true;}
     let persistenceFailed=false;
-    try{if(this.latchFile)unconfirmed=persistStopLatch(this.latchFile,{unconfirmed}).unconfirmed;}
+    try{if(this.latchFile)unconfirmed=persistRecoveryStop(this.latchFile,this.recoveredTask&&this.priorGuard?this.priorGuard:path.basename(this.guardFile),{unconfirmed}).unconfirmed;}
     catch{persistenceFailed=true;this.lastControlReason='stop_persistence_failed';}
     if(unconfirmed&&!persistenceFailed)this.lastControlReason='guardian_stop_unconfirmed';
     await this.driver.abort?.();
