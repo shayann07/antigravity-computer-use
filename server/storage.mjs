@@ -41,5 +41,5 @@ export function defaultInstallationRoot({helper,home,localAppData,hasD=fs.exists
  let identity;try{identity=JSON.parse(result.stdout);}catch{}
  if(result.status!==0||!identity?.owner_sid)throw Error('Cannot determine the Windows installation owner.');
  const suffix=createHash('sha256').update(identity.owner_sid).digest('hex').slice(0,10);
- return hasD?path.join('D:\\','AntigravityComputerUse-'+suffix):path.join(localAppData||home,'AntigravityComputerUse');
+ return hasD?path.join('D:\\','Apps','AntigravityComputerUse',suffix):path.join(localAppData||home,'AntigravityComputerUse');
 }
