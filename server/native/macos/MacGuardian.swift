@@ -78,6 +78,7 @@ enum MacWorkers {
 
 final class MacPanicMonitor {
     var tap: CFMachPort?
+    var guardianIdentity: (pid_t, String)?
     var baseline: CGPoint?
     var moved: Double = 0
     var at = Date()
@@ -143,7 +144,7 @@ final class MacPanicMonitor {
         let mode = (try? Data(contentsOf: preferences)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }?["takeover_mode"] as? String ?? "manual"
         guard mode == "smart" else { return }
         // Local controls must remain usable without the takeover hook racing them.
-        if let bytes = try? Data(contentsOf: URL(fileURLWithPath: MacFence.file + ".hud")),
+        if type != .keyDown, let bytes = try? Data(contentsOf: URL(fileURLWithPath: MacFence.file + ".hud")),
            let r = try? JSONSerialization.jsonObject(with: bytes) as? [Double], r.count == 4,
            CGRect(x: r[0], y: r[1], width: r[2], height: r[3]).contains(event.location) { return }
         var deliberate = type != .mouseMoved
@@ -153,12 +154,51 @@ final class MacPanicMonitor {
             baseline = event.location; deliberate = moved >= 70
         }
         if deliberate {
-            try? MacFence.write("paused|\(state.token)|\(state.until)|\(Data(state.grants.sorted().joined(separator: "\n").utf8).base64EncodedString())")
+            // Read the guardian's actual focused modal via public AX APIs.
+            // No file rectangle or model-supplied flag can declare a consent UI.
+            if localConsentInteraction(type, event) { moved = 0; baseline = event.location; return }
+            do { guard try MacFence.pauseForTakeover(state) else { return } }
+            catch { MacFence.emergency("takeover_state_unavailable"); return }
             let workersStopped = macWaitForWorkers(), inputsRecovered = MacInputLedger.recover()
             if !workersStopped || !inputsRecovered { MacFence.emergency("input_cleanup_failed") }
         }
     }
+    static func consentPointVisible(_ point: CGPoint, modal: CGRect, guardian: pid_t, windows: [[String: Any]]) -> Bool {
+        guard modal.contains(point) else { return false }
+        // CGWindowList is front-to-back. A foreign cover is never an exemption,
+        // including system banners; uncertainty retains ordinary takeover.
+        for row in windows {
+            guard let alpha = (row[kCGWindowAlpha as String] as? NSNumber)?.doubleValue, alpha.isFinite else { return false }
+            if alpha <= 0 { continue }
+            guard let bounds = row[kCGWindowBounds as String] as? [String: Any],
+                  let rect = CGRect(dictionaryRepresentation: bounds as CFDictionary),
+                  [rect.minX, rect.minY, rect.width, rect.height].allSatisfy({ $0.isFinite }) else { return false }
+            if !rect.contains(point) { continue }
+            return (row[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == guardian &&
+                abs(rect.minX - modal.minX) <= 2 && abs(rect.minY - modal.minY) <= 2 &&
+                abs(rect.width - modal.width) <= 2 && abs(rect.height - modal.height) <= 2
+        }
+        return false
+    }
+    func localConsentInteraction(_ type: CGEventType, _ event: CGEvent) -> Bool {
+        guard let (pid, birth) = guardianIdentity, (try? macProcessStart(pid)) == birth else { return false }
+        let app = AXUIElementCreateApplication(pid)
+        guard AXUIElementSetMessagingTimeout(app, 0.02) == .success,
+              let raw = axAttr(app, kAXFocusedWindowAttribute as String), CFGetTypeID(raw) == AXUIElementGetTypeID() else { return false }
+        let window = raw as! AXUIElement
+        guard AXUIElementSetMessagingTimeout(window, 0.02) == .success,
+              let modal = axAttr(window, kAXModalAttribute as String), CFGetTypeID(modal) == CFBooleanGetTypeID(),
+              (modal as? Bool) == true else { return false }
+        var owner: pid_t = 0
+        guard AXUIElementGetPid(window, &owner) == .success, owner == pid else { return false }
+        if type == .keyDown { return NSWorkspace.shared.frontmostApplication?.processIdentifier == pid }
+        guard let bounds = axRect(window),
+              let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else { return false }
+        let rect = CGRect(x: bounds[0], y: bounds[1], width: bounds[2], height: bounds[3])
+        return Self.consentPointVisible(event.location, modal: rect, guardian: pid, windows: windows)
+    }
     func run(guardian: pid_t, birth: String) -> Never {
+        guardianIdentity = (guardian, birth)
         guard start() else { emit(["ev": "error", "message": "Input Monitoring permission is required for independent Stop."]); exit(1) }
         do {
             let marker = MacFence.file + ".watchdog"
@@ -315,8 +355,8 @@ final class MacGuardian: NSObject {
         func reply(_ extra: [String: Any] = [:]) { emit(extra.merging(["id": id, "state": state]) { _, new in new }) }
         do {
             switch op {
-            case "visual_status": reply(["controls_visible": visuals.visible, "cursor": state == "active", "takeover_mode": takeoverMode()])
-            case "show_controls": visuals.show(state); controlsUntil = Date().addingTimeInterval(state == "idle" || state == "stopped" ? 30 : 600); reply(["controls_visible": true, "human_rearm_required": state == "stopped"])
+            case "visual_status": reply(["controls_visible": visuals.visible, "cursor": state == "active", "takeover_mode": takeoverMode(), "material_backend": MacVisuals.materialBackend(for: visuals.rootView)])
+            case "show_controls": visuals.show(state); controlsUntil = Date().addingTimeInterval(state == "idle" || state == "stopped" ? 30 : 600); reply(["controls_visible": visuals.visible, "human_rearm_required": state == "stopped", "material_backend": MacVisuals.materialBackend(for: visuals.rootView)])
             case "dismiss_controls": if ["active", "paused"].contains(state) { stop("dismiss") }; visuals.hide(); reply(["controls_visible": false])
             case "attach": reply(["registered": true]) // worker self-registers before reporting ready
             case "activate":
@@ -343,12 +383,17 @@ final class MacGuardian: NSObject {
             case "prompt":
                 guard state != "stopped", state != "paused" else { reply(["allowed": false]); return }
                 try ensureWatchdog()
+                let approvalState = try MacFence.read()
                 let kind = str(message["kind"]) ?? ""
+                guard ["app", "action"].contains(kind) else { throw AxonError("bad_arguments", "Unknown native confirmation kind.") }
                 var identity: [String: Any]?
                 if kind == "app" { identity = try macIdentity(pid_t(int(message["app_pid"], -1))) }
                 var allowed = hostManaged
                 if !hostManaged {
                     visuals.hideForCapture()
+                    // Capture hiding removes our pointer window; the human
+                    // needs the normal OS cursor throughout a modal decision.
+                    visuals.releaseCursor()
                     let alert = NSAlert(); alert.messageText = kind == "app" ? "Allow this app for this session?" : "Allow one sensitive action?"
                     alert.informativeText = String((identity?["path"] as? String ?? "") + "\n\n" + (str(message["message"]) ?? "").prefix(6000))
                     alert.addButton(withTitle: "Deny"); alert.addButton(withTitle: "Allow")
@@ -356,23 +401,29 @@ final class MacGuardian: NSObject {
                     let expiry = Timer(timeInterval: 90, repeats: false) { _ in NSApp.abortModal() }
                     RunLoop.main.add(expiry, forMode: .common); RunLoop.main.add(expiry, forMode: .modalPanel)
                     allowed = alert.runModal() == .alertSecondButtonReturn
-                    expiry.invalidate(); prompt = nil; visuals.finishCapture(state)
+                    expiry.invalidate(); prompt = nil
+                    tick() // Resolve takeover, Stop and expiry before restoring control visuals.
+                    visuals.finishCapture(state)
                 }
-                if state == "stopped" || MacFence.latchBlocks(MacFence.latch) { allowed = false }
+                if state == "stopped" || state == "paused" || MacFence.latchBlocks(MacFence.latch) { allowed = false }
                 var result: [String: Any] = ["allowed": allowed, "decision": allowed ? (hostManaged ? "host-authorized" : "allowed") : "denied"]
-                if allowed && kind == "app", let identity = identity {
-                    let current = try macIdentity(pid_t(identity["pid"] as! Int))
-                    guard current["key"] as? String == identity["key"] as? String else { throw AxonError("identity_changed", "App restarted during approval.") }
-                    grants.insert(identity["key"] as! String); try writeState()
-                }
-                if allowed && kind == "action" {
-                    let args = message["args"] as? [String: Any] ?? [:], operation = str(message["action_op"]) ?? ""
-                    let label = str(message["label"]) ?? "", permit = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
-                    let key = args["__pid"] != nil ? try macIdentity(pid_t(int(args["__pid"], -1)))["key"] as! String : ""
-                    let dir = MacFence.file + ".permits"; try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-                    let contents = "\(token)\n\(try macFingerprint(operation, args, label))\n\(key)\n\(MacFenceState.now + 900_000_000)"
-                    let path = (dir as NSString).appendingPathComponent(permit)
-                    try Data(contents.utf8).write(to: URL(fileURLWithPath: path), options: [.atomic]); chmod(path, 0o600); result["permit"] = permit
+                if allowed {
+                    try MacFence.withApprovalFence(approvalState) {
+                        if kind == "app", let identity = identity {
+                            let current = try macIdentity(pid_t(identity["pid"] as! Int))
+                            guard current["key"] as? String == identity["key"] as? String else { throw AxonError("identity_changed", "App restarted during approval.") }
+                            grants.insert(identity["key"] as! String); try writeState()
+                        }
+                        if kind == "action" {
+                            let args = message["args"] as? [String: Any] ?? [:], operation = str(message["action_op"]) ?? ""
+                            let label = str(message["label"]) ?? "", permit = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+                            let key = args["__pid"] != nil ? try macIdentity(pid_t(int(args["__pid"], -1)))["key"] as! String : ""
+                            let dir = MacFence.file + ".permits"; try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+                            let contents = "\(token)\n\(try macFingerprint(operation, args, label))\n\(key)\n\(MacFenceState.now + 900_000_000)"
+                            let path = (dir as NSString).appendingPathComponent(permit)
+                            try Data(contents.utf8).write(to: URL(fileURLWithPath: path), options: [.atomic]); chmod(path, 0o600); result["permit"] = permit
+                        }
+                    }
                 }
                 reply(result)
             default: reply(["allowed": false, "error": "unknown_guardian_operation"])

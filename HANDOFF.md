@@ -10,6 +10,70 @@ fix. Public updater transfer timeout #32 and banner overlap #33 were found in
 real tests. The download-deadline repair is merged source, not included in beta.4.
 Keep the full goal active; Mac and physical/hardware gates are still pending.
 
+PR #34 merged the download-deadline repair after all source CI passed. PR #35
+contains the frozen Windows beta.5 own-HUD candidate at `935c82d` (521 local
+tests: 509 pass, zero fail, 12 skips; all source CI and signed preparation run
+41343173485 passed). Build `0ffcc611…` and its 121 payloads/qualification ZIP
+were independently verified locally; the offline real-package helper probe
+passed with self-contained runtime tracing. Native fresh install remains
+skipped for `insecure_storage_ancestor`, with parent ACLs unchanged. It remains draft until the
+deferred live and physical checks can be performed. The installed skills remain
+the exact published beta.4 bytes.
+
+A Mac material audit found the current source used the older visual-effect
+fallback and handwritten icon approximations. The `codex/mac-native-glass-assets`
+candidate restores Apple's public macOS 26 AppKit glass API under an explicit
+SDK/runtime gate and shares Windows' official Phosphor SVG assets. See
+[the correction and qualification boundaries](docs/MACOS-GLASS-MATERIAL.md).
+Native Mac compilation/resource rendering and hardware appearance must be
+qualified; source edits alone do not establish native glass parity.
+The Mac branch now integrates main through `a02fabc` and fixes capture-restored
+controls replaying their entrance or overriding a dismissal. Fresh native CI
+must verify the merged source and lifecycle contract; earlier branch checks
+are historical. Windows's frozen candidate and the installed release are unchanged.
+The local shared suite passed 503/516 tests with zero failures and 13 explicit
+skips; that Windows-host run does not compile or qualify the new Swift changes.
+Issue #43 records the separate Smart/standalone consent-dialog takeover concern.
+The candidate now verifies the actual guardian-owned native modal in the
+independent monitor and fences approval completion against a changed session,
+pause, Stop, deadline or pending cleanup. The transition lock is separate from
+held input so takeover can revoke a drag immediately. Native refusal and
+covering-window contracts accompany the repair; compilation and physical
+Allow/Deny/outside-input qualification remain pending. See
+[the exact behavior and acceptance matrix](docs/MACOS-CONSENT-TAKEOVER.md).
+Standalone confirmation also releases the normal cursor before showing the
+modal decision, then refreshes native pause/Stop/expiry before restoring visuals.
+This avoids leaving both the hidden OS cursor and hidden custom pointer absent
+while a human tries to approve. Actual cursor visibility still needs Mac testing.
+The subsequent macOS 26 Intel PR job failed its concurrent-source compiler test
+at the unchanged 120-second compiler deadline; the same-head push job passed.
+The candidate now coalesces same-stamp source builds using the existing native
+kernel lease rather than running two optimized compilers. Reply-directory
+initialization, late cache publication and cleanup have focused regression
+coverage. Fresh Mac CI is required; this is not a confirmed Mac repair yet.
+The first local full run with that change recorded 520 tests: 506 passed, one
+failed and 13 skipped. The optional MCP startup test exceeded its five-second
+reply bound under the concurrent suite; an isolated rerun passed in 458 ms.
+Both records are retained. No timeout was raised and that isolated pass does
+not convert the failed full run into a passing run.
+The serial full suite at `25884f6` passed 507/520, with zero failures and 13
+skips; both Windows CI jobs and macOS 26 ARM passed. The ARM job exercised the
+real concurrent build and confirmed exactly one compiler. The Intel macOS 15
+push job then failed with `macos_build_lease_exited`. Source review identified
+an acknowledgement/exit race compatible with that failure: a busy helper can
+write its final reply and exit between the caller's file read and process
+check. A deterministic inert schedule exercises this exact interleaving. The
+caller now reads the final reply once more before refusing an exited helper.
+Fresh Mac CI must test that diagnosis against the real native failure; the
+failed job and earlier logs remain retained. No installed build changed.
+At `17fa01f`, both Windows jobs and the full Mac push matrix passed. Intel
+macOS 15/26 jobs verified one compiler for the two concurrent requests in
+57.880/69.417 seconds; each full Mac suite passed 485/522, zero failures and
+37 platform skips. These are source-build/headless checks, not desktop speed
+benchmarks. The subsequent consent patch's Windows-host shared suite passed
+509/522, zero failures and 13 skips; it cannot compile or qualify that Swift
+change. Fresh exact-head native CI remains required.
+
 The `codex/latency-evidence-validation` work selects the comparison utility from
 Antigravity's unmerged `a44e532` latency worktree, rather than merging its stale
 runtime wholesale. It repairs false pair qualification, trace validation and

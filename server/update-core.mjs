@@ -42,6 +42,9 @@ export function verifyUpdateBundle(directory,m,{node,host,storage}={}){
  // otherwise signed but incomplete bundle must not silently drop that helper.
  if(m.platform==='win32'&&(m.version==='0.3.0-beta.4'||newerVersion(m.version,'0.3.0-beta.4')))
   required.push('liquidglass/LiquidGlass.Host.exe','liquidglass/libSkiaSharp.dll');
+ // Refuse a signed Mac package that drops the real HUD icon resources.
+ if(m.platform==='darwin'&&(m.version==='0.3.0-beta.4'||newerVersion(m.version,'0.3.0-beta.4')))
+  required.push(...['sliders-horizontal-fill','pause-fill','play-fill','stop-fill','x-fill'].map(name=>'bin/AxonHost.app/Contents/Resources/Phosphor/'+name+'.svg'));
  if(!bundle.files||typeof bundle.files!=='object'||Array.isArray(bundle.files)||required.some(name=>!Object.hasOwn(bundle.files,name)))throw Error('update_bundle_incomplete');
  const names=Object.keys(bundle.files),signed=Object.keys(m.files).filter(name=>name!=='bundle-manifest.json');
  if(names.length!==signed.length||names.some(name=>!Object.hasOwn(m.files,name)||bundle.files[name]!==m.files[name].sha256))throw Error('update_bundle_inventory_mismatch');

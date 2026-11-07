@@ -286,14 +286,68 @@ func macContractTest() throws {
         throw AxonError("contract_test_failed", "macOS Space and window capture failure classification differs.")
     }
     let activeHud = MacVisuals.statePresentation(for: "active", latched: false)
+    var hudVisibility = MacHudVisibility()
+    guard !hudVisibility.requestedVisible, !hudVisibility.captureHidden,
+          hudVisibility.requestShow() else {
+        throw AxonError("contract_test_failed", "Passive HUD visibility or first entrance differs.")
+    }
+    hudVisibility.beginCapture()
+    guard hudVisibility.captureHidden, !hudVisibility.requestShow(),
+          hudVisibility.endCapture(), !hudVisibility.requestShow() else {
+        throw AxonError("contract_test_failed", "Capture restoration must not replay the HUD entrance.")
+    }
+    hudVisibility.beginCapture()
+    hudVisibility.requestHide()
+    guard !hudVisibility.endCapture(), !hudVisibility.requestedVisible,
+          hudVisibility.requestShow() else {
+        throw AxonError("contract_test_failed", "Capture restoration undid Hide or blocked a later explicit show.")
+    }
+    hudVisibility.requestHide()
+    hudVisibility.beginCapture()
+    guard !hudVisibility.endCapture() else {
+        throw AxonError("contract_test_failed", "Passive capture restoration unexpectedly requested controls.")
+    }
+    _ = NSApplication.shared
+    let dormantHud = MacVisuals(), hudPath = MacFence.file + ".hud"
+    var existingHud = stat()
+    guard lstat(hudPath, &existingHud) != 0, errno == ENOENT else {
+        throw AxonError("contract_test_failed", "HUD fixture path was already occupied.")
+    }
+    try Data("[0,0,32,32]".utf8).write(to: URL(fileURLWithPath: hudPath), options: [.withoutOverwriting])
+    dormantHud.hideForCapture()
+    guard !FileManager.default.fileExists(atPath: hudPath) else {
+        throw AxonError("contract_test_failed", "Hidden HUD retained its takeover-exemption bounds.")
+    }
+    try FileManager.default.createDirectory(atPath: hudPath, withIntermediateDirectories: false)
+    dormantHud.hide()
+    var hudIsDirectory = ObjCBool(false)
+    guard FileManager.default.fileExists(atPath: hudPath, isDirectory: &hudIsDirectory), hudIsDirectory.boolValue else {
+        throw AxonError("contract_test_failed", "HUD cleanup recursively removed a directory.")
+    }
+    guard rmdir(hudPath) == 0 else { // This exact empty fixture only.
+        throw AxonError("contract_test_failed", "HUD fixture cleanup was not an empty directory.")
+    }
+    let iconAssets = try MacPhosphorIcon.validateAssets()
+    guard iconAssets == 5 else { throw AxonError("contract_test_failed", "Official HUD icon inventory differs.") }
+    let material = MacVisuals.makeMaterial(frame: NSRect(x: 0, y: 0, width: 396, height: 44), content: NSView())
+    let materialBackend = MacVisuals.materialBackend(for: material)
+    #if AGCU_MACOS26_SDK
+    if #available(macOS 26.0, *) {
+        guard materialBackend == "native_liquid_glass" else { throw AxonError("contract_test_failed", "The native glass view was not selected.") }
+    } else {
+        guard materialBackend == "visual_effect_fallback" else { throw AxonError("contract_test_failed", "The older-system material fallback differs.") }
+    }
+    #else
+    guard materialBackend == "visual_effect_fallback" else { throw AxonError("contract_test_failed", "The older-SDK material fallback differs.") }
+    #endif
     let pausedHud = MacVisuals.statePresentation(for: "paused", latched: false)
     let stoppedHud = MacVisuals.statePresentation(for: "stopped", latched: false)
     let latchedHud = MacVisuals.statePresentation(for: "active", latched: true)
-    guard activeHud.title.contains("Working"), !activeHud.isEmergency,
+    guard activeHud.title == "Antigravity is working", !activeHud.isEmergency,
           pausedHud.title.contains("Paused"), !pausedHud.isEmergency,
-          stoppedHud.title == "Stopped · Re-arm required", stoppedHud.isEmergency, stoppedHud.minimumContrast >= 8.5,
-          latchedHud.resolvedState == "stopped", latchedHud.title == "Stopped · Re-arm required", latchedHud.isEmergency else {
-        throw AxonError("contract_test_failed", "Mac HUD state presentation or emergency contrast contract differs.")
+          stoppedHud.title == "Stopped · re-arm to begin", stoppedHud.toggleTitle.isEmpty, stoppedHud.isEmergency, stoppedHud.contrastTarget >= 8.5,
+          latchedHud.resolvedState == "stopped", latchedHud.title == "Stopped · re-arm to begin", latchedHud.isEmergency else {
+        throw AxonError("contract_test_failed", "Mac HUD state presentation or emergency contrast target differs.")
     }
     guard macRole("AXWebArea") == "Document",
           macRole("AXLink") == "Hyperlink",
@@ -371,6 +425,38 @@ func macContractTest() throws {
     guard state.state == "active", state.token == token, state.grants.contains(grant), state.until > MacFenceState.now else {
         throw AxonError("contract_test_failed", "Shared state decoding differs.")
     }
+    // Pure native approval/geometry checks: no modal, consent click or desktop
+    // event is fabricated, and no real application is granted here.
+    let expectedApproval = try MacFenceState("active|approval|1000||2000|0")
+    guard MacFence.approvalStateMatches(expectedApproval, expectedApproval, latched: false, wallNow: 900, bootNow: 1000),
+          !MacFence.approvalStateMatches(expectedApproval, expectedApproval, latched: true, wallNow: 900, bootNow: 1000),
+          !MacFence.approvalStateMatches(expectedApproval, expectedApproval, latched: false, wallNow: 1000, bootNow: 1000),
+          !MacFence.approvalStateMatches(expectedApproval, expectedApproval, latched: false, wallNow: 900, bootNow: 2000) else {
+        throw AxonError("contract_test_failed", "Approval deadline/Stop classification differs.")
+    }
+    for changed in ["paused|approval|1000||0|1", "stopped||0||0|1", "idle||0||0|0",
+                    "active|other|1000||2000|0", "active|approval|1001||2000|0",
+                    "active|approval|1000||2001|0", "active|approval|1000|eA==|2000|0"] {
+        guard !MacFence.approvalStateMatches(expectedApproval, try MacFenceState(changed), latched: false, wallNow: 900, bootNow: 1000) else {
+            throw AxonError("contract_test_failed", "A changed native session could complete an old approval.")
+        }
+    }
+    let consentRect = CGRect(x: 40, y: 50, width: 300, height: 160), consentPoint = CGPoint(x: 80, y: 90)
+    func consentRow(_ owner: Int, _ rect: CGRect, _ alpha: Double = 1) -> [String: Any] {
+        [kCGWindowOwnerPID as String: NSNumber(value: owner), kCGWindowAlpha as String: NSNumber(value: alpha),
+         kCGWindowBounds as String: ["X":rect.minX,"Y":rect.minY,"Width":rect.width,"Height":rect.height]]
+    }
+    let ownModal = consentRow(777, consentRect), foreignCover = consentRow(888, consentRect)
+    guard MacPanicMonitor.consentPointVisible(consentPoint, modal: consentRect, guardian: 777, windows: [ownModal, foreignCover]),
+          !MacPanicMonitor.consentPointVisible(consentPoint, modal: consentRect, guardian: 777, windows: [foreignCover, ownModal]),
+          !MacPanicMonitor.consentPointVisible(consentPoint, modal: consentRect, guardian: 777, windows: [[:],ownModal]),
+          !MacPanicMonitor.consentPointVisible(consentPoint, modal: consentRect, guardian: 777, windows: [[kCGWindowAlpha as String:NSNumber(value:1)],ownModal]),
+          !MacPanicMonitor.consentPointVisible(consentPoint, modal: consentRect, guardian: 777, windows: []),
+          !MacPanicMonitor.consentPointVisible(CGPoint.zero, modal: consentRect, guardian: 777, windows: [ownModal]),
+          !MacPanicMonitor.consentPointVisible(consentPoint, modal: consentRect, guardian: 777, windows: [consentRow(777,consentRect.insetBy(dx: -10, dy: -10))]),
+          MacPanicMonitor.consentPointVisible(consentPoint, modal: consentRect, guardian: 777, windows: [consentRow(888,consentRect,0),ownModal]) else {
+        throw AxonError("contract_test_failed", "Native consent ownership or covering-window classification differs.")
+    }
     do { _ = try MacFenceState("active|broken|NaN|"); throw AxonError("contract_test_failed", "Malformed state accepted.") }
     catch let error as AxonError { if error.code == "contract_test_failed" { throw error } }
     for invalid in ["active|fixture|999|", "active|fixture|999||0", "active|fixture|999||invalid"] {
@@ -390,6 +476,19 @@ func macContractTest() throws {
     // Exercise the actual native fence in isolated project-local storage.
     // Refusals only: no fake live permission, application grant or input event.
     try MacFence.initialize()
+    let pendingApproval = try MacFenceState("active|approval-fixture|\(MacFenceState.now + 100_000_000)||\(MacDeadline.now + 10_000)|0")
+    try MacFence.write("active|approval-fixture|\(pendingApproval.until)||\(pendingApproval.bootUntil)|0")
+    try MacInputLedger.withLock {
+        guard try MacFence.pauseForTakeover(pendingApproval) else { throw AxonError("contract_test_failed", "Native takeover waited for held input instead of revoking it.") }
+    }
+    do {
+        try MacFence.withApprovalFence(pendingApproval) { throw AxonError("contract_test_failed", "An old approval overwrote takeover.") }
+        throw AxonError("contract_test_failed", "An old approval was accepted after takeover.")
+    } catch let error as AxonError { if error.code != "approval_changed" { throw error } }
+    guard try MacFence.read().state == "paused", try MacFence.read().cleanupPending,
+          !(try MacFence.pauseForTakeover(pendingApproval)) else {
+        throw AxonError("contract_test_failed", "Approval completion lost native takeover/cleanup state.")
+    }
     MacFence.current = ["__session": token]
     let live = "active|\(token)|\(MacFenceState.now + 10_000_000)||\(MacDeadline.now + 1000)"
     func refused(_ state: String, _ description: String) throws {
@@ -506,7 +605,7 @@ func macContractTest() throws {
     try Data("invalid journal".utf8).write(to:URL(fileURLWithPath:MacInputLedger.path))
     guard !MacInputLedger.recover() else { throw AxonError("contract_test_failed","Malformed input journal was accepted.") }
     try MacInputLedger.save(["keys":[Int](),"buttons":[Int]()])
-    emit(["ok": true, "control_contract": 1, "checks": ["shared state codec", "malformed state refusal", "canonical approval fingerprint", "sensitive action classification", "kernel process birth identity", "native idle/paused/stopped/expired/session/monitor/Stop refusals", "empty cleanup and malformed input-journal refusal"], "desktop_input_sent": false])
+    emit(["ok": true, "control_contract": 1, "checks": ["shared state codec", "malformed state refusal", "canonical approval fingerprint", "sensitive action classification", "kernel process birth identity", "native idle/paused/stopped/expired/session/monitor/Stop refusals", "empty cleanup and malformed input-journal refusal", "official Phosphor resource rendering", "SDK and runtime material selection", "capture visibility and dismissal lifecycle", "native consent ownership geometry", "approval completion and takeover fencing"], "hud_icon_assets": iconAssets, "hud_material": materialBackend, "native_glass_compiled": MacVisuals.nativeGlassCompiled, "desktop_input_sent": false])
 }
 
 func macMoveCursor(_ point: CGPoint, _ args: [String: Any]) throws -> [String: Any] {

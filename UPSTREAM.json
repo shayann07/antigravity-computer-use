@@ -5,7 +5,7 @@
     {
       "path": "server/build.mjs",
       "upstream_sha256": "81260b378fffb46573cfe475a3a336930113c8abc465d3d278bbb0851d8a4377",
-      "local_sha256": "e45a6e3c481075ef5c1e1845da7a74e7098e1484c3deda6e4795a40b08705c58",
+      "local_sha256": "10705d002dd842f47aa74e054ae1420e1a037692b260f417bbef3e52f2d5dbae",
       "modified": true
     },
     {
@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "cc2a7c64194720c1b2deb0ecca4b798ddc8cd888eaab084dc6f35c79cf747415"
+      "sha256": "43a7366dae7815ab9d858e74f0a44ddaa63f5d7656baa4057549941e3c7ba82b"
     },
     {
       "path": "server/mcp.mjs",
@@ -492,7 +492,7 @@
     },
     {
       "path": "HANDOFF.md",
-      "sha256": "23eaa2ee8abb470295af85f003640ad25de18341662c5fbe6891030840805ca6"
+      "sha256": "1ae9c259353bc224c14338e30c3ac27c775c770a61aca2446e9418131b83836c"
     },
     {
       "path": "tests/guardian-visibility.mjs",
@@ -500,7 +500,7 @@
     },
     {
       "path": "docs/CLAUDE-CODE-HANDOFF-PROMPT.md",
-      "sha256": "2c7834de05a7298dce7b1de47779e157d4447d9c884a693cdb344c0ecaee8646"
+      "sha256": "2315a5b1cdc450cf12f23b4cf98c7c6839aa55bf2d6154f022a62e94a5ba21a5"
     },
     {
       "path": "docs/BRANCHES.md",
@@ -552,7 +552,7 @@
     },
     {
       "path": "server/macos-build.mjs",
-      "sha256": "963ce75e3df84f88ce93832b50fdad425ca9d0aabbee318d2bac8a0b9bc60f88"
+      "sha256": "5890dd6013eca6128675dbc8b62d30e0858f6e3460884a93a5f020176d7e9453"
     },
     {
       "path": "tests/platform-contract.test.mjs",
@@ -564,23 +564,23 @@
     },
     {
       "path": ".github/workflows/macos.yml",
-      "sha256": "4535f967e3a7d16847d4d0a74f884d3104615fa8a15dbd138b498b889eb3c575"
+      "sha256": "7c2293cc99dbbcb696ecb7f0cdc8ea0da26d0da89fef97b4caa377c6c587d498"
     },
     {
       "path": "server/native/macos/MacControl.swift",
-      "sha256": "e0b55b81e051cc1e1cf752b3e253f2db57afdc311b2e8028567b7ece495a680e"
+      "sha256": "2c81f58db8aea0c30d3c9a85c23dfb7d52ff543338a57487b0afa103032ceb0c"
     },
     {
       "path": "server/native/macos/MacGuardian.swift",
-      "sha256": "fb29f3f9101e849d90eae48f2368b52bed1709a7cbac67eeb347762ec042804a"
+      "sha256": "f46e34852f24f3a66b4f12ed8050d4592e5f2320f11a7d0cb7a3f650689d0299"
     },
     {
       "path": "server/native/macos/MacOperations.swift",
-      "sha256": "020f9719768f5bdb9db14862adf8af5d1a6094e81c0d1263e8efc867ba0ff4bb"
+      "sha256": "19d143af580b6eccc877a5b8cc57b8cdc65353d755e6c1325d547f7a9bd0ae52"
     },
     {
       "path": "server/native/macos/MacVisuals.swift",
-      "sha256": "d597497241eb1bfc88d3e4b1683473c3b89da9b4f7121f966997e070a3549cf4"
+      "sha256": "4e0f892d365ff37ed54b788879661bf4b1236efd206de603d1111a0e7d8c5d51"
     },
     {
       "path": "server/native/macos/PrivateStorage.swift",
@@ -612,7 +612,7 @@
     },
     {
       "path": "server/update-core.mjs",
-      "sha256": "91e1e451fd7647d012c459025784dcd47040be084f06ca41f0c38f911c94a7c3"
+      "sha256": "eb1cfda6a8c051639a9d4fd620178ffe181ea46a27e3e76b04263cf68a6be189"
     },
     {
       "path": "server/auto-update.mjs",
@@ -636,11 +636,11 @@
     },
     {
       "path": "tests/recovery-update.test.mjs",
-      "sha256": "5246c9e593abad18de446577cf28b38cf200a4dec2e845b5ae4a76b6e287dafc"
+      "sha256": "02cf5fea3fd7445219406bd7323cf63b6850fab80ff023c1302615fb848bb4c6"
     },
     {
       "path": "tests/update-transaction.test.mjs",
-      "sha256": "7dceea36ea72cf07c7ac943399ef1b13e2e17e1a0f346b2a3a9f1d9bd83a1356"
+      "sha256": "93d3ce74cc807d11a9ae030b8de81009cb8512e40c06529ba8954e0d95250e1c"
     },
     {
       "path": "docs/RELIABILITY-IMPLEMENTATION.md",
@@ -648,7 +648,7 @@
     },
     {
       "path": "docs/MAC-QUALIFICATION-PROMPT.md",
-      "sha256": "7793a8a8a3538a719d85eec7db79c8deaa20c1ac2b42ccb3cf42fcfd52d38cb2"
+      "sha256": "a193806592f21c7cb9ada79a0a284de01fa74f6d5ea90bbaf64c6c592e63e46a"
     },
     {
       "path": "tests/reporting.test.mjs",
@@ -676,7 +676,7 @@
     },
     {
       "path": "tests/macos-tool-probe.test.mjs",
-      "sha256": "df6beb65abeb654b188210bf5259a1fd4467f7e5a38b9fca26d584658be71752"
+      "sha256": "87c7ab50edde9c0454e7d3ddeb8d51264cd40b6d0bb8abfdbaf6663df57eb0d2"
     },
     {
       "path": "scripts/setup-release-signing.ps1",
@@ -708,7 +708,7 @@
     },
     {
       "path": ".github/workflows/prepare-signed-release.yml",
-      "sha256": "60d1a8ff906fcc3a65e14d74a8d9512d00d8d569335dbbc9e35b7c2c568601ac"
+      "sha256": "310bedacf4deb57864eee0f9a1c309e222722b28b4afa7bf113ecf0d5a4a4463"
     },
     {
       "path": "server/recovery.mjs",
@@ -764,7 +764,7 @@
     },
     {
       "path": "docs/MACOS-QUALIFICATION.md",
-      "sha256": "c028398afbb261bc4dec0f70bee0e4a651e47acbbb3a70fc859543f1fd701992"
+      "sha256": "ad1b0743d921db5742fcf6fca919a5d84b7ad376e530f85db6ac49b37fa8dc6d"
     },
     {
       "path": "tests/MacStorageMarkerWriter.swift",
@@ -824,7 +824,7 @@
     },
     {
       "path": "THIRD_PARTY_NOTICES.md",
-      "sha256": "53d285532a28557fda36bde3dd89e56a371dc1353a2cfeaf15932d734e1af3b9"
+      "sha256": "c9366a76bb2529d7a4d943db90ff9bda9aee85a95104f40544e70a138e647ed4"
     },
     {
       "path": "docs/RELEASE.md",
@@ -837,6 +837,18 @@
     {
       "path": "docs/WINDOWS-BETA4-QUALIFICATION.md",
       "sha256": "8efb0fa4a94163923984de7f8b95b72864a047f5a01c477a905736f86b78fd7d"
+    },
+    {
+      "path": "server/native/macos/MacPhosphorIcons.swift",
+      "sha256": "ef42a8e0e3a4fa6a2e7d839fd23e22788a2c17682353fd7847ce3e3671a6e7fb"
+    },
+    {
+      "path": "tests/macos-hud-assets.test.mjs",
+      "sha256": "b22c79f5537db715d116d6b90a0b2d31fd75e9dc56e3e9cd2fb55a674fc7a27f"
+    },
+    {
+      "path": "docs/MACOS-GLASS-MATERIAL.md",
+      "sha256": "21a450eefbb2347c8e71c6e3e0de20d23404262a469e1e0e0bddbf6411218851"
     },
     {
       "path": "scripts/compare-runs.mjs",
@@ -873,6 +885,14 @@
     {
       "path": "tests/brief-reply.test.mjs",
       "sha256": "9f2b3a109d96b186184f37d4dbdcd42f0abf5b891afccc06729067d4d9f359c2"
+    },
+    {
+      "path": "tests/macos-compiler-lease.test.mjs",
+      "sha256": "0850d754dde72f423f75611e278562a90b20f7a3bee33c35da4b391eae6ac5d7"
+    },
+    {
+      "path": "docs/MACOS-CONSENT-TAKEOVER.md",
+      "sha256": "b0b0a15130e555ca7e19cae57bdd295e06116d6a6884b03bdb01bef9a542d8a8"
     }
   ],
   "external_files": [
