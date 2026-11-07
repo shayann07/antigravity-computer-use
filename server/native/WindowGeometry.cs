@@ -14,5 +14,23 @@ namespace Axon {
             foreach(Rectangle display in displays)if(display.Contains(point))return true;
             return false;
         }
+        // Move only our own HUD. Never hide or click through a foreign cover.
+        internal static bool AvoidHud(Rectangle hud,Rectangle target,Rectangle work,int margin,out Rectangle result) {
+            result=hud;
+            if(hud.Width<=0||hud.Height<=0||target.Width<=0||target.Height<=0||work.Width<hud.Width||work.Height<hud.Height)return false;
+            Rectangle padded=target;padded.Inflate(margin,margin);
+            if(!hud.IntersectsWith(padded))return true;
+            int left=work.Left+margin,right=work.Right-hud.Width-margin;
+            int top=work.Top+margin,bottom=work.Bottom-hud.Height-margin;
+            int center=work.Left+(work.Width-hud.Width)/2;
+            long best=Int64.MaxValue;
+            foreach(int y in new int[]{top,bottom})foreach(int x in new int[]{left,center,right}) {
+                Rectangle candidate=new Rectangle(x,y,hud.Width,hud.Height);
+                if(!work.Contains(candidate)||candidate.IntersectsWith(padded))continue;
+                long dx=(long)x-hud.X,dy=(long)y-hud.Y,score=dx*dx+dy*dy;
+                if(score<best){best=score;result=candidate;}
+            }
+            return best!=Int64.MaxValue;
+        }
     }
 }

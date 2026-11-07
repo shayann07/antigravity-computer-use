@@ -10,6 +10,23 @@ fix. Public updater transfer timeout #32 and banner overlap #33 were found in
 real tests. The download-deadline repair is merged source, not included in beta.4.
 Keep the full goal active; Mac and physical/hardware gates are still pending.
 
+The Windows own-HUD branch is being brought up to main `a02fabc`, including
+the lossless brief completeness fix from PR #42 and the qualification repairs.
+Its package version is `0.3.0-beta.5` for an **unpublished qualification bundle**.
+The supported bootstrap and installed deployment remain on published beta.4.
+Fresh combined tests, signed-asset preparation and exact artifact identities
+are required; no current paragraph qualifies the integrated candidate's live
+HUD movement, physical input, model timing or update transport.
+The integrated local suite completed 521 tests: 509 passed, zero failed and
+12 explicit platform/ACL skips. Signing and exact-head CI remain separate
+steps; these source checks do not qualify a live desktop or skipped ACL gate.
+
+The download deadline repair merged in PR #34 after Windows, Intel and Apple
+Silicon CI passed (local 463 tests: 451 pass, zero fail, 12 skips). It is not in
+published beta.4. The own-HUD avoidance source candidate is described in
+[its qualification procedure](docs/HUD-AVOIDANCE.md); live relocation, foreign
+overlay refusal and physical Stop tests must pass before it is shipped.
+
 The `codex/latency-evidence-validation` work selects the comparison utility from
 Antigravity's unmerged `a44e532` latency worktree, rather than merging its stale
 runtime wholesale. It repairs false pair qualification, trace validation and
