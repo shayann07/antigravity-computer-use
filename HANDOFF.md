@@ -1,5 +1,14 @@
 # Antigravity Computer Use: handoff
 
+## Current takeover — 13 November 2026
+
+Read [the verified Claude takeover](docs/CLAUDE-TAKEOVER-2026-11-13.md)
+and [all current open issues and comments](docs/CLAUDE-ISSUE-INVENTORY-2026-11-13.md)
+first. They supersede historical status below. The owner cleared the goal;
+do not recreate a goal or automation. Local uninstall is explicitly queued,
+not completed. PR44 still has one failing Windows check; four Mac checks pass.
+New issues #46–#60 include unresolved code and usability work, not only testing.
+
 ## Latest checkpoint — 2 November 2026
 
 Windows beta.4 is published and the global installation now uses the exact
