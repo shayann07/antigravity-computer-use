@@ -21,7 +21,8 @@ runtime's authority.
 
 Keep the returned `task_token` private. Prefer copying `task_command_prefix`
 from the ready response and appending the next command to that prefix; it
-already includes the correct installed launcher and task context.
+already includes the correct installed launcher and task context. Do not call
+`status` before `ready`; `ready` already reports the state you need.
 Alternatively, append `--task <task_token>` to
 all subsequent task commands, including `ready` after a human handoff and
 `end`. The CLI obtains this token inside the first `ready` call; no separate
@@ -102,6 +103,8 @@ These common command shapes are complete; use them directly without schema setup
 | `launch` | `--app EXE_OR_APP_BUNDLE --observe --reason TEXT` |
 | `snapshot` | `--hwnd H --reason TEXT [--query TEXT] [--max-nodes 500] [--image] [--settle-ms 600]` |
 | `click` | `--hwnd H --observation-id F --name TEXT --role Button --risk routine --reason TEXT [--physical true] [--image] [--max-nodes 500]`; or `--index N` in place of name/role |
+| `click` (pixels) | `--hwnd H --observation-id F --x X --y Y --risk routine --reason TEXT [--image]`; X/Y come from that frame's freshly viewed image |
+| `move` | `--hwnd H --observation-id F --x X --y Y --reason TEXT`; hover without clicking |
 | `set_value` | `--hwnd H --observation-id F --name TEXT --role Edit --text VALUE --risk routine --reason TEXT`; or `--index N` |
 | `file_dialog` | `--hwnd OWNER --observation-id F --path FILE --action open` (or `save`) `--entry-method clipboard --reason TEXT` |
 | `run` | `--hwnd H --observation-id F --reason TEXT --step COMMAND` followed by that step's flags; repeat at most 8 times, omitting per-step owner/frame |
@@ -110,7 +113,7 @@ These common command shapes are complete; use them directly without schema setup
 | `close_window` | `--hwnd H --reason TEXT` |
 | `end`, `status` | No arguments |
 
-- Inspect the returned `tree` and **open the actual `image.path` with the host image viewer** at visual checkpoints. Agent Manager's `read_file` can view its JPEGs. JSON, a reconstructed picture or an accessibility label does not prove visual behavior. Report an unavailable image viewer.
+- **Tree first.** Read the returned `tree`; it answers most questions. **Open the actual `image.path` with the host image viewer** only when you need pixel coordinates, when you are making a visual claim (layout, rendering, colour, image content), or when the tree cannot answer. Each image view costs a full model turn. Agent Manager's `read_file` can view its JPEGs. JSON, a reconstructed picture or an accessibility label does not prove visual behavior. Report an unavailable image viewer.
 - Every action consumes its `observation_id` and returns a **fresh frame and tree**. Use that reply directly. Do not take another snapshot merely to get a frame you already have. Ordinary named actions are tree-only; add `--image` when pixels or visual verification are needed. Pixel targets require a fresh viewed image.
 - Prefer observed accessibility indexes or exact **unique** `--name`, `--role`, `--automation-id`. Names resolve against that frame's bounded native snapshot, not an unbounded live search. Ambiguous/missing controls refuse; inspect rather than guess. `--query 'Export format'` returns a matching section and its child controls. Named section snapshots are tree-only by default; add `--image` for visual inspection. Queries are literal substrings, not regex. If a reply is truncated, use one relevant section query or `--max-nodes 500`, rather than many repeated full screenshots.
 - Clicks move the real animated pointer by default, including named/index targets. They retain observation-scoped resolution and native ownership and visibility checks. Use `--physical false` only when an accessible control requires a semantic action; it may leave the pointer stationary. `set_value`, invoke and other semantic actions need not move it. Do not claim pointer movement for a semantic action.
@@ -123,11 +126,12 @@ from the current task and its fresh observation.
 {{DESKTOP_COMMAND}} click --hwnd 123 --observation-id FRAME --name Settings --role Button --risk routine --reason 'Open observed settings' --max-nodes 500
 {{DESKTOP_COMMAND}} run --hwnd 123 --observation-id FRAME --reason 'Choose observed settings' --step click --name JPEG --role Button --risk routine --step click --name 'Close settings' --role Button --risk routine
 {{DESKTOP_COMMAND}} run --hwnd 123 --observation-id FRAME --reason 'Import the sample' --step click --index 7 --risk routine --step file_dialog --path 'D:\Samples\cat.jpg' --action open --entry-method clipboard --settle-ms 600
+{{DESKTOP_COMMAND}} run --hwnd 123 --observation-id FRAME --reason 'Import, start and wait' --step click --name 'Choose files' --role Button --risk routine --step file_dialog --path 'D:\Samples\cat.jpg' --action open --entry-method clipboard --settle-ms 600 --step click --name Start --role Button --risk routine --step wait --until 'Done' --timeout-ms 30000
 {{DESKTOP_COMMAND}} run --hwnd 123 --observation-id FRAME --reason 'Save the document' --step click --index 8 --risk routine --step file_dialog --path 'D:\Samples\result.txt' --action save --entry-method clipboard --settle-ms 600
 {{DESKTOP_COMMAND}} set_value --hwnd 123 --observation-id FRAME --index 9 --text 'Sample' --risk routine --reason 'Set the observed field'
 ```
 
-Fetch only unfamiliar command schemas in **one** `describe move drag scroll run` call. Do not read every schema, implementation or historical test script to operate an app. Named flags need no JSON request/plan files; automatic receipts already record bounded timings/delivery. Use UTF-8 `--text-file` for large generated text. Keep user-facing progress brief, without raw trees/log dumps.
+Fetch only unfamiliar command schemas in **one** `describe drag scroll` call; the table above already covers clicks, hover and `run`. Do not read every schema, implementation or historical test script to operate an app. Named flags need no JSON request/plan files; automatic receipts already record bounded timings/delivery. Use UTF-8 `--text-file` for large generated text. Keep user-facing progress brief, without raw trees/log dumps.
 
 For processing, use `wait --hwnd 123 --until 'ACTUAL EXPECTED TEXT' --timeout-ms 30000 --reason 'Wait for the observed result'`. If you know the app's actual failure labels, `--abort-on 'Failed,Cancelled'` stops early when one appears; failure wins if both success and failure are visible. Labels are literal substrings; select specific observed text. Do not combine `--query` with `--abort-on`: filtering may hide failure labels, so this combination is refused before input. If a failure-aware wait reports an incomplete tree, inspect the result before continuing; do not replay the previous action. Even an unfiltered accessibility tree may omit offscreen or inaccessible errors; inspect the result independently. A `--step wait` may follow an action in a batch; combined polling budgets are at most30seconds, and an unmet or aborted wait stops subsequent input. An in-flight observation may extend actual elapsed time beyond that budget; do not assume the request has finished or start another action until its outcome is known. Never invent a completion or failure label. A known output can instead be watched by ordinary authorized file tools with a bounded deadline, then checked independently and against the GUI. Start once; a timeout is a reason to inspect, never resubmit.
 
@@ -150,7 +154,9 @@ the saved text against the original code points, allowing only explicitly
 requested line-ending/encoding differences. A screenshot, byte count or hex dump
 without comparison does not prove exact content. Report a mismatch honestly.
 
-Click the actual Open/Browse/Save control first. `file_dialog` fills an **already-open picker** using the **owner app's hwnd and fresh owner frame**, exact path and `--action open`/`save`. Prefer explicit `--entry-method clipboard` for authorized temporary clipboard use: atomic filename entry must match readback before confirmation. The compatibility keyboard method can lose characters through Windows text services; `file_dialog_path_mismatch` means confirmation was refused. Never blindly send Enter/replay. Owner screenshots can omit a separate modal; discover and inspect the actual dialog if needed, while keeping file_dialog bound to its owner. Dialog closure alone does not prove import/save completed.
+If the app opens with earlier work still loaded (a queue, a previous file, a half-finished form), use its single visible reset or clear control once, then continue. Do not hunt through menus to tidy it.
+
+Click the actual Open/Browse/Save control first. In a batch, put `file_dialog` only behind the app's visible, labelled Open/Browse/Choose control; never behind a guessed control, such as an unlabelled `+` or a menu you have not seen open. If you are unsure the control opens a picker, click it alone, look, then fill the dialog. `file_dialog` fills an **already-open picker** using the **owner app's hwnd and fresh owner frame**, exact path and `--action open`/`save`. Prefer explicit `--entry-method clipboard` for authorized temporary clipboard use: atomic filename entry must match readback before confirmation. The compatibility keyboard method can lose characters through Windows text services; `file_dialog_path_mismatch` means confirmation was refused. Never blindly send Enter/replay. Owner screenshots can omit a separate modal; discover and inspect the actual dialog if needed, while keeping file_dialog bound to its owner. Dialog closure alone does not prove import/save completed.
 
 ## Control, permission and recovery
 
@@ -160,7 +166,9 @@ Standalone uses local approval dialogs. Operator-installed host-managed mode rel
 
 On `input_completed:true` plus a verification error, input already ran; observe its effect before continuing. `delivery_unknown:true` means it may have run: never retry via another provider/pixel/Enter. A stale frame, moved window or restarted worker needs fresh state. `point_off_desktop` sends no input: explicit `fit_window` can restore/fit the approved app, then inspect its fresh state. Never clamp onto another app, relax identity/occlusion checks or change virtual desktops. For other failures, read [recovery guidance](references/recovery.md).
 
-Verify the requested result in the real app and its produced artifact, restore test-modified preferences, close only owned disposable windows with `close_window --hwnd HANDLE --reason ...`, and call `end`. A later task can begin without restarting Antigravity. For broader development/QA qualification, see [application verification](references/app-verification.md).
+Report the result within a fixed budget. Confirm completion from the app's own text in the tree, then check the produced artifact once (one file check of the expected path). If the app does not show the output path, use at most one visible control that opens the output folder, or say the path was not shown. Do not explore history panels, hover for tooltips or search the disk to find it. Restore test-modified preferences, close only owned disposable windows with `close_window --hwnd HANDLE --reason ...`, and call `end`.
+
+If you give up before finishing (an error you cannot resolve, a refusal, or a task you abandon), still call `end` once before reporting, so your open task does not block the next conversation with `task_owned`. If `end` is refused, report its reply and `recovery` instead of retrying. This does not apply while you are waiting for a human handoff. A later task can begin without restarting Antigravity. For broader development/QA qualification, see [application verification](references/app-verification.md).
 
 ## Failure reports and updates
 

@@ -22,3 +22,34 @@ test('computer-use skill documents a supported ready entrypoint and bounded huma
   assert.match(skill, /stop issuing controller calls and wait for the human/);
   assert.match(skill, /Do not poll,\s*repeat `run`, retry a drag/);
 });
+
+test('every command example in the computer-use skill parses with the real CLI', async () => {
+  const {parseArguments, parseRunArguments} = await import('../scripts/arguments.mjs');
+  const words = line => [...line.matchAll(/'([^']*)'|(\S+)/g)].map(m => m[1] ?? m[2]);
+  const examples = [...skill.matchAll(/```powershell\n([\s\S]*?)```/g)]
+    .flatMap(block => block[1].split('\n'))
+    .map(line => line.trim())
+    .filter(line => line.startsWith('{{DESKTOP_COMMAND}} ') && line !== '{{DESKTOP_COMMAND}} ready')
+    .map(line => words(line).slice(1));
+  // Pixel rows in the command table, with placeholders filled.
+  examples.push(['click', '--hwnd', '1', '--observation-id', 'F', '--x', '10', '--y', '20', '--risk', 'routine', '--reason', 'r']);
+  examples.push(['move', '--hwnd', '1', '--observation-id', 'F', '--x', '10', '--y', '20', '--reason', 'r']);
+  assert(examples.length >= 7, 'expected the skill examples to be found');
+  assert(examples.some(([command, ...rest]) => command === 'run' && rest.includes('wait')), 'a batch example must end with a wait');
+  for (const [command, ...rest] of examples) {
+    const schema = describeCommand(command).inputSchema;
+    const args = command === 'run' ? parseRunArguments(schema, rest, describeCommand) : parseArguments(schema, rest);
+    assert.equal(typeof args, 'object', command);
+  }
+  assert.doesNotMatch(skill, /describe move drag scroll run/);
+});
+
+test('computer-use skill bounds image views, result reporting and abandoned tasks', () => {
+  assert.match(skill, /\*\*Tree first\.\*\*/);
+  assert.match(skill, /Pixel targets require a fresh viewed image/);
+  assert.match(skill, /check the produced artifact once/);
+  assert.match(skill, /Do not explore history panels, hover for tooltips or search the disk/);
+  assert.match(skill, /still call `end` once before reporting/);
+  assert.match(skill, /never behind a guessed control/);
+  assert.match(skill, /Do not call\s+`status` before `ready`/);
+});
