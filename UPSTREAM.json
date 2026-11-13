@@ -360,7 +360,7 @@
     },
     {
       "path": "scripts/bundle.mjs",
-      "sha256": "3c40c9cb68a7ab4f38c62e1a04e0a4882fc6d2cfcb81a8853c130c97290af2dd"
+      "sha256": "6c8c8d73f7b94b5b9ab5747dc42e5e23a641d7ab4bd533669f6d766a33a3b526"
     },
     {
       "path": "tests/install.test.mjs",
@@ -692,7 +692,7 @@
     },
     {
       "path": ".github/workflows/ci.yml",
-      "sha256": "08052bc690e2c4afc45241f5149d87252d461feea92d7370b95484497b2befd8"
+      "sha256": "4ed80a8befd859c4f6a52036f811cbbc792f7e0396578aaad96181b3bc56236e"
     },
     {
       "path": "release-public-key.pem",
