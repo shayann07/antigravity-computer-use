@@ -732,7 +732,7 @@
     },
     {
       "path": "server/atomic-json.mjs",
-      "sha256": "528f2f0a61db6086b11f2dc7337c32d727617b85f97cb06b4138c36fa755fc2b"
+      "sha256": "f2a7fe5576d554caa0f6026cbdb461245ea7210df2a90c7dea630e8471403a99"
     },
     {
       "path": "tests/atomic-json.test.mjs",
