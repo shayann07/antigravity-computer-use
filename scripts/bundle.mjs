@@ -28,8 +28,9 @@ fs.copyFileSync(path.join(root,'server/update-notice.mjs'),path.join(out,'server
 fs.copyFileSync(path.join(root,'server/atomic-json.mjs'),path.join(out,'server/atomic-json.mjs'));
 if(fs.existsSync(path.join(root,'release-public-key.pem')))fs.copyFileSync(path.join(root,'release-public-key.pem'),path.join(out,'release-public-key.pem'));
 for(const folder of ['skills','scripts','licenses'])fs.cpSync(path.join(root,folder),path.join(out,folder),{recursive:true});
-for(const f of ['README.md','HANDOFF.md','CONTRIBUTING.md','SECURITY.md','LICENSE','THIRD_PARTY_NOTICES.md','UPSTREAM.json','VALIDATION.md','PROJECT-STATUS.md','IMPLEMENTATION_PROGRESS.md'])if(fs.existsSync(path.join(root,f)))fs.copyFileSync(path.join(root,f),path.join(out,f));
-fs.cpSync(path.join(root,'docs'),path.join(out,'docs'),{recursive:true});
+for(const f of ['README.md','CONTRIBUTING.md','SECURITY.md','LICENSE','THIRD_PARTY_NOTICES.md','UPSTREAM.json','VALIDATION.md'])if(fs.existsSync(path.join(root,f)))fs.copyFileSync(path.join(root,f),path.join(out,f));
+// Internal handoff and maintainer notes stay in the repository, not in releases.
+fs.cpSync(path.join(root,'docs'),path.join(out,'docs'),{recursive:true,filter:source=>path.relative(path.join(root,'docs'),source).split(path.sep)[0]!=='internal'});
 const sha=file=>createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const nativeSource=createHash('sha256');for(const file of SOURCES)nativeSource.update(path.basename(file)+'\0').update(fs.readFileSync(file));
 fs.writeFileSync(path.join(out,'bundle-manifest.json'),JSON.stringify({version,platform:process.platform,arch:process.arch,node:process.version,node_sha256:sha(path.join(out,platform.node)),host_sha256:sha(path.join(out,'bin',platform.host)),storage_guard_sha256:sha(path.join(out,'bin',platform.storage)),storage_source_sha256:sha(path.join(root,process.platform==='darwin'?'server/native/macos/PrivateStorage.swift':'server/native/StorageGuard.cs')),native_source_sha256:nativeSource.digest('hex'),license_node_revision:'v24.20.0',built_at:new Date().toISOString(),default_direct_permission_mode:'standalone',permission_modes:['standalone','host-managed'],qualification:process.platform==='darwin'?'experimental-native-adapter-interactive-qualification-pending':'windows-beta'},null,2));

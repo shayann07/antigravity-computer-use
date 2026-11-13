@@ -21,7 +21,7 @@
   <a href="#see-it-in-action">Demo</a> ·
   <a href="#install">Install</a> ·
   <a href="docs/INSTALLATION.md">Documentation</a> ·
-  <a href="HANDOFF.md">Roadmap &amp; handoff</a>
+  <a href="docs/internal/HANDOFF.md">Roadmap &amp; handoff</a>
 </p>
 
 Antigravity is the agent. This open-source skill gives its existing model native
@@ -140,15 +140,15 @@ this project adds no separate model service or telemetry. [Security model](SECUR
 
 | Area | Verified evidence and remaining work |
 | --- | --- |
-| **Automated checks** | See the [current handoff](HANDOFF.md) for the candidate's exact test and CI results. ACL-related skips are not native qualification passes. |
+| **Automated checks** | See the [current handoff](docs/internal/HANDOFF.md) for the candidate's exact test and CI results. ACL-related skips are not native qualification passes. |
 | **Physical safety** | Earlier Windows builds passed held-drag Esc, persisted Stop, human Re-arm, a second task and clean End. These are historical checks, not proof for every later build. |
 | **Real app workflow** | An earlier Windows build completed genuine native-AI Upscaly PNG and JPG exports; independent dimensions and hashes are recorded in the handoff. |
 | **Speed** | The earlier High-effort Antigravity tasks took **4m29s PNG / 4m33s JPEG**. Host/model orchestration dominates the remaining delay. These are historical witnesses, not a current speed guarantee. |
 | **Still open** | Live physical queued/held-input interruption on the final helper, real mixed-DPI/multi-monitor hardware, broader applications and cursor/glow feedback. |
 | **Platforms** | This release contains Windows x64 assets. macOS ARM/Intel support remains experimental and is not included in this Windows-only release. Linux is unsupported. |
 
-[Current handoff and TODOs](HANDOFF.md) · [Validation](VALIDATION.md) ·
-[Performance measurements](docs/PERFORMANCE.md) · [Project status](PROJECT-STATUS.md)
+[Current handoff and TODOs](docs/internal/HANDOFF.md) · [Validation](VALIDATION.md) ·
+[Performance measurements](docs/PERFORMANCE.md) · [Project status](docs/internal/PROJECT-STATUS.md)
 
 ## Build and contribute
 
@@ -177,7 +177,7 @@ display scaling, app/version, expected result and the failed step. Remove privat
 data before sharing evidence.
 
 [Contributing](CONTRIBUTING.md) · [Review guide](docs/review-guide.md) ·
-[Claude Code continuation brief](docs/CLAUDE-CODE-HANDOFF-PROMPT.md) ·
+[Claude Code continuation brief](docs/internal/CLAUDE-CODE-HANDOFF-PROMPT.md) ·
 [Branch policy](docs/BRANCHES.md) · [Report a bug](https://github.com/shayann07/antigravity-computer-use/issues/new)
 
 ## Open source and attribution
@@ -191,4 +191,4 @@ MIT quickstarts. Exact revisions, modifications and hashes are recorded in
 
 This is an independent project, not an official Google, OpenAI or Anthropic product.
 
-[License](LICENSE) · [Security](SECURITY.md) · [Implementation history](IMPLEMENTATION_PROGRESS.md)
+[License](LICENSE) · [Security](SECURITY.md) · [Implementation history](docs/internal/IMPLEMENTATION_PROGRESS.md)

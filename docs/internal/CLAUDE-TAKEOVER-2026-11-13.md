@@ -31,7 +31,7 @@ Uninstall is queued deliberately because a managed sidecar and two scopes requir
 
 1. Inspect current ownership/status using the installed commands, not source CLI. If another task is active, defer shutdown and record its state; do not End a foreign task.
 2. Back up only relevant config entries/deployment pointers under ignored .localdata/uninstall-<date>. Preserve Stop, incident data, update policy and rollback records. Do not publish these private files.
-3. Disable/remove only sidecars.antigravity-computer-use in C:\Users\shaya\.gemini\config\config.json, preserving all unrelated settings. Inspect/remove its matching definition under .gemini/config/sidecars/antigravity-computer-use/sidecar.json only after verifying its target. Prevent host auto-restart before shutdown; do not close/restart Antigravity.
+3. Disable/remove only sidecars.antigravity-computer-use in %USERPROFILE%\.gemini\config\config.json, preserving all unrelated settings. Inspect/remove its matching definition under .gemini/config/sidecars/antigravity-computer-use/sidecar.json only after verifying its target. Prevent host auto-restart before shutdown; do not close/restart Antigravity.
 4. Use the installed normal shutdown after task cleanup. If cleanup is refused, retain files and record the actual blocker; never force-delete Stop/ledger data or kill a potentially held-input watchdog.
 5. Remove only matching global skill .gemini/config/skills/computer-use and project .agents/skills/computer-use; examine any legacy profiles and MCP entry but do not delete unrelated entries. Verify pointers target THIS installation before edits.
 6. After confirmed process exit, archive or remove this installation root only. Validate resolved paths before recursive operations. Preserve repository and backups/evidence. Verify no matching host registration/launcher points to a removed root. Do not install a replacement unless requested for qualification.
@@ -103,7 +103,7 @@ Owner requires the actual published LiquidGlass library on Windows, not copied/i
 
 Useful local records: .localdata/PAUSED-CURRENT.md, INSTALLATION-CURRENT.md, CLEANUP.md, final2-windows-ci-failure.log, windows-beta4-acceptance, combined-candidate-full-suite.log. Older logs have older test totals/heads. Some historical duplicate bundles were removed to reclaim22.413GB; metadata remaining does not mean binaries still exist.
 
-Stable app: .localdata/one-line-demo-20261028/stable-app/upscaly.exe. Cached input: .localdata/demo-capture-fix-20261028/portrait.jpg. Original sample_data lives under D:\Work\AndroidStudioProjects\SideProjects\kmp\PhotoResizer\docs\sample_data. Preserve private Upscaly settings/work. Never launch disliked1.1 as substitute for stable1.0.9.
+Stable app: .localdata/one-line-demo-20261028/stable-app/upscaly.exe. Cached input: .localdata/demo-capture-fix-20261028/portrait.jpg. Original sample_data lives under the owner's private sample-data folder. Preserve private Upscaly settings/work. Never launch disliked1.1 as substitute for stable1.0.9.
 
 Owner wants direct autonomous work, clear done/partial/blocked records, fast practical agent UX and honest proofs. Do not restart/close Antigravity or interfere with another agent's desktop session. Do not contact the unrelated deputy. Do not recreate cleared goal or scheduling. Ordinary tasks cannot self-modify/self-merge; shareable diagnostics exclude screenshots/text/clipboard/private paths and need reporting consent. Only open-source/documented reuse with attribution.
 
