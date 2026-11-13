@@ -35,6 +35,19 @@ remain usable. Check light/dark content and the human-selected Reduce Motion,
 Reduce Transparency and Increase Contrast states. Do not silently change global
 accessibility settings or manufacture OS approvals. Record unavailable cases.
 
+Exercise repeated screenshots while the real controls are visible: capture
+restore should not restart the entrance animation. Dismiss stopped controls
+while a capture is in flight; a late restore must not reopen them. Explicit
+Show must still work afterward. Use actual screenshot/action observations;
+native state-policy tests alone do not prove smooth live compositing.
+Challenge issue #43 with an actual trusted confirmation in Smart takeover:
+review docs/MACOS-CONSENT-TAKEOVER.md and its candidate's native transition
+and approval-fence contracts first. They are not physical confirmation evidence.
+Allow/Deny interaction must not produce an unwanted takeover/repeated-approval
+loop. Keep physical Esc independent. Do not silently change global policy to
+obtain this case; use an authorized private qualification setup and report any
+unavailable condition. The capture-visibility fix does not resolve that issue.
+
 Run source/native checks, build and install the matching candidate in a private
 per-user path using the supported installer. Preserve settings, Stop and rollback.
 Do not weaken storage guards, change parent ACLs or bypass OS security.

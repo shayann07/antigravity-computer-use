@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { macToolProbe, publishMacBundle } from './macos-build.mjs';
+import { macToolProbe, publishMacBundle, macSDKFlags, macHudIconFiles, copyMacHudIcons, macCompilerLease, waitForMacCompilerWinner } from './macos-build.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const WIN_SOURCES = [
@@ -33,7 +33,7 @@ const WIN_SOURCES = [
   path.join(HERE, 'native', 'DesktopContext.cs'),
   path.join(HERE, 'native', 'WindowGeometry.cs'),
 ];
-const MAC_SOURCES = [path.join(HERE, 'native', 'AxonHost.swift'), ...['PrivateStorage.swift','MacControl.swift','MacGuardian.swift','MacVisuals.swift','MacOperations.swift'].map(name=>path.join(HERE,'native','macos',name))];
+const MAC_SOURCES = [path.join(HERE, 'native', 'AxonHost.swift'), ...['PrivateStorage.swift','MacControl.swift','MacGuardian.swift','MacVisuals.swift','MacPhosphorIcons.swift','MacOperations.swift'].map(name=>path.join(HERE,'native','macos',name))];
 
 export const SOURCES = process.platform === 'darwin' ? MAC_SOURCES : WIN_SOURCES;
 export const SOURCE = SOURCES[0];
@@ -268,15 +268,19 @@ function ensureMacHost({ force = false, log = () => {} } = {}) {
   }
   const sdkResult=spawnSync('/usr/bin/xcrun',['--sdk','macosx','--show-sdk-path'],{encoding:'utf8',timeout:30000});
   const sdk=macToolProbe(sdkResult,'SDK');
+  const sdkVersion=macToolProbe(spawnSync('/usr/bin/xcrun',['--sdk','macosx','--show-sdk-version'],{encoding:'utf8',timeout:30000}),'SDK version');
+  const sdkFlags=macSDKFlags(sdkVersion);
 
   const h = createHash('sha256');
   for (const f of SOURCES) h.update(fs.readFileSync(f));
-  h.update('\0' + swiftc + '\0mac-guard-v1\0'+process.arch+'\0'+sdk);
+  for (const f of macHudIconFiles)h.update(path.basename(f)+'\0').update(fs.readFileSync(f));
+  h.update('\0' + swiftc + '\0mac-guard-v2-wmo\0'+process.arch+'\0'+sdk+'\0'+sdkVersion);
   const stamp = h.digest('hex');
   const app=path.join(binDir(),'AxonHost-'+stamp.slice(0,16)+'.app');
   const exe=path.join(app,'Contents','MacOS','AxonHost');
   const verifyApp=folder=>{
     if(!fs.existsSync(path.join(folder,'Contents','MacOS','AxonHost'))||!fs.existsSync(path.join(folder,'Contents','Info.plist')))throw new BuildError('Existing macOS host bundle is incomplete.',null);
+    for(const file of macHudIconFiles)if(!fs.existsSync(path.join(folder,'Contents/Resources/Phosphor',path.basename(file))))throw new BuildError('The macOS HUD is missing an official icon asset.',null);
     const checked=spawnSync('/usr/bin/codesign',['--verify','--strict',folder],{encoding:'utf8',timeout:30000});
     if(checked.status!==0)throw new BuildError('Existing macOS host bundle signature could not be verified.',checked.stderr||checked.stdout);
   };
@@ -288,6 +292,20 @@ function ensureMacHost({ force = false, log = () => {} } = {}) {
   }
 
   fs.mkdirSync(binDir(), { recursive: true });
+  const cacheExistedBeforeLease=fs.existsSync(exe);
+  const lease=macCompilerLease(path.join(binDir(),'.compile-'+stamp));
+  try {
+  if(!lease.acquired&&force&&cacheExistedBeforeLease)throw new BuildError('A forced source build is already in progress. Inspect that build before retrying; the old cache is not new compilation evidence.',null);
+  if(!lease.acquired)return waitForMacCompilerWinner(()=>{
+    if(!fs.existsSync(exe))return null;verifyApp(app);
+    return {exe,rebuilt:false,compiler:swiftc};
+  });
+  lease.assertHeld();
+  // A peer may publish between our initial cache check and lease acquisition.
+  // A fresh-cache concurrent request must reuse that verified winner too.
+  if(!cacheExistedBeforeLease&&fs.existsSync(exe)){
+    verifyApp(app);return {exe,rebuilt:false,compiler:swiftc};
+  }
   log('compiling host with ' + swiftc);
   const stage=fs.mkdtempSync(path.join(binDir(),'.build-'));
   const stagedApp=path.join(stage,'AxonHost.app'),temp=path.join(stagedApp,'Contents','MacOS','AxonHost');
@@ -295,8 +313,10 @@ function ensureMacHost({ force = false, log = () => {} } = {}) {
 
   try {
 
+  const compilationStarted=performance.now();
   const res = spawnSync(swiftc, [
-    '-O', '-parse-as-library','-sdk',sdk,'-target',process.arch==='arm64'?'arm64-apple-macos14.0':'x86_64-apple-macos14.0', '-o', temp,
+    '-O', '-whole-module-optimization', '-parse-as-library','-sdk',sdk,'-target',process.arch==='arm64'?'arm64-apple-macos14.0':'x86_64-apple-macos14.0', '-o', temp,
+    ...sdkFlags,
     '-framework', 'AppKit',
     '-framework', 'ApplicationServices',
     '-framework', 'CoreGraphics',
@@ -305,6 +325,7 @@ function ensureMacHost({ force = false, log = () => {} } = {}) {
     ...SOURCES,
   ], { encoding: 'utf8', timeout: 120000 });
 
+  log('macOS host compiler elapsed_ms=' + Math.round(performance.now()-compilationStarted));
   if (res.error) throw new BuildError('Could not run swiftc: ' + res.error.message, null);
   if (res.status !== 0 || !fs.existsSync(temp)) {
     const out = ((res.stdout || '') + (res.stderr || '')).trim();
@@ -314,15 +335,18 @@ function ensureMacHost({ force = false, log = () => {} } = {}) {
       'Report this project build failure at https://github.com/shayann07/antigravity-computer-use/issues.');
   }
   try { fs.chmodSync(temp, 0o755); } catch {}
+  copyMacHudIcons(stagedApp);
   fs.writeFileSync(path.join(stagedApp,'Contents','Info.plist'),'<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>io.github.shayann07.antigravity-computer-use</string><key>CFBundleExecutable</key><string>AxonHost</string><key>CFBundleName</key><string>Antigravity Computer Use</string><key>CFBundleDisplayName</key><string>Antigravity Computer Use</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleVersion</key><string>1</string><key>LSUIElement</key><true/><key>NSHighResolutionCapable</key><true/><key>LSMinimumSystemVersion</key><string>14.0</string></dict></plist>');
   const signed=spawnSync('/usr/bin/codesign',['--force','--sign','-',stagedApp],{encoding:'utf8',timeout:30000});
   if(signed.status!==0)throw new BuildError('Ad-hoc signing of the native Mac helper failed.',signed.stderr||signed.stdout);
   verifyApp(stagedApp);
+  lease.assertHeld();
   const published=publishMacBundle(stagedApp,app,verifyApp);
   warmUp(exe, log);
   log('host built at ' + exe);
   return { exe, rebuilt: published, compiler: swiftc };
   } finally { fs.rmSync(stage,{recursive:true,force:true}); }
+  } finally { lease.release(); }
 }
 
 // Allow `node build.mjs` for a manual/diagnostic build.

@@ -2,6 +2,7 @@ import fs from 'node:fs';import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {readTaskState} from '../server/atomic-json.mjs';
 import {acquireServiceLease} from '../server/service-lease.mjs';
+import {readStopLatch} from '../server/recovery.mjs';
 export function rollbackPlan(file){
 if(!file)throw new Error('Pass the exact backups/<timestamp>/rollback.json to restore.');
 const data=JSON.parse(fs.readFileSync(path.resolve(file),'utf8'));
@@ -20,6 +21,8 @@ export function rollback(file,{guard=()=>{}}={}){return restoreRollback(rollback
 function restoreRollback({data,roots},guard){
 guard();
 for(const root of roots){
+const stop=readStopLatch(path.join(root,'data','emergency.stop'));
+if(stop?.unconfirmed||stop?.invalid)throw Error('stop_recovery_required_before_rollback');
 if(readTaskState(path.join(root,'data','task-state.json')))throw Error('task_open_finish_before_rollback');
 const sessionFile=path.join(root,'data/desktop-session.json');if(fs.existsSync(sessionFile)){
  const session=JSON.parse(fs.readFileSync(sessionFile,'utf8'));if(!Number.isSafeInteger(session.pid)||session.pid<=0)throw Error('Invalid live-session metadata; inspect before rollback.');

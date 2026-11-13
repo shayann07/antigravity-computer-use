@@ -8,6 +8,7 @@ import {acquireServiceLease} from '../server/service-lease.mjs';
 import {request} from './desktop.mjs';
 import {writeAtomicJSON} from '../server/atomic-json.mjs';
 import {rollbackGuarded} from './rollback.mjs';
+import {readStopLatch} from '../server/recovery.mjs';
 const root=fileURLToPath(new URL('../',import.meta.url));
 export async function update(target,command,{fetcher=fetch,adapters={}}={}){
  target=path.resolve(target);
@@ -126,6 +127,8 @@ async function updateLocked(target,command,{fetcher,adapters}){
    }
   }
   const current=cli(installed,['status']);if(current.ok!==true)throw Error('update_controller_check_failed');if(!['idle','not_running','stopped'].includes(current.state)||current.approved_apps?.length)return {deferred:true,next_action:'wait_for_task_end'};
+  if(['guardian_stop_unconfirmed','stop_persistence_failed','guard_persistence_failed'].includes(current.control_reason))return {deferred:true,next_action:'inspect_stop_recovery'};
+  const localStop=readStopLatch(path.join(target,'data','emergency.stop'));if(localStop?.unconfirmed||localStop?.invalid)return {deferred:true,next_action:'inspect_stop_recovery'};
   const serviceRunning=current.state!=='not_running'&&current.reconnect_required!==true;
   // Older services cannot prove whether an idle conversation still owns an
   // open task. Do not replace them automatically on the basis of idle alone.

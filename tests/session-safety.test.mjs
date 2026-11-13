@@ -3,6 +3,22 @@ import test from 'node:test';import assert from 'node:assert/strict';import fs f
 import {EventEmitter,once} from 'node:events';import {storageOperation} from '../server/storage.mjs';import {acquireServiceLease} from '../server/service-lease.mjs';
 import {spawn} from 'node:child_process';
 const inertFence=()=>({assertHeld(){},async release(){}});
+
+test('stale cleanup distinguishes a new verified fence helper from live or replaced owners',async t=>{
+ for(const scenario of ['own-helper','foreign-live','already-live','changed-record']){
+  const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'pid-reuse-'));let spawned=false,released=0;
+  const s=new Sessions({dir,isAlive:()=>scenario==='already-live'||spawned&&scenario!=='changed-record',acquireInputLease:async()=>{
+   spawned=true;if(scenario==='changed-record')fs.writeFileSync(s.lease,JSON.stringify({pid:124,at:2}));
+   return {pid:scenario==='own-helper'?123:456,assertHeld(){},async release(){released++;}};
+  }});
+  try{
+   fs.writeFileSync(s.lease,JSON.stringify({pid:123,at:1}));
+   if(scenario==='own-helper'){assert((await s.clearVerifiedStale(123)).cleared);assert(!fs.existsSync(s.lease));}
+   else{await assert.rejects(s.clearVerifiedStale(123),/not confirmed gone/);assert(fs.existsSync(s.lease));}
+   assert.equal(released,scenario==='already-live'?0:1);
+  }finally{fs.rmSync(dir,{recursive:true,force:true});}
+ }
+});
 test('peer guidance describes only the scope actually coordinated',()=>{
  const s=new Sessions({dir:testDirectory('peer-guidance'),sessionId:'advisory'});s.peers=()=>[{pid:123,label:'session 2',session_id:'different'}];
  const note=s.note(null,{always:true}),description=s.describe();

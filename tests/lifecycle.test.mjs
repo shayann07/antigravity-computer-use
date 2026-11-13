@@ -12,6 +12,13 @@ function fixture(){
  const sessions={register(){},close(){}};
  return new Runtime({guardian,driver,sessions});
 }
+test('status is read-only after end and ready reports when it starts a new task',async()=>{
+ const r=fixture();r.guardian.request=async()=>({state:'idle',controls_visible:true});
+ const first=await r.ready();assert.equal(first.task_started,true);assert.equal(first.task_open,true);
+ assert.equal((await r.ready()).task_started,false);
+ await r.finish();for(let n=0;n<2;n++)assert.equal(r.status().task_open,false);
+ const next=await r.ready();assert.equal(next.task_started,true);assert.equal(next.task_open,true);
+});
 test('task reservation survives controller replacement until confirmed End',async()=>{
  const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'agcu-task-state-')),file=path.join(dir,'task-state.json');
  const make=()=>{const guardian=new EventEmitter();guardian.send=()=>{};return new Runtime({guardian,driver:{async abort(){}},sessions:{register(){},close(){}},taskFile:file});};
@@ -62,6 +69,26 @@ test('recovered End closes only after old Windows ledger and native processes ve
   assert.equal(r.status().recovered_task,true);assert.equal((await r.finish()).ended,true);assert.equal(r.status().task_open,false);assert.equal(JSON.parse(fs.readFileSync(file)).open,false);
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
+test('recovered End closes a prior task that never dispatched input only when its owner is gone and its ledger is empty',{skip:process.platform!=='win32'},async t=>{
+ const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'undispatched-prior-')),file=path.join(dir,'task-state.json');
+ const deadGuard='guard-2147483647-12345678-1234-1234-1234-123456789abc.state',liveGuard=`guard-${process.pid}-12345678-1234-1234-1234-123456789abd.state`;
+ const restart=()=>{const guardian=new EventEmitter();guardian.send=()=>{};return new Runtime({guardian,driver:{async abort(){}},sessions:{register(){},close(){},async clearVerifiedStale(pid){assert.equal(pid,2147483647);}},taskFile:file});};
+ const write=(record,inputs='')=>{fs.writeFileSync(file,JSON.stringify({schema:1,open:true,watchdogs_complete:true,...record}));fs.writeFileSync(path.join(dir,record.guard),'idle||0|');if(inputs!==null)fs.writeFileSync(path.join(dir,record.guard+'.inputs'),inputs);};
+ try{
+  try{storageOperation('data',dir);}catch(error){if(['storage_unsafe_ancestor','insecure_storage_ancestor','storage_permissions_conflict'].includes(error.code)){t.skip('native private storage qualification refused: '+error.code);return;}throw error;}
+  // Missing dispatch evidence is not proof that no input was sent.
+  write({guard:deadGuard,children:[]});await assert.rejects(restart().finish(),e=>e.code==='recovered_cleanup_unverified');assert.equal(JSON.parse(fs.readFileSync(file)).open,true);
+  // Recorded native workers mean dispatch may have started.
+  write({guard:deadGuard,children:[2147483645],dispatched:false});await assert.rejects(restart().finish(),e=>e.code==='recovered_cleanup_unverified');
+  // A non-empty input ledger is held-input evidence.
+  write({guard:deadGuard,children:[],dispatched:false},'k:65:0:0');await assert.rejects(restart().finish(),e=>e.code==='recovered_cleanup_unverified');
+  // A live owner could still dispatch after this check.
+  write({guard:liveGuard,children:[],dispatched:false});const live=restart();assert.equal((await live.ready()).next_action,'inspect_prior_input_cleanup');await assert.rejects(live.finish(),e=>e.code==='recovered_cleanup_unverified');assert.equal(JSON.parse(fs.readFileSync(file)).open,true);
+  write({guard:deadGuard,children:[],dispatched:false});const r=restart();assert.equal(r.status().recovered_task,true);
+  const advice=await r.ready();assert.equal(advice.ready,false);assert.equal(advice.next_action,'end_recovered_task');assert.equal(advice.replay_allowed,false);assert.equal(JSON.parse(fs.readFileSync(file)).open,true);
+  assert.equal((await r.finish()).ended,true);assert.equal(r.status().task_open,false);assert.equal(JSON.parse(fs.readFileSync(file)).open,false);
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
 test('recovered End waits for actual prior process exits and preserves Stop',{skip:process.platform!=='win32',timeout:30000},async t=>{
  const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'prior-processes-')),file=path.join(dir,'task-state.json'),latch=path.join(dir,'emergency.stop');let children=[],controller;
  const previous={data:process.env.AGCU_DATA_DIR,plugin:process.env.CU_PLUGIN_DATA,claude:process.env.CLAUDE_PLUGIN_DATA};
@@ -85,9 +112,12 @@ test('recovered End waits for actual prior process exits and preserves Stop',{sk
   // do not retry input, weaken the predicate, or mark cleanup verified early.
   const record=JSON.parse(fs.readFileSync(file)),cleanupDeadline=performance.now()+5000;
   while(!priorWindowsCleanupVerified(dir,record)&&performance.now()<cleanupDeadline)await new Promise(resolve=>setTimeout(resolve,25));
-  storageOperation('verify-data-tree',dir);
-  assert.equal(priorWindowsCleanupVerified(dir,record),true,'Prior fixture processes or their ledger remain unverified');
-  assert.equal((await r.finish()).ended,true);assert.equal(r.state,'stopped');assert.equal(fs.readFileSync(latch,'utf8'),'stopped');assert.equal(JSON.parse(fs.readFileSync(file)).open,false);
+  // End performs its own native storage probe. That probe can reuse a released
+  // fixture PID; assert the authoritative End boundary, not a stale predicate
+  // separated from it by spawning another helper.
+  let ended,cleanupError;const endDeadline=performance.now()+5000;
+  do {try{ended=await r.finish();break;}catch(error){cleanupError=error;if(error.code!=='recovered_cleanup_unverified')throw error;await new Promise(resolve=>setTimeout(resolve,25));}}while(performance.now()<endDeadline);
+  assert.equal(ended?.ended,true,cleanupError?.message);assert.equal(r.state,'stopped');assert.equal(fs.readFileSync(latch,'utf8'),'stopped');assert.equal(JSON.parse(fs.readFileSync(file)).open,false);
  }finally{
   if(controller&&controller.exitCode===null&&controller.signalCode===null)controller.kill();if(controller)await controller.done;
   for(const child of children){if(child.exitCode===null&&child.signalCode===null)child.kill();await child.done;}
@@ -131,9 +161,9 @@ test('durable unconfirmed Stop remains distinct across controller restart',async
  try{assert.equal(r.state,'stopped');assert.equal(r.lastControlReason,'guardian_stop_unconfirmed');const ready=await r.ready();assert.equal(ready.error.code,'guardian_stop_unconfirmed');assert.equal(ready.next_action,'inspect_diagnostics');assert.equal(ready.replay_allowed,false);assert.equal(requests,0);guardian.emit('resume','idle','human_resume');assert.equal(r.state,'stopped');}
  finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
-test('explicit controls refuse unverified restart and Stop failures before starting guardian',async()=>{
- const r=fixture();let requests=0;r.guardian.request=async()=>{requests++;return {controls_visible:true};};
- r.recoveredTask=true;await assert.rejects(r.showControls(),e=>e.code==='recovered_cleanup_unverified');
+test('explicit controls lock re-arm after an unverified restart and refuse Stop failures before starting guardian',async()=>{
+ const r=fixture();let requests=0;const ops=[];r.guardian.request=async m=>{requests++;ops.push(m);return {controls_visible:true};};
+ r.recoveredTask=true;await assert.rejects(r.showControls(),e=>e.code==='recovered_cleanup_unverified');assert.deepEqual(ops.map(m=>[m.op,m.rearm_locked]),[['show_controls',true],['dismiss_controls',undefined]]);requests=0;
  r.recoveredTask=false;r.state='stopped';r.lastControlReason='guardian_stop_unconfirmed';await assert.rejects(r.showControls(),e=>e.code==='guardian_stop_unconfirmed');
  r.lastControlReason='stop_persistence_failed';await assert.rejects(r.showControls(),e=>e.code==='stop_persistence_failed');
  r.lastControlReason='guard_persistence_failed';await assert.rejects(r.showControls(),e=>e.code==='guard_persistence_failed');assert.equal(requests,0);

@@ -19,6 +19,22 @@ The first controller call is always the installed command above. Run exactly one
 `.localdata` to decide how to operate the desktop. The `ready` reply is the
 runtime's authority.
 
+Keep the returned `task_token` private. Prefer copying `task_command_prefix`
+from the ready response and appending the next command to that prefix; it
+already includes the correct installed launcher and task context.
+Alternatively, append `--task <task_token>` to
+all subsequent task commands, including `ready` after a human handoff and
+`end`. The CLI obtains this token inside the first `ready` call; no separate
+model/tool round trip is needed. For example:
+
+`{{DESKTOP_COMMAND}} snapshot --task <task_token> --hwnd <observed-window>`
+
+On `task_owned`, wait for the owning task to finish. Never fetch another
+conversation's token or issue End on its behalf. Status, app discovery and
+emergency Stop remain available without the task token. After successful End,
+discard the old token; a new task starts with `ready` without `--task`.
+A lost response does not justify replaying an input action.
+
 - If `ready:true`, continue directly with `apps`/`launch`, then `snapshot`,
   action/verification and `end`.
 - If `ready:false`, perform only the returned `next_action` (for example
@@ -51,6 +67,7 @@ state, restart the host or interrupt the requested task to investigate it.
 - `human_start_on_visible_desktop`: ask the human to open **`{{CONTROLLER_START}}`** once on their normal desktop. Do not switch desktops or repeatedly start helpers. If controls still fail, collect diagnostics and report the incident instead of inventing another launch method.
 - `inspect_diagnostics`: run `{{DESKTOP_COMMAND}} diagnostics` once, report the incident ID and stop repeating startup. Do not invent an Antigravity Sidecar panel or repeatedly ask the user to rerun the starter.
 - `resolve_version_mismatch` or `client_build_mismatch:true`: the selected skill and running service use different builds. Stop and report the mismatch; do not interrupt another task, overwrite a project pin or restart repeatedly. An operator can reconcile the intended deployment before retrying.
+- `end_recovered_task`: a leftover task was opened but never sent input, and its controller is gone. Call `end` once, then `ready`. Every blocked reply also carries a `recovery` object: `actor` (agent, human or operator), the exact `command` (or a `reason` when there is none) and `safe_when`. Follow it instead of guessing. While a recovered task is unverified, `controls` shows the bar with Stop available and re-arm locked.
 - `inspect_recovered_task`, `inspect_prior_input_cleanup` or `recovered_task:true`: the controller restarted with a task still open. Its last input may have happened; inspect existing app state or artifacts without replay. Snapshots of already running apps remain available under the normal permission rules, but target actions and launches are refused. If you can establish it is your task and no other conversation owns it, call `end` once. On both Windows and macOS, supported records can close only after the runtime verifies that all recorded prior processes are gone and the exact old input ledger is empty. The runtime performs this verification; never inspect/delete private guard files yourself. Missing, legacy or unverifiable records remain blocked. If End still reports `inspect_prior_input_cleanup`, stop and report that operator inspection is needed. Do not force an update, clear the marker, or end another caller's task. Emergency Stop still requires local human re-arm.
 - `inspect_stop_persistence_without_restart`: control is stopped but the emergency latch could not be saved. Report this and do not restart or send further input; the operator must inspect the controller's private storage.
 - `inspect_input_cleanup`: automation-held input cleanup could not be confirmed. Report the failure and stop; do not repeat input, force an update, or ask the user repeatedly to re-arm. The operator must inspect the native ledger and cleanup state.
@@ -65,7 +82,7 @@ human action or diagnostics are needed; do not try a different launch method.
 
 On macOS, launch an existing `.app` bundle such as `/Applications/Example.app`; returned `hwnd` values are opaque window handles with the same observation rules. Use the application's Mac shortcuts (`cmd`/`option`) where appropriate. Required macOS Accessibility, Screen Recording and Input Monitoring grants must be completed by the human through the installed **Setup.Mac.Permissions.command**. Never operate system permission prompts or weaken a refusal. The native Mac adapter is experimental until the documented interactive qualification passes; a compile/contract test is not desktop acceptance.
 
-The installed App sidecar keeps a passive listener across tasks. Finish with `end`; use `shutdown` only for updates/removal. The pinned launcher's build must match the listener. Windows Agent Manager terminal jobs can run on an isolated `exebox` desktop, even in Turbo. If the sidecar is unavailable, the human starts **`{{CONTROLLER_START}}`** on the normal desktop or restarts the App's Computer Use sidecar. Do not use WMI, switch desktops, change policy or restart a live unresponsive controller to get around this boundary.
+The installed App sidecar keeps a passive listener across tasks. Finish with `end`; use `shutdown` only for updates/removal. `ready` starts a task (its reply says `task_started`); to check state after `end`, use `status`, which never opens a task. The pinned launcher's build must match the listener. Windows Agent Manager terminal jobs can run on an isolated `exebox` desktop, even in Turbo. If the sidecar is unavailable, the human starts **`{{CONTROLLER_START}}`** on the normal desktop or restarts the App's Computer Use sidecar. Do not use WMI, switch desktops, change policy or restart a live unresponsive controller to get around this boundary.
 
 The direct Sidecar currently shares one task state between callers; it does not
 authenticate which conversation owns the session. Individual actions are

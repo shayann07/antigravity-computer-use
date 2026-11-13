@@ -26,11 +26,11 @@ jobs:
             platform: win32
             arch: x64
             minimum_kernel: 10.0.19041
-          - runner: macos-15
+          - runner: macos-26
             platform: darwin
             arch: arm64
             minimum_kernel: 23.0.0
-          - runner: macos-15-intel
+          - runner: macos-26-intel
             platform: darwin
             arch: x64
             minimum_kernel: 23.0.0

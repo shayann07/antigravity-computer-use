@@ -120,11 +120,14 @@ struct MacFenceState {
 }
 
 enum MacFence {
-    static func latchBlocks(_ path: String) -> Bool {
+    static func latchEntryBlocks(_ path: String) -> Bool {
         guard !path.isEmpty else { return true }
         var info = stat()
         if lstat(path, &info) == 0 { return true }
         return errno != ENOENT
+    }
+    static func latchBlocks(_ path: String) -> Bool {
+        path.isEmpty || latchEntryBlocks(path) || latchEntryBlocks(path + ".unconfirmed")
     }
     static func resolvedState(_ proposed: String, latched: Bool) -> String {
         latched ? "stopped" : proposed
@@ -135,6 +138,7 @@ enum MacFence {
     static var operation = ""
     static var didDispatch = false
     static var rootIdentity: (dev_t, ino_t)?
+    static var transitionIdentity: (dev_t, ino_t)?
     static var parentIdentity: String?
     static var keyboardPID: pid_t = 0
     static var keyboardWindow: AXUIElement?
@@ -145,6 +149,9 @@ enum MacFence {
         try MacPrivateStorage.verify(root)
         let identity = try MacPrivateStorage.info(root)
         rootIdentity = (identity.st_dev, identity.st_ino)
+        let transitions = try MacPrivateStorage.prepare(file + ".transitions")
+        let transitionInfo = try MacPrivateStorage.info(transitions)
+        transitionIdentity = (transitionInfo.st_dev, transitionInfo.st_ino)
         let parent = pid_t(ProcessInfo.processInfo.environment["AGCU_PARENT_PID"] ?? "0") ?? 0
         guard parent > 0, !requireDirectParent || parent == getppid() else { throw AxonError("no_native_guard", "The native runtime parent is invalid.") }
         parentIdentity = try macProcessStart(parent)
@@ -267,15 +274,87 @@ enum MacFence {
         return MacContract.pattern("sensitive_label_pattern", riskLabel)
     }
     static func dispatched() throws { try check(); didDispatch = true }
+    static func approvalStateMatches(_ expected: MacFenceState, _ current: MacFenceState,
+                                     latched: Bool, wallNow: Int64, bootNow: UInt64) -> Bool {
+        guard !latched, ["idle", "active"].contains(expected.state),
+              current.state == expected.state, current.token == expected.token,
+              current.until == expected.until, current.bootUntil == expected.bootUntil,
+              current.grants == expected.grants, !current.cleanupPending, !expected.cleanupPending else { return false }
+        return current.state == "idle" || (current.until > wallNow && MacDeadline.valid(current.bootUntil, now: bootNow))
+    }
+    // Keep this lock separate from the held-input lock: takeover must revoke
+    // an in-progress drag before waiting for that worker to release input.
+    static func withTransitionLock<T>(_ body: () throws -> T) throws -> T {
+        let path = file + ".transitions", fd = open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
+        guard fd >= 0 else { throw AxonError("control_stopped", "Cannot open the native transition lock.") }
+        defer { close(fd) }
+        var held = stat()
+        guard let pinned = transitionIdentity, fstat(fd, &held) == 0,
+              held.st_uid == getuid(), held.st_mode & S_IFMT == S_IFDIR,
+              held.st_mode & 0o077 == 0, held.st_dev == pinned.0, held.st_ino == pinned.1 else {
+            throw AxonError("control_stopped", "The native transition lock changed.")
+        }
+        let start = MacDeadline.now
+        guard start > 0 else { throw AxonError("control_stopped", "The transition-lock clock is unavailable.") }
+        while flock(fd, LOCK_EX | LOCK_NB) != 0 {
+            let problem = errno, now = MacDeadline.now
+            guard problem == EWOULDBLOCK || problem == EAGAIN || problem == EINTR,
+                  now >= start, now - start < 100 else {
+                throw AxonError("control_stopped", "The native transition lock did not become available.")
+            }
+            Thread.sleep(forTimeInterval: 0.001)
+        }
+        defer { flock(fd, LOCK_UN) }
+        let current = try MacPrivateStorage.info(path)
+        guard current.st_dev == held.st_dev, current.st_ino == held.st_ino else {
+            throw AxonError("control_stopped", "The native transition directory was replaced.")
+        }
+        return try body()
+    }
+    // Serialize approval publication with deliberate takeover.
+    // This accepts only a native state captured before the local dialog; there
+    // is no new approval/resume field in the desktop action protocol.
+    static func withApprovalFence<T>(_ expected: MacFenceState, _ body: () throws -> T) throws -> T {
+        try withTransitionLock {
+            guard approvalStateMatches(expected, try read(), latched: latchBlocks(latch),
+                                       wallNow: MacFenceState.now, bootNow: MacDeadline.now) else {
+                throw AxonError("approval_changed", "Control changed during confirmation. No approval was published; observe after authorized resume.")
+            }
+            let result = try body()
+            guard !latchBlocks(latch) else { throw AxonError("control_stopped", "Stop interrupted confirmation. No action is authorized.") }
+            return result
+        }
+    }
+    static func pauseForTakeover(_ observed: MacFenceState) throws -> Bool {
+        try withTransitionLock {
+            let current = try read()
+            guard current.state == "active", current.token == observed.token,
+                  current.until == observed.until, current.bootUntil == observed.bootUntil,
+                  !latchBlocks(latch) else { return false }
+            let encoded = Data(current.grants.sorted().joined(separator: "\n").utf8).base64EncodedString()
+            try write("paused|\(current.token)|\(current.until)|\(encoded)|0|1")
+            return true
+        }
+    }
     static func write(_ text: String) throws {
         try Data(text.utf8).write(to: URL(fileURLWithPath: file), options: [.atomic])
         guard chmod(file, 0o600) == 0 else { throw AxonError("control_stopped", "Cannot protect native control state.") }
     }
-    static func emergency(_ reason: String) {
-        if !latch.isEmpty { try? Data("stopped".utf8).write(to: URL(fileURLWithPath: latch), options: [.atomic]) }
+    @discardableResult static func latchStop(_ path: String) -> Bool {
+        guard !path.isEmpty else { return false }
+        let fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0o600)
+        guard fd >= 0 else { return errno == EEXIST } // Preserve every existing entry, including uncertainty.
+        defer { close(fd) }
+        let bytes = Array("stopped".utf8)
+        let written = bytes.withUnsafeBytes { Darwin.write(fd, $0.baseAddress, bytes.count) }
+        return written == bytes.count && fsync(fd) == 0
+    }
+    @discardableResult static func emergency(_ reason: String) -> Bool {
+        latchStop(latch)
         try? write("stopped||0||0|1")
         let workersStopped = macWaitForWorkers(), inputsRecovered = MacInputLedger.recover()
         if !workersStopped || !inputsRecovered { emit(["ev": "visual_warning", "message": "Input cleanup is incomplete; control stays stopped."]) }
+        return workersStopped && inputsRecovered
     }
 }
 

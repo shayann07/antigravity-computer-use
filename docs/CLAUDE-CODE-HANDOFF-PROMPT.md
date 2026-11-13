@@ -23,6 +23,7 @@ The real Flash PNG/JPEG task took 471.556 seconds with 34 calls; speed is not
 solved. The separate reduce_orchestration_latency worktree remains unmerged.
 Audit its implementation before selecting utilities; do not merge stale native
 code over the current safety, updater or UI repairs.
+
 Use the reviewed comparison methodology in docs/PERFORMANCE.md. A single
 metadata-matched pair is not a release-speed qualification, and output flags
 are declarations to check independently. Preserve the original failed evidence.

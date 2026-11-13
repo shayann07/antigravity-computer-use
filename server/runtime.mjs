@@ -1,7 +1,7 @@
 // Antigravity adapter over the MIT ridelink native host and input-lease implementation.
 import fs from 'node:fs';
 import path from 'node:path';
-import {randomUUID} from 'node:crypto';
+import {randomUUID,randomBytes} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {Driver,HostError} from './driver.mjs';
@@ -16,7 +16,7 @@ import {storageOperation} from './storage.mjs';
 import {contract,nativePlatform,launchTarget,executableKey} from './platform.mjs';
 import {Incidents} from './incidents.mjs';
 import {updateNotice} from './update-notice.mjs';
-import {recoveryAdvice,priorWindowsCleanupVerified,priorMacCleanupVerified} from './recovery.mjs';
+import {currentStopNonce,persistRecoveryStop,settlePriorStop,recoveryAdvice,priorWindowsCleanupVerified,priorMacCleanupVerified,priorUndispatchedCleanupVerified,readStopLatch,persistStopLatch,settleFreshStopLatch} from './recovery.mjs';
 import {writeAtomicJSON,readTaskRecord} from './atomic-json.mjs';
 
 const input=new Set(['move','click','type','set_value','key','scroll','drag','focus','fit_window','close_window','paste','paste_files','clipboard','open','file_dialog']);
@@ -39,8 +39,6 @@ function attachWaitMetrics(error,started,budget,observations){
   return error;
 }
 const persistenceFailure=reason=>['stop_persistence_failed','guard_persistence_failed'].includes(reason);
-const readStopLatch=file=>{try{const value=fs.readFileSync(file,'utf8');return {value,unconfirmed:value.startsWith('unconfirmed:')};}catch{return null;}};
-const stopLatchValue=unconfirmed=>unconfirmed?`unconfirmed:${randomUUID()}`:'stopped';
 function initializeInputLedger(guardFile){
   const ledger=guardFile+'.inputs';let fd;
   try{fd=fs.openSync(ledger,'wx',0o600);fs.writeFileSync(fd,process.platform==='darwin'?'{"keys":[],"buttons":[]}':'');fs.fsyncSync(fd);}
@@ -124,7 +122,11 @@ export class Runtime {
     this.sessions=sessions||new Sessions({sessionId:randomUUID(),onInputLeaseLost:()=>this.stop().catch(()=>{})});this.sessions.register();
     this.grants=new Map();this.frames=new Map();this.generation=0;this.state='idle';this.token='';this.taskOpen=priorTask;this.recoveredTask=priorTask;this.priorGuard=priorTask?prior.guard:null;this.priorChildren=priorTask?prior.children:null;this.priorDispatched=priorTask?prior.dispatched:null;this.priorWatchdogsComplete=priorTask?prior.watchdogs_complete:null;this.dispatchChildren=[];this.dispatchStarted=false;this.watchdogsComplete=true;this.taskDurable=true;this.remaining=contract.action_budget;
     this.lastControlReason='';
-    if(this.latchFile&&fs.existsSync(this.latchFile)){this.state='stopped';this.lastControlReason=readStopLatch(this.latchFile)?.unconfirmed?'guardian_stop_unconfirmed':'persisted_emergency_stop';}
+    if(this.latchFile){
+      const saved=readStopLatch(this.latchFile);if(saved){this.state='stopped';
+        this.lastControlReason=saved.unconfirmed?'guardian_stop_unconfirmed':saved.value==='stopped'?'persisted_emergency_stop':'stop_persistence_failed';
+      }
+    }
     this.guardian.on('state',(s,reason)=>{
       const previousState=this.state;
       // A delayed idle/active notification must never undo an emergency Stop.
@@ -135,7 +137,7 @@ export class Runtime {
       const priorStopUnconfirmed=previousState==='stopped'&&this.lastControlReason==='guardian_stop_unconfirmed';
       if((reason||s!==this.state)&&(!priorStopUnconfirmed||persistenceFailure(reason)))this.lastControlReason=reason||s;
       this.state=s;
-      if((reason==='guardian_exited'&&previousState!=='idle'||reason==='guardian_unresponsive')&&this.latchFile)try{fs.writeFileSync(this.latchFile,stopLatchValue(reason==='guardian_unresponsive'));}catch{}
+      if((reason==='guardian_exited'&&previousState!=='idle'||reason==='guardian_unresponsive')&&this.latchFile)try{persistRecoveryStop(this.latchFile,this.recoveredTask&&this.priorGuard?this.priorGuard:path.basename(this.guardFile),{unconfirmed:reason==='guardian_unresponsive'||priorStopUnconfirmed});}catch{}
       if(s==='stopped'&&this.latchFile){try{const latch=readStopLatch(this.latchFile);if(!latch||latch.value!=='stopped'&&!latch.unconfirmed)throw Error('invalid latch');if(latch.unconfirmed&&!persistenceFailure(reason))this.lastControlReason='guardian_stop_unconfirmed';}catch{this.lastControlReason='stop_persistence_failed';this.diagnosticError='stop_persistence_failed';}}
       if(reason==='guardian_unresponsive'&&!persistenceFailure(this.lastControlReason))this.lastControlReason='guardian_stop_unconfirmed';
       if(reason==='guardian_exited'&&this.privateDataStorage===true)new Incidents(dataDir()).recordSerialized('computer_guardian',{state:s,error:{code:'guardian_exited'},guardian_exit:this.guardian.lastExit}).catch(()=>{this.diagnosticError='private_diagnostic_storage_unavailable';});
@@ -148,7 +150,7 @@ export class Runtime {
     this.guardian.on('resume',(_state,source)=>{
       if(this.state==='stopped'){
         if(source!=='human_resume'||_state!=='idle'||persistenceFailure(this.lastControlReason)||this.lastControlReason==='guardian_stop_unconfirmed')return;
-        if(this.latchFile){try{fs.lstatSync(this.latchFile);return;}catch(error){if(error.code!=='ENOENT')return;}}
+        if(this.latchFile&&readStopLatch(this.latchFile))return;
         this.state='idle';
       }
       this.frames.clear();this.lastControlReason=source==='host_resume'?'host_authorized_resume':'human_resume';if(this.state==='active')this.deadline=Date.now()+contract.session_ms;
@@ -156,6 +158,7 @@ export class Runtime {
   }
   stamp(){return {__session:this.token};}
   beginTask(){
+    if(this.finishing)fail('cleanup_in_progress','Task cleanup is still pending. Wait for its result before starting another task.');
     if(this.taskOpen&&this.taskDurable)return;
     this.taskOpen=true;this.taskDurable=false;
     try{
@@ -185,21 +188,37 @@ export class Runtime {
   }
   // A passive App sidecar must not open a HUD, install input hooks or acquire
   // cursor ownership just because a previous task left an emergency latch.
-  async prepare(){}
+  async prepare(){
+    if(this.taskFile&&!fs.existsSync(this.taskFile))try{writeAtomicJSON(this.taskFile,{schema:1,open:false},{exclusive:true});}catch(error){if(error.code!=='EEXIST')throw error;}
+  }
   async showControls(){
-    if(this.recoveredTask)fail('recovered_cleanup_unverified','A previous task survived restart. Verify its native input cleanup before showing controls or re-arming. Do not replay the interrupted action.');
+    if(this.recoveredTask){
+      // Show the bar so the human always has Stop, but with re-arm, resume and
+      // activation locked: this process's empty ledger proves nothing about
+      // the previous one. A guardian that does not confirm the lock is hidden.
+      const result=await this.guardian.request({op:'show_controls',rearm_locked:true});
+      if(result.rearm_locked!==true){try{await this.guardian.request({op:'dismiss_controls'});}catch{}fail('recovered_cleanup_unverified','Local controls could not lock re-arm, so they were not shown. Verify the previous task\'s input cleanup first.');}
+      return {...result,rearm_locked:true};
+    }
     if(this.state==='stopped'&&this.lastControlReason==='guardian_stop_unconfirmed')fail('guardian_stop_unconfirmed','Native Stop delivery is unconfirmed. Inspect diagnostics and input cleanup before showing controls; do not re-arm or replay.');
     if(this.state==='stopped'&&persistenceFailure(this.lastControlReason))fail(this.lastControlReason,'Control storage failed. Inspect private storage before showing controls; do not re-arm.');
     const result=await this.guardian.request({op:'show_controls'});if(result.controls_visible===true)this.recoveryFailure=null;return result;
   }
   async ready(){
-    Runtime.prototype.beginTask.call(this);
+    // ready is the explicit task start; status is the read-only check. Report
+    // whether this call opened the task so a ready after end is not misread.
+    const wasOpen=this.taskOpen;Runtime.prototype.beginTask.call(this);const taskStarted=!wasOpen&&this.taskOpen===true;
     if(this.state==='stopped'&&this.lastControlReason==='guardian_stop_unconfirmed'&&this.driver?.inputMayBeHeld===true)return {...this.status(),ready:false,controls_visible:null,next_action:'inspect_input_cleanup',replay_allowed:false,error:{code:'input_cleanup_failed',message:'Input cleanup and native Stop delivery are unconfirmed. Inspect diagnostics; do not restart, re-arm or replay.'}};
     if(this.state==='stopped'&&this.lastControlReason==='guardian_stop_unconfirmed')return {...this.status(),ready:false,controls_visible:null,next_action:'inspect_diagnostics',replay_allowed:false,error:{code:'guardian_stop_unconfirmed',message:'Stop delivery to native controls is unconfirmed. Inspect diagnostics and input cleanup; do not restart, re-arm or replay.'}};
     if(this.state==='stopped'&&persistenceFailure(this.lastControlReason))return {...this.status(),ready:false,controls_visible:null,next_action:'inspect_stop_persistence_without_restart',replay_allowed:false,error:{code:this.lastControlReason,message:'Control is stopped because native control storage failed. Inspect private storage; do not restart or send input.'}};
     // A replacement process cannot use its own empty ledger as evidence that
     // the previous process released input. Do not lead the agent toward re-arm
     // or start a new guardian before the recovered task has passed cleanup.
+    if(this.recoveredTask&&this.taskFile){
+      // Read-only: a leftover that provably never sent input can be ended once.
+      let undispatched=false;try{const record=readTaskRecord(this.taskFile);undispatched=record.guard===this.priorGuard&&priorUndispatchedCleanupVerified(path.dirname(this.taskFile),record);}catch{}
+      if(undispatched)return {...this.status(),ready:false,controls_visible:null,next_action:'end_recovered_task',replay_allowed:false,error:{code:'recovered_cleanup_unverified',message:'A previous task was opened but never sent input, and its controller is gone. Run end once to close it, then ready.'}};
+    }
     if(this.recoveredTask)return {...this.status(),ready:false,controls_visible:null,next_action:'inspect_prior_input_cleanup',replay_allowed:false,error:{code:'recovered_cleanup_unverified',message:'A previous task survived restart. Inspect its result without replay and verify its native input cleanup before re-arm or a new task.'}};
     const unavailable=()=>({...this.status(),ready:false,controls_visible:this.recoveryVisibility??null,guardian_running:!!this.guardian.proc&&!this.guardian.proc.killed,guardian_exit:this.guardian.lastExit??null,...recoveryAdvice({error:this.recoveryFailure}),error:this.recoveryFailure});
     if(this.recoveryFailure)return unavailable();
@@ -212,12 +231,12 @@ export class Runtime {
       if(this.state==='stopped'&&persistenceFailure(this.lastControlReason))return {...this.status(),ready:false,controls_visible:controls.controls_visible??null,next_action:'inspect_stop_persistence_without_restart',replay_allowed:false,error:{code:this.lastControlReason,message:'Control is stopped because native control storage failed. Inspect private storage; do not restart or send input.'}};
       const visible=controls.controls_visible===true;
       if(!visible)throw Object.assign(Error('Local controls did not report a visible bar.'),{code:'guardian_controls_not_visible'});
-      return {...this.status(),update_notice:updateNotice(dataDir()),ready:visible&&this.state!=='stopped'&&this.state!=='paused'&&!this.recoveredTask,controls_visible:visible,desktop_context:controls.desktop_context,guardian_running:!!this.guardian.proc,guardian_exit:this.guardian.lastExit??null,
+      return {...this.status(),task_started:taskStarted,update_notice:updateNotice(dataDir()),ready:visible&&this.state!=='stopped'&&this.state!=='paused'&&!this.recoveredTask,controls_visible:visible,desktop_context:controls.desktop_context,...(['native_liquid_glass','visual_effect_fallback'].includes(controls.material_backend)?{visual_material:controls.material_backend}:{}),guardian_running:!!this.guardian.proc,guardian_exit:this.guardian.lastExit??null,
         next_action:this.state==='stopped'?(this.lastControlReason==='input_cleanup_failed'||this.driver?.inputMayBeHeld===true?'inspect_input_cleanup':'awaiting_human_rearm'):this.state==='paused'?'awaiting_human_resume':this.recoveredTask?'inspect_recovered_task':'discover_or_launch'};
     }catch(error){this.recoveryVisibility=controls?.controls_visible===false?false:null;this.recoveryFailure={code:error.code||'guardian_unavailable',message:error.code==='desktop_context_unavailable'?'Start the installed local launcher on the visible desktop. No desktop was switched and Stop remains latched.':'Local controls failed to start. Run diagnostics; do not repeat launch commands.'};return unavailable();}
   }
   enforceStopLatch(){
-    if(this.latchFile){let latched=false;try{fs.lstatSync(this.latchFile);latched=true;}catch(error){if(error.code!=='ENOENT'){this.stop().catch(()=>{});fail('stop_persistence_failed','Cannot verify the emergency Stop latch; no input was sent.');}}if(latched){this.stop().catch(()=>{});fail('control_stopped','Emergency Stop remains latched; local human re-arm is required.');}}
+    if(this.latchFile){const latch=readStopLatch(this.latchFile);if(latch){this.stop().catch(()=>{});if(latch.invalid)fail('stop_persistence_failed','Cannot verify the emergency Stop latch; no input was sent.');fail('control_stopped','Emergency Stop remains latched; local human re-arm is required.');}}
   }
   check(){
     if(this.state!=='active')fail('control_inactive',`Control is ${this.state}. Use the local Resume/Re-arm control or request a new grant.`);
@@ -401,6 +420,7 @@ export class Runtime {
     }
     const generation=this.generation;
     const payload={...args,...this.stamp(),mode:'take',__risk:args.risk==='routine'?'routine':'sensitive'};
+    let hudRegion;
     delete payload.risk;delete payload.reason;delete payload.observation_id;delete payload.observe;
     if(w){
       payload.hwnd=Number(w.hwnd);payload.__pid=w.pid;payload.__started=w.started;
@@ -417,6 +437,14 @@ export class Runtime {
           if(!f.image)fail('no_image','Observe with_image first.');
           payload.from=imagePoint(f.image,...args.from);payload.to=imagePoint(f.image,...args.to);
         }
+        if(op==='click'&&(payload.point||payload.physical!==false)){
+          if(payload.point)hudRegion=[...payload.point,1,1];
+          else {
+            const rect=f.elements?.find(node=>node.i===payload.index)?.rect;
+            if(Array.isArray(rect)&&rect.length===4&&rect.every(Number.isSafeInteger)&&rect[2]>0&&rect[3]>0)
+              hudRegion=rect[2]<=512&&rect[3]<=192?[...rect]:[Math.round(rect[0]+rect[2]/2),Math.round(rect[1]+rect[3]/2),1,1];
+          }
+        }
       }
     }
     // Visible real-pointer clicks are the default for both semantic selectors
@@ -430,6 +458,16 @@ export class Runtime {
     // Window-free clipboard work and first-launch/restarted workers also need
     // independent guardian registration. Never replace a frame's older epoch.
     if(payload.__worker_epoch==null)payload.__worker_epoch=this.driver.epoch;
+    const avoidHud=async()=>{
+      if(!hudRegion||this.driver.info?.hud_avoidance!==true)return;
+      const avoided=await this.guardian.request({op:'avoid_input',token:this.token,rect:hudRegion});
+      this.check();if(generation!==this.generation)fail('control_changed','Control changed while positioning the controls. Observe again.');
+      if(avoided.allowed!==true)fail('hud_target_obscured','Local controls could not move safely away from this target. No app input was sent.');
+    };
+    // Pixel risk classification must see the app beneath our HUD, rather than
+    // accidentally classifying one of our own buttons. The native click still
+    // independently verifies the actual topmost target before sending input.
+    await avoidHud();
     const preview=(await this.driver.call('authorize',{action_op:op,action_args:payload})).result;
     if(preview.sensitive){
       const filenameClipboard=op==='file_dialog'&&args.entry_method==='clipboard'?'\r\nFilename entry explicitly uses the local clipboard temporarily and restores preservable formats.\r\n':'';
@@ -442,6 +480,9 @@ export class Runtime {
     const result=await this.sessions.withInput(op,{hwnd:w?.hwnd,title:w?.title},async()=>{
       this.check();if(generation!==this.generation)fail('control_changed','Cancelled before execution.');
       if(Date.now()>=this.deadline||this.remaining<=0)fail('session_limit','Session expired or action budget exhausted. End and obtain a new human grant.');
+      // Recheck after a sensitive prompt or a wait for the shared input lease.
+      await avoidHud();
+      if(Date.now()>=this.deadline||this.remaining<=0)fail('session_limit','Session expired while positioning local controls. No app input was sent.');
       Runtime.prototype.recordDispatch.call(this);
       // Count an attempted dispatch, including uncertain delivery, but not a
       // rejected lease or a cancellation that never reached the native worker.
@@ -540,23 +581,65 @@ export class Runtime {
       this.frames.delete(latest.metadata.observation_id);
     }while(true);
   }
-  async finish({preserveTask=false}={}){this.generation++;this.frames.clear();this.grants.clear();this.guardian.send({op:'end'});if(!['stopped','paused'].includes(this.state)){this.state='idle';this.lastControlReason='completed';}this.token='';await this.driver.abort?.();
+  async finish(options={}){
+    if(this.finishing)return this.finishing;
+    this.generation++;this.frames.clear();this.grants.clear();this.token='';
+    this.finishing=Promise.resolve().then(()=>Runtime.prototype.finishTransaction.call(this,options));
+    try{return await this.finishing;}finally{this.finishing=null;}
+  }
+  async finishTransaction({preserveTask=false}={}){
+    try{
+      await this.driver.abort?.();
+      if(this.guardian.requiresStopAcknowledgement){
+        if(typeof this.guardian.endAcknowledged!=='function')fail('guardian_end_unconfirmed','Native End cleanup acknowledgement is unavailable.');
+        const receipt=await this.guardian.endAcknowledged(randomBytes(16).toString('hex'));
+        if(this.driver.inputMayBeHeld===true)fail('guardian_end_unconfirmed','Input cleanup remains uncertain.');
+        if(receipt.state==='stopped'||receipt.state==='paused')this.state=receipt.state;
+      }else this.guardian.send({op:'end'});
+    }catch(error){
+      // Keep the durable task record open. A failed End is never a successful
+      // completion, and Stop must not replay the uncertain operation.
+      let cleanup;try{cleanup=await this.stop();}catch{}
+      if(cleanup?.exited_native_cleanup_verified!==true){
+        if(error?.code==='input_cleanup_failed')throw error;
+        throw Object.assign(Error('End cleanup is unconfirmed; task evidence was retained. Inspect status without replaying input.'),{code:'guardian_end_unconfirmed',cause:error});
+      }
+    }
+    if(!['stopped','paused'].includes(this.state)){this.state='idle';this.lastControlReason='completed';}
     // The replacement's new guard file is not the previous process's input
     // ledger. Its cleanup cannot establish what the crashed process held.
     if(this.recoveredTask&&!preserveTask){
       let verified=false;
       try{
         const record=readTaskRecord(this.taskFile);
-        if(record.open&&record.guard===this.priorGuard&&record.dispatched===this.priorDispatched&&record.watchdogs_complete===this.priorWatchdogsComplete&&JSON.stringify(record.children)===JSON.stringify(this.priorChildren)&&record.guard&&record.dispatched===true){
+        const unchanged=record.open&&record.guard===this.priorGuard&&record.dispatched===this.priorDispatched&&record.watchdogs_complete===this.priorWatchdogsComplete&&JSON.stringify(record.children)===JSON.stringify(this.priorChildren)&&record.guard;
+        if(unchanged&&record.dispatched===false){
+          // Opened, never dispatched: no native input worker was started.
           const directory=path.dirname(this.taskFile);storageOperation('verify-data-tree',directory);
-          verified=priorWindowsCleanupVerified(directory,record)||priorMacCleanupVerified(directory,record);
+          verified=priorUndispatchedCleanupVerified(directory,record);
+        }
+        else if(unchanged&&record.dispatched===true){
+          const directory=path.dirname(this.taskFile);storageOperation('verify-data-tree',directory);
+          // The verification helper itself can briefly reuse an old numeric
+          // PID. Wait only for read-only proof; never ignore a live identity.
+          const cleanupDeadline=performance.now()+500;
+          do {verified=priorWindowsCleanupVerified(directory,record)||priorMacCleanupVerified(directory,record);if(verified)break;await new Promise(resolve=>setTimeout(resolve,25));}while(performance.now()<cleanupDeadline);
         }
       }catch{}
       if(!verified)fail('recovered_cleanup_unverified','Prior-session input cleanup is unverified. Keep the task open and inspect the previous native ledger; do not repeat input or force an update.');
       try{await this.sessions.clearVerifiedStale(Number(/^guard-(\d+)-/.exec(this.priorGuard)[1]));}
       catch{fail('recovered_cleanup_unverified','Previous input ownership could not be safely cleared. Keep the task open; do not repeat input or force an update.');}
+      if(this.latchFile&&readStopLatch(this.latchFile)?.unconfirmed){
+        try{const record=readTaskRecord(this.taskFile);if(record.guard!==this.priorGuard||JSON.stringify(record.children)!==JSON.stringify(this.priorChildren))throw Error('Prior task changed');settlePriorStop(this.latchFile,record);this.state='stopped';this.lastControlReason='prior_cleanup_verified';}
+        catch{fail('guardian_stop_unconfirmed','Prior Stop context or native cleanup is unverified. Keep the recovery record and do not re-arm or replay.');}
+      }
     }
-    if(!preserveTask){try{if(this.taskFile)writeAtomicJSON(this.taskFile,{schema:1,open:false});this.taskOpen=false;this.recoveredTask=false;this.dispatchChildren=[];this.dispatchStarted=false;this.watchdogsComplete=true;this.taskDurable=true;}catch{this.taskOpen=true;this.taskDurable=false;throw Object.assign(Error('Input cleanup finished, but task state could not be saved. Updates remain deferred.'),{code:'task_state_write_failed'});}}return {ended:true,state:this.state,restart_required:false};}
+    if(!preserveTask){
+      const stopped=this.latchFile?readStopLatch(this.latchFile):null;
+      if(stopped?.unconfirmed||this.lastControlReason==='guardian_stop_unconfirmed')fail('guardian_stop_unconfirmed','Stop remains unconfirmed. Keep the task recovery record; inspect prior actors and input cleanup without replay.');
+      if(stopped?.invalid||persistenceFailure(this.lastControlReason))fail('stop_persistence_failed','Stop storage is unverified. Keep the task recovery record and inspect private storage.');
+      try{if(this.taskFile)writeAtomicJSON(this.taskFile,{schema:1,open:false});this.taskOpen=false;this.recoveredTask=false;this.dispatchChildren=[];this.dispatchStarted=false;this.watchdogsComplete=true;this.taskDurable=true;}catch{this.taskOpen=true;this.taskDurable=false;throw Object.assign(Error('Input cleanup finished, but task state could not be saved. Updates remain deferred.'),{code:'task_state_write_failed'});}
+    }return {ended:true,state:this.state,restart_required:false};}
   async feedback(args){
     // Revalidate at the persistence boundary too; never store model text,
     // application content, screenshots, paths or arbitrary error messages.
@@ -637,7 +720,59 @@ export class Runtime {
     this.state='active';this.check();this.lastControlReason='host_authorized_resume';this.deadline=Date.now()+contract.session_ms;
     return {resumed:true,fresh_observation_required:true,replayed_actions:0};
   }
-  async stop(){const priorUnconfirmed=this.lastControlReason==='guardian_stop_unconfirmed';this.generation++;this.frames.clear();this.grants.clear();this.state='stopped';this.lastControlReason='requested_stop';let deliveryFailed=false;try{const sent=this.guardian.send({op:'stop'});deliveryFailed=sent===false&&!!(this.guardian.proc||this.guardian.starting||this.guardian.cleanupFailed);}catch{deliveryFailed=true;}let persistenceFailed=false;try{if(this.latchFile)fs.writeFileSync(this.latchFile,stopLatchValue(deliveryFailed||priorUnconfirmed));}catch{persistenceFailed=true;this.lastControlReason='stop_persistence_failed';}if((deliveryFailed||priorUnconfirmed)&&!persistenceFailed)this.lastControlReason='guardian_stop_unconfirmed';await this.driver.abort?.();if(persistenceFailed)throw Object.assign(Error('Control is stopped, but the emergency Stop latch could not be saved. Do not restart the controller; inspect its private storage.'),{code:'stop_persistence_failed'});if(deliveryFailed||priorUnconfirmed)throw Object.assign(Error('The local Stop latch and cleanup were attempted, but delivery to native controls is unconfirmed. Inspect status; do not re-arm or replay.'),{code:'guardian_stop_unconfirmed'});return {stopped:true,human_rearm_required:true};}
+  async stop(){
+    if(this.stopping)return this.stopping;
+    const priorUnconfirmed=this.lastControlReason==='guardian_stop_unconfirmed';
+    this.generation++;this.frames.clear();this.grants.clear();this.state='stopped';this.lastControlReason='requested_stop';
+    const work=Promise.resolve().then(()=>this.stopTransaction(priorUnconfirmed));this.stopping=work;
+    try{return await work;}finally{if(this.stopping===work)this.stopping=null;}
+  }
+  async exitedCurrentCleanupVerified(){
+    if(this.recoveredTask||!this.taskFile||this.driver.inputMayBeHeld!==false||!this.dispatchStarted||!this.watchdogsComplete)return false;
+    if(this.driver.proc||this.driver.starting||this.guardian.proc||this.guardian.starting)return false;
+    try{
+      const record=readTaskRecord(this.taskFile),directory=path.dirname(this.taskFile);
+      if(!record.open||record.guard!==path.basename(this.guardFile)||path.resolve(this.guardFile)!==path.join(directory,record.guard)||!record.guard.startsWith('guard-'+process.pid+'-')||record.children?.includes(process.pid)||JSON.stringify(record.children)!==JSON.stringify(this.dispatchChildren))return false;
+      storageOperation('verify-data-tree',directory);
+      // This same live JS instance owns the bound guard; only its native input
+      // actors must have exited. No caller-supplied PID/verification flag exists.
+      const probe=pid=>{if(pid===process.pid)throw Object.assign(Error('Current JS owner is not an input actor'),{code:'ESRCH'});process.kill(pid,0);};
+      const until=performance.now()+500;
+      do{if(priorWindowsCleanupVerified(directory,record,{probe})||priorMacCleanupVerified(directory,record,{probe}))return true;await new Promise(resolve=>setTimeout(resolve,25));}while(performance.now()<until);
+    }catch{}
+    return false;
+  }
+  async stopTransaction(priorUnconfirmed){
+    if(typeof this.guardian.stopAcknowledged==='function'&&this.guardian.requiresStopAcknowledgement){
+      const old=this.latchFile?readStopLatch(this.latchFile):null;
+      const boundNonce=!this.recoveredTask&&old?.unconfirmed?currentStopNonce(this.latchFile,path.basename(this.guardFile)):null;
+      const nonce=boundNonce||randomUUID().replaceAll('-','');let marker,rootIdentity,persistenceFailed=false;
+      const maySettle=(!priorUnconfirmed&&!old?.unconfirmed||!!boundNonce)&&!old?.invalid&&!this.recoveredTask;
+      try{if(!this.latchFile)throw Error('Missing Stop path');rootIdentity=fs.lstatSync(path.dirname(this.latchFile),{bigint:true});marker=persistRecoveryStop(this.latchFile,this.recoveredTask&&this.priorGuard?this.priorGuard:path.basename(this.guardFile),{unconfirmed:true,nonce});}
+      catch{persistenceFailed=true;this.lastControlReason='stop_persistence_failed';}
+      const outcomes=await Promise.allSettled([Promise.resolve().then(()=>this.guardian.stopAcknowledged(nonce)),Promise.resolve().then(()=>this.driver.abort?.())]);
+      if(outcomes[1].status==='rejected'){this.lastControlReason='input_cleanup_failed';throw outcomes[1].reason;}
+      if(persistenceFailed||persistenceFailure(this.lastControlReason))throw Object.assign(Error('Stop persistence is unconfirmed. Inspect private storage; do not restart or re-arm.'),{code:'stop_persistence_failed'});
+      const receipt=outcomes[0].status==='fulfilled'?outcomes[0].value:null;
+      const freshReceipt=receipt?.stop_nonce===nonce&&receipt.workers_stopped===true&&receipt.input_cleanup_confirmed===true;
+      const exitedProof=!freshReceipt&&maySettle&&await this.exitedCurrentCleanupVerified();
+      if(!maySettle||marker?.value!=='unconfirmed:'+nonce||(!freshReceipt&&!exitedProof)||this.driver.inputMayBeHeld!==false){
+        this.lastControlReason='guardian_stop_unconfirmed';throw Object.assign(Error('Native Stop or prior cleanup is unconfirmed. Inspect diagnostics; do not re-arm or replay.'),{code:'guardian_stop_unconfirmed'});
+      }
+      try{settleFreshStopLatch(this.latchFile,nonce,rootIdentity);}catch{this.lastControlReason='guardian_stop_unconfirmed';throw Object.assign(Error('Stop changed before confirmation could be persisted; control remains stopped.'),{code:'guardian_stop_unconfirmed'});}
+      this.lastControlReason='requested_stop';return {stopped:true,human_rearm_required:true,native_stop_confirmed:true,...(exitedProof?{exited_native_cleanup_verified:true}:{} )};
+    }
+    let unconfirmed=priorUnconfirmed||this.privateDataStorage===true&&typeof this.guardian.stopAcknowledged!=='function';
+    try{const sent=this.guardian.send({op:'stop'});unconfirmed=unconfirmed||sent===false&&!!(this.guardian.proc||this.guardian.starting||this.guardian.cleanupFailed);}catch{unconfirmed=true;}
+    let persistenceFailed=false;
+    try{if(this.latchFile)unconfirmed=persistRecoveryStop(this.latchFile,this.recoveredTask&&this.priorGuard?this.priorGuard:path.basename(this.guardFile),{unconfirmed}).unconfirmed;}
+    catch{persistenceFailed=true;this.lastControlReason='stop_persistence_failed';}
+    if(unconfirmed&&!persistenceFailed)this.lastControlReason='guardian_stop_unconfirmed';
+    await this.driver.abort?.();
+    if(persistenceFailed)throw Object.assign(Error('Control is stopped, but the emergency Stop latch could not be saved. Do not restart the controller; inspect its private storage.'),{code:'stop_persistence_failed'});
+    if(unconfirmed)throw Object.assign(Error('The local Stop latch and cleanup were attempted, but delivery to native controls is unconfirmed. Inspect status; do not re-arm or replay.'),{code:'guardian_stop_unconfirmed'});
+    return {stopped:true,human_rearm_required:true};
+  }
   status(){return {state:this.state,task_open:this.taskOpen===true,recovered_task:this.recoveredTask===true,remaining_actions:this.remaining,approved_apps:[...this.grants.values()].map(w=>({pid:w.pid,path:w.path})),runtime:nativePlatform().runtime,build_version:VERSION,build_id:BUILD_ID,private_data_storage:this.privateDataStorage,real_cursor:true,custom_cursor:this.guardian.customCursor??null,permission_mode:this.permissionMode,takeover_mode:this.guardian.takeoverMode||savedTakeoverMode(path.join(dataDir(),'control-preferences.json'),this.takeoverMode),control_reason:this.lastControlReason};}
   async close(){const normal=this.state==='idle';if(!normal)await this.stop();else await this.driver.abort?.();await this.guardian.close({normal});this.sessions.close();}
 }

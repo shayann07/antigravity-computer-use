@@ -28,15 +28,19 @@ export async function installedStopQualification(configFile,{checkOnly=false,fix
  assert.equal(process.platform,'win32','This harness qualifies the installed Windows helper');
  const config=stopConfig(JSON.parse(fs.readFileSync(configFile,'utf8'))),evidence=newStopEvidence(config);
  const record={passed:false,qualification_complete:false,evidence_kind:fixtures?'inert_fixture':'installed_protocol',stage:'preflight',expected_build_id:config.expected_build_id,checks:[],events:[],desktop_input_attempted:false,input_completion_acknowledged:false,target_release_delivery_verified:false};
- let aborting=false,ownsTask=false,operationPending=false,request,policy,directory,sequence=0,lastState;
+ let aborting=false,ownsTask=false,operationPending=false,request,policy,directory,sequence=0,lastState,taskToken;
  const save=()=>{if(aborting){record.passed=false;record.stage='aborted';}return writeAtomicJSON(path.join(evidence,'result.json'),record);};
  const call=async(command,args={})=>{
   if(aborting&&!['status','stop','end'].includes(command))throw Object.assign(Error('Qualification aborted; no more app commands are allowed.'),{code:'qualification_aborted'});
   const session=JSON.parse(fs.readFileSync(path.join(directory,'desktop-session.json')));
+  if(taskToken)session.task_token=taskToken;
   const result=await qualificationRequest(request,session,policy,command,args);
+  if(result.task_token)taskToken=result.task_token;
+  if(command==='end'&&result.ended===true)taskToken=undefined;
+  const {task_token:privateToken,...evidenceResult}=result;
   if(command==='status'){
    if(lastState!==result.state){lastState=result.state;record.events.push({state:result.state,reason:result.control_reason,at:new Date().toISOString()});save();}
-  }else fs.writeFileSync(path.join(evidence,String(++sequence).padStart(2,'0')+'-'+command+'.json'),JSON.stringify({command,args,result},null,2),{flag:'wx'});
+  }else fs.writeFileSync(path.join(evidence,String(++sequence).padStart(2,'0')+'-'+command+'.json'),JSON.stringify({command,args,result:evidenceResult},null,2),{flag:'wx'});
   return result;
  };
  const input=async(command,args)=>{operationPending=true;record.desktop_input_attempted=true;save();const result=await call(command,args);operationPending=false;if(result.input_completed===true)record.input_completion_acknowledged=true;return result;};
@@ -58,7 +62,7 @@ export async function installedStopQualification(configFile,{checkOnly=false,fix
   const cli=command=>{
    if(fixtures?.lifecycle)return fixtures.lifecycle(command);
    const child=spawnSync(path.join(release,'node.exe'),[path.join(release,'scripts/desktop.mjs'),command],{encoding:'utf8',windowsHide:true,timeout:20000});
-   assert.equal(child.status,0,'Installed lifecycle command failed: '+command);return JSON.parse(child.stdout);
+   assert.equal(child.status,0,'Installed lifecycle command failed: '+command);const result=JSON.parse(child.stdout);if(result.task_token)taskToken=result.task_token;return result;
   };
   record.version=manifest.version;record.build_id=manifest.build_id;record.native_sha256=manifest.host_sha256;save();
   qualificationIdle(await call('status'),manifest.build_id);

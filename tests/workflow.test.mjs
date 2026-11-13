@@ -20,7 +20,7 @@ test('native action dispatch follows durable child recording and refuses a faile
 
 test('passive startup, status, End and shutdown preserve Stop without opening controls',async()=>{
  const folder=fs.mkdtempSync(path.join(testDirectory('tmp'),'passive-stop-'));
- const latch=path.join(folder,'emergency.stop');fs.writeFileSync(latch,'owner-stop');
+ const latch=path.join(folder,'emergency.stop');fs.writeFileSync(latch,'stopped');
  const guardian=new EventEmitter();let starts=0,requests=0,aborts=0;
  Object.assign(guardian,{async start(){starts++;},async request(){requests++;},send(){},async close(){}});
  const r=new Runtime({guardian,driver:{async abort(){aborts++;}},sessions:{register(){},close(){}},latchFile:latch});

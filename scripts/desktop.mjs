@@ -13,7 +13,9 @@ import {loadDeployment,applyDeployment} from '../server/deployment.mjs';
 import {diagnostics} from './diagnostics.mjs';
 import {scheduleUpdates} from '../server/auto-update.mjs';
 import {Incidents} from '../server/incidents.mjs';
-import {recoveryAdvice} from '../server/recovery.mjs';
+import {desktopCommand} from './install.mjs';
+import {recoveryAdvice,persistStopLatch,readStopLatch} from '../server/recovery.mjs';
+import {withRecovery} from '../server/recovery-guide.mjs';
 const EMPTY_INPUT={type:'object',properties:{},required:[],additionalProperties:false};
 const LIFECYCLE=[
   {command:'start',description:'Start or reconnect to this exact installed build. No arguments. Never clears emergency Stop or changes the installed permission policy.',inputSchema:EMPTY_INPUT},
@@ -37,7 +39,7 @@ export function describeCommand(name){
 // Windows PowerShell can decode native stdout using its legacy OEM code page
 // before piping it to UTF-8. ASCII JSON preserves every Unicode code unit even
 // through that boundary; JSON.parse restores the original text exactly.
-export function encodeReply(value){return JSON.stringify(value).replace(/[^\x00-\x7f]/g,char=>'\\u'+char.charCodeAt(0).toString(16).padStart(4,'0'));}
+export function encodeReply(value){return JSON.stringify(withRecovery(value)).replace(/[^\x00-\x7f]/g,char=>'\\u'+char.charCodeAt(0).toString(16).padStart(4,'0'));}
 export function briefReply(value){
  const out={...value};
  if(out.metadata){const m=out.metadata;delete out.metadata;out.observation_id=m.observation_id;out.hwnd=m.hwnd;out.tree=m.tree;
@@ -48,9 +50,13 @@ export function briefReply(value){
  return out;
 }
 let replyMode='json';
-const printReply=value=>console.log(encodeReply(replyMode==='brief'?briefReply(value):value));
+const printReply=value=>{
+  if(typeof value.task_token==='string'&&value.task_token.length===64&&/^[a-f0-9]{64}$/.test(value.task_token))value={...value,task_command_prefix:desktopCommand(process.execPath,process.argv[1])+' --task '+value.task_token};
+  console.log(encodeReply(replyMode==='brief'?briefReply(value):value));
+};
 export function failureReply(error){
  const result={ok:false,error:{code:error.code||'refused',message:error.message},next_action:'inspect_diagnostics'};
+  if(typeof error.task_token==='string'&&error.task_token.length===64&&/^[a-f0-9]{64}$/.test(error.task_token))result.task_token=error.task_token;
  for(const field of ['delivery_unknown','observe_before_continuing','cancellation_requested','repeated_failure'])if(error[field]===true)result[field]=true;
  if(Number.isSafeInteger(error.recovery_attempts_remaining))result.recovery_attempts_remaining=error.recovery_attempts_remaining;
  Object.assign(result,recoveryAdvice(result));
@@ -63,17 +69,23 @@ export async function recordedFailureReply(error){
  return result;
 }
 
-export function request(session,command,args={},timeout=100000,expectedPermissionMode){
+export async function request(session,command,args={},timeout=100000,expectedPermissionMode){
+  if(session.task_protocol===1&&command==='ready'&&!session.task_token){
+    const claim=await request(session,'claim',{},timeout,expectedPermissionMode);
+    if(!claim.ok)return claim;
+    if(typeof claim.task_token!=='string'||claim.task_token.length!==64||!/^[a-f0-9]{64}$/.test(claim.task_token))throw Object.assign(Error('Task reservation did not return valid context; no desktop action was requested.'),{code:'task_claim_unconfirmed'});
+    session.task_token=claim.task_token;
+  }
   return new Promise((resolve,reject)=>{
     let buffer='',settled=false,connected=false;
     const socket=net.createConnection(session.pipe);
     socket.setEncoding('utf8');
     const transportFailure=(code,message)=>Object.assign(Error(message),{code,...(connected?{delivery_unknown:true,observe_before_continuing:true,cancellation_requested:true}:{})});
-    const done=(error,result)=>{if(settled)return;settled=true;clearTimeout(deadline);socket.destroy();error?reject(error):resolve(result);};
+    const done=(error,result)=>{if(settled)return;settled=true;clearTimeout(deadline);socket.destroy();if(error&&session.task_token)error.task_token=session.task_token;error?reject(error):resolve(command==='ready'&&session.task_token?{...result,task_token:session.task_token}:result);};
     // Absolute deadline: partial bytes cannot keep a hung action alive forever.
     // Closing the connection requests server cancellation, not proof of cleanup.
     const deadline=setTimeout(()=>done(transportFailure('request_timeout','Desktop request timed out. Cancellation was requested; completion is unconfirmed. Inspect status and the actual app before continuing; do not replay the action.')),timeout);
-    socket.on('connect',()=>{connected=true;socket.write(JSON.stringify({secret:session.secret,command,args,expected_build_id:BUILD_ID,expected_permission_mode:expectedPermissionMode})+'\n');});
+    socket.on('connect',()=>{connected=true;socket.write(JSON.stringify({secret:session.secret,task_token:session.task_token,command,args,expected_build_id:BUILD_ID,expected_permission_mode:expectedPermissionMode})+'\n');});
     socket.on('data',chunk=>{
       buffer+=chunk;
       if(Buffer.byteLength(buffer)>4*1024*1024)return done(transportFailure('service_response_too_large','Desktop response exceeded its limit. Completion is unconfirmed; inspect the app without replaying the action.'));
@@ -94,7 +106,11 @@ export function request(session,command,args={},timeout=100000,expectedPermissio
 }
 
 export async function main(){
-  const [rawCommand,...rest]=process.argv.slice(2);const command=rawCommand?.replace(/^computer_/,'');
+  const words=process.argv.slice(2);
+  if(words[0]==='--task'){const prefix=words.splice(0,2);if(words.length===0)throw Error('--task needs a token and command');words.splice(1,0,...prefix);}
+  const [rawCommand,...rest]=words;const command=rawCommand?.replace(/^computer_/,'');
+  let taskToken;const taskIndex=rest.indexOf('--task');
+  if(taskIndex>=0){taskToken=rest[taskIndex+1];if(typeof taskToken!=='string'||taskToken.length!==64||!/^[a-f0-9]{64}$/.test(taskToken)||rest.lastIndexOf('--task')!==taskIndex)throw Error('Invalid --task capability');rest.splice(taskIndex,2);}
   if(command==='diagnostics'){applyDeployment(loadDeployment());if(rest.some(a=>a!=='--submit'))throw Error('Use diagnostics [--submit]');printReply(await diagnostics(dataDir(),{submit:rest.includes('--submit')}));return;}
   if(command==='update'){
     const deployment=applyDeployment(loadDeployment());if(!deployment.installed)throw Error('Updates require a supported installation.');
@@ -124,9 +140,12 @@ export async function main(){
   const policy=applyDeployment(loadDeployment());
   const file=path.join(dataDir(),'desktop-session.json');
   if(command==='start'||command==='serve'||command==='ready'){
-    storageOperation('data',dataDir());
+    // A live service already owns/prepared its private directory. Reapplying
+    // ACLs across that tree races its atomic diagnostic journal publication.
+    // Verify the private root when reconnecting; the service owns initialization.
+    storageOperation(fs.existsSync(file)?'verify':'data',dataDir());
     let existing,saved;
-    try{saved=JSON.parse(fs.readFileSync(file));existing=await request(saved,'status',{},1500,policy.permission_mode);}catch{}
+    try{saved=JSON.parse(fs.readFileSync(file));saved.task_token=taskToken;existing=await request(saved,'status',{},1500,policy.permission_mode);}catch{}
     if(existing?.ok){
       if(existing.build_id!==BUILD_ID||existing.build_version!==VERSION)throw Object.assign(Error('This skill and the running service use different builds. Do not interrupt an active task or change a pinned deployment. Inspect the intended scope and use a matching installed version.'),{code:'version_mismatch'});
       if(existing.permission_mode!==policy.permission_mode)throw Object.assign(Error('A different permission policy owns the live session. Finish and shutdown its task before using this installed policy; no override was applied.'),{code:'deployment_policy_mismatch'});
@@ -150,19 +169,19 @@ export async function main(){
     const child=spawn(process.execPath,[fileURLToPath(new URL('../server/desktop-service.mjs',import.meta.url)),'--serve'],{detached:true,windowsHide:true,stdio:'ignore',env:{...process.env,AGCU_PERMISSION_MODE:policy.permission_mode}});child.unref();
     for(let i=0;i<100;i++){
       await new Promise(resolve=>setTimeout(resolve,100));
-      try{const session=JSON.parse(fs.readFileSync(file));const found=await request(session,'status',{},1500,policy.permission_mode);if(found.ok&&found.build_id===BUILD_ID&&found.permission_mode===policy.permission_mode){printReply(command==='ready'?await request(session,'ready',{},15000,policy.permission_mode):found);return;}}catch(error){if(command==='ready'&&error.code!=='session_unavailable')throw error;}
+      try{const session=JSON.parse(fs.readFileSync(file));session.task_token=taskToken;const found=await request(session,'status',{},1500,policy.permission_mode);if(found.ok&&found.build_id===BUILD_ID&&found.permission_mode===policy.permission_mode){printReply(command==='ready'?await request(session,'ready',{},15000,policy.permission_mode):found);return;}}catch(error){if(command==='ready'&&error.code!=='session_unavailable')throw error;}
     }
     throw Error('Native session did not start; run the service in foreground for diagnostics.');
   }
   if(!fs.existsSync(file)){
-    if(command==='status'){printReply({ok:true,state:fs.existsSync(path.join(dataDir(),'emergency.stop'))?'stopped':'not_running',build_version:VERSION,build_id:BUILD_ID,reconnect_required:true});return;}
+    if(command==='status'){const latch=readStopLatch(path.join(dataDir(),'emergency.stop'));printReply({ok:true,state:latch?'stopped':'not_running',...(latch?.unconfirmed?{control_reason:'guardian_stop_unconfirmed'}:{}),...(latch?.invalid?{control_reason:'stop_persistence_failed'}:{}),build_version:VERSION,build_id:BUILD_ID,reconnect_required:true});return;}
     throw Object.assign(Error('No desktop session is running (it may have expired after15 idle minutes). Restart the installed App sidecar (or use its human starter on the normal Windows desktop), then discover apps and take a fresh observation. Antigravity does not need to restart; emergency Stop remains latched.'),{code:'no_session'});
   }
-  const session=JSON.parse(fs.readFileSync(file));
+  const session=JSON.parse(fs.readFileSync(file));session.task_token=taskToken;
   if(command==='shutdown'){
     const previous=await request(session,'status',{},100000,policy.permission_mode);
     // Preserve an old adapter's stop during migration, before that process exits.
-    if(previous.state==='stopped')fs.writeFileSync(path.join(dataDir(),'emergency.stop'),'stopped');
+    if(previous.state==='stopped')persistStopLatch(path.join(dataDir(),'emergency.stop'),{unconfirmed:previous.control_reason==='guardian_stop_unconfirmed'});
   }
   const result=await request(session,command,args,100000,policy.permission_mode);printReply(result);if(!result.ok)process.exitCode=1;
 }
