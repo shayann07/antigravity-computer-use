@@ -10,7 +10,7 @@
   <a href="https://github.com/shayann07/antigravity-computer-use/releases"><img src="https://img.shields.io/github/v/release/shayann07/antigravity-computer-use?include_prereleases&amp;label=Windows%20beta&amp;color=80abcf" alt="Latest Windows prerelease"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-9ac7dc" alt="MIT license"></a>
   <img src="https://img.shields.io/badge/platform-Windows%20x64-697e92" alt="Windows x64">
-  <a href="https://github.com/shayann07/antigravity-computer-use/stargazers"><img src="https://img.shields.io/github/stars/shayann07/antigravity-computer-use?style=flat&amp;color=80abcf" alt="GitHub stars"></a>
+  <a href="https://github.com/shayann07/antigravity-computer-use"><img src="https://img.shields.io/github/stars/shayann07/antigravity-computer-use?style=flat&amp;color=80abcf" alt="GitHub stars"></a>
 </p>
 
 <p align="center">

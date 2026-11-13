@@ -37,10 +37,12 @@ jobs:
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
           # Anything that is not plainly documentation runs the full checks.
+          # UPSTREAM.json counts as documentation: every docs edit updates it,
+          # and the docs job verifies it against the files with check-provenance.
           if [ "$EVENT" != "pull_request" ]; then echo "code=true" >> "$GITHUB_OUTPUT"; exit 0; fi
           files=$(git diff --name-only "$BASE...$HEAD")
           echo "$files"
-          code=$(printf '%s\n' "$files" | grep -Ev '^(docs/.*|[^/]+\.md|\.github/(ISSUE_TEMPLATE/.*|PULL_REQUEST_TEMPLATE\.md|FUNDING\.yml)|LICENSE)$' | grep -c . || true)
+          code=$(printf '%s\n' "$files" | grep -Ev '^(docs/.*|[^/]+\.md|UPSTREAM\.json|\.github/(ISSUE_TEMPLATE/.*|PULL_REQUEST_TEMPLATE\.md|FUNDING\.yml)|LICENSE)$' | grep -c . || true)
           if [ "$code" -gt 0 ] || [ -z "$files" ]; then echo "code=true" >> "$GITHUB_OUTPUT"; else echo "code=false" >> "$GITHUB_OUTPUT"; fi
 
   docs:
