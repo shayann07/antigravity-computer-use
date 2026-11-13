@@ -360,7 +360,7 @@
     },
     {
       "path": "scripts/bundle.mjs",
-      "sha256": "f6919f50960b0672f656e22304ccf43f7ad3d564bd83eaead11553b804ec1fe9"
+      "sha256": "3c40c9cb68a7ab4f38c62e1a04e0a4882fc6d2cfcb81a8853c130c97290af2dd"
     },
     {
       "path": "tests/install.test.mjs",
@@ -491,7 +491,7 @@
       "sha256": "d3c0b852ce2d810131a9cd718e28af731d9d1e8fb84c5d6abaf329d8ed4c881c"
     },
     {
-      "path": "HANDOFF.md",
+      "path": "docs/internal/HANDOFF.md",
       "sha256": "feb2a6cde7b35f105c119b3b4698d3a5f10c5dd736f0654c9f99c89db2918d5b"
     },
     {
@@ -499,7 +499,7 @@
       "sha256": "e84e4869af528b801b48b0f696077c21d400d8d45b03c0ad8757c4d7d4fe80d9"
     },
     {
-      "path": "docs/CLAUDE-CODE-HANDOFF-PROMPT.md",
+      "path": "docs/internal/CLAUDE-CODE-HANDOFF-PROMPT.md",
       "sha256": "2315a5b1cdc450cf12f23b4cf98c7c6839aa55bf2d6154f022a62e94a5ba21a5"
     },
     {
@@ -643,7 +643,7 @@
       "sha256": "0be85a783c1794268d4c936c943f363c6f17a723d906e467b6fde61c5ee80edd"
     },
     {
-      "path": "docs/MAC-QUALIFICATION-PROMPT.md",
+      "path": "docs/internal/MAC-QUALIFICATION-PROMPT.md",
       "sha256": "a193806592f21c7cb9ada79a0a284de01fa74f6d5ea90bbaf64c6c592e63e46a"
     },
     {
