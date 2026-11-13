@@ -78,3 +78,33 @@ test('launch discovery remains bounded if the wall clock moves backwards',async(
  try{const result=await Runtime.prototype.launch.call(r,{app,observe:true,reason:'Clock change'});assert.equal(result.observe_pending,true);assert.equal(result.input_completed,true);assert.equal(counts().launches,1);}
  finally{Date.now=realDate;if(ownNow)Object.defineProperty(performance,'now',ownNow);else delete performance.now;}
 });
+
+// Feed list_apps a timeline of window sets keyed by elapsed milliseconds.
+function timeline(steps){
+ const {r,counts}=harness([]),original=r.driver.call,started=performance.now();const seen=[];
+ r.driver.call=async(op,args)=>{if(op!=='list_apps')return original(op,args);const t=performance.now()-started;let windows=steps[0][1];for(const [at,set] of steps)if(t>=at)windows=set;return {result:{windows}};};
+ r.observe=async a=>{seen.push(a.hwnd);return {metadata:{hwnd:a.hwnd,observation_id:'fresh'}};};
+ return {r,counts,seen};
+}
+const win=(hwnd,w,h)=>({hwnd,pid:123,path:executable,rect:[0,0,w,h]});
+test('launch --observe waits past a splash screen and observes the main window',async()=>{
+ const {r,seen}=timeline([[0,[win(5,600,350)]],[700,[win(6,1280,800)]]]);
+ const result=await Runtime.prototype.launch.call(r,{app,observe:true,reason:'Splash then main'});
+ assert.equal(result.input_completed,true);assert.deepEqual(seen,[6]);
+});
+test('a lone small window waits for the main window, but is used if none appears',async()=>{
+ const later=timeline([[0,[win(5,413,210)]],[1500,[win(5,413,210),win(6,1280,800)]]]);
+ await Runtime.prototype.launch.call(later.r,{app,observe:true,reason:'Widget then main'});
+ assert.deepEqual(later.seen,[6]);
+ const only=timeline([[0,[win(5,413,210)]]]),started=performance.now();
+ await Runtime.prototype.launch.call(only.r,{app,observe:true,reason:'Small app'});
+ assert.deepEqual(only.seen,[5]);assert(performance.now()-started<6500,'small-window wait stays bounded');
+});
+test('a clearly dominant window is chosen; comparable windows stay ambiguous',async()=>{
+ const dominant=timeline([[0,[win(5,1280,800),win(6,300,200)]]]);
+ const chosen=await Runtime.prototype.launch.call(dominant.r,{app,observe:true,reason:'Main plus palette'});
+ assert.deepEqual(dominant.seen,[5]);assert.equal(chosen.input_completed,true);
+ const close=timeline([[0,[win(5,800,600),win(6,700,600)]]]);
+ const pending=await Runtime.prototype.launch.call(close.r,{app,observe:true,reason:'Two documents'});
+ assert.equal(pending.observe_pending,true);assert.deepEqual(close.seen,[]);assert.equal(close.counts().launches,1);
+});

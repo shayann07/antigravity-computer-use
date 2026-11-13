@@ -21,6 +21,15 @@ import {writeAtomicJSON,readTaskRecord} from './atomic-json.mjs';
 
 const input=new Set(['move','click','type','set_value','key','scroll','drag','focus','fit_window','close_window','paste','paste_files','clipboard','open','file_dialog']);
 const fail=(code,message)=>{throw new HostError(code,message,null);};
+// Post-launch observation settles on the app's main window (#72).
+const LAUNCH_SETTLE_MS=1200,LAUNCH_SETTLE_LIMIT_MS=5000,SMALL_WINDOW=[480,320];
+// One match is the main window; among several, only one at least twice the
+// area of every other counts. Anything closer stays ambiguous.
+export function mainWindow(matches){
+ if(matches.length===1)return matches[0];
+ const sorted=[...matches].sort((a,b)=>b.rect[2]*b.rect[3]-a.rect[2]*a.rect[3]);
+ return sorted[0].rect[2]*sorted[0].rect[3]>=2*sorted[1].rect[2]*sorted[1].rect[3]?sorted[0]:null;
+}
 export async function waitUntil(target,{now=()=>performance.now(),sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms)),check=()=>{}}={}){
   // Node timers may wake before a fractional deadline. Do not start another
   // expensive poll until the intended delay has actually elapsed.
@@ -690,15 +699,30 @@ export class Runtime {
     try {
       if(!Number.isSafeInteger(result.pid)||result.pid<=0)throw Object.assign(Error('Launcher returned no PID. Discover apps without relaunching.'),{code:'launch_pid_unavailable'});
       const until=performance.now()+8000;
+      // Splash screens and small helper windows appear before the main window.
+      // Observe only once the matching window set has been unchanged for
+      // LAUNCH_SETTLE_MS, within LAUNCH_SETTLE_LIMIT_MS of the first match; a
+      // lone small window waits out that limit in case the main window follows.
+      let firstMatch=null,lastKey=null,stableSince=0;
       do {
         this.check();if(generation!==this.generation)fail('control_changed','Control changed after launch.');
         const windows=(await this.driver.call('list_apps',{})).result.windows;
         const matches=windows.filter(w=>w.pid===result.pid&&executableKey(path.resolve(w.path||''))===executableKey(executable)&&!w.minimized&&!w.other_desktop&&w.rect?.[2]>0&&w.rect?.[3]>0);
-        if(matches.length>1)return {...result,input_completed:true,observe_pending:true,observation_hint:'Several matching windows opened. Discover apps and select the intended window; do not relaunch.'};
-        if(matches.length===1){
-          const observed=await this.observe({hwnd:Number(matches[0].hwnd),reason:args.reason});
-          return {...observed,result,input_completed:true};
+        if(matches.length){
+          const now=performance.now();firstMatch??=now;
+          const key=matches.map(w=>[w.hwnd,...w.rect].join(',')).sort().join('|');
+          if(key!==lastKey){lastKey=key;stableSince=now;}
+          const chosen=mainWindow(matches),settleEnd=Math.min(until,firstMatch+LAUNCH_SETTLE_LIMIT_MS);
+          const small=chosen&&chosen.rect[2]<SMALL_WINDOW[0]&&chosen.rect[3]<SMALL_WINDOW[1];
+          if((now-stableSince>=LAUNCH_SETTLE_MS&&!(small&&now<settleEnd))||now>=settleEnd){
+            if(!chosen)return {...result,input_completed:true,observe_pending:true,observation_hint:'Several matching windows opened. Discover apps and select the intended window; do not relaunch.'};
+            this.check();if(generation!==this.generation)fail('control_changed','Control changed after launch.');
+            const observed=await this.observe({hwnd:Number(chosen.hwnd),reason:args.reason});
+            return {...observed,result,input_completed:true};
+          }
+          await new Promise(resolve=>setTimeout(resolve,200));continue;
         }
+        firstMatch=null;lastKey=null;
         // Packaged Windows launchers often exit after handing off. Waiting the
         // entire discovery budget cannot produce a window of an exited PID.
         let alive=true;try{process.kill(result.pid,0);}catch(error){if(error.code==='ESRCH')alive=false;}
