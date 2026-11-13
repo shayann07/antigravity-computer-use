@@ -42,3 +42,20 @@ test('trusted local End releases an abandoned capability only after cleanup, kee
   const next=await request(b,'ready');assert.equal(next.ready,false);assert.equal(next.state,'stopped');assert.notEqual(next.task_token,first.task_token);assert.equal((await request(a,'end')).error.code,'task_owned');await request(b,'end');
  }finally{await service.shutdown();fs.rmSync(dir,{recursive:true,force:true});}
 });
+test('ready on a recovered task returns the runtime advice through IPC without issuing a token',async()=>{
+ const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'recovered-claim-'));let recovered=true,open=true,undispatched=true,readies=0,ends=0;
+ const runtime={status:()=>({state:'idle',task_open:open,recovered_task:recovered,build_id:BUILD_ID,build_version:VERSION,permission_mode:'standalone'}),
+  async ready(){readies++;return undispatched?{ready:false,next_action:'end_recovered_task',replay_allowed:false,error:{code:'recovered_cleanup_unverified',message:'never sent input'}}:{ready:false,next_action:'inspect_prior_input_cleanup',replay_allowed:false,error:{code:'recovered_cleanup_unverified',message:'may have sent input'}};},
+  async finish(){ends++;recovered=false;open=false;return {ended:true};},async close(){}};
+ const service=await serveDesktop({directory:dir,runtime,requireTaskOwnership:true});
+ try{
+  const session=JSON.parse(fs.readFileSync(service.file));
+  const advice=await request({...session},'ready');assert.equal(advice.ok,false);assert.equal(advice.next_action,'end_recovered_task');assert.equal(advice.task_token,undefined);assert.equal(readies,1);
+  const env={...process.env,AGCU_DATA_DIR:dir,AGCU_PERMISSION_MODE:'standalone'};delete env.CU_PLUGIN_DATA;delete env.CLAUDE_PLUGIN_DATA;
+  const cli=async args=>{try{return JSON.parse((await promisify(execFile)(process.execPath,[fileURLToPath(new URL('../scripts/desktop.mjs',import.meta.url)),...args],{env,windowsHide:true,timeout:10000})).stdout);}catch(error){return JSON.parse(error.stdout);}};
+  const printed=await cli(['ready']);assert.equal(printed.next_action,'end_recovered_task');assert.equal(printed.recovery.actor,'agent');assert.equal(printed.recovery.command,'end');assert.equal(printed.task_token,undefined);
+  undispatched=false;const locked=await request({...session},'ready');assert.equal(locked.next_action,'inspect_prior_input_cleanup');assert.equal(locked.task_token,undefined);
+  undispatched=true;assert.equal((await request({...session},'end')).ended,true);assert.equal(ends,1);
+  const next=await request({...session},'ready');assert.match(next.task_token,/^[a-f0-9]{64}$/);
+ }finally{await service.shutdown();fs.rmSync(dir,{recursive:true,force:true});}
+});

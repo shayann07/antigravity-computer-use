@@ -292,7 +292,7 @@
     },
     {
       "path": "server/desktop-service.mjs",
-      "sha256": "8eb2beaba3d9dd44b27377bb5ec663c42c3764d9ca71e7af1ff92445edaa91de"
+      "sha256": "a7c7bea715d091723dc9abc8f787ec5ebc86e46426a9aa0094f1d73bfe8a31c5"
     },
     {
       "path": "server/desktop-tools.mjs",
@@ -888,7 +888,7 @@
     },
     {
       "path": "tests/task-ownership.test.mjs",
-      "sha256": "3888eb384685f54c9cfa16856f780c9b6797905e28dbec616fc7aeaffac37d26"
+      "sha256": "100cb69e4906fd07ecab3a4057671d53917e45227bd606be8f8e3288fedef6e0"
     },
     {
       "path": "tests/installation-location.test.mjs",
