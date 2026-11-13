@@ -511,24 +511,31 @@ export class Runtime {
       return result;
     };
     const finish=result=>({...result,wait_metrics:{elapsed_ms:Math.round(performance.now()-started),observations,polling_budget_ms:budget}});
+    // until: the text has appeared. until_gone: observed text has disappeared;
+    // an incomplete tree never counts as gone, and the text must be visible
+    // when the wait starts, so a mistyped label cannot read as finished.
+    const gone=typeof args.until_gone==='string',label=(gone?args.until_gone:args.until).toLowerCase();
+    const matches=view=>{const present=view.metadata.tree.toLowerCase().includes(label);return gone?!present&&view.metadata.tree_incomplete!==true:present;};
     do {
       this.check();latest=await observe({hwnd:args.hwnd,with_image:false,query:args.query,native_snapshot_deadline:until,require_native_budget:true,...(args.abort_on?.length?{max_nodes:500}:{})});
-      const tree=latest.metadata.tree.toLowerCase();
       const failure=waitFailure(latest,args.abort_on);
       if(failure){
         if(args.with_image===false)return finish({matched:false,aborted:true,abort_match:failure,...latest});
         this.frames.delete(latest.metadata.observation_id);return finish({matched:false,aborted:true,abort_match:failure,...await observe({hwnd:args.hwnd,query:args.query,with_image:args.with_image,max_nodes:500,native_snapshot_deadline:until})});
       }
-      if(tree.includes(args.until.toLowerCase())){
+      if(gone&&observations===1&&!latest.metadata.tree.toLowerCase().includes(label)){
+        this.frames.delete(latest.metadata.observation_id);
+        fail('wait_label_not_observed','The text to wait on was not visible when the wait started. Observe again; the job may already have finished. No input was sent.');
+      }
+      if(matches(latest)){
         // Do not authorize the next batch step based on a transient match in
         // an older frame. Confirm both success and failure on the returned view.
         this.frames.delete(latest.metadata.observation_id);
         const verified=await observe({hwnd:args.hwnd,query:args.query,with_image:args.with_image,native_snapshot_deadline:until,require_native_budget:true,...(args.abort_on?.length?{max_nodes:500}:{})});
-        const verifiedTree=verified.metadata.tree.toLowerCase();
         const verifiedFailure=waitFailure(verified,args.abort_on);
         if(verifiedFailure)return finish({matched:false,aborted:true,abort_match:verifiedFailure,...verified});
         if(args.abort_on?.length&&verified.metadata.tree_incomplete)return finish({matched:false,incomplete:true,...verified});
-        if(verifiedTree.includes(args.until.toLowerCase()))return finish({matched:true,...verified});
+        if(matches(verified))return finish({matched:true,...verified});
         if(args.with_image===false&&performance.now()>=until)return finish({matched:false,timed_out:true,...verified});
         latest=verified;
         if(performance.now()>=until){this.frames.delete(latest.metadata.observation_id);break;}

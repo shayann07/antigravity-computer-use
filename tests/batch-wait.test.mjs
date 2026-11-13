@@ -312,3 +312,37 @@ test('batched wait_change passes the fresh frame forward and stops after timeout
  assert.equal(seen.length,2);assert.equal(timeout.ok,false);assert.equal(timeout.verification_error.code,'wait_change_timeout');assert.equal(timeout.batch.skipped,1);assert.equal(timeout.metadata.observation_id,'after-change');
  seen.length=0;await assert.rejects(call(runtime,'computer_run',args([{kind:'click',name:'Start'},{kind:'wait',until:'Ready',timeout_ms:20000},{kind:'wait_change',timeout_ms:20000}])),/Combined batch waits/);assert.equal(seen.length,0);
 });
+
+test('until_gone returns once observed text disappears, confirmed on a fresh frame',async()=>{
+ const trees=['Upscaling 40% Stop upscaling','Upscaling 90% Stop upscaling','Done in 25 s','Done in 25 s'];const frames=new Map();let n=0;
+ const runtime={frames,generation:0,check(){},async observe(){const id='s'+(++n);frames.set(id,{});return{metadata:{observation_id:id,tree:trees[Math.min(n-1,trees.length-1)]}};}};
+ const result=await Runtime.prototype.wait.call(runtime,{hwnd:7,until_gone:'Stop upscaling',timeout_ms:5000,with_image:false});
+ assert.equal(result.matched,true);assert.equal(result.metadata.tree,'Done in 25 s');assert.equal(result.wait_metrics.observations,4);
+});
+
+test('until_gone never treats an incomplete tree as gone',async()=>{
+ const frames=new Map();let n=0;
+ const runtime={frames,generation:0,check(){},async observe(){const id='s'+(++n);frames.set(id,{});return n===1?{metadata:{observation_id:id,tree:'Stop upscaling'}}:{metadata:{observation_id:id,tree:'',tree_incomplete:true}};}};
+ const result=await Runtime.prototype.wait.call(runtime,{hwnd:7,until_gone:'Stop upscaling',timeout_ms:300,with_image:false});
+ assert.equal(result.matched,false);assert.equal(result.timed_out,true);
+});
+
+test('until_gone refuses text that was not visible when the wait started',async()=>{
+ const frames=new Map();let n=0;
+ const runtime={frames,generation:0,check(){},async observe(){const id='s'+(++n);frames.set(id,{});return{metadata:{observation_id:id,tree:'Done in 25 s'}};}};
+ await assert.rejects(Runtime.prototype.wait.call(runtime,{hwnd:7,until_gone:'Stop upscaling',timeout_ms:1000,with_image:false}),error=>error.code==='wait_label_not_observed');
+ assert.equal(n,1);assert.equal(frames.size,0);
+ const {recoveryAdvice}=await import('../server/recovery.mjs');
+ assert.equal(recoveryAdvice({error:{code:'wait_label_not_observed'}}).next_action,'observe_again');
+});
+
+test('wait takes exactly one of until or until_gone, and until_gone works as a batch step',async()=>{
+ assert.throws(()=>validate('computer_wait',{hwnd:7,reason:'r'}),/exactly one of until or until_gone/);
+ assert.throws(()=>validate('computer_wait',{hwnd:7,reason:'r',until:'Done',until_gone:'Stop'}),/exactly one of until or until_gone/);
+ validate('computer_wait',{hwnd:7,reason:'r',until_gone:'Stop'});
+ const seen=[];
+ const runtime={async action(op){seen.push(op);return{metadata:{observation_id:'after-click'}};},async wait(a){seen.push('wait:'+a.until_gone);return{matched:true,metadata:{observation_id:'verified'}};}};
+ const plan=parseRunArguments(describe('run').inputSchema,['--hwnd','7','--observation-id','initial','--reason','Start and wait','--step','click','--name','Upscale','--step','wait','--until-gone','Stop upscaling','--timeout-ms','30000'],describe);
+ const result=await call(runtime,'computer_run',plan);
+ assert.deepEqual(seen,['click','wait:Stop upscaling']);assert.equal(result.batch.completed.length,2);
+});
