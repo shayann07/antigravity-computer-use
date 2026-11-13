@@ -1,13 +1,5 @@
 name: Prepare signed release assets (no publication)
 on:
-  push:
-    branches: [codex/macos-and-latency-review]
-    paths:
-      - .github/workflows/prepare-signed-release.yml
-      - scripts/sign-update.mjs
-      - scripts/sign-update-ci.mjs
-      - scripts/verify-signed-assets.mjs
-      - release-public-key.pem
   workflow_dispatch:
     inputs:
       sequence:
@@ -35,6 +27,9 @@ jobs:
             arch: x64
             minimum_kernel: 23.0.0
     runs-on: ${{ matrix.runner }}
+    # The signing key is only available after the maintainer approves the
+    # protected release environment, which is limited to main.
+    environment: release
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
