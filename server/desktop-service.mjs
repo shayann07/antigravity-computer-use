@@ -138,6 +138,9 @@ export async function serveDesktop({directory=dataDir(),runtime,idlePolicy='shut
           const state=runtime.status();
           if(name==='computer_claim'){
             if(busy)throw Object.assign(Error('A desktop operation is pending.'),{code:'task_owned'});
+            // A recovered task is never adopted. Return the runtime's read-only
+            // advice (end once, or inspect cleanup) without issuing a token.
+            if(state.recovered_task===true&&!taskOwnership.owner){const advice=await runtime.ready();finished=true;socket.end(JSON.stringify({...advice,ok:false})+'\n');return;}
             const task_token=taskOwnership.claim(state);finished=true;socket.end(JSON.stringify({ok:true,task_token})+'\n');return;
           }
           taskOwnership.authorize(name,request.task_token,state);
