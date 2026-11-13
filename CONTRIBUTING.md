@@ -7,3 +7,4 @@ Describe the problem, observable behavior, and verification in your pull request
 Keep source attribution and modification hashes in UPSTREAM.json current. Do not submit private screenshots, user recordings, logs, credentials, .localdata, generated executables, or dist archives in source commits. Public release assets belong in GitHub Releases.
 
 Report OS, display scaling, monitor arrangement, app version and reproduction steps for bugs. Redact personal content. See SECURITY.md for security reports and VALIDATION.md for verification limits.
+
