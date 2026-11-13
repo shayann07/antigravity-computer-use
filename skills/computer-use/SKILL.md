@@ -104,7 +104,7 @@ These common command shapes are complete; use them directly without schema setup
 | `snapshot` | `--hwnd H --reason TEXT [--query TEXT] [--max-nodes 500] [--image] [--settle-ms 600]` |
 | `click` | `--hwnd H --observation-id F --name TEXT --role Button --risk routine --reason TEXT [--physical true] [--image] [--max-nodes 500]`; or `--index N` in place of name/role |
 | `click` (pixels) | `--hwnd H --observation-id F --x X --y Y --risk routine --reason TEXT [--image]`; X/Y come from that frame's freshly viewed image |
-| `move` | `--hwnd H --observation-id F --x X --y Y --reason TEXT`; hover without clicking |
+| `move` | `--hwnd H --observation-id F --x X --y Y --risk routine --reason TEXT`; hover without clicking |
 | `set_value` | `--hwnd H --observation-id F --name TEXT --role Edit --text VALUE --risk routine --reason TEXT`; or `--index N` |
 | `file_dialog` | `--hwnd OWNER --observation-id F --path FILE --action open` (or `save`) `--entry-method clipboard --reason TEXT` |
 | `run` | `--hwnd H --observation-id F --reason TEXT --step COMMAND` followed by that step's flags; repeat at most 8 times, omitting per-step owner/frame |
@@ -154,7 +154,7 @@ the saved text against the original code points, allowing only explicitly
 requested line-ending/encoding differences. A screenshot, byte count or hex dump
 without comparison does not prove exact content. Report a mismatch honestly.
 
-If the app opens with earlier work still loaded (a queue, a previous file, a half-finished form), use its single visible reset or clear control once, then continue. Do not hunt through menus to tidy it.
+If the app opens with leftover state that blocks the requested task and holds nothing the user could lose, such as an old processing queue, use its single visible clear control once, then continue. If the leftover could be the user's work (an unsaved document, a half-filled form), do not clear it: say what you found and stop. Do not hunt through menus to tidy an app.
 
 Click the actual Open/Browse/Save control first. In a batch, put `file_dialog` only behind the app's visible, labelled Open/Browse/Choose control; never behind a guessed control, such as an unlabelled `+` or a menu you have not seen open. If you are unsure the control opens a picker, click it alone, look, then fill the dialog. `file_dialog` fills an **already-open picker** using the **owner app's hwnd and fresh owner frame**, exact path and `--action open`/`save`. Prefer explicit `--entry-method clipboard` for authorized temporary clipboard use: atomic filename entry must match readback before confirmation. The compatibility keyboard method can lose characters through Windows text services; `file_dialog_path_mismatch` means confirmation was refused. Never blindly send Enter/replay. Owner screenshots can omit a separate modal; discover and inspect the actual dialog if needed, while keeping file_dialog bound to its owner. Dialog closure alone does not prove import/save completed.
 
@@ -168,7 +168,7 @@ On `input_completed:true` plus a verification error, input already ran; observe 
 
 Report the result within a fixed budget. Confirm completion from the app's own text in the tree, then check the produced artifact once (one file check of the expected path). If the app does not show the output path, use at most one visible control that opens the output folder, or say the path was not shown. Do not explore history panels, hover for tooltips or search the disk to find it. Restore test-modified preferences, close only owned disposable windows with `close_window --hwnd HANDLE --reason ...`, and call `end`.
 
-If you give up before finishing (an error you cannot resolve, a refusal, or a task you abandon), still call `end` once before reporting, so your open task does not block the next conversation with `task_owned`. If `end` is refused, report its reply and `recovery` instead of retrying. This does not apply while you are waiting for a human handoff. A later task can begin without restarting Antigravity. For broader development/QA qualification, see [application verification](references/app-verification.md).
+If your own `ready` returned a `task_token` and you give up before finishing, still call `end` once before reporting, so your open task does not block the next conversation with `task_owned`. If `end` is refused, report its reply and `recovery` instead of retrying. This never applies to a task you do not own (`task_owned`, or `ready:false` without a token), while you are waiting for a human handoff, or when a reply's `next_action` or `recovery` says to report and stop. A later task can begin without restarting Antigravity. For broader development/QA qualification, see [application verification](references/app-verification.md).
 
 ## Failure reports and updates
 

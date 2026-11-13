@@ -26,14 +26,14 @@ test('computer-use skill documents a supported ready entrypoint and bounded huma
 test('every command example in the computer-use skill parses with the real CLI', async () => {
   const {parseArguments, parseRunArguments} = await import('../scripts/arguments.mjs');
   const words = line => [...line.matchAll(/'([^']*)'|(\S+)/g)].map(m => m[1] ?? m[2]);
-  const examples = [...skill.matchAll(/```powershell\n([\s\S]*?)```/g)]
-    .flatMap(block => block[1].split('\n'))
+  const examples = [...skill.matchAll(/```powershell\r?\n([\s\S]*?)```/g)]
+    .flatMap(block => block[1].split(/\r?\n/))
     .map(line => line.trim())
     .filter(line => line.startsWith('{{DESKTOP_COMMAND}} ') && line !== '{{DESKTOP_COMMAND}} ready')
     .map(line => words(line).slice(1));
   // Pixel rows in the command table, with placeholders filled.
   examples.push(['click', '--hwnd', '1', '--observation-id', 'F', '--x', '10', '--y', '20', '--risk', 'routine', '--reason', 'r']);
-  examples.push(['move', '--hwnd', '1', '--observation-id', 'F', '--x', '10', '--y', '20', '--reason', 'r']);
+  examples.push(['move', '--hwnd', '1', '--observation-id', 'F', '--x', '10', '--y', '20', '--risk', 'routine', '--reason', 'r']);
   assert(examples.length >= 7, 'expected the skill examples to be found');
   assert(examples.some(([command, ...rest]) => command === 'run' && rest.includes('wait')), 'a batch example must end with a wait');
   for (const [command, ...rest] of examples) {
