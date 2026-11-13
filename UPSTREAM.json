@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "0d4a9e80651724007d8de3afe952b8bae15fa64489e70000d60f99dc9a0e4ba6"
+      "sha256": "73dac15d2e1daa7aa0544d863dae26294e9c79915343c6de1d2cec9aeaf0bb38"
     },
     {
       "path": "server/mcp.mjs",
@@ -344,7 +344,7 @@
     },
     {
       "path": "tests/launch-observe.test.mjs",
-      "sha256": "cd42f582f0ccfc0bf1f134c7a701957ddf09edc11c413ec08fc4bbd11e77c600"
+      "sha256": "128312e05025a1bec477bcf690a6df0abfff466884e089f57d069dc4c5beb00d"
     },
     {
       "path": "scripts/install.mjs",
