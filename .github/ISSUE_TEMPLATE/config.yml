@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/shayann07/antigravity-computer-use/security/advisories/new
+    about: Report security problems privately. Please don't open a public issue.
+  - name: Installation guide
+    url: https://github.com/shayann07/antigravity-computer-use/blob/main/docs/INSTALLATION.md
+    about: Install, update, roll back or remove Computer Use.

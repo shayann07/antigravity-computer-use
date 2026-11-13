@@ -1,12 +1,14 @@
 # README media
 
+`launch-film.mp4` and `launch-film.gif` are the beta.5 launch film shown at the top of the README: a real recording edited in HyperFrames, with labelled speed-ups. Provenance, privacy edits and music credits are in [LAUNCH-FILM.md](LAUNCH-FILM.md).
+
 `hero.svg` is original, editable vector branding for this repository. It is not
 a screenshot or a product capability demonstration. `social-preview.png` is its
 1280×640 raster derivative, prepared for GitHub's repository social-preview field;
 the image was uploaded to GitHub social-preview settings on 28 October 2026.
 
-The README now embeds the real stable Upscaly task described in
-[UPSCALY-DEMO.md](UPSCALY-DEMO.md). It is a full-screen excerpt at normal speed,
+The earlier Upscaly 1.0.9 recording, described in
+[UPSCALY-DEMO.md](UPSCALY-DEMO.md), is a full-screen excerpt at normal speed,
 with actual glow, controls and pointer input. The older v0.2.0 fixture has its
 own historical notes in [REAL-DEMO.md](REAL-DEMO.md).
 
