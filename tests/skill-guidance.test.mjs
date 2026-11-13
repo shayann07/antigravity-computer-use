@@ -53,3 +53,11 @@ test('computer-use skill bounds image views, result reporting and abandoned task
   assert.match(skill, /never behind a guessed control/);
   assert.match(skill, /Do not call\s+`status` before `ready`/);
 });
+
+test('computer-use skill documents wait --until-gone and it parses with the real CLI', async () => {
+ const {parseArguments} = await import('../scripts/arguments.mjs');
+ assert.match(skill, /--until-gone OBSERVED_TEXT/);
+ assert.match(skill, /wait_label_not_observed/);
+ const args = parseArguments(describeCommand('wait').inputSchema, ['--hwnd', '1', '--until-gone', 'Stop upscaling', '--timeout-ms', '30000', '--reason', 'r']);
+ assert.equal(args.until_gone, 'Stop upscaling');
+});

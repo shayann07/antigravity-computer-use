@@ -600,7 +600,7 @@
     },
     {
       "path": "skills/computer-use/SKILL.md",
-      "sha256": "e0addc6bf6bd262d9af4c79d057a02485323a79f9a38cb746e71a28dfdbc9cba"
+      "sha256": "0ed02513fbfbd8a311d282d9f141e50f2ee6d76c45442db822c8cc18718d08b0"
     },
     {
       "path": "docs/MACOS.md",
@@ -864,7 +864,7 @@
     },
     {
       "path": "tests/skill-guidance.test.mjs",
-      "sha256": "cbb39e6fa283d7db7c5db997a441b9fdd387c511fa49e09e40db585e1a0bb265"
+      "sha256": "530735b06316b19e00c4a1a6d7bfcca0397aaf43e82e6431d2e385d8008e5b90"
     },
     {
       "path": "tests/brief-reply.test.mjs",
