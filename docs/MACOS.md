@@ -37,7 +37,7 @@ retained. No user Mac was controlled from the Windows development environment.
 ## Try a prebuilt candidate
 
 Use the architecture-matching artifact from the Mac adapter branch's successful
-[macOS workflow run](https://github.com/shayann07/antigravity-computer-use/actions/workflows/macos.yml).
+[macOS workflow run](https://github.com/shayann07/antigravity-computer-use/actions/workflows/ci.yml).
 These CI artifacts are temporary development downloads, not release assets.
 
 1. Extract the artifact ZIP and its `.tar.gz` archive. Keep the complete

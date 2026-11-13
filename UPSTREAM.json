@@ -563,10 +563,6 @@
       "sha256": "cc3b5f1d765ae272b15cb5011abfbe0ed50e33f75e70caef5660dd2fd49b6e3e"
     },
     {
-      "path": ".github/workflows/macos.yml",
-      "sha256": "84a7c5a70741c35f0b03394db5f7e104ce9264dfcaeaeeb4e04faa7a05492e70"
-    },
-    {
       "path": "server/native/macos/MacControl.swift",
       "sha256": "83dc0a5f58c4fdeee41b533a1d843d9aed1ebbfdcfdf0e556b1ad4f052b4d96e"
     },
@@ -608,7 +604,7 @@
     },
     {
       "path": "docs/MACOS.md",
-      "sha256": "f80f218c671676198ef3bde7b023daaa1c8c22a4532dce9edb06f6f5abaa3408"
+      "sha256": "346d0e3c492960dc59dfb9d0fff9b714245f27bf6caef585ec513a9ab6c485b0"
     },
     {
       "path": "server/update-core.mjs",
@@ -695,8 +691,8 @@
       "sha256": "82bab3638383b29bd789526b5ebfcd6138d73d5825ee160482d388b8ec1d7a4b"
     },
     {
-      "path": ".github/workflows/windows.yml",
-      "sha256": "bb61bf51773884ddfe8386b3ff15a243d5b5b457b84a42ffa6974b1cd8044e67"
+      "path": ".github/workflows/ci.yml",
+      "sha256": "08052bc690e2c4afc45241f5149d87252d461feea92d7370b95484497b2befd8"
     },
     {
       "path": "release-public-key.pem",
@@ -708,7 +704,7 @@
     },
     {
       "path": ".github/workflows/prepare-signed-release.yml",
-      "sha256": "310bedacf4deb57864eee0f9a1c309e222722b28b4afa7bf113ecf0d5a4a4463"
+      "sha256": "eacc2b65ffc0775d3e48e03f2a478f914701f11e806c2079d7fa764e6558dcc4"
     },
     {
       "path": "server/recovery.mjs",
@@ -780,7 +776,7 @@
     },
     {
       "path": "docs/CI.md",
-      "sha256": "9551fc3ad937b064463c5457d1853db38ef92d75b7d2d2c8477b9b1d891b0b14"
+      "sha256": "8a56a5871c803cd9bb3dc9179f0ff23a83c6ea89b614cf456e8a77d5d9169c26"
     },
     {
       "path": "tests/NativeSnapshotBudgetTests.cs",
