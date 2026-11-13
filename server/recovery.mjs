@@ -153,6 +153,24 @@ export function priorMacCleanupVerified(directory,record,{platform=process.platf
   return pids.every(gone);
  }catch{return false;}
 }
+// A task that was opened but never reached recordDispatch() started no native
+// input worker: recordDispatch() persists dispatched:true before every driver
+// input call. That is positive evidence only when the record says so
+// explicitly, no worker identity was recorded, the controller that owned the
+// record is gone, and its input ledger is the platform's empty ledger.
+export function priorUndispatchedCleanupVerified(directory,record,{platform=process.platform,probe=process.kill,io=fs}={}){
+ if(!['win32','darwin'].includes(platform)||record?.open!==true||record.dispatched!==false||!Array.isArray(record.children)||record.children.length!==0||typeof record.guard!=='string'||!/^guard-[1-9][0-9]{0,9}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.state$/.test(record.guard))return false;
+ const gone=pid=>{if(!Number.isSafeInteger(pid)||pid<=0||pid>4294967295)return false;try{probe(pid,0);return false;}catch(error){return error.code==='ESRCH';}};
+ try{
+  const guard=path.join(directory,record.guard),parent=Number(/^guard-(\d+)-/.exec(record.guard)[1]);
+  if(!gone(parent))return false;
+  const fields=readRecoveryFile(guard,4096,io).split('|');if(fields.length<4||!['idle','stopped'].includes(fields[0]))return false;
+  const ledger=readRecoveryFile(guard+'.inputs',65536,io);
+  if(platform==='win32'){if(ledger!=='')return false;}
+  else{const value=JSON.parse(ledger);if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).sort().join(',')!=='buttons,keys'||value.keys.length!==0||value.buttons.length!==0)return false;}
+  return gone(parent);
+ }catch{return false;}
+}
 export function recoveryAdvice(result){
  const code=result.error?.code||result.verification_error?.code;
  const extra={

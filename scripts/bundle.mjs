@@ -23,6 +23,7 @@ const modules=['index.mjs','desktop-service.mjs','task-ownership.mjs','task-coor
 fs.mkdirSync(path.join(out,'server'),{recursive:true});for(const f of modules)fs.copyFileSync(path.join(root,'server',f),path.join(out,'server',f));
 fs.copyFileSync(path.join(root,'server/auto-update.mjs'),path.join(out,'server/auto-update.mjs'));
 fs.copyFileSync(path.join(root,'server/recovery.mjs'),path.join(out,'server/recovery.mjs'));
+fs.copyFileSync(path.join(root,'server/recovery-guide.mjs'),path.join(out,'server/recovery-guide.mjs'));
 fs.copyFileSync(path.join(root,'server/update-notice.mjs'),path.join(out,'server/update-notice.mjs'));
 fs.copyFileSync(path.join(root,'server/atomic-json.mjs'),path.join(out,'server/atomic-json.mjs'));
 if(fs.existsSync(path.join(root,'release-public-key.pem')))fs.copyFileSync(path.join(root,'release-public-key.pem'),path.join(out,'release-public-key.pem'));

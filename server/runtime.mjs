@@ -16,7 +16,7 @@ import {storageOperation} from './storage.mjs';
 import {contract,nativePlatform,launchTarget,executableKey} from './platform.mjs';
 import {Incidents} from './incidents.mjs';
 import {updateNotice} from './update-notice.mjs';
-import {currentStopNonce,persistRecoveryStop,settlePriorStop,recoveryAdvice,priorWindowsCleanupVerified,priorMacCleanupVerified,readStopLatch,persistStopLatch,settleFreshStopLatch} from './recovery.mjs';
+import {currentStopNonce,persistRecoveryStop,settlePriorStop,recoveryAdvice,priorWindowsCleanupVerified,priorMacCleanupVerified,priorUndispatchedCleanupVerified,readStopLatch,persistStopLatch,settleFreshStopLatch} from './recovery.mjs';
 import {writeAtomicJSON,readTaskRecord} from './atomic-json.mjs';
 
 const input=new Set(['move','click','type','set_value','key','scroll','drag','focus','fit_window','close_window','paste','paste_files','clipboard','open','file_dialog']);
@@ -205,6 +205,11 @@ export class Runtime {
     // A replacement process cannot use its own empty ledger as evidence that
     // the previous process released input. Do not lead the agent toward re-arm
     // or start a new guardian before the recovered task has passed cleanup.
+    if(this.recoveredTask&&this.taskFile){
+      // Read-only: a leftover that provably never sent input can be ended once.
+      let undispatched=false;try{const record=readTaskRecord(this.taskFile);undispatched=record.guard===this.priorGuard&&priorUndispatchedCleanupVerified(path.dirname(this.taskFile),record);}catch{}
+      if(undispatched)return {...this.status(),ready:false,controls_visible:null,next_action:'end_recovered_task',replay_allowed:false,error:{code:'recovered_cleanup_unverified',message:'A previous task was opened but never sent input, and its controller is gone. Run end once to close it, then ready.'}};
+    }
     if(this.recoveredTask)return {...this.status(),ready:false,controls_visible:null,next_action:'inspect_prior_input_cleanup',replay_allowed:false,error:{code:'recovered_cleanup_unverified',message:'A previous task survived restart. Inspect its result without replay and verify its native input cleanup before re-arm or a new task.'}};
     const unavailable=()=>({...this.status(),ready:false,controls_visible:this.recoveryVisibility??null,guardian_running:!!this.guardian.proc&&!this.guardian.proc.killed,guardian_exit:this.guardian.lastExit??null,...recoveryAdvice({error:this.recoveryFailure}),error:this.recoveryFailure});
     if(this.recoveryFailure)return unavailable();
@@ -598,7 +603,13 @@ export class Runtime {
       let verified=false;
       try{
         const record=readTaskRecord(this.taskFile);
-        if(record.open&&record.guard===this.priorGuard&&record.dispatched===this.priorDispatched&&record.watchdogs_complete===this.priorWatchdogsComplete&&JSON.stringify(record.children)===JSON.stringify(this.priorChildren)&&record.guard&&record.dispatched===true){
+        const unchanged=record.open&&record.guard===this.priorGuard&&record.dispatched===this.priorDispatched&&record.watchdogs_complete===this.priorWatchdogsComplete&&JSON.stringify(record.children)===JSON.stringify(this.priorChildren)&&record.guard;
+        if(unchanged&&record.dispatched===false){
+          // Opened, never dispatched: no native input worker was started.
+          const directory=path.dirname(this.taskFile);storageOperation('verify-data-tree',directory);
+          verified=priorUndispatchedCleanupVerified(directory,record);
+        }
+        else if(unchanged&&record.dispatched===true){
           const directory=path.dirname(this.taskFile);storageOperation('verify-data-tree',directory);
           // The verification helper itself can briefly reuse an old numeric
           // PID. Wait only for read-only proof; never ignore a live identity.

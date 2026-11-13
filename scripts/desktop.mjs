@@ -15,6 +15,7 @@ import {scheduleUpdates} from '../server/auto-update.mjs';
 import {Incidents} from '../server/incidents.mjs';
 import {desktopCommand} from './install.mjs';
 import {recoveryAdvice,persistStopLatch,readStopLatch} from '../server/recovery.mjs';
+import {withRecovery} from '../server/recovery-guide.mjs';
 const EMPTY_INPUT={type:'object',properties:{},required:[],additionalProperties:false};
 const LIFECYCLE=[
   {command:'start',description:'Start or reconnect to this exact installed build. No arguments. Never clears emergency Stop or changes the installed permission policy.',inputSchema:EMPTY_INPUT},
@@ -38,7 +39,7 @@ export function describeCommand(name){
 // Windows PowerShell can decode native stdout using its legacy OEM code page
 // before piping it to UTF-8. ASCII JSON preserves every Unicode code unit even
 // through that boundary; JSON.parse restores the original text exactly.
-export function encodeReply(value){return JSON.stringify(value).replace(/[^\x00-\x7f]/g,char=>'\\u'+char.charCodeAt(0).toString(16).padStart(4,'0'));}
+export function encodeReply(value){return JSON.stringify(withRecovery(value)).replace(/[^\x00-\x7f]/g,char=>'\\u'+char.charCodeAt(0).toString(16).padStart(4,'0'));}
 export function briefReply(value){
  const out={...value};
  if(out.metadata){const m=out.metadata;delete out.metadata;out.observation_id=m.observation_id;out.hwnd=m.hwnd;out.tree=m.tree;

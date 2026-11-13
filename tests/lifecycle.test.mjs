@@ -62,6 +62,26 @@ test('recovered End closes only after old Windows ledger and native processes ve
   assert.equal(r.status().recovered_task,true);assert.equal((await r.finish()).ended,true);assert.equal(r.status().task_open,false);assert.equal(JSON.parse(fs.readFileSync(file)).open,false);
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
+test('recovered End closes a prior task that never dispatched input only when its owner is gone and its ledger is empty',{skip:process.platform!=='win32'},async t=>{
+ const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'undispatched-prior-')),file=path.join(dir,'task-state.json');
+ const deadGuard='guard-2147483647-12345678-1234-1234-1234-123456789abc.state',liveGuard=`guard-${process.pid}-12345678-1234-1234-1234-123456789abd.state`;
+ const restart=()=>{const guardian=new EventEmitter();guardian.send=()=>{};return new Runtime({guardian,driver:{async abort(){}},sessions:{register(){},close(){},async clearVerifiedStale(pid){assert.equal(pid,2147483647);}},taskFile:file});};
+ const write=(record,inputs='')=>{fs.writeFileSync(file,JSON.stringify({schema:1,open:true,watchdogs_complete:true,...record}));fs.writeFileSync(path.join(dir,record.guard),'idle||0|');if(inputs!==null)fs.writeFileSync(path.join(dir,record.guard+'.inputs'),inputs);};
+ try{
+  try{storageOperation('data',dir);}catch(error){if(['storage_unsafe_ancestor','insecure_storage_ancestor','storage_permissions_conflict'].includes(error.code)){t.skip('native private storage qualification refused: '+error.code);return;}throw error;}
+  // Missing dispatch evidence is not proof that no input was sent.
+  write({guard:deadGuard,children:[]});await assert.rejects(restart().finish(),e=>e.code==='recovered_cleanup_unverified');assert.equal(JSON.parse(fs.readFileSync(file)).open,true);
+  // Recorded native workers mean dispatch may have started.
+  write({guard:deadGuard,children:[2147483645],dispatched:false});await assert.rejects(restart().finish(),e=>e.code==='recovered_cleanup_unverified');
+  // A non-empty input ledger is held-input evidence.
+  write({guard:deadGuard,children:[],dispatched:false},'k:65:0:0');await assert.rejects(restart().finish(),e=>e.code==='recovered_cleanup_unverified');
+  // A live owner could still dispatch after this check.
+  write({guard:liveGuard,children:[],dispatched:false});const live=restart();assert.equal((await live.ready()).next_action,'inspect_prior_input_cleanup');await assert.rejects(live.finish(),e=>e.code==='recovered_cleanup_unverified');assert.equal(JSON.parse(fs.readFileSync(file)).open,true);
+  write({guard:deadGuard,children:[],dispatched:false});const r=restart();assert.equal(r.status().recovered_task,true);
+  const advice=await r.ready();assert.equal(advice.ready,false);assert.equal(advice.next_action,'end_recovered_task');assert.equal(advice.replay_allowed,false);assert.equal(JSON.parse(fs.readFileSync(file)).open,true);
+  assert.equal((await r.finish()).ended,true);assert.equal(r.status().task_open,false);assert.equal(JSON.parse(fs.readFileSync(file)).open,false);
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
 test('recovered End waits for actual prior process exits and preserves Stop',{skip:process.platform!=='win32',timeout:30000},async t=>{
  const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'prior-processes-')),file=path.join(dir,'task-state.json'),latch=path.join(dir,'emergency.stop');let children=[],controller;
  const previous={data:process.env.AGCU_DATA_DIR,plugin:process.env.CU_PLUGIN_DATA,claude:process.env.CLAUDE_PLUGIN_DATA};
