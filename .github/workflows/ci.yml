@@ -1,0 +1,158 @@
+name: CI
+# One required status check, `ci-ok`, protects main. It always reports, so a
+# docs-only pull request is never left pending and a skipped or failed job can
+# never be mistaken for success.
+#
+# Pull requests: full Windows checks plus macOS on the newest Apple Silicon and
+# the oldest Intel runner. Pushes to main, the nightly run and manual runs: the
+# full four-runner macOS matrix and downloadable development candidates.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.scope.outputs.code }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - id: scope
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # Anything that is not plainly documentation runs the full checks.
+          if [ "$EVENT" != "pull_request" ]; then echo "code=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          files=$(git diff --name-only "$BASE...$HEAD")
+          echo "$files"
+          code=$(printf '%s\n' "$files" | grep -Ev '^(docs/.*|[^/]+\.md|\.github/(ISSUE_TEMPLATE/.*|PULL_REQUEST_TEMPLATE\.md|FUNDING\.yml)|LICENSE)$' | grep -c . || true)
+          if [ "$code" -gt 0 ] || [ -z "$files" ]; then echo "code=true" >> "$GITHUB_OUTPUT"; else echo "code=false" >> "$GITHUB_OUTPUT"; fi
+
+  docs:
+    # Docs are provenance-tracked; a docs-only change still verifies them.
+    needs: changes
+    if: needs.changes.outputs.code == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.20.0
+          package-manager-cache: false
+      - run: node scripts/check-provenance.mjs
+
+  windows:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.20.0
+          package-manager-cache: false
+      # Avoid exhausting small hosted runners with simultaneous native compilers,
+      # PowerShell processes and installer fixtures. Do not skip any tests.
+      - run: node --test --test-concurrency=4 tests/*.test.mjs
+      - run: node scripts/check-provenance.mjs
+      - run: node server/build.mjs --force
+      - name: Guardian refuses a noninteractive desktop without creating UI
+        run: node scripts/qualify-guardian-desktop.mjs
+      - name: Build prebuilt Windows development candidate
+        run: node scripts/bundle.mjs --output .localdata/windows-bundle
+      - name: Native signed updater qualification or explicit ACL limitation
+        run: node scripts/windows-install-check.mjs
+      - name: Archive development candidate
+        if: github.event_name != 'pull_request'
+        shell: pwsh
+        run: Compress-Archive -Path .localdata/windows-bundle -DestinationPath .localdata/AntigravityComputerUse-windows-candidate.zip
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: github.event_name != 'pull_request'
+        with:
+          name: AntigravityComputerUse-windows-x64-candidate
+          path: .localdata/AntigravityComputerUse-windows-candidate.zip
+          retention-days: 14
+      # Desktop/input acceptance requires an interactive Windows session.
+
+  macos:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: ${{ fromJSON(github.event_name == 'pull_request' && '["macos-26","macos-15-intel"]' || '["macos-15","macos-15-intel","macos-26","macos-26-intel"]') }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.20.0
+          package-manager-cache: false
+      - name: Compile native adapters and check contracts without desktop access
+        run: node scripts/macos-native-check.mjs
+      - name: Full shared and platform regression suite
+        # Several files compile isolated native helpers. Keep cross-file work
+        # serial on hosted Intel runners; the explicit two-builder race test
+        # still runs both builders concurrently and retains its deadlines.
+        run: node --test --test-concurrency=1 tests/*.test.mjs
+      - name: Package the prebuilt Mac candidate
+        run: node scripts/bundle.mjs --output .localdata/macos-bundle
+      - name: Install, restart, update and rollback in a project-local fake home
+        run: node scripts/macos-install-check.mjs
+      - name: Verify source provenance
+        run: node scripts/check-provenance.mjs
+      - name: Archive experimental prebuilt candidate
+        if: github.event_name != 'pull_request'
+        run: tar -czf .localdata/AntigravityComputerUse-macos-candidate.tar.gz -C .localdata macos-bundle
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: github.event_name != 'pull_request'
+        with:
+          name: AntigravityComputerUse-${{ matrix.runner }}-candidate
+          path: .localdata/AntigravityComputerUse-macos-candidate.tar.gz
+          retention-days: 14
+
+  ci-ok:
+    needs: [changes, docs, windows, macos]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - shell: bash
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          CODE: ${{ needs.changes.outputs.code }}
+          WINDOWS: ${{ needs.windows.result }}
+          MACOS: ${{ needs.macos.result }}
+          DOCS: ${{ needs.docs.result }}
+        run: |
+          echo "changes=$CHANGES code=$CODE windows=$WINDOWS macos=$MACOS"
+          [ "$CHANGES" = "success" ] || { echo "Change detection did not succeed."; exit 1; }
+          if [ "$CODE" = "true" ]; then
+            [ "$WINDOWS" = "success" ] && [ "$MACOS" = "success" ] || { echo "Required platform checks did not pass."; exit 1; }
+          else
+            [ "$DOCS" = "success" ] && [ "$WINDOWS" = "skipped" ] && [ "$MACOS" = "skipped" ] || { echo "Docs-only checks did not pass."; exit 1; }
+          fi
