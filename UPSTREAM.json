@@ -292,7 +292,7 @@
     },
     {
       "path": "server/desktop-service.mjs",
-      "sha256": "a7c7bea715d091723dc9abc8f787ec5ebc86e46426a9aa0094f1d73bfe8a31c5"
+      "sha256": "24a19ffb626aa0910c14d70df90a7dbfc6d15585676d363b32d876d411b0b00c"
     },
     {
       "path": "server/desktop-tools.mjs",
@@ -308,7 +308,7 @@
     },
     {
       "path": "tests/desktop-service.test.mjs",
-      "sha256": "fa26f7e00bc5094399c349070a0fcbe8285bb23132cbf9604407dd1a183546ca"
+      "sha256": "ecd98a99238df359f562a4146de6d0206389d5d6abfd1295ae29fefc6a5e9bc4"
     },
     {
       "path": "tests/installed-direct-smoke.mjs",
@@ -476,7 +476,7 @@
     },
     {
       "path": "skills/computer-use/references/recovery.md",
-      "sha256": "77df37e69f48e8d3104d01691537ebd955e4d0293aff54300f36147ec378cdfe"
+      "sha256": "2f053da41ec8befb0667e211b93698376b477ffcff1d4fb39ac8cda52afbdf7a"
     },
     {
       "path": "scripts/measure-run.mjs",
@@ -708,7 +708,7 @@
     },
     {
       "path": "server/recovery.mjs",
-      "sha256": "f837e30c6f76167900391099ff610182cb9d573f83d7e4666d8d9da4135a9327"
+      "sha256": "df44fe32904d770717bf68e3161c08843c1c7f3c4f1fde20826adecc56d18fbc"
     },
     {
       "path": "scripts/qualify-guardian-desktop.mjs",

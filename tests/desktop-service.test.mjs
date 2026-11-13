@@ -392,6 +392,19 @@ test('cleanup failure with uncertain delivery survives direct and batch IPC',asy
  }finally{await service.shutdown();fs.rmSync(dir,{recursive:true,force:true});}
 });
 
+test('pre-input refusals carry operation-specific advice through IPC',async()=>{
+ const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'agcu-refusal-advice-'));let calls=0;
+ const runtime={status:()=>({state:'active'}),async action(){calls++;throw Object.assign(Error('Clipboard formats could not be preserved'),{code:'clipboard_unsafe'});},async close(){}};
+ const service=await serveDesktop({directory:dir,runtime});const session=JSON.parse(fs.readFileSync(service.file));
+ try{
+  const dialog=await request(session,'file_dialog',{hwnd:1,observation_id:'frame',reason:'test',path:'D:/x.txt',action:'open',entry_method:'clipboard'});
+  assert.equal(dialog.ok,false);assert.equal(dialog.error.code,'clipboard_unsafe');assert.equal(dialog.next_action,'retry_file_dialog_with_keyboard');assert.equal(dialog.replay_allowed,false);
+  const paste=await request(session,'paste',{hwnd:1,observation_id:'frame',reason:'test',text:'hello'});
+  assert.equal(paste.error.code,'clipboard_unsafe');assert.equal(paste.next_action,'enter_without_clipboard');assert.equal(paste.replay_allowed,false);
+  assert.equal(calls,2);
+ }finally{await service.shutdown();fs.rmSync(dir,{recursive:true,force:true});}
+});
+
 test('direct IPC accepts bounded feedback without desktop input or arbitrary task content',async()=>{
  const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'agcu-feedback-ipc-'));const original=Incidents.prototype.recordSerialized;let recorded;
  Incidents.prototype.recordSerialized=async function(op,result){recorded={op,result};return 'feedback-id';};

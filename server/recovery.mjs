@@ -171,7 +171,9 @@ export function priorUndispatchedCleanupVerified(directory,record,{platform=proc
   return gone(parent);
  }catch{return false;}
 }
-export function recoveryAdvice(result){
+// operation is the tool name (for example computer_file_dialog) when known; it
+// only refines advice for refusals that sent no input.
+export function recoveryAdvice(result,operation){
  const code=result.error?.code||result.verification_error?.code;
  const extra={
   ...(result.repeated_failure===true?{repeated_failure:true}:{}),
@@ -200,5 +202,10 @@ export function recoveryAdvice(result){
  if(['stop_persistence_failed','guard_persistence_failed'].includes(code))return {...extra,next_action:'inspect_stop_persistence_without_restart',replay_allowed:false};
  if(['permission_denied','approval_timeout','confirmation_required'].includes(code))return {...extra,next_action:'await_user_decision',replay_allowed:false};
  if(['control_stopped','control_inactive'].includes(code))return {...extra,next_action:'inspect_status_then_human_controls',replay_allowed:false};
+ // Ordinary refusals raised before the input they guard. Any reply where input
+ // already ran returned inspect_effect_without_replay above.
+ if(code==='obscured')return {...extra,next_action:'observe_and_retarget',replay_allowed:false};
+ if(code==='no_file_dialog')return {...extra,next_action:'observe_app_no_picker',replay_allowed:false};
+ if(code==='clipboard_unsafe')return {...extra,next_action:operation==='computer_file_dialog'?'retry_file_dialog_with_keyboard':'enter_without_clipboard',replay_allowed:false};
  return {...extra,next_action:'inspect_diagnostics',replay_allowed:false};
 }
