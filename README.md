@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <b><a href="https://github.com/shayann07/antigravity-computer-use/releases/tag/v0.3.0-beta.4">Download for Windows</a></b> ·
+  <b><a href="https://github.com/shayann07/antigravity-computer-use/releases/tag/v0.3.0-beta.5">Download for Windows</a></b> ·
   <a href="#see-it-in-action">Demo</a> ·
   <a href="#install">Install</a> ·
   <a href="docs/INSTALLATION.md">Documentation</a> ·
@@ -30,9 +30,9 @@ dialogs, and operate custom canvases through screenshots. It works in the
 **Antigravity Agent Manager App**. No separate LLM, extra model subscription,
 browser extension or required MCP server.
 
-> **Windows beta.** Version **v0.3.0-beta.4** is a published Windows x64 prerelease.
+> **Windows beta.** Version **v0.3.0-beta.5** is a published Windows x64 prerelease.
 > Automated checks and earlier real desktop tests do not prove every workflow on
-> this build. See [the current qualification record](docs/WINDOWS-BETA4-QUALIFICATION.md)
+> this build. See [the beta.5 release notes](https://github.com/shayann07/antigravity-computer-use/releases/tag/v0.3.0-beta.5), [the earlier beta.4 qualification record](docs/WINDOWS-BETA4-QUALIFICATION.md)
 > and [what is verified](#status-and-limits) before installing.
 
 **macOS experimental support:** Apple Silicon/Intel adapters share the same
@@ -46,7 +46,7 @@ whole-bundle updates. It also supports structured, unverified agent feedback;
 automatic issue reporting is opt-in and requires GitHub authentication. Models
 can miss problems, while runtime errors are logged independently. It shares the
 runtime with the Mac adapter. [Implementation and acceptance status](docs/RELIABILITY-IMPLEMENTATION.md).
-The Windows download and one-line installer below are pinned to beta.4.
+The Windows download and one-line installer below are pinned to beta.5.
 Our [public CI guide](docs/CI.md) explains the fork checks, local commands and
 the separate maintainer signing workflow.
 
