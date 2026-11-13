@@ -180,7 +180,7 @@ export function recoveryAdvice(result){
  if(['input_cleanup_failed','guardian_end_unconfirmed','guardian_stop_unconfirmed'].includes(code))return {...extra,next_action:'inspect_input_cleanup',replay_allowed:false};
  if(result.delivery_unknown===true||result.input_completed===true&&code||code==='input_outcome_unknown')return {...extra,next_action:'inspect_effect_without_replay',replay_allowed:false};
  if(['wait_failure_observed','wait_observation_incomplete','wait_observation_timeout','wait_condition_timeout','wait_change_timeout','op_timeout','capture_preparation_timeout'].includes(code))return {...extra,next_action:'inspect_effect_without_replay',replay_allowed:false};
- if(['stale_observation','element_stale','window_moved','no_image','control_changed','focus_changed'].includes(code))return {...extra,next_action:'observe_again',replay_allowed:false};
+ if(['stale_observation','element_stale','window_moved','no_image','control_changed','focus_changed','wait_label_not_observed'].includes(code))return {...extra,next_action:'observe_again',replay_allowed:false};
  if(['window_minimized','window_hidden','window_capture_unavailable'].includes(code))return {...extra,next_action:result.repeated_failure===true?'await_human_window_recovery':'focus_target_then_observe',replay_allowed:false};
  if(code==='other_desktop')return {...extra,next_action:'await_human_space_switch',replay_allowed:false};
  if(code==='window_fullscreen')return {...extra,next_action:'await_human_fullscreen_exit',replay_allowed:false};
