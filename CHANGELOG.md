@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0-beta.5 - Stop, ownership and recovery (Windows)
+
+- Stop that may not have reached the native controls is kept as uncertain across native writes, restart and update; unknown input delivery is never replayed. Normal End never clears an emergency Stop.
+- Task ownership: tasks get capabilities issued by the server, and a per-account native lease and journal coordinates installations. End needs a native cleanup acknowledgement, and cleanup by current and prior actors is verified.
+- Recovery after a restart is no longer a dead end (#47, #57). A leftover task that provably never sent input can be ended once. `controls` shows the bar with Stop available and re-arm locked while the previous task's cleanup is unverified. Every blocked reply now names who acts next, the exact command and when it is safe (`recovery`).
+- `ready` reports `task_started`; use `status` to check state after `end` (#55).
+- The Windows control bar moves away from the target before a click (HUD avoidance).
+- Internal maintainer notes are no longer shipped in release bundles.
+- macOS changes in this source (native glass, consent fencing, compiler leases) are compiled in CI only. This release is Windows-only; macOS remains experimental and unqualified on hardware.
+
 ## 2026-10-28 - repository presentation
 
 - Reworked the README with original branding, CI/release/license badges, the labelled historical real demo, installation and concise qualification limits.
