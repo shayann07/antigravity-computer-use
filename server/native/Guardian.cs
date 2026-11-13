@@ -308,7 +308,9 @@ namespace Axon {
         volatile string state = "idle"; string token = "";
         // Set while a previous task's input cleanup is unverified: the bar is
         // visible and Stop works, but re-arm, resume and activation refuse.
-        volatile bool rearmLocked;
+        // Starts locked when the runtime recovered an unverified prior task, so
+        // no path that shows the bar before show_controls can offer re-arm.
+        volatile bool rearmLocked=Environment.GetEnvironmentVariable("AGCU_REARM_LOCKED")=="1";
         readonly object stateLock=new object();
         readonly HashSet<string> grants = new HashSet<string>();
         Form activePrompt; bool captureHidden; bool captureExcluded; bool recordVisuals;
