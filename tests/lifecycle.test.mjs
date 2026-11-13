@@ -154,9 +154,9 @@ test('durable unconfirmed Stop remains distinct across controller restart',async
  try{assert.equal(r.state,'stopped');assert.equal(r.lastControlReason,'guardian_stop_unconfirmed');const ready=await r.ready();assert.equal(ready.error.code,'guardian_stop_unconfirmed');assert.equal(ready.next_action,'inspect_diagnostics');assert.equal(ready.replay_allowed,false);assert.equal(requests,0);guardian.emit('resume','idle','human_resume');assert.equal(r.state,'stopped');}
  finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
-test('explicit controls refuse unverified restart and Stop failures before starting guardian',async()=>{
- const r=fixture();let requests=0;r.guardian.request=async()=>{requests++;return {controls_visible:true};};
- r.recoveredTask=true;await assert.rejects(r.showControls(),e=>e.code==='recovered_cleanup_unverified');
+test('explicit controls lock re-arm after an unverified restart and refuse Stop failures before starting guardian',async()=>{
+ const r=fixture();let requests=0;const ops=[];r.guardian.request=async m=>{requests++;ops.push(m);return {controls_visible:true};};
+ r.recoveredTask=true;await assert.rejects(r.showControls(),e=>e.code==='recovered_cleanup_unverified');assert.deepEqual(ops.map(m=>[m.op,m.rearm_locked]),[['show_controls',true],['dismiss_controls',undefined]]);requests=0;
  r.recoveredTask=false;r.state='stopped';r.lastControlReason='guardian_stop_unconfirmed';await assert.rejects(r.showControls(),e=>e.code==='guardian_stop_unconfirmed');
  r.lastControlReason='stop_persistence_failed';await assert.rejects(r.showControls(),e=>e.code==='stop_persistence_failed');
  r.lastControlReason='guard_persistence_failed';await assert.rejects(r.showControls(),e=>e.code==='guard_persistence_failed');assert.equal(requests,0);

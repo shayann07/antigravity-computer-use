@@ -252,6 +252,9 @@ final class MacGuardian: NSObject {
     var visuals = MacVisuals()
     var prompt: NSAlert?
     var controlsUntil = Date.distantFuture
+    // Set while a previous task's input cleanup is unverified: the bar is
+    // visible and Stop works, but re-arm, resume and activation refuse.
+    var rearmLocked = false
     let hostManaged = ProcessInfo.processInfo.environment["AGCU_PERMISSION_MODE"] == "host-managed"
     func run() throws -> Never {
         _ = NSApplication.shared; NSApp.setActivationPolicy(.accessory)
@@ -336,6 +339,7 @@ final class MacGuardian: NSObject {
     func stop(_ reason: String) { MacFence.emergency(reason); set("stopped", reason: reason) }
     func humanToggle() {
         if state == "active" { set("paused", reason: "requested_pause"); return }
+        if rearmLocked { emit(["ev":"visual_warning", "message":"A previous task's input cleanup is unverified; re-arm stays locked"]); return }
         do { try ensureWatchdog() } catch { emit(["ev":"visual_warning", "message":String(describing:error)]); return }
         guard macWaitForWorkers(), MacInputLedger.recover() else { return }
         until = MacFenceState.now + Int64(MacContract.value["session_ms"] as? Int ?? 600_000) * 10_000
@@ -380,18 +384,18 @@ final class MacGuardian: NSObject {
         do {
             switch op {
             case "visual_status": reply(["controls_visible": visuals.visible, "cursor": state == "active", "takeover_mode": takeoverMode(), "material_backend": MacVisuals.materialBackend(for: visuals.rootView)])
-            case "show_controls": visuals.show(state); controlsUntil = .distantFuture; reply(["controls_visible": visuals.visible, "human_rearm_required": state == "stopped", "material_backend": MacVisuals.materialBackend(for: visuals.rootView)])
+            case "show_controls": rearmLocked = (message["rearm_locked"] as? Bool) ?? false; visuals.show(state); controlsUntil = .distantFuture; reply(["controls_visible": visuals.visible, "human_rearm_required": state == "stopped", "rearm_locked": rearmLocked, "material_backend": MacVisuals.materialBackend(for: visuals.rootView)])
             case "dismiss_controls": if ["active", "paused"].contains(state) { stop("dismiss") }; visuals.hide(); reply(["controls_visible": false])
             case "attach": reply(["registered": true]) // worker self-registers before reporting ready
             case "activate":
-                guard state != "stopped", state != "paused", MacInputLedger.recover() else { reply(["allowed": false]); return }
+                guard !rearmLocked, state != "stopped", state != "paused", MacInputLedger.recover() else { reply(["allowed": false]); return }
                 try ensureWatchdog(); let nextToken = str(message["token"]) ?? "", requested = Int64(str(message["deadline"]) ?? "0") ?? 0
                 let nextBoot = MacDeadline.create(requested: requested, wallNow: MacFenceState.now, bootNow: MacDeadline.now, maximumMs: MacContract.value["session_ms"] as? Int ?? 600_000)
                 guard !nextToken.isEmpty, nextBoot > 0 else { reply(["allowed": false]); return }
                 token = nextToken; until = requested; bootUntil = nextBoot
                 set("active"); reply(["allowed": state == "active"])
             case "resume":
-                guard hostManaged, state == "paused", MacInputLedger.recover() else { reply(["allowed": false]); return }
+                guard hostManaged, !rearmLocked, state == "paused", MacInputLedger.recover() else { reply(["allowed": false]); return }
                 try ensureWatchdog(); until = MacFenceState.now + 6_000_000_000
                 bootUntil = MacDeadline.create(requested: until, wallNow: MacFenceState.now, bootNow: MacDeadline.now, maximumMs: MacContract.value["session_ms"] as? Int ?? 600_000)
                 guard bootUntil > 0 else { reply(["allowed": false]); return }

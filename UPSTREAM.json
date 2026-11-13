@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "6a1e642047cec0d5a60460a969ca604baf932c250cf8266cc75608c1bfc3d9ce"
+      "sha256": "fab08a58052365faf97a0cccecc640ea5cd9b71272b00ba567fd850aacbc1c32"
     },
     {
       "path": "server/mcp.mjs",
@@ -268,7 +268,7 @@
     },
     {
       "path": "server/native/Guardian.cs",
-      "sha256": "5e98a84bb92faf224916ee34b111084d9f359d5cef81d0858948a0a290d3b2d4"
+      "sha256": "cbcc8c6293fef78c04e88b9c84e0a22df3bc43b1baf0b6087458a7b24c541154"
     },
     {
       "path": "server/native/CursorSafety.cs",
@@ -308,7 +308,7 @@
     },
     {
       "path": "tests/desktop-service.test.mjs",
-      "sha256": "0a454e7a09146417309a98f39cfaab66ad20500c7c81d701ec6f8edfce6aae8c"
+      "sha256": "fa26f7e00bc5094399c349070a0fcbe8285bb23132cbf9604407dd1a183546ca"
     },
     {
       "path": "tests/installed-direct-smoke.mjs",
@@ -360,7 +360,7 @@
     },
     {
       "path": "scripts/bundle.mjs",
-      "sha256": "a49e016943a700917b43571b36cfc3ef9836e587edc8609f0acf07f1dace22ea"
+      "sha256": "f6919f50960b0672f656e22304ccf43f7ad3d564bd83eaead11553b804ec1fe9"
     },
     {
       "path": "tests/install.test.mjs",
@@ -572,7 +572,7 @@
     },
     {
       "path": "server/native/macos/MacGuardian.swift",
-      "sha256": "58ae014e22822931cb5a69a04ef01aa0ef17eba15bca4ea37e8b3c247c7ec6ac"
+      "sha256": "9fcc53550a279d316913c9434bb6ed4db4fd60ed1e8f11b6a7eba6852e6d3cf2"
     },
     {
       "path": "server/native/macos/MacOperations.swift",
@@ -604,7 +604,7 @@
     },
     {
       "path": "skills/computer-use/SKILL.md",
-      "sha256": "de0e1c342599bc1a2dde51708e8ca875fdb761c5a4fe9a4308988fc03ecd7851"
+      "sha256": "ff722372b4c3b22f6ecea977bc789aad496f21d78b4fa38f6c30f331da10d154"
     },
     {
       "path": "docs/MACOS.md",
@@ -660,7 +660,7 @@
     },
     {
       "path": "tests/lifecycle.test.mjs",
-      "sha256": "ff1dc5d5b37528b5a1d0c3ed981ecad6e6c9ee8dfc2f6e6a882e0aad50e4e23e"
+      "sha256": "f4cf3208dc8169a871af144d972b30b1116a922e6164a18028800e586429cfa8"
     },
     {
       "path": "server/native/GuardCleanup.cs",

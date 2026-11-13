@@ -111,14 +111,16 @@ test('update reservation refuses an idle task and unavailable task state',async(
 test('direct IPC refuses replay and unverified cleanup after task recovery',async t=>{
  const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'agcu-recovered-ipc-')),taskFile=path.join(dir,'task-state.json');
  try{storageOperation('data',dir);}catch(error){if(['storage_unsafe_ancestor','insecure_storage_ancestor','storage_permissions_conflict'].includes(error.code)){fs.rmSync(dir,{recursive:true,force:true});t.skip('native private storage qualification refused: '+error.code);return;}throw error;}
- fs.writeFileSync(taskFile,JSON.stringify({schema:1,open:true}));let nativeCalls=0,cleanups=0,guardianRequests=0;
- const guardian=new EventEmitter();guardian.send=()=>{};guardian.request=async()=>{guardianRequests++;return {state:'idle',controls_visible:true};};guardian.close=async()=>{};
+ fs.writeFileSync(taskFile,JSON.stringify({schema:1,open:true}));let nativeCalls=0,cleanups=0,guardianRequests=0,honourLock=false;const guardianOps=[];
+ const guardian=new EventEmitter();guardian.send=()=>{};guardian.request=async m=>{guardianRequests++;guardianOps.push(m);return {state:'idle',controls_visible:m.op==='show_controls',...(honourLock&&m.rearm_locked===true?{rearm_locked:true}:{})};};guardian.close=async()=>{};
  const runtime=new Runtime({taskFile,guardian,driver:{async abort(){cleanups++;},async call(){nativeCalls++;throw Error('no native call expected');}},sessions:{register(){},close(){}}});
  const service=await serveDesktop({directory:dir,runtime});const session=JSON.parse(fs.readFileSync(service.file));
  const send=(command,args={})=>request(session,command,args,5000,'standalone');
  try{
   const ready=await send('ready');assert.equal(ready.ready,false);assert.equal(ready.next_action,'inspect_prior_input_cleanup');assert.equal(ready.error.code,'recovered_cleanup_unverified');assert.equal(ready.recovered_task,true);assert.equal(ready.replay_allowed,false);assert.equal(guardianRequests,0);
-  const controls=await send('controls');assert.equal(controls.error.code,'recovered_cleanup_unverified');assert.equal(controls.next_action,'inspect_prior_input_cleanup');assert.equal(guardianRequests,0);
+  // A guardian that does not confirm the re-arm lock must not leave a bar up.
+  const refused=await send('controls');assert.equal(refused.error.code,'recovered_cleanup_unverified');assert.equal(refused.next_action,'inspect_prior_input_cleanup');assert.deepEqual(guardianOps.map(m=>m.op),['show_controls','dismiss_controls']);assert.equal(guardianOps[0].rearm_locked,true);
+  honourLock=true;const controls=await send('controls');assert.equal(controls.controls_visible,true);assert.equal(controls.rearm_locked,true);assert.equal(guardianOps.at(-1).rearm_locked,true);assert.equal((await send('status')).recovered_task,true);
   const result=await send('click',{hwnd:1,observation_id:'old',index:1,reason:'Do not replay'});assert.equal(result.error.code,'recovered_task_requires_end');assert.equal(result.replay_allowed,false);assert.equal(nativeCalls,0);
   assert.equal((await send('prepare_update')).prepared,false);
   const ended=await send('end');assert.equal(ended.error.code,'recovered_cleanup_unverified');assert.equal(ended.next_action,'inspect_prior_input_cleanup');assert.equal(cleanups,1);assert.equal((await send('status')).recovered_task,true);assert.equal(JSON.parse(fs.readFileSync(taskFile)).open,true);

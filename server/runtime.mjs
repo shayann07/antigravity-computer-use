@@ -192,7 +192,14 @@ export class Runtime {
     if(this.taskFile&&!fs.existsSync(this.taskFile))try{writeAtomicJSON(this.taskFile,{schema:1,open:false},{exclusive:true});}catch(error){if(error.code!=='EEXIST')throw error;}
   }
   async showControls(){
-    if(this.recoveredTask)fail('recovered_cleanup_unverified','A previous task survived restart. Verify its native input cleanup before showing controls or re-arming. Do not replay the interrupted action.');
+    if(this.recoveredTask){
+      // Show the bar so the human always has Stop, but with re-arm, resume and
+      // activation locked: this process's empty ledger proves nothing about
+      // the previous one. A guardian that does not confirm the lock is hidden.
+      const result=await this.guardian.request({op:'show_controls',rearm_locked:true});
+      if(result.rearm_locked!==true){try{await this.guardian.request({op:'dismiss_controls'});}catch{}fail('recovered_cleanup_unverified','Local controls could not lock re-arm, so they were not shown. Verify the previous task\'s input cleanup first.');}
+      return {...result,rearm_locked:true};
+    }
     if(this.state==='stopped'&&this.lastControlReason==='guardian_stop_unconfirmed')fail('guardian_stop_unconfirmed','Native Stop delivery is unconfirmed. Inspect diagnostics and input cleanup before showing controls; do not re-arm or replay.');
     if(this.state==='stopped'&&persistenceFailure(this.lastControlReason))fail(this.lastControlReason,'Control storage failed. Inspect private storage before showing controls; do not re-arm.');
     const result=await this.guardian.request({op:'show_controls'});if(result.controls_visible===true)this.recoveryFailure=null;return result;

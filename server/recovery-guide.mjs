@@ -29,7 +29,7 @@ export const RECOVERY_GUIDE=Object.freeze({
  await_human_permission_grant:entry(H,null,'The human grants the requested OS permission in system settings.','OS permissions are human-only.'),
  human_start_on_visible_desktop:entry(H,null,'The human opens the installed Start Computer Use launcher once on the normal desktop.','Starting on the visible desktop is human-only.'),
  await_legacy_owner_shutdown:entry(H,null,'The human closes the older controller that still owns the desktop.','The older controller cannot be ended by this one.'),
- inspect_prior_input_cleanup:entry(O,'diagnostics','Run diagnostics once and report the incident ID; the previous task may have sent input, so do not end, re-arm or replay until its cleanup is verified.'),
+ inspect_prior_input_cleanup:entry(O,'diagnostics','Run diagnostics once and report the incident ID; the previous task may have sent input, so do not end, re-arm or replay until its cleanup is verified. controls shows the bar with Stop available and re-arm locked.'),
  inspect_input_cleanup:entry(O,'diagnostics','Run diagnostics once; do not restart, re-arm or replay until cleanup is confirmed.'),
  inspect_stop_persistence_without_restart:entry(O,'diagnostics','Run diagnostics once; private storage must be writable before control resumes.'),
  inspect_stop_recovery:entry(O,'diagnostics','Run diagnostics once and report the incident ID.'),

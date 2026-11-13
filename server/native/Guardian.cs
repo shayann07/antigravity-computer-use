@@ -306,6 +306,9 @@ namespace Axon {
         string activity="";DateTime activityAt;
         readonly System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer();
         volatile string state = "idle"; string token = "";
+        // Set while a previous task's input cleanup is unverified: the bar is
+        // visible and Stop works, but re-arm, resume and activation refuse.
+        volatile bool rearmLocked;
         readonly object stateLock=new object();
         readonly HashSet<string> grants = new HashSet<string>();
         Form activePrompt; bool captureHidden; bool captureExcluded; bool recordVisuals;
@@ -345,6 +348,7 @@ namespace Axon {
             using(GraphicsPath rounded=Overlay.RoundRect(new RectangleF(0,0,Width,Height),21*visualScale))Region=new Region(rounded);
             toggle=ButtonAt(1,DesktopVisuals.ToggleRect); toggle.Click += delegate {
                 if(state=="active")SetState("paused");
+                else if(rearmLocked){Emit(new {ev="visual_warning",message="A previous task's input cleanup is unverified; re-arm stays locked"});}
                 else {
                     long humanEpoch=Interlocked.Read(ref stopEpoch);
                     try {ControlFence.Recover();}catch {}
@@ -606,9 +610,10 @@ namespace Axon {
                 Emit(new {id=id,allowed=canAvoid,moved=moved,state=state});return;
             }
             if(op=="show_controls") {
+                rearmLocked=m.ContainsKey("rearm_locked")&&Convert.ToBoolean(m["rearm_locked"]);
                 var context=DesktopContext.Inspect();
                 if(!(bool)context["interactive"]) {DismissControls();Emit(new {id=id,state=state,controls_visible=false,desktop_context=context,error=new {code="desktop_context_unavailable",message="Controls cannot be shown on the visible input desktop. Use the installed local launcher; no desktop was switched."}});return;}
-                ShowControls(0);Emit(new {id=id,state=state,controls_visible=Visible,desktop_context=context,human_rearm_required=state=="stopped"});return;
+                ShowControls(0);Emit(new {id=id,state=state,controls_visible=Visible,desktop_context=context,human_rearm_required=state=="stopped",rearm_locked=rearmLocked});return;
             }
             if(op=="dismiss_controls") {if(state=="active"||state=="paused")Emergency("dismiss");DismissControls();Emit(new {id=id,state=state,controls_visible=Visible});return;}
             if(op=="activity" && state=="active") {
@@ -630,7 +635,7 @@ namespace Axon {
                 // Soft takeover only. The host permission policy must authorize
                 // a chat-directed Resume. Emergency Stop remains human-only.
                 try {ControlFence.Recover();}catch {}
-                bool resumeAllowed=hostManaged && state=="paused" && !InputLedger.HasHeld() && WorkersExited(0);
+                bool resumeAllowed=hostManaged && !rearmLocked && state=="paused" && !InputLedger.HasHeld() && WorkersExited(0);
                 if(resumeAllowed) {deadline=DateTime.UtcNow.AddMinutes(10).Ticks;bootDeadline=NativeDeadline.Create(deadline,DateTime.UtcNow.Ticks,NativeDeadline.GetTickCount64(),ControlContract.Number("session_ms",600000));if(bootDeadline==0)resumeAllowed=false;else {SetState("active","host_authorized_resume");resumeAllowed=state=="active";if(resumeAllowed)Emit(new {ev="host_resume",state=state});}}
                 Emit(new {id=id,allowed=resumeAllowed,state=state});return;
             }
@@ -665,7 +670,7 @@ namespace Axon {
             if (op == "capture_end") { captureHidden=false;SyncVisibility();return; }
             if (op == "activate") {
                 bool accepted=false;
-                if (state != "stopped" && state != "paused" && !InputLedger.HasHeld()) {
+                if (!rearmLocked && state != "stopped" && state != "paused" && !InputLedger.HasHeld()) {
                     string nextToken=Convert.ToString(m["token"]);long requested=Convert.ToInt64(m["deadline"]);
                     ulong nextBoot=NativeDeadline.Create(requested,DateTime.UtcNow.Ticks,NativeDeadline.GetTickCount64(),ControlContract.Number("session_ms",600000));
                     if(!String.IsNullOrEmpty(nextToken)&&nextBoot>0){token=nextToken;deadline=requested;bootDeadline=nextBoot;SetState("active");accepted=state=="active";}
