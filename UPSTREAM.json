@@ -692,7 +692,7 @@
     },
     {
       "path": ".github/workflows/ci.yml",
-      "sha256": "03411f9af281a88a40e3ccb10af33403785039ea69b734be16c12509c2f2b12d"
+      "sha256": "08052bc690e2c4afc45241f5149d87252d461feea92d7370b95484497b2befd8"
     },
     {
       "path": "release-public-key.pem",
@@ -776,7 +776,7 @@
     },
     {
       "path": "docs/CI.md",
-      "sha256": "7b4ac10bcbc9240ccac2d8dfa6e2333c348add57ee8371ac382d413eb00d00a2"
+      "sha256": "8a56a5871c803cd9bb3dc9179f0ff23a83c6ea89b614cf456e8a77d5d9169c26"
     },
     {
       "path": "tests/NativeSnapshotBudgetTests.cs",

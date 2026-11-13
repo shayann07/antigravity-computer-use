@@ -3,15 +3,15 @@ name: CI
 # docs-only pull request is never left pending and a skipped or failed job can
 # never be mistaken for success.
 #
-# Pull requests: full Windows checks plus macOS on the newest Apple Silicon and
-# the oldest Intel runner. Pushes to main, the nightly run and manual runs: the
-# full four-runner macOS matrix and downloadable development candidates.
+# Every code change runs the full Windows checks and all four macOS runners in
+# parallel, so main is never the first place a platform is tested. Pushes to
+# main, the weekly run and manual runs also upload development candidates.
 on:
   pull_request:
   push:
     branches: [main]
   schedule:
-    - cron: '17 3 * * *'
+    - cron: '17 3 * * 1'
   workflow_dispatch:
 permissions:
   contents: read
@@ -101,7 +101,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: ${{ fromJSON(github.event_name == 'pull_request' && '["macos-26","macos-15-intel"]' || '["macos-15","macos-15-intel","macos-26","macos-26-intel"]') }}
+        runner: [macos-15, macos-15-intel, macos-26, macos-26-intel]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 15
     steps:
