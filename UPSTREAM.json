@@ -300,7 +300,7 @@
     },
     {
       "path": "scripts/desktop.mjs",
-      "sha256": "16cf01a1f1e9c73062836313e216390396b09d6fbd6dc4cdd6b6f74a759e1403"
+      "sha256": "7ee0a391a0718099bacae981f5716abc1953debec504c606b23237f48340567a"
     },
     {
       "path": "server/version.mjs",
@@ -600,7 +600,7 @@
     },
     {
       "path": "skills/computer-use/SKILL.md",
-      "sha256": "4b480b09f90898f9994c5a4f3cbdde345c2a6cd97b747dd9a631e0a113f2ee17"
+      "sha256": "e0addc6bf6bd262d9af4c79d057a02485323a79f9a38cb746e71a28dfdbc9cba"
     },
     {
       "path": "docs/MACOS.md",
@@ -864,7 +864,7 @@
     },
     {
       "path": "tests/skill-guidance.test.mjs",
-      "sha256": "8633c828cbea9e89f3115f8d123c3693d5838d1a0ad2d76f7050ee219f569460"
+      "sha256": "cbb39e6fa283d7db7c5db997a441b9fdd387c511fa49e09e40db585e1a0bb265"
     },
     {
       "path": "tests/brief-reply.test.mjs",
