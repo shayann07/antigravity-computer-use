@@ -33,4 +33,4 @@ them. A full pre-cleanup Git bundle is retained locally under ignored `.localdat
 | `work/release-documentation` | `a733bddf77271f6b1302811fdffa293e2ccf2b40` | README-only draft retained by tag `archive/readme-draft-20261028`; current documentation is on `main` |
 
 No runtime implementation was discarded or force-pushed. For current work and
-qualification limits, read [the handoff](../HANDOFF.md).
+qualification limits, read [the validation record](../VALIDATION.md).

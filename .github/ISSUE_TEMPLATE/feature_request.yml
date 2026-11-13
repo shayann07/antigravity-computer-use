@@ -1,0 +1,21 @@
+name: Feature or app request
+description: Suggest an improvement, or an app that /computer-use should handle better.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The task or app, and where it gets slow, stuck or unsafe today.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help?
+      description: Your idea, if you have one. Safety rules (human-only re-arm, no replay of uncertain input) stay as they are.
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else
+      description: Versions, screenshots with personal content removed, links.

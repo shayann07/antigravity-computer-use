@@ -1,12 +1,8 @@
-<p align="center">
-  <img src="docs/media/hero.svg" width="100%" alt="Antigravity Computer Use — desktop automation for Google Antigravity. Observe, act, verify.">
-</p>
-
 <h1 align="center">Antigravity Computer Use</h1>
 
 <p align="center">
-  Give Google Antigravity real Windows desktop control with <b>/computer-use</b>.<br>
-  Screenshots, accessible controls, your real cursor, and a clear way to take control back.
+  Let your Antigravity agent use real Windows apps with <b>/computer-use</b>:<br>
+  the real cursor, the real keyboard, and a Stop you can always reach.
 </p>
 
 <p align="center">
@@ -14,93 +10,33 @@
   <a href="https://github.com/shayann07/antigravity-computer-use/releases"><img src="https://img.shields.io/github/v/release/shayann07/antigravity-computer-use?include_prereleases&amp;label=Windows%20beta&amp;color=80abcf" alt="Latest Windows prerelease"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-9ac7dc" alt="MIT license"></a>
   <img src="https://img.shields.io/badge/platform-Windows%20x64-697e92" alt="Windows x64">
+  <a href="https://github.com/shayann07/antigravity-computer-use/stargazers"><img src="https://img.shields.io/github/stars/shayann07/antigravity-computer-use?style=flat&amp;color=80abcf" alt="GitHub stars"></a>
 </p>
 
 <p align="center">
-  <b><a href="https://github.com/shayann07/antigravity-computer-use/releases/tag/v0.3.0-beta.5">Download for Windows</a></b> ·
-  <a href="#see-it-in-action">Demo</a> ·
+  <img src="docs/media/launch-film.gif" width="720" alt="A real recording: an Antigravity agent opens Upscaly, picks a photo in the file dialog and runs a 4x upscale while the blue edge glow and control bar show it is in control.">
+</p>
+
+<p align="center">
+  <a href="docs/media/launch-film.mp4"><b>Watch the 40-second film with sound</b></a> ·
   <a href="#install">Install</a> ·
   <a href="docs/INSTALLATION.md">Documentation</a> ·
-  <a href="docs/internal/HANDOFF.md">Roadmap &amp; handoff</a>
+  <a href="https://github.com/shayann07/antigravity-computer-use/issues">Roadmap</a>
 </p>
 
 Antigravity is the agent. This open-source skill gives its existing model native
-desktop tools: inspect applications, use buttons and fields, navigate native file
-dialogs, and operate custom canvases through screenshots. It works in the
-**Antigravity Agent Manager App**. No separate LLM, extra model subscription,
-browser extension or required MCP server.
+desktop tools: it can look at an app, use its buttons and fields, fill in file
+dialogs and work on canvases from screenshots. It runs in the **Antigravity
+Agent Manager App** and uses the model you already chose there: no separate LLM,
+API key, browser extension or MCP server.
 
-> **Windows beta.** Version **v0.3.0-beta.5** is a published Windows x64 prerelease.
-> Automated checks and earlier real desktop tests do not prove every workflow on
-> this build. See [the beta.5 release notes](https://github.com/shayann07/antigravity-computer-use/releases/tag/v0.3.0-beta.5), [the earlier beta.4 qualification record](docs/WINDOWS-BETA4-QUALIFICATION.md)
-> and [what is verified](#status-and-limits) before installing.
+The film above is a real recording, edited for length: the agent operates
+Upscaly and upscales a 736×1308 photo to 2944×5232. The countdown is shown at
+8× speed and labelled. [How it was made](docs/media/LAUNCH-FILM.md).
 
-**macOS experimental support:** Apple Silicon/Intel adapters share the same
-controller, tool schemas and `/computer-use` skill. Intel Mac physical
-qualification passed on a single Retina display; external-display, sleep/wake
-and permission-revocation hardware checks remain pending.
-[Mac qualification details](docs/MACOS-QUALIFICATION.md).
-
-The beta line includes control recovery, sanitized failure reports and signed
-whole-bundle updates. It also supports structured, unverified agent feedback;
-automatic issue reporting is opt-in and requires GitHub authentication. Models
-can miss problems, while runtime errors are logged independently. It shares the
-runtime with the Mac adapter. [Implementation and acceptance status](docs/RELIABILITY-IMPLEMENTATION.md).
-The Windows download and one-line installer below are pinned to beta.5.
-Our [public CI guide](docs/CI.md) explains the fork checks, local commands and
-the separate maintainer signing workflow.
-
-## See it in action
-
-<p align="center">
-  <img src="docs/media/upscaly-demo.gif" width="720" alt="Real Antigravity computer-use session in Upscaly: select a model, import a photo, upscale and view the result.">
-</p>
-
-<p align="center"><a href="docs/media/upscaly-demo.mp4"><b>Watch the full 39-second real demo</b></a> · <a href="docs/media/UPSCALY-DEMO.md">Recording details</a></p>
-
-An actual Antigravity task operating **Upscaly 1.0.9**, with a different
-user-provided portrait, our breathing edge glow, working bar and moving native
-cursor. The **39-second excerpt plays at normal speed**; waiting and the private
-file picker are cut. The native NCNN process was observed and the resulting
-2800×4496 PNG independently decoded. This records a development build with the
-new local recording preference; the downloadable beta.2 predates that preference.
-The excerpt is not a task-speed benchmark. [Recording provenance](docs/media/UPSCALY-DEMO.md).
-
-<details>
-<summary><b>Minimal desktop controls</b></summary>
-
-<p align="center">
-  <img src="docs/media/hud-active.png" width="384" alt="Native renderer preview of the active computer-use bar">
-  <img src="docs/media/hud-paused.png" width="384" alt="Native renderer preview of the paused computer-use bar">
-</p>
-
-The bar, breathing edge glow and temporary custom cursor indicate active control.
-These two images are **production-renderer previews**, not live desktop captures.
-Passive background startup stays hidden. End hides the controls; stopped controls
-auto-dismiss after eight seconds. [Interface and media notes](docs/media/README.md).
-
-</details>
-
-## What it can do
-
-| Capability | How it works |
-| --- | --- |
-| **Observe the actual app** | Screenshots plus Windows accessibility names, roles and values. |
-| **Use native controls** | Click, invoke, select, toggle and set values through observed accessibility references. |
-| **Operate visually** | Move the real cursor, click, double-click, right-click, drag and scroll using screenshot coordinates. |
-| **Enter text and shortcuts** | Native keyboard input, Unicode text and explicit clipboard-preserving paste. |
-| **Work across apps** | Discover, launch, focus and select windows, including approved owned dialogs and file pickers. |
-| **Verify each step** | Fresh observations, bounded sequential batches and no automatic replay after uncertain input. |
-| **Give control back** | Pause, optional human takeover, independent Stop and input cleanup. |
-
-Useful tasks include checking a development build's UI, importing an image,
-changing export settings and verifying the output. Describe the result you want:
-
-```text
-/computer-use
-Open my app, import the sample image, export it as PNG, and verify the result.
-Restore the original settings and end computer use when finished.
-```
+> **Windows beta.** [v0.3.0-beta.5](https://github.com/shayann07/antigravity-computer-use/releases/tag/v0.3.0-beta.5)
+> is a published Windows x64 prerelease. Read [what is verified](#status-and-limits)
+> before installing. Not affiliated with or endorsed by Google.
 
 ## Install
 
@@ -110,54 +46,88 @@ On Windows, paste this one line into PowerShell:
 irm https://raw.githubusercontent.com/shayann07/antigravity-computer-use/main/install.ps1 | iex
 ```
 
-Then open Antigravity, choose **/computer-use**, and describe your task. The
-installer downloads and verifies the pinned Windows beta, installs the global
-skill and enables its passive background service. It preserves existing settings
-and emergency Stop. Requires Windows x64 and the standard .NET Framework runtime.
+Then open Antigravity, type **/computer-use**, and describe what you want done.
 
-For manual download, project-local setup, permissions, updates and rollback, see
-[installation options](docs/INSTALLATION.md). Fresh-install native ACL qualification
-remains open where project ancestors are replaceable; see [validation](VALIDATION.md).
+The installer:
+- downloads the beta.5 Windows bundle and checks its SHA-256;
+- installs the global skill;
+- enables a small background service, which Antigravity starts as a sidecar.
 
-## Permissions and human control
+It keeps your existing settings and any emergency Stop. Requires Windows x64 and
+the standard .NET Framework runtime. Installed copies update themselves from
+signed releases; you can switch updates to manual or roll back.
 
-- **Standalone approval is the default.** Approve an application per session and
-  confirm sensitive operations separately. Grants bind to its actual process identity.
-- **Host-managed approval is an explicit installation option.** Use
-  `--permission-mode host-managed` to rely on Antigravity's execution review. It
-  does not inspect or authenticate the Turbo preset. See [permission policy](docs/INSTALLATION.md#permission-policy).
-- **Keep working is the default.** Incidental mouse or keyboard activity does not
-  pause automation. Optional **Yield on input** pauses on deliberate human activity.
-- **Esc, Ctrl+Alt+F12 or Stop** invalidates control and releases automation-held
-  input. Emergency re-arm is human-only. Ordinary completion uses `end`.
+Manual ZIP install, project-only setup, permissions, updates and removal:
+[installation guide](docs/INSTALLATION.md).
 
-Use one active desktop task at a time. Windows virtual desktops share the physical
-mouse and keyboard. Authentication, security surfaces, UAC and the secure desktop
-require human handoff. Screenshots go to Antigravity's selected model/provider;
-this project adds no separate model service or telemetry. [Security model](SECURITY.md).
+## Try it
+
+```text
+/computer-use
+Open my app, import the sample image, export it as PNG, and verify the result.
+Restore the original settings and end computer use when finished.
+```
+
+Name the app, the file and where the output should go. The agent works faster
+when it doesn't have to search for things.
+
+## What it can do
+
+| Capability | How it works |
+| --- | --- |
+| **See the real app** | Screenshots plus Windows accessibility names, roles and values. |
+| **Use native controls** | Click, invoke, select, toggle and set values on the controls it observed. |
+| **Work visually** | Moves the real cursor: click, double-click, right-click, drag and scroll by screenshot position. |
+| **Type and use shortcuts** | Native keyboard input, Unicode text, and paste that restores your clipboard. |
+| **Work across apps** | Find, launch, focus and pick windows, including the app's own file pickers and dialogs. |
+| **Check each step** | Fresh observations after actions, short ordered batches, and no automatic replay when an input's outcome is uncertain. |
+| **Hand control back** | Pause, optional take-over on human input, and an independent Stop that releases held keys and buttons. |
+
+## You stay in control
+
+- **You can see when it's working.** A breathing blue edge glow and a small
+  control bar appear while the agent is in control.
+- **Stop is always yours.** Esc, Ctrl+Alt+F12 or the bar's Stop button halts it
+  immediately and releases anything it was holding. Only a human can re-arm it;
+  restarting the service does not clear Stop.
+- **Approvals have one owner.** The one-line install uses the sidecar, which
+  relies on Antigravity's own approval of each command (`host-managed`). A
+  manual install asks you directly instead (`standalone`): you approve each app
+  per session and confirm sensitive actions separately. Either way, grants are
+  tied to the real process. See [permission policy](docs/INSTALLATION.md#permission-policy).
+- **Recovery is spelled out.** After a crash, every blocked reply names who acts
+  next, the exact command and when it is safe.
+- **Human-only screens stay human.** Sign-ins, UAC and the secure desktop are
+  handed back to you. Screenshots go only to the model provider you already
+  use in Antigravity; this project adds no telemetry.
+
+Use one desktop task at a time: Windows virtual desktops share one mouse and
+keyboard. [Security model](SECURITY.md).
 
 ## Status and limits
 
-| Area | Verified evidence and remaining work |
+| Area | Where it stands (beta.5, build `f5a02d01`) |
 | --- | --- |
-| **Automated checks** | See the [current handoff](docs/internal/HANDOFF.md) for the candidate's exact test and CI results. ACL-related skips are not native qualification passes. |
-| **Physical safety** | Earlier Windows builds passed held-drag Esc, persisted Stop, human Re-arm, a second task and clean End. These are historical checks, not proof for every later build. |
-| **Real app workflow** | An earlier Windows build completed genuine native-AI Upscaly PNG and JPG exports; independent dimensions and hashes are recorded in the handoff. |
-| **Speed** | The earlier High-effort Antigravity tasks took **4m29s PNG / 4m33s JPEG**. Host/model orchestration dominates the remaining delay. These are historical witnesses, not a current speed guarantee. |
-| **Still open** | Live physical queued/held-input interruption on the final helper, real mixed-DPI/multi-monitor hardware, broader applications and cursor/glow feedback. |
-| **Platforms** | This release contains Windows x64 assets. macOS ARM/Intel support remains experimental and is not included in this Windows-only release. Linux is unsupported. |
+| **Automated checks** | Windows and four macOS CI runners pass on every code change. The local suite has 575 tests: 562 passed, 0 failed, 13 skipped for platform or folder permissions. |
+| **Releases** | Update metadata is signed through a protected release environment. A real beta.4 install updated itself to beta.5 from GitHub and can roll back. |
+| **Desk test** | On a real install: normal task, physical Esc while typing, human re-arm, and recovery after a crash, both before and after input was sent. |
+| **Speed** | Each step costs a model turn. In one Upscaly run, 30 turns took about 4.5 minutes, of which the controller itself used about 16 seconds. Cutting turns is tracked in [#74](https://github.com/shayann07/antigravity-computer-use/issues/74). |
+| **Known gaps** | Some WebView2/Tauri controls are missing from the accessibility tree ([#70](https://github.com/shayann07/antigravity-computer-use/issues/70)). The bar can't be dragged yet ([#68](https://github.com/shayann07/antigravity-computer-use/issues/68)). Weaker models aren't tested yet ([#57](https://github.com/shayann07/antigravity-computer-use/issues/57)). Mixed-DPI and multi-monitor hardware remain untested. |
+| **Platforms** | Windows x64. macOS (Apple Silicon and Intel) shares the same controller and skill but is **experimental**: it is built in CI only and not part of this release ([Mac guide](docs/MACOS.md)). Linux is unsupported. |
 
-[Current handoff and TODOs](docs/internal/HANDOFF.md) · [Validation](VALIDATION.md) ·
-[Performance measurements](docs/PERFORMANCE.md) · [Project status](docs/internal/PROJECT-STATUS.md)
+[Validation record](VALIDATION.md) · [Performance notes](docs/PERFORMANCE.md) ·
+[Changelog](CHANGELOG.md) · [All releases](https://github.com/shayann07/antigravity-computer-use/releases)
 
 ## Build and contribute
 
-Windows source builds require **Windows x64, Node 24.20.0** and the inbox .NET
-Framework compiler. Experimental Mac builds use **macOS 14+, matching Intel or
-Apple Silicon Node 24.20.0, and Xcode Command Line Tools**; follow the
-[Mac build and qualification guide](docs/MACOS.md). There are no npm runtime
-dependencies. The shared source includes the Mac adapter; the Windows-only
-release does not publish a new Mac bundle.
+Contributions are welcome, especially ones that cut model turns or make real
+apps work more reliably. Start with an issue labelled
+[`good first issue`](https://github.com/shayann07/antigravity-computer-use/labels/good%20first%20issue)
+or [`help wanted`](https://github.com/shayann07/antigravity-computer-use/labels/help%20wanted),
+and read [CONTRIBUTING](CONTRIBUTING.md).
+
+Windows source builds need **Windows x64, Node 24.20.0** and the built-in .NET
+Framework compiler. There are no npm runtime dependencies.
 
 ```powershell
 git clone https://github.com/shayann07/antigravity-computer-use.git
@@ -168,17 +138,12 @@ npm run bundle
 ```
 
 The portable bundle is written to `dist/AntigravityComputerUse-windows-x64`.
-Interactive native tests require an available desktop; do not run them while
-another person or session owns it. Keep temporary evidence under ignored `.localdata/`.
+Interactive native tests need a desktop nobody else is using. Keep test evidence
+under the ignored `.localdata/` folder.
 
-Contributions that reduce measured orchestration latency or improve real-app
-reliability are especially useful. For bug reports, include your Windows version,
-display scaling, app/version, expected result and the failed step. Remove private
-data before sharing evidence.
-
-[Contributing](CONTRIBUTING.md) · [Review guide](docs/review-guide.md) ·
-[Claude Code continuation brief](docs/internal/CLAUDE-CODE-HANDOFF-PROMPT.md) ·
-[Branch policy](docs/BRANCHES.md) · [Report a bug](https://github.com/shayann07/antigravity-computer-use/issues/new)
+[Contributing](CONTRIBUTING.md) · [Code of conduct](CODE_OF_CONDUCT.md) ·
+[Review guide](docs/review-guide.md) · [CI guide](docs/CI.md) ·
+[Report a bug](https://github.com/shayann07/antigravity-computer-use/issues/new/choose)
 
 ## Open source and attribution
 
@@ -186,9 +151,10 @@ data before sharing evidence.
 [ridelink0/claude-computer-use](https://github.com/ridelink0/claude-computer-use),
 with attributed adaptations from OpenAI's MIT computer-use sample and Anthropic's
 MIT quickstarts. Exact revisions, modifications and hashes are recorded in
-[UPSTREAM.json](UPSTREAM.json); the original licenses are retained in
+[UPSTREAM.json](UPSTREAM.json); bundled components and their licences are listed in
 [third-party notices](THIRD_PARTY_NOTICES.md).
 
-This is an independent project, not an official Google, OpenAI or Anthropic product.
+This is an independent project. It is not an official Google, OpenAI or Anthropic
+product and is not affiliated with or endorsed by them.
 
-[License](LICENSE) · [Security](SECURITY.md) · [Implementation history](docs/internal/IMPLEMENTATION_PROGRESS.md)
+[License](LICENSE) · [Security](SECURITY.md)

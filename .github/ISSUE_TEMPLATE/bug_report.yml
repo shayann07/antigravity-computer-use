@@ -1,0 +1,54 @@
+name: Bug report
+description: Something went wrong while /computer-use was running.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Remove personal content (names, files, credentials) from anything you paste.
+        Security problems go to [private vulnerability reporting](https://github.com/shayann07/antigravity-computer-use/security/advisories/new), not here.
+  - type: input
+    id: version
+    attributes:
+      label: Computer Use version
+      description: The `build_version` and the first 8 characters of `build_id` from `status`.
+      placeholder: 0.3.0-beta.5, f5a02d01
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version and display setup
+      placeholder: Windows 11 24H2, 150% scaling, two monitors
+    validations:
+      required: true
+  - type: input
+    id: app
+    attributes:
+      label: App being operated, with its version
+      placeholder: Upscaly 1.1.0
+  - type: input
+    id: model
+    attributes:
+      label: Antigravity model and effort
+      placeholder: Gemini 4 Hydrogen, High
+  - type: textarea
+    id: what
+    attributes:
+      label: What you asked for and what happened
+      description: The prompt (shortened is fine), the step that failed, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reply
+    attributes:
+      label: The failing reply
+      description: Paste the JSON reply, especially `error.code`, `next_action` and `recovery`. Remove personal content.
+      render: json
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I removed personal content from this report.
+          required: true
