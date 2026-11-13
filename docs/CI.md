@@ -12,8 +12,7 @@ preparation workflow is not automatically cancelled by this policy.
 
 | Workflow | What it runs | Important boundary |
 | --- | --- | --- |
-| `windows.yml` | Node tests, provenance, native host build, noninteractive guardian check, development bundle and native updater qualification where the runner's ACL permits it | An ACL refusal is reported as a skip, not proof of a native update. Hosted CI does not test interactive mouse, desktop or physical Stop. |
-| `macos.yml` | Shared tests, native builds and contracts on Apple Silicon and Intel, development bundles, isolated native installation/update/rollback | Uses test keys and substituted transport. It does not grant macOS permissions or qualify physical desktop use. |
+| `ci.yml` | One required check, `ci-ok`, that always reports. Every code change runs the full Windows checks (Node tests, provenance, native host build, noninteractive guardian check, development bundle, native updater qualification where the runner ACL permits it) and all four macOS runners in parallel. Pushes to main, a weekly run and manual runs also upload development candidates. Docs-only pull requests run the provenance check only. | An ACL refusal is reported as a skip, not proof of a native update. Hosted CI does not test interactive mouse, desktop or physical Stop. macOS runs use test keys and substituted transport and do not qualify physical permissions. |
 | `prepare-signed-release.yml` | Maintainer-only preparation and verification of signed candidate assets on Windows and both Mac architectures | Requires the maintainer's signing secret. It is not run for fork pull requests and does not publish a release. Never expose the signing key to untrusted pull-request code. |
 
 The downloadable CI artifacts are **development candidates**, not signed public
