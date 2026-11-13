@@ -708,7 +708,7 @@
     },
     {
       "path": "server/recovery.mjs",
-      "sha256": "599558058feaadb63e1af8a112477fb0a16c3ad939b01856eb3ef9984b3c79c8"
+      "sha256": "8f309de3a4b8fe915afe4ecd6f458ecc73fc151073027f1d3cd7dd418dc10624"
     },
     {
       "path": "scripts/qualify-guardian-desktop.mjs",
@@ -872,7 +872,7 @@
     },
     {
       "path": "tests/stop-latch.test.mjs",
-      "sha256": "90b8e77d517402c1d41d5cfcdd323029b68ee4ebc37847fde2b02640672ee5d0"
+      "sha256": "a90da2fe5c937d96a1b086bc009a62b87d1872ddbdadeed5174d0c147d480d2a"
     },
     {
       "path": "docs/STOP-UNCERTAINTY.md",

@@ -71,3 +71,13 @@ test('independent ordinary writers cannot downgrade an already published uncerta
  for(const result of results)if(result.status==='rejected')throw result.reason;
  assert.equal(fs.readFileSync(file,'utf8'),'unconfirmed:multi-process');
 });
+
+test('a Stop entry seen mid-publication (two links) is re-read; one that stays linked is refused',t=>{
+ const {file}=location(t);fs.writeFileSync(file,'unconfirmed:linking');
+ const twoLinks=stats=>Object.assign(Object.create(Object.getPrototypeOf(stats)),stats,{nlink:2n});
+ const io=times=>{let left=times;return {...fs,constants:fs.constants,lstatSync:(f,o)=>{const s=fs.lstatSync(f,o);return f===file&&left-->0?twoLinks(s):s;}};};
+ assert.deepEqual(readStopLatch(file,{io:io(3)}),{value:'unconfirmed:linking',unconfirmed:true});
+ const started=performance.now();
+ assert.equal(readStopLatch(file,{io:io(Infinity)}).invalid,true);
+ assert(performance.now()-started<2000,'the link window wait stays bounded');
+});
