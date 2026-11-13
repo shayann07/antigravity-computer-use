@@ -12,6 +12,13 @@ function fixture(){
  const sessions={register(){},close(){}};
  return new Runtime({guardian,driver,sessions});
 }
+test('status is read-only after end and ready reports when it starts a new task',async()=>{
+ const r=fixture();r.guardian.request=async()=>({state:'idle',controls_visible:true});
+ const first=await r.ready();assert.equal(first.task_started,true);assert.equal(first.task_open,true);
+ assert.equal((await r.ready()).task_started,false);
+ await r.finish();for(let n=0;n<2;n++)assert.equal(r.status().task_open,false);
+ const next=await r.ready();assert.equal(next.task_started,true);assert.equal(next.task_open,true);
+});
 test('task reservation survives controller replacement until confirmed End',async()=>{
  const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'agcu-task-state-')),file=path.join(dir,'task-state.json');
  const make=()=>{const guardian=new EventEmitter();guardian.send=()=>{};return new Runtime({guardian,driver:{async abort(){}},sessions:{register(){},close(){}},taskFile:file});};

@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "fab08a58052365faf97a0cccecc640ea5cd9b71272b00ba567fd850aacbc1c32"
+      "sha256": "737ed19ac873f9860ffc66840f13b59042eff8fd9e3dc714195b595121b9875d"
     },
     {
       "path": "server/mcp.mjs",
@@ -604,7 +604,7 @@
     },
     {
       "path": "skills/computer-use/SKILL.md",
-      "sha256": "ff722372b4c3b22f6ecea977bc789aad496f21d78b4fa38f6c30f331da10d154"
+      "sha256": "4b480b09f90898f9994c5a4f3cbdde345c2a6cd97b747dd9a631e0a113f2ee17"
     },
     {
       "path": "docs/MACOS.md",
@@ -660,7 +660,7 @@
     },
     {
       "path": "tests/lifecycle.test.mjs",
-      "sha256": "f4cf3208dc8169a871af144d972b30b1116a922e6164a18028800e586429cfa8"
+      "sha256": "a6f34932011ea43c7b9f2c705f23afe3a0f448183e397b9188ab45ab95bc8f5d"
     },
     {
       "path": "server/native/GuardCleanup.cs",
