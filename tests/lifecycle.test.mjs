@@ -292,3 +292,12 @@ test('emergency Stop survives service replacement; ordinary idle shutdown does n
   assert(fs.existsSync(file),'model operations must not remove the native human re-arm latch');
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
+test('a guardian created for a recovered unverified task starts with re-arm locked',()=>{
+ const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'agcu-rearm-env-')),file=path.join(dir,'task-state.json');const previous=process.env.AGCU_DATA_DIR;process.env.AGCU_DATA_DIR=dir;
+ const make=()=>new Runtime({driver:{async abort(){}},sessions:{register(){},close(){}},taskFile:file});
+ try{
+  fs.writeFileSync(file,JSON.stringify({schema:1,open:false}));assert.equal(make().guardian.env.AGCU_REARM_LOCKED,'0');
+  fs.writeFileSync(file,JSON.stringify({schema:1,open:true,guard:'guard-2147483647-12345678-1234-1234-1234-123456789abc.state',children:[],dispatched:false,watchdogs_complete:true}));
+  const recovered=make();assert.equal(recovered.status().recovered_task,true);assert.equal(recovered.guardian.env.AGCU_REARM_LOCKED,'1');
+ }finally{if(previous===undefined)delete process.env.AGCU_DATA_DIR;else process.env.AGCU_DATA_DIR=previous;fs.rmSync(dir,{recursive:true,force:true});}
+});

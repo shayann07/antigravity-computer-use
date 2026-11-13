@@ -254,7 +254,8 @@ final class MacGuardian: NSObject {
     var controlsUntil = Date.distantFuture
     // Set while a previous task's input cleanup is unverified: the bar is
     // visible and Stop works, but re-arm, resume and activation refuse.
-    var rearmLocked = false
+    // Starts locked when the runtime recovered an unverified prior task.
+    var rearmLocked = ProcessInfo.processInfo.environment["AGCU_REARM_LOCKED"] == "1"
     let hostManaged = ProcessInfo.processInfo.environment["AGCU_PERMISSION_MODE"] == "host-managed"
     func run() throws -> Never {
         _ = NSApplication.shared; NSApp.setActivationPolicy(.accessory)

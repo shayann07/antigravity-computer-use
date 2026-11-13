@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "737ed19ac873f9860ffc66840f13b59042eff8fd9e3dc714195b595121b9875d"
+      "sha256": "edd72fdb9c40925f683733a8f4a24fa0a6192c28a48138f0b1ae38aa9b3c8bf0"
     },
     {
       "path": "server/mcp.mjs",
@@ -268,7 +268,7 @@
     },
     {
       "path": "server/native/Guardian.cs",
-      "sha256": "cbcc8c6293fef78c04e88b9c84e0a22df3bc43b1baf0b6087458a7b24c541154"
+      "sha256": "293f70c162425dff90db85ce5baba805872f3a64a93b063629e72ab103a96731"
     },
     {
       "path": "server/native/CursorSafety.cs",
@@ -568,7 +568,7 @@
     },
     {
       "path": "server/native/macos/MacGuardian.swift",
-      "sha256": "9fcc53550a279d316913c9434bb6ed4db4fd60ed1e8f11b6a7eba6852e6d3cf2"
+      "sha256": "36e6ae831f815bb88540b2caa35dc9697874405faaecd2bf803c8bfe727e935b"
     },
     {
       "path": "server/native/macos/MacOperations.swift",
@@ -656,7 +656,7 @@
     },
     {
       "path": "tests/lifecycle.test.mjs",
-      "sha256": "a6f34932011ea43c7b9f2c705f23afe3a0f448183e397b9188ab45ab95bc8f5d"
+      "sha256": "3f9d9a191e91c0bab672a1b61954a06d13c98e3a344fdd09cd85ae33da3a435c"
     },
     {
       "path": "server/native/GuardCleanup.cs",
