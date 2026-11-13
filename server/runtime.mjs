@@ -21,6 +21,15 @@ import {writeAtomicJSON,readTaskRecord} from './atomic-json.mjs';
 
 const input=new Set(['move','click','type','set_value','key','scroll','drag','focus','fit_window','close_window','paste','paste_files','clipboard','open','file_dialog']);
 const fail=(code,message)=>{throw new HostError(code,message,null);};
+// Post-launch observation settles on the app's main window (#72).
+const LAUNCH_SETTLE_MS=1200,LAUNCH_SETTLE_LIMIT_MS=5000,SMALL_WINDOW=[480,320];
+// One match is the main window; among several, only one at least twice the
+// area of every other counts. Anything closer stays ambiguous.
+export function mainWindow(matches){
+ if(matches.length===1)return matches[0];
+ const sorted=[...matches].sort((a,b)=>b.rect[2]*b.rect[3]-a.rect[2]*a.rect[3]);
+ return sorted[0].rect[2]*sorted[0].rect[3]>=2*sorted[1].rect[2]*sorted[1].rect[3]?sorted[0]:null;
+}
 export async function waitUntil(target,{now=()=>performance.now(),sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms)),check=()=>{}}={}){
   // Node timers may wake before a fractional deadline. Do not start another
   // expensive poll until the intended delay has actually elapsed.
@@ -511,24 +520,31 @@ export class Runtime {
       return result;
     };
     const finish=result=>({...result,wait_metrics:{elapsed_ms:Math.round(performance.now()-started),observations,polling_budget_ms:budget}});
+    // until: the text has appeared. until_gone: observed text has disappeared;
+    // an incomplete tree never counts as gone, and the text must be visible
+    // when the wait starts, so a mistyped label cannot read as finished.
+    const gone=typeof args.until_gone==='string',label=(gone?args.until_gone:args.until).toLowerCase();
+    const matches=view=>{const present=view.metadata.tree.toLowerCase().includes(label);return gone?!present&&view.metadata.tree_incomplete!==true:present;};
     do {
       this.check();latest=await observe({hwnd:args.hwnd,with_image:false,query:args.query,native_snapshot_deadline:until,require_native_budget:true,...(args.abort_on?.length?{max_nodes:500}:{})});
-      const tree=latest.metadata.tree.toLowerCase();
       const failure=waitFailure(latest,args.abort_on);
       if(failure){
         if(args.with_image===false)return finish({matched:false,aborted:true,abort_match:failure,...latest});
         this.frames.delete(latest.metadata.observation_id);return finish({matched:false,aborted:true,abort_match:failure,...await observe({hwnd:args.hwnd,query:args.query,with_image:args.with_image,max_nodes:500,native_snapshot_deadline:until})});
       }
-      if(tree.includes(args.until.toLowerCase())){
+      if(gone&&observations===1&&!latest.metadata.tree.toLowerCase().includes(label)){
+        this.frames.delete(latest.metadata.observation_id);
+        fail('wait_label_not_observed','The text to wait on was not visible when the wait started. Observe again; the job may already have finished. No input was sent.');
+      }
+      if(matches(latest)){
         // Do not authorize the next batch step based on a transient match in
         // an older frame. Confirm both success and failure on the returned view.
         this.frames.delete(latest.metadata.observation_id);
         const verified=await observe({hwnd:args.hwnd,query:args.query,with_image:args.with_image,native_snapshot_deadline:until,require_native_budget:true,...(args.abort_on?.length?{max_nodes:500}:{})});
-        const verifiedTree=verified.metadata.tree.toLowerCase();
         const verifiedFailure=waitFailure(verified,args.abort_on);
         if(verifiedFailure)return finish({matched:false,aborted:true,abort_match:verifiedFailure,...verified});
         if(args.abort_on?.length&&verified.metadata.tree_incomplete)return finish({matched:false,incomplete:true,...verified});
-        if(verifiedTree.includes(args.until.toLowerCase()))return finish({matched:true,...verified});
+        if(matches(verified))return finish({matched:true,...verified});
         if(args.with_image===false&&performance.now()>=until)return finish({matched:false,timed_out:true,...verified});
         latest=verified;
         if(performance.now()>=until){this.frames.delete(latest.metadata.observation_id);break;}
@@ -690,15 +706,30 @@ export class Runtime {
     try {
       if(!Number.isSafeInteger(result.pid)||result.pid<=0)throw Object.assign(Error('Launcher returned no PID. Discover apps without relaunching.'),{code:'launch_pid_unavailable'});
       const until=performance.now()+8000;
+      // Splash screens and small helper windows appear before the main window.
+      // Observe only once the matching window set has been unchanged for
+      // LAUNCH_SETTLE_MS, within LAUNCH_SETTLE_LIMIT_MS of the first match; a
+      // lone small window waits out that limit in case the main window follows.
+      let firstMatch=null,lastKey=null,stableSince=0;
       do {
         this.check();if(generation!==this.generation)fail('control_changed','Control changed after launch.');
         const windows=(await this.driver.call('list_apps',{})).result.windows;
         const matches=windows.filter(w=>w.pid===result.pid&&executableKey(path.resolve(w.path||''))===executableKey(executable)&&!w.minimized&&!w.other_desktop&&w.rect?.[2]>0&&w.rect?.[3]>0);
-        if(matches.length>1)return {...result,input_completed:true,observe_pending:true,observation_hint:'Several matching windows opened. Discover apps and select the intended window; do not relaunch.'};
-        if(matches.length===1){
-          const observed=await this.observe({hwnd:Number(matches[0].hwnd),reason:args.reason});
-          return {...observed,result,input_completed:true};
+        if(matches.length){
+          const now=performance.now();firstMatch??=now;
+          const key=matches.map(w=>[w.hwnd,...w.rect].join(',')).sort().join('|');
+          if(key!==lastKey){lastKey=key;stableSince=now;}
+          const chosen=mainWindow(matches),settleEnd=Math.min(until,firstMatch+LAUNCH_SETTLE_LIMIT_MS);
+          const small=chosen&&chosen.rect[2]<SMALL_WINDOW[0]&&chosen.rect[3]<SMALL_WINDOW[1];
+          if((now-stableSince>=LAUNCH_SETTLE_MS&&!(small&&now<settleEnd))||now>=settleEnd){
+            if(!chosen)return {...result,input_completed:true,observe_pending:true,observation_hint:'Several matching windows opened. Discover apps and select the intended window; do not relaunch.'};
+            this.check();if(generation!==this.generation)fail('control_changed','Control changed after launch.');
+            const observed=await this.observe({hwnd:Number(chosen.hwnd),reason:args.reason});
+            return {...observed,result,input_completed:true};
+          }
+          await new Promise(resolve=>setTimeout(resolve,200));continue;
         }
+        firstMatch=null;lastKey=null;
         // Packaged Windows launchers often exit after handing off. Waiting the
         // entire discovery budget cannot produce a window of an exited PID.
         let alive=true;try{process.kill(result.pid,0);}catch(error){if(error.code==='ESRCH')alive=false;}

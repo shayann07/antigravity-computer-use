@@ -41,3 +41,29 @@ test('replies gain an additive recovery object without changing existing fields'
  assert.deepEqual(withRecovery({ok:true}),{ok:true});
  const own={next_action:'observe_again',recovery:{custom:true}};assert.equal(withRecovery(own),own);
 });
+
+test('ordinary pre-input refusals get actionable agent advice, never a replay', async () => {
+ const {recoveryAdvice} = await import('../server/recovery.mjs');
+ const advice = (code, operation, extra = {}) => recoveryAdvice({error: {code}, ...extra}, operation);
+ const cases = [
+  ['obscured', 'computer_click', 'observe_and_retarget'],
+  ['no_file_dialog', 'computer_file_dialog', 'observe_app_no_picker'],
+  ['clipboard_unsafe', 'computer_file_dialog', 'retry_file_dialog_with_keyboard'],
+  ['clipboard_unsafe', 'computer_paste', 'enter_without_clipboard'],
+  ['clipboard_unsafe', 'computer_run', 'enter_without_clipboard'],
+  ['clipboard_unsafe', undefined, 'enter_without_clipboard']
+ ];
+ for (const [code, operation, expected] of cases) {
+  const result = advice(code, operation);
+  assert.equal(result.next_action, expected, `${code} via ${operation}`);
+  assert.equal(result.replay_allowed, false);
+  assert.equal(RECOVERY_GUIDE[expected].actor, 'agent');
+ }
+ // Once input may have run, the uncertain-effect advice still wins.
+ for (const code of ['obscured', 'no_file_dialog', 'clipboard_unsafe']) {
+  assert.equal(advice(code, 'computer_file_dialog', {input_completed: true}).next_action, 'inspect_effect_without_replay');
+  assert.equal(advice(code, 'computer_file_dialog', {delivery_unknown: true}).next_action, 'inspect_effect_without_replay');
+ }
+ // Unknown codes still fall back to operator diagnostics.
+ assert.equal(advice('something_new', 'computer_click').next_action, 'inspect_diagnostics');
+});

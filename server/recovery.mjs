@@ -6,13 +6,26 @@ import {writeAtomicText} from './atomic-json.mjs';
 // Stop is monotonic until trusted local recovery: an ordinary Stop never
 // replaces existing evidence of uncertain delivery. This does not acknowledge
 // native delivery or clear a latch.
+// Exclusive publication links the temporary file into place, then unlinks the
+// temporary, so a concurrent reader can briefly see two links. Wait out that
+// window (bounded); an entry that stays hard-linked is still refused.
+const LINK_WINDOW_MS=250;
 function stopRecord(file,io){
+ const deadline=performance.now()+LINK_WINDOW_MS;
+ for(;;){
+  try{return stopRecordOnce(file,io);}
+  catch(error){if(error.code!=='stop_entry_linking'||performance.now()>=deadline)throw error;Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,5);}
+ }
+}
+const linking=()=>Object.assign(Error('Stop entry is being published'),{code:'stop_entry_linking'});
+function stopRecordOnce(file,io){
  let fd;
  try{
   const info=io.lstatSync(file,{bigint:true});
+  if(info.isFile()&&!info.isSymbolicLink()&&info.nlink===2n)throw linking();
   if(!info.isFile()||info.isSymbolicLink()||info.nlink!==1n||info.size>4096n)throw Error('invalid Stop entry');
   fd=io.openSync(file,io.constants.O_RDONLY|(io.constants.O_NOFOLLOW||0));
-  const opened=io.fstatSync(fd,{bigint:true});if(!opened.isFile()||opened.nlink!==1n||opened.size>4096n||opened.dev!==info.dev||opened.ino!==info.ino)throw Error('Stop entry changed');
+  const opened=io.fstatSync(fd,{bigint:true});if(opened.nlink===2n&&opened.dev===info.dev&&opened.ino===info.ino)throw linking();if(!opened.isFile()||opened.nlink!==1n||opened.size>4096n||opened.dev!==info.dev||opened.ino!==info.ino)throw Error('Stop entry changed');
   const bytes=Buffer.alloc(4097);let used=0;
   while(used<bytes.length){const n=io.readSync(fd,bytes,used,bytes.length-used,null);if(!n)break;used+=n;}
   const after=io.fstatSync(fd,{bigint:true}),current=io.lstatSync(file,{bigint:true});
@@ -171,7 +184,9 @@ export function priorUndispatchedCleanupVerified(directory,record,{platform=proc
   return gone(parent);
  }catch{return false;}
 }
-export function recoveryAdvice(result){
+// operation is the tool name (for example computer_file_dialog) when known; it
+// only refines advice for refusals that sent no input.
+export function recoveryAdvice(result,operation){
  const code=result.error?.code||result.verification_error?.code;
  const extra={
   ...(result.repeated_failure===true?{repeated_failure:true}:{}),
@@ -180,7 +195,7 @@ export function recoveryAdvice(result){
  if(['input_cleanup_failed','guardian_end_unconfirmed','guardian_stop_unconfirmed'].includes(code))return {...extra,next_action:'inspect_input_cleanup',replay_allowed:false};
  if(result.delivery_unknown===true||result.input_completed===true&&code||code==='input_outcome_unknown')return {...extra,next_action:'inspect_effect_without_replay',replay_allowed:false};
  if(['wait_failure_observed','wait_observation_incomplete','wait_observation_timeout','wait_condition_timeout','wait_change_timeout','op_timeout','capture_preparation_timeout'].includes(code))return {...extra,next_action:'inspect_effect_without_replay',replay_allowed:false};
- if(['stale_observation','element_stale','window_moved','no_image','control_changed','focus_changed'].includes(code))return {...extra,next_action:'observe_again',replay_allowed:false};
+ if(['stale_observation','element_stale','window_moved','no_image','control_changed','focus_changed','wait_label_not_observed'].includes(code))return {...extra,next_action:'observe_again',replay_allowed:false};
  if(['window_minimized','window_hidden','window_capture_unavailable'].includes(code))return {...extra,next_action:result.repeated_failure===true?'await_human_window_recovery':'focus_target_then_observe',replay_allowed:false};
  if(code==='other_desktop')return {...extra,next_action:'await_human_space_switch',replay_allowed:false};
  if(code==='window_fullscreen')return {...extra,next_action:'await_human_fullscreen_exit',replay_allowed:false};
@@ -200,5 +215,10 @@ export function recoveryAdvice(result){
  if(['stop_persistence_failed','guard_persistence_failed'].includes(code))return {...extra,next_action:'inspect_stop_persistence_without_restart',replay_allowed:false};
  if(['permission_denied','approval_timeout','confirmation_required'].includes(code))return {...extra,next_action:'await_user_decision',replay_allowed:false};
  if(['control_stopped','control_inactive'].includes(code))return {...extra,next_action:'inspect_status_then_human_controls',replay_allowed:false};
+ // Ordinary refusals raised before the input they guard. Any reply where input
+ // already ran returned inspect_effect_without_replay above.
+ if(code==='obscured')return {...extra,next_action:'observe_and_retarget',replay_allowed:false};
+ if(code==='no_file_dialog')return {...extra,next_action:'observe_app_no_picker',replay_allowed:false};
+ if(code==='clipboard_unsafe')return {...extra,next_action:operation==='computer_file_dialog'?'retry_file_dialog_with_keyboard':'enter_without_clipboard',replay_allowed:false};
  return {...extra,next_action:'inspect_diagnostics',replay_allowed:false};
 }

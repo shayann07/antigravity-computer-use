@@ -26,12 +26,23 @@ export function readTaskState(file){return readTaskRecord(file).open;}
 export function writeAtomicJSON(file,value,{exclusive=false,io=fs}={}){
  return writeAtomicText(file,JSON.stringify(value),{exclusive,io});
 }
+// On Windows, replacing a file fails briefly with EPERM/EACCES/EBUSY while
+// another process (antivirus, the search indexer, a reader) still holds the
+// destination open. Retry for at most RENAME_RETRY_MS, then fail as before.
+const RENAME_RETRY_MS=500;
+export function renameReplacing(io,from,to,{platform=process.platform,sleep=ms=>Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,ms),now=()=>performance.now()}={}){
+ const deadline=now()+RENAME_RETRY_MS;
+ for(let delay=10;;delay=Math.min(delay*2,100)){
+  try{return io.renameSync(from,to);}
+  catch(error){if(platform!=='win32'||!['EPERM','EACCES','EBUSY'].includes(error.code)||now()+delay>deadline)throw error;sleep(delay);}
+ }
+}
 export function writeAtomicText(file,bytes,{exclusive=false,io=fs}={}){
  const directory=path.dirname(file),temporary=path.join(directory,'.'+path.basename(file)+'.'+randomUUID()+'.tmp');
  let descriptor;
  try{
   descriptor=io.openSync(temporary,'wx',0o600);io.writeFileSync(descriptor,bytes);io.fsyncSync(descriptor);io.closeSync(descriptor);descriptor=undefined;
-  if(exclusive){io.linkSync(temporary,file);io.unlinkSync(temporary);}else io.renameSync(temporary,file);
+  if(exclusive){io.linkSync(temporary,file);io.unlinkSync(temporary);}else renameReplacing(io,temporary,file);
   let folder;
   try{folder=io.openSync(directory,'r');io.fsyncSync(folder);return {file_flushed:true,directory_flushed:true};}
   catch(error){
