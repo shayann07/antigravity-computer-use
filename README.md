@@ -34,7 +34,7 @@ The film above is a real recording, edited for length: the agent operates
 Upscaly and upscales a 736×1308 photo to 2944×5232. The countdown is shown at
 8× speed and labelled. [How it was made](docs/media/LAUNCH-FILM.md).
 
-> **Windows beta.** [v0.3.0-beta.5](https://github.com/shayann07/antigravity-computer-use/releases/tag/v0.3.0-beta.5)
+> **Windows beta.** [v0.3.0-beta.6](https://github.com/shayann07/antigravity-computer-use/releases/tag/v0.3.0-beta.6)
 > is a published Windows x64 prerelease. Read [what is verified](#status-and-limits)
 > before installing. Not affiliated with or endorsed by Google.
 
@@ -49,7 +49,7 @@ irm https://raw.githubusercontent.com/shayann07/antigravity-computer-use/main/in
 Then open Antigravity, type **/computer-use**, and describe what you want done.
 
 The installer:
-- downloads the beta.5 Windows bundle and checks its SHA-256;
+- downloads the beta.6 Windows bundle and checks its SHA-256;
 - installs the global skill;
 - enables a small background service, which Antigravity starts as a sidecar.
 
@@ -106,13 +106,13 @@ keyboard. [Security model](SECURITY.md).
 
 ## Status and limits
 
-| Area | Where it stands (beta.5, build `f5a02d01`) |
+| Area | Where it stands (beta.6, build `01eb959c`) |
 | --- | --- |
-| **Automated checks** | Windows and four macOS CI runners pass on every code change. The local suite has 575 tests: 562 passed, 0 failed, 13 skipped for platform or folder permissions. |
-| **Releases** | Update metadata is signed through a protected release environment. A real beta.4 install updated itself to beta.5 from GitHub and can roll back. |
+| **Automated checks** | Windows and four macOS CI runners pass on every code change. The local suite has 607 tests: 594 passed, 0 failed, 13 skipped for platform or folder permissions. |
+| **Releases** | Update metadata is signed through a protected release environment. Each release's signature, payload hashes and inventory are verified independently against the public key. A real beta.4 install updated itself to beta.5 from GitHub and can roll back. |
 | **Desk test** | On a real install: normal task, physical Esc while typing, human re-arm, and recovery after a crash, both before and after input was sent. |
-| **Speed** | Each step costs a model turn. In one Upscaly run, 30 turns took about 4.5 minutes, of which the controller itself used about 16 seconds. Cutting turns is tracked in [#74](https://github.com/shayann07/antigravity-computer-use/issues/74). |
-| **Known gaps** | Some WebView2/Tauri controls are missing from the accessibility tree ([#70](https://github.com/shayann07/antigravity-computer-use/issues/70)). The bar can't be dragged yet ([#68](https://github.com/shayann07/antigravity-computer-use/issues/68)). Weaker models aren't tested yet ([#57](https://github.com/shayann07/antigravity-computer-use/issues/57)). Mixed-DPI and multi-monitor hardware remain untested. |
+| **Speed** | Steps can be batched into one command. An Upscaly task that took 30 turns and about 4.5 minutes now takes 9 commands and about 2 minutes. Most remaining time is the model thinking between commands. |
+| **Known gaps** | The bar can't be dragged yet ([#68](https://github.com/shayann07/antigravity-computer-use/issues/68)). Text-only models can't see screenshots, so visual tasks suffer ([#57](https://github.com/shayann07/antigravity-computer-use/issues/57)). Mixed-DPI and multi-monitor hardware remain untested. |
 | **Platforms** | Windows x64. macOS (Apple Silicon and Intel) shares the same controller and skill but is **experimental**: it is built in CI only and not part of this release ([Mac guide](docs/MACOS.md)). Linux is unsupported. |
 
 [Validation record](VALIDATION.md) · [Performance notes](docs/PERFORMANCE.md) ·
