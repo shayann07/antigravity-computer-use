@@ -19,9 +19,17 @@ function fixture(){
  return {runtime,sent,drag,drags:()=>sent.filter(s=>s.op==='drag')};
 }
 
+// Points drags are Windows-only today, so the mapping is checked as on Windows
+// whichever platform runs the suite.
+async function asPlatform(platform,body){
+ const original=Object.getOwnPropertyDescriptor(process,'platform');
+ Object.defineProperty(process,'platform',{value:platform});
+ try{return await body();}finally{Object.defineProperty(process,'platform',original);}
+}
+
 test('every drag point is mapped from screenshot pixels to the screen',async()=>{
  const f=fixture();
- const result=await f.drag({points:[[0,0],[100,50],[199,99]]});
+ const result=await asPlatform('win32',()=>f.drag({points:[[0,0],[100,50],[199,99]]}));
  assert.equal(result.input_completed,true);
  const [{payload}]=f.drags();
  assert.deepEqual(payload.points,[[100,50],[300,150],[498,248]]);
@@ -45,12 +53,8 @@ test('points together with from/to, or neither, is refused before any input',asy
 });
 
 test('macOS refuses a points drag instead of silently drawing a straight line',async()=>{
- const original=Object.getOwnPropertyDescriptor(process,'platform');
- Object.defineProperty(process,'platform',{value:'darwin'});
- try{
-  const f=fixture();
-  await assert.rejects(f.drag({points:[[0,0],[50,20],[100,50]]}),e=>e.code==='points_unsupported');
-  assert.equal(f.drags().length,0);
- }finally{Object.defineProperty(process,'platform',original);}
+ const f=fixture();
+ await asPlatform('darwin',()=>assert.rejects(f.drag({points:[[0,0],[50,20],[100,50]]}),e=>e.code==='points_unsupported'));
+ assert.equal(f.drags().length,0);
  assert.equal(recoveryAdvice({error:{code:'points_unsupported'}}).next_action,'fix_drag_points');
 });
