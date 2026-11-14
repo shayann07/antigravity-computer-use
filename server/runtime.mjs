@@ -24,6 +24,19 @@ const fail=(code,message)=>{throw new HostError(code,message,null);};
 // Post-launch observation settles on the app's main window (#72).
 const LAUNCH_SETTLE_MS=1200,LAUNCH_SETTLE_LIMIT_MS=5000,SMALL_WINDOW=[480,320];
 const UNTIL_GONE_GRACE_MS=3000;
+const CAPTURE_RETRY_MS=250;
+// A transient overlay (tooltip, toast, menu fading out) can cover the window
+// for a moment while the check capture runs. Capturing sends no input, so one
+// retry after a short pause is safe and saves the agent a whole turn.
+async function observeAfterInput(runtime,args){
+  try{return await runtime.observe(args);}
+  catch(error){
+    if(error.code!=='capture_changed')throw error;
+    await new Promise(resolve=>setTimeout(resolve,CAPTURE_RETRY_MS));
+    runtime.check();
+    return runtime.observe({...args,settle_ms:0});
+  }
+}
 // One match is the main window; among several, only one at least twice the
 // area of every other counts. Anything closer stays ambiguous.
 export function mainWindow(matches){
@@ -515,7 +528,7 @@ export class Runtime {
       this.check();
       if(generation!==this.generation)fail('control_changed','Control changed during execution. Inspect the result; do not replay this action.');
       if(op==='close_window')return {result,input_completed:true,verification_required:true,refresh_apps:true};
-      return {result,input_completed:true,verification_required:true,...(w?await this.observe({hwnd:w.hwnd,settle_ms:op==='move'?0:180,...args.observe}):{})};
+      return {result,input_completed:true,verification_required:true,...(w?await observeAfterInput(this,{hwnd:w.hwnd,settle_ms:op==='move'?0:180,...args.observe}):{})};
     }
     catch(error){return {result,input_completed:true,verification_required:true,observe_before_continuing:true,verification_error:{code:error.code||'observation_failed',message:error.message,...(error.hint?{hint:error.hint}:{})}};}
   }
