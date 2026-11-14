@@ -23,6 +23,7 @@ const input=new Set(['move','click','type','set_value','key','scroll','drag','fo
 const fail=(code,message)=>{throw new HostError(code,message,null);};
 // Post-launch observation settles on the app's main window (#72).
 const LAUNCH_SETTLE_MS=1200,LAUNCH_SETTLE_LIMIT_MS=5000,SMALL_WINDOW=[480,320];
+const UNTIL_GONE_GRACE_MS=3000;
 // One match is the main window; among several, only one at least twice the
 // area of every other counts. Anything closer stays ambiguous.
 export function mainWindow(matches){
@@ -523,24 +524,36 @@ export class Runtime {
     // until: the text has appeared. until_gone: observed text has disappeared;
     // an incomplete tree never counts as gone, and the text must be visible
     // when the wait starts, so a mistyped label cannot read as finished.
-    const gone=typeof args.until_gone==='string',label=(gone?args.until_gone:args.until).toLowerCase();
-    const matches=view=>{const present=view.metadata.tree.toLowerCase().includes(label);return gone?!present&&view.metadata.tree_incomplete!==true:present;};
+    const gone=typeof args.until_gone==='string',label=(gone?args.until_gone:args.until).toLowerCase();let seen=false;
+    // Absence is only meaningful in a whole view: an 80-row reply omits rows in
+    // ordinary windows such as File Explorer, so failure-aware and until_gone
+    // waits read up to 500 rows.
+    const wide=gone||!!args.abort_on?.length;
+    const matches=view=>{const present=view.metadata.tree.toLowerCase().includes(label);return gone?seen&&!present&&view.metadata.tree_incomplete!==true:present;};
+    const labelRefusal=view=>{
+      if(view.metadata.tree_incomplete!==true)return finish({matched:false,label_not_observed:true,ok:false,error:{code:'wait_label_not_observed',message:'The text to wait on never appeared; the job may already have finished. This reply carries a fresh frame: act on it. The wait itself sent no input; never replay earlier steps.'},...view});
+      this.frames.delete(view.metadata.observation_id);
+      fail('wait_label_not_observed','The text to wait on never appeared and the tree was incomplete. Observe again. The wait itself sent no input; never replay earlier steps.');
+    };
     do {
-      this.check();latest=await observe({hwnd:args.hwnd,with_image:false,query:args.query,native_snapshot_deadline:until,require_native_budget:true,...(args.abort_on?.length?{max_nodes:500}:{})});
+      this.check();latest=await observe({hwnd:args.hwnd,with_image:false,query:args.query,native_snapshot_deadline:until,require_native_budget:true,...(wide?{max_nodes:500}:{})});
       const failure=waitFailure(latest,args.abort_on);
       if(failure){
         if(args.with_image===false)return finish({matched:false,aborted:true,abort_match:failure,...latest});
         this.frames.delete(latest.metadata.observation_id);return finish({matched:false,aborted:true,abort_match:failure,...await observe({hwnd:args.hwnd,query:args.query,with_image:args.with_image,max_nodes:500,native_snapshot_deadline:until})});
       }
-      if(gone&&observations===1&&!latest.metadata.tree.toLowerCase().includes(label)){
-        this.frames.delete(latest.metadata.observation_id);
-        fail('wait_label_not_observed','The text to wait on was not visible when the wait started. Observe again; the job may already have finished. No input was sent.');
+      // until_gone needs the label seen first. A label that only appears a
+      // moment after the preceding click gets a short grace; one that never
+      // appears is refused with this frame, so no extra snapshot is needed.
+      if(gone&&!seen){
+        if(latest.metadata.tree.toLowerCase().includes(label))seen=true;
+        else if(performance.now()-started>=Math.min(UNTIL_GONE_GRACE_MS,budget)||performance.now()>=until)return labelRefusal(latest);
       }
       if(matches(latest)){
         // Do not authorize the next batch step based on a transient match in
         // an older frame. Confirm both success and failure on the returned view.
         this.frames.delete(latest.metadata.observation_id);
-        const verified=await observe({hwnd:args.hwnd,query:args.query,with_image:args.with_image,native_snapshot_deadline:until,require_native_budget:true,...(args.abort_on?.length?{max_nodes:500}:{})});
+        const verified=await observe({hwnd:args.hwnd,query:args.query,with_image:args.with_image,native_snapshot_deadline:until,require_native_budget:true,...(wide?{max_nodes:500}:{})});
         const verifiedFailure=waitFailure(verified,args.abort_on);
         if(verifiedFailure)return finish({matched:false,aborted:true,abort_match:verifiedFailure,...verified});
         if(args.abort_on?.length&&verified.metadata.tree_incomplete)return finish({matched:false,incomplete:true,...verified});
@@ -552,11 +565,13 @@ export class Runtime {
         // A text-only timeout already has an observation to return. Starting
         // a second potentially slow capture after the budget is exhausted can
         // add latency without changing the fact that the wait must stop.
+        if(gone&&!seen&&performance.now()>=until)return labelRefusal(latest);
         if(args.with_image===false&&performance.now()>=until)return finish({matched:false,timed_out:true,...latest});
         if(performance.now()>=until){this.frames.delete(latest.metadata.observation_id);break;}
       }
       await waitUntil(Math.min(until,performance.now()+500),{check:()=>{this.check();if(this.generation!==generation||this.driver?.epoch!==workerEpoch)fail('control_changed','Control or native worker changed while waiting. Observe again.');}});
       if(performance.now()>=until){
+        if(gone&&!seen)return labelRefusal(latest);
         if(args.with_image===false)return finish({matched:false,timed_out:true,...latest});
         this.frames.delete(latest.metadata.observation_id);break;
       }
@@ -566,7 +581,7 @@ export class Runtime {
     // only trustworthy frame. Starting another capture here adds latency and
     // can change the answer after the wait has already timed out.
     if(latest)return finish({matched:false,timed_out:true,...latest});
-    const final=await observe({hwnd:args.hwnd,query:args.query,with_image:args.with_image,native_snapshot_deadline:until,...(args.abort_on?.length?{max_nodes:500}:{})});
+    const final=await observe({hwnd:args.hwnd,query:args.query,with_image:args.with_image,native_snapshot_deadline:until,...(wide?{max_nodes:500}:{})});
     const finalFailure=waitFailure(final,args.abort_on);
     if(finalFailure)return finish({matched:false,aborted:true,abort_match:finalFailure,...final});
     return finish({matched:false,timed_out:true,...final});

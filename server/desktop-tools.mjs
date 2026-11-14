@@ -120,7 +120,8 @@ export async function call(r,name,a){
     if(last.ok===false){
      const error=last.error&&typeof last.error==='object'&&!Array.isArray(last.error)&&typeof last.error.code==='string'
       ?last.error:{code:'batch_step_failed',message:'The step reported failure. Inspect the app before continuing.'};
-     return {...last,ok:false,error,completed,failed_index:i,skipped:plan.length-i-1,observe_before_continuing:true};
+     const framed=error.code==='wait_label_not_observed'&&typeof last.metadata?.observation_id==='string';
+     return {...last,ok:false,error,completed,failed_index:i,skipped:plan.length-i-1,...(framed?{}:{observe_before_continuing:true})};
     }
     completed.push({index:i,kind,ok:true,...(['computer_wait','computer_wait_change'].includes(n)&&last.wait_metrics?{wait_metrics:last.wait_metrics}:{})});
     if(last.verification_error)return {...last,batch:{completed,failed_index:i,skipped:plan.length-i-1,phase:'verification'}};

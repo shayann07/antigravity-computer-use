@@ -405,6 +405,19 @@ test('pre-input refusals carry operation-specific advice through IPC',async()=>{
  }finally{await service.shutdown();fs.rmSync(dir,{recursive:true,force:true});}
 });
 
+test('an until_gone refusal keeps its fresh frame through IPC',async()=>{
+ const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'agcu-wait-refusal-'));
+ const refusal={matched:false,label_not_observed:true,ok:false,error:{code:'wait_label_not_observed',message:'never appeared'},metadata:{observation_id:'fresh-frame',hwnd:1,tree:'[1] Button "Choose files"',tree_incomplete:false}};
+ const runtime={status:()=>({state:'active'}),async wait(){return refusal;},async close(){}};
+ const service=await serveDesktop({directory:dir,runtime});const session=JSON.parse(fs.readFileSync(service.file));
+ try{
+  const reply=await request(session,'wait',{hwnd:1,until_gone:'Stop upscaling',reason:'test'});
+  assert.equal(reply.ok,false);assert.equal(reply.error.code,'wait_label_not_observed');
+  assert.equal(reply.next_action,'use_returned_frame');assert.equal(reply.replay_allowed,false);
+  assert.match(JSON.stringify(reply),/fresh-frame/);assert.match(JSON.stringify(reply),/Choose files/);
+ }finally{await service.shutdown();fs.rmSync(dir,{recursive:true,force:true});}
+});
+
 test('direct IPC accepts bounded feedback without desktop input or arbitrary task content',async()=>{
  const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'agcu-feedback-ipc-'));const original=Incidents.prototype.recordSerialized;let recorded;
  Incidents.prototype.recordSerialized=async function(op,result){recorded={op,result};return 'feedback-id';};

@@ -1549,12 +1549,15 @@ namespace Axon
 
             // A web page's accessibility tree is much deeper and wider than a
             // native window's - the form fields on a page sit 20-30 levels down.
-            // So a browser gets a deeper, roomier default; native windows keep
-            // the tight one. An explicit max_depth / max_nodes always wins.
+            // So a browser gets a deeper, roomier default. Native windows get
+            // 24 levels: File Explorer's list rows sit at 14 and still have
+            // children, so a tighter cut reported every Explorer tree as
+            // incomplete. max_nodes and the time budget still bound the walk.
+            // An explicit max_depth / max_nodes always wins.
             bool hasDepth = Get(a, "max_depth") != null;
             bool hasNodes = Get(a, "max_nodes") != null;
             int maxNodes = hasNodes ? Int(Get(a, "max_nodes"), 400) : (web ? 1500 : 400);
-            int maxDepth = hasDepth ? Int(Get(a, "max_depth"), 14) : (web ? 45 : 14);
+            int maxDepth = hasDepth ? Int(Get(a, "max_depth"), 14) : (web ? 45 : 24);
             bool interactiveOnly = Bool(Get(a, "interactive_only"), false);
             // A poll (wait_for change / text) reads the tree without keeping
             // it, so it neither bumps the snapshot sequence nor evicts a
