@@ -60,7 +60,7 @@
     {
       "path": "server/native/AxonHost.cs",
       "upstream_sha256": "bef101afecbdf8f75df2a1f8b45d224eade39f09e3c8e25cf7b450e3fa49a8ef",
-      "local_sha256": "8eea2212ffdc7d9242795b17e54c5ef9056802187273bec57d4b246ac7f51007",
+      "local_sha256": "4928d01ec3750b191f5785ebaef42fb973a6b298cd2d713f7de972a18742cff3",
       "modified": true
     },
     {
