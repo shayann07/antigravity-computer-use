@@ -63,3 +63,8 @@ test('a bad launch path is the agent\'s to fix, not an operator incident',()=>{
  assert.equal(recoveryAdvice({error:{code:'invalid_application'}}).next_action,'fix_app_path');
  assert.equal(recoveryFor('fix_app_path').actor,'agent');
 });
+
+test('a spoiled or blocked capture sends the agent back to observe, not to diagnostics',()=>{
+ assert.equal(recoveryAdvice({error:{code:'capture_changed'}}).next_action,'observe_again');
+ assert.equal(recoveryAdvice({error:{code:'window_capture_unavailable'}}).next_action,'focus_target_then_observe');
+});

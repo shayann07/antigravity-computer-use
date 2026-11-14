@@ -3878,7 +3878,17 @@ namespace Axon
             using (Bitmap full = new Bitmap(region.Width, region.Height, PixelFormat.Format24bppRgb))
             {
                 bool printed = false;
-                if (wantedWindow && captureHwnd != IntPtr.Zero && !Native.IsUnobscured(captureHwnd, captureRect))
+                bool covered = wantedWindow && captureHwnd != IntPtr.Zero && !Native.IsUnobscured(captureHwnd, captureRect);
+                if (!covered)
+                {
+                    using (Graphics g = Graphics.FromImage(full))
+                        g.CopyFromScreen(region.Location, Point.Empty, region.Size);
+                    // A tooltip, menu or toast can cross the window during the
+                    // grab. Those pixels are discarded and the window is asked
+                    // to render itself instead, exactly as for a covered window.
+                    if (wantedWindow && !Native.IsUnobscured(captureHwnd,captureRect)) covered = true;
+                }
+                if (covered)
                 {
                     // Something lies over part of the window, so a screen grab
                     // would photograph the cover. PrintWindow asks the window to
@@ -3891,6 +3901,9 @@ namespace Axon
                     {
                         using (Graphics g = Graphics.FromImage(full))
                         {
+                            // Drop any screen-grab pixels first, so a window that
+                            // renders nothing reads as blank, not as its cover.
+                            g.Clear(Color.Black);
                             IntPtr hdc = g.GetHdc();
                             try { printed = Native.PrintWindow(captureHwnd, hdc, 0x00000002 /* PW_RENDERFULLCONTENT */); }
                             finally { g.ReleaseHdc(hdc); }
@@ -3900,13 +3913,6 @@ namespace Axon
                     catch { printed = false; }
                     if (!printed) throw new AxonError("window_capture_unavailable", "The app is covered and could not render a private window capture. No covering-window pixels were returned.", "Bring the approved app to the front, then observe again.");
                     capture = "window";
-                }
-                if (!printed)
-                {
-                    using (Graphics g = Graphics.FromImage(full))
-                        g.CopyFromScreen(region.Location, Point.Empty, region.Size);
-                    if (wantedWindow && !Native.IsUnobscured(captureHwnd,captureRect))
-                        throw new AxonError("capture_changed", "Window coverage changed during capture. Discarding pixels; observe again.", "Bring the approved app to the front before capturing.");
                 }
 
                 double scale = Math.Min(1.0, maxWidth / (double)region.Width);
