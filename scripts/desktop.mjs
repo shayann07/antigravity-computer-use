@@ -16,11 +16,13 @@ import {Incidents} from '../server/incidents.mjs';
 import {desktopCommand} from './install.mjs';
 import {recoveryAdvice,persistStopLatch,readStopLatch} from '../server/recovery.mjs';
 import {withRecovery} from '../server/recovery-guide.mjs';
+import {runPlan,loadPlan} from '../server/plan-runner.mjs';
 const EMPTY_INPUT={type:'object',properties:{},required:[],additionalProperties:false};
 const LIFECYCLE=[
   {command:'start',description:'Start or reconnect to this exact installed build. No arguments. Never clears emergency Stop or changes the installed permission policy.',inputSchema:EMPTY_INPUT},
   {command:'serve',description:'Run the exact installed service in the foreground. For an interactive host terminal use run_command IsDaemon:true and WaitMsBeforeAsync:1000. Windows exebox terminals need the installed App sidecar or local starter. No permission/data overrides. Reuses only a matching live build/policy.',inputSchema:EMPTY_INPUT},
   {command:'shutdown',description:'Shut down the native service after input cleanup. No arguments. Preserves emergency Stop for human re-arm.',inputSchema:EMPTY_INPUT},
+  {command:'plan',description:'Run a long pre-computed list of steps (drawing, form filling, data entry) as consecutive run batches of at most 8, with a progress ledger. Resumes without replaying input, re-observes after a spoiled frame, halts on any other refusal, and returns a frame every --checkpoint-every batches (default 6) for you to check before running the same command again. --renew-budget N (default 0) lets it end and restart the task at most N times when the 200-action budget runs out; the reply then carries the new task token.',usage:'plan --hwnd H --observation-id F --plan-file STEPS.json --ledger LEDGER.json --reason TEXT [--checkpoint-every N] [--renew-budget N]',inputSchema:{type:'object',properties:{hwnd:{type:'integer'},observation_id:{type:'string'},plan_file:{type:'string'},ledger:{type:'string'},reason:{type:'string'},checkpoint_every:{type:'integer',minimum:1,maximum:50},renew_budget:{type:'integer',minimum:0,maximum:10}},required:['hwnd','observation_id','plan_file','ledger','reason'],additionalProperties:false}},
   {command:'describe',description:'Read command descriptions or the exact argument schema for one command, without desktop access.',usage:'describe [COMMAND]',inputSchema:{type:'object',properties:{command:{type:'string'}},required:[],additionalProperties:false}}
 ];
 
@@ -50,6 +52,10 @@ export function briefReply(value){
  return out;
 }
 let replyMode='json';
+function validatePlanArguments(args){
+ for(const key of ['hwnd','observation_id','plan_file','ledger','reason'])if(args[key]===undefined||args[key]==='')throw Object.assign(Error('plan needs --hwnd, --observation-id, --plan-file, --ledger and --reason.'),{code:'bad_arguments'});
+ if(path.resolve(args.plan_file)===path.resolve(args.ledger))throw Object.assign(Error('The ledger must be a different file from the plan.'),{code:'bad_arguments'});
+}
 const printReply=value=>{
   if(typeof value.task_token==='string'&&value.task_token.length===64&&/^[a-f0-9]{64}$/.test(value.task_token))value={...value,task_command_prefix:desktopCommand(process.execPath,process.argv[1])+' --task '+value.task_token};
   console.log(encodeReply(replyMode==='brief'?briefReply(value):value));
@@ -136,6 +142,7 @@ export async function main(){
   const schema=describeCommand(command).inputSchema;
   const args=command==='run'?parseRunArguments(schema,rest,describeCommand):parseArguments(schema,rest);
   if(TOOLS.some(tool=>tool.name==='computer_'+command))validate('computer_'+command,args);
+  else if(command==='plan')validatePlanArguments(args);
   else if(Object.keys(args).length)throw Object.assign(Error('This lifecycle command takes no arguments.'),{code:'bad_arguments'});
   const policy=applyDeployment(loadDeployment());
   const file=path.join(dataDir(),'desktop-session.json');
@@ -178,6 +185,13 @@ export async function main(){
     throw Object.assign(Error('No desktop session is running (it may have expired after15 idle minutes). Restart the installed App sidecar (or use its human starter on the normal Windows desktop), then discover apps and take a fresh observation. Antigravity does not need to restart; emergency Stop remains latched.'),{code:'no_session'});
   }
   const session=JSON.parse(fs.readFileSync(file));session.task_token=taskToken;
+  if(command==='plan'){
+    const steps=loadPlan(args.plan_file);
+    const call=(name,input)=>{if(name==='run')validate('computer_run',input);return request(session,name,input,100000,policy.permission_mode).catch(failureReply);};
+    const renew=async()=>{const ended=await request(session,'end',{},100000,policy.permission_mode).catch(failureReply);if(!ended.ok)return ended;session.task_token=undefined;return request(session,'ready',{},15000,policy.permission_mode).catch(failureReply);};
+    const result=await runPlan({steps,hwnd:args.hwnd,observationId:args.observation_id,reason:args.reason,ledgerFile:args.ledger,call,renew,checkpointEvery:args.checkpoint_every??6,maxRenewals:args.renew_budget??0});
+    printReply(result);if(!result.ok)process.exitCode=1;return;
+  }
   if(command==='shutdown'){
     const previous=await request(session,'status',{},100000,policy.permission_mode);
     // Preserve an old adapter's stop during migration, before that process exits.

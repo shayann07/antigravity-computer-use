@@ -66,7 +66,11 @@ test('computer-use skill teaches multi-point drags, chained pixel steps and step
  assert.match(skill, /--points '\[\[X,Y\],\[X,Y\],\.\.\.\]'/);
  assert.match(skill, /Pixel steps \(`click --x --y`, `move`, `drag`\) may follow each other in one `run`/);
  assert.match(skill, /--steps-file FILE/);
- assert.match(skill, /Do not drive the CLI from a script loop/);
+ assert.match(skill, /compute the steps with a script, then run them with `plan`/);
+ assert.ok(skill.includes('references/complex-tasks.md'));
+ const reference = fs.readFileSync(new URL('../skills/computer-use/references/complex-tasks.md', import.meta.url), 'utf8');
+ assert.match(reference, /plan --hwnd H --observation-id F --plan-file/);
+ assert.doesNotMatch(reference, /\{\{/, 'references are copied without templating');
  const file = /A steps file for the same idea holds `(\[.*?\])`/.exec(skill);
  assert.ok(file, 'the steps file example is present');
  const steps = JSON.parse(file[1]);
