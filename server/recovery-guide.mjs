@@ -8,6 +8,7 @@ const entry=(actor,command,safe_when,reason)=>Object.freeze(command===null?{acto
 export const RECOVERY_GUIDE=Object.freeze({
  discover_or_launch:entry(A,'apps','Controls are visible and the task is ready.'),
  observe_again:entry(A,'snapshot','Always; take a fresh observation before any further input.'),
+ use_returned_frame:entry(A,null,'The reply carries a fresh frame and no input was sent; continue from its observation_id instead of taking another snapshot.','The refusal already includes the current view.'),
  focus_target_then_observe:entry(A,'focus','The target window still exists; observe again after focusing.'),
  discover_apps_then_observe:entry(A,'apps','Always; pick the window again from the list before observing.'),
  inspect_effect_without_replay:entry(A,'snapshot','Always; check what changed and never repeat the uncertain action.'),

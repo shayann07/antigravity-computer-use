@@ -327,13 +327,42 @@ test('until_gone never treats an incomplete tree as gone',async()=>{
  assert.equal(result.matched,false);assert.equal(result.timed_out,true);
 });
 
-test('until_gone refuses text that was not visible when the wait started',async()=>{
+test('until_gone refuses text that never appeared and returns the fresh frame',async()=>{
  const frames=new Map();let n=0;
  const runtime={frames,generation:0,check(){},async observe(){const id='s'+(++n);frames.set(id,{});return{metadata:{observation_id:id,tree:'Done in 25 s'}};}};
- await assert.rejects(Runtime.prototype.wait.call(runtime,{hwnd:7,until_gone:'Stop upscaling',timeout_ms:1000,with_image:false}),error=>error.code==='wait_label_not_observed');
- assert.equal(n,1);assert.equal(frames.size,0);
+ const result=await Runtime.prototype.wait.call(runtime,{hwnd:7,until_gone:'Stop upscaling',timeout_ms:700,with_image:false});
+ assert.equal(result.ok,false);assert.equal(result.matched,false);assert.equal(result.error.code,'wait_label_not_observed');
+ assert.ok(n>=2,'the grace period polls more than once');
+ assert.ok(frames.has(result.metadata.observation_id),'the returned frame stays usable');assert.equal(result.metadata.tree,'Done in 25 s');
  const {recoveryAdvice}=await import('../server/recovery.mjs');
+ assert.equal(recoveryAdvice(result).next_action,'use_returned_frame');
  assert.equal(recoveryAdvice({error:{code:'wait_label_not_observed'}}).next_action,'observe_again');
+});
+
+test('until_gone waits briefly for a label that appears just after the click',async()=>{
+ const trees=['Upscale','Upscaling 10% Stop upscaling','Done in 25 s','Done in 25 s'];const frames=new Map();let n=0;
+ const runtime={frames,generation:0,check(){},async observe(){const id='s'+(++n);frames.set(id,{});return{metadata:{observation_id:id,tree:trees[Math.min(n-1,trees.length-1)]}};}};
+ const result=await Runtime.prototype.wait.call(runtime,{hwnd:7,until_gone:'Stop upscaling',timeout_ms:5000,with_image:false});
+ assert.equal(result.matched,true);assert.equal(result.metadata.tree,'Done in 25 s');
+});
+
+test('a batched until_gone refusal keeps the frame and does not demand another snapshot',async()=>{
+ const runtime={async action(){return{input_completed:true,metadata:{observation_id:'after-click'}};},
+  async wait(){return{matched:false,label_not_observed:true,ok:false,error:{code:'wait_label_not_observed',message:'The wait itself sent no input; never replay earlier steps.'},metadata:{observation_id:'fresh',tree:'Done'}};}};
+ const plan=args([{kind:'click',name:'Upscale'},{kind:'wait',until_gone:'Stop upscaling',timeout_ms:30000}]);
+ const result=await call(runtime,'computer_run',plan);
+ assert.equal(result.ok,false);assert.equal(result.error.code,'wait_label_not_observed');assert.equal(result.failed_index,1);
+ assert.equal(result.metadata.observation_id,'fresh');assert.equal(result.observe_before_continuing,undefined);
+ assert.match(result.error.message,/never replay earlier steps/);
+ const {recoveryAdvice}=await import('../server/recovery.mjs');
+ assert.equal(recoveryAdvice(result).next_action,'use_returned_frame');
+});
+
+test('until_gone on an incomplete tree that never shows the label refuses without a frame',async()=>{
+ const frames=new Map();let n=0;
+ const runtime={frames,generation:0,check(){},async observe(){const id='s'+(++n);frames.set(id,{});return{metadata:{observation_id:id,tree:'',tree_incomplete:true}};}};
+ await assert.rejects(Runtime.prototype.wait.call(runtime,{hwnd:7,until_gone:'Stop upscaling',timeout_ms:600,with_image:false}),error=>error.code==='wait_label_not_observed');
+ assert.equal(frames.size,0);
 });
 
 test('wait takes exactly one of until or until_gone, and until_gone works as a batch step',async()=>{
