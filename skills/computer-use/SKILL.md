@@ -74,7 +74,7 @@ state, restart the host or interrupt the requested task to investigate it.
 - `inspect_input_cleanup`: automation-held input cleanup could not be confirmed. Report the failure and stop; do not repeat input, force an update, or ask the user repeatedly to re-arm. The operator must inspect the native ledger and cleanup state.
 - If `control_reason` is `guard_persistence_failed` or `stop_persistence_failed`, report that native control storage failed and do not restart or send further input. The operator must inspect storage before continuing.
 
-Use `ready → apps/launch → snapshot → action/verify → end`. Read only unfamiliar command schemas through one `describe` call. Do not inspect implementation/source files to perform a desktop task. Launch returns the window, frame and screenshot; reuse them. Launch already waits for the app's windows to settle, so do not add a wait for a splash screen. `observe_pending`, `input_completed:true` or a verification failure after launch means discover the existing process, never launch it again blindly.
+Use `ready → apps/launch → snapshot → action/verify → end`. Read only unfamiliar command schemas through one `describe` call. Do not inspect implementation/source files to perform a desktop task. Launch returns the window, frame and screenshot; reuse them. `observe_pending`, `input_completed:true` or a verification failure after launch means discover the existing process, never launch it again blindly.
 
 For another recovery `next_action`, read only the relevant case in
 [recovery guidance](references/recovery.md). This packaged skill reference is
