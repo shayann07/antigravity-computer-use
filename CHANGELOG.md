@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0-beta.6 - Faster app operation (Windows)
+
+- `run` batches several steps in one command, and pixel steps chained inside one `run` each get a fresh screenshot (#82, #85).
+- `wait --until-gone` waits up to about 3 s for its label to appear and, when refused, returns a fresh frame to act on (#83, #84).
+- WebView2 apps are read as web content, and native windows are walked 24 levels deep, so lists such as Explorer rows are visible (#70, #84).
+- `drag --points` draws one continuous stroke through up to 400 points, for curves and handwriting-like input. macOS refuses points drags for now (#85).
+- A check capture spoiled by a passing overlay is retried once instead of skipping the rest of a batch. The launch refusal now says how to find a Windows Store app's real executable (#86).
+- This release is Windows-only; macOS remains experimental and unqualified on hardware.
+
 ## 0.3.0-beta.5 - Stop, ownership and recovery (Windows)
 
 - Stop that may not have reached the native controls is kept as uncertain across native writes, restart and update; unknown input delivery is never replayed. Normal End never clears an emergency Stop.
