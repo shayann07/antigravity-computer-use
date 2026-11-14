@@ -58,3 +58,8 @@ test('macOS refuses a points drag instead of silently drawing a straight line',a
  assert.equal(f.drags().length,0);
  assert.equal(recoveryAdvice({error:{code:'points_unsupported'}}).next_action,'fix_drag_points');
 });
+
+test('a bad launch path is the agent\'s to fix, not an operator incident',()=>{
+ assert.equal(recoveryAdvice({error:{code:'invalid_application'}}).next_action,'fix_app_path');
+ assert.equal(recoveryFor('fix_app_path').actor,'agent');
+});

@@ -1,11 +1,11 @@
 ---
 name: computer-use
-description: Operate and visually verify real desktop applications, including development builds, through the Antigravity native desktop runtime. Use for interactive app testing, screenshots, controls, dialogs, canvas gestures and task verification.
+description: Operate and visually verify real desktop applications, including development builds, through the Antigravity native desktop runtime. Use for interactive app testing, screenshots, controls, dialogs, canvas gestures and task verification. You run its terminal commands yourself; never hand the user manual steps to follow.
 ---
 
 # Computer use
 
-Antigravity is the agent; the local native runtime supplies screenshots, accessibility and real mouse/keyboard input. Windows and macOS use the same tools, observation/action loop, batch limits and permission lifecycle. Use its installed direct terminal command. No MCP or separate model is needed. Do not mix it with Cua Driver or another controller.
+Antigravity is the agent: you do the task yourself by running these commands, not by writing instructions for the user. The local native runtime supplies screenshots, accessibility and real mouse/keyboard input. Windows and macOS use the same tools, observation/action loop, batch limits and permission lifecycle. Use its installed direct terminal command. No MCP or separate model is needed. Do not mix it with Cua Driver or another controller.
 
 ```powershell
 {{DESKTOP_COMMAND}} ready

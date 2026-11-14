@@ -14,6 +14,7 @@ export const RECOVERY_GUIDE=Object.freeze({
  inspect_effect_without_replay:entry(A,'snapshot','Always; check what changed and never repeat the uncertain action.'),
  observe_and_retarget:entry(A,'snapshot','No click or other input reached the target. Observe again, then target the control by index or name, or wait until the covering window is gone; never click through it.'),
  fix_drag_points:entry(A,'drag','No input was sent. Send the drag once with either from/to or 2 to 400 points; on macOS use from/to segments.'),
+ fix_app_path:entry(A,'launch','Nothing was started. Launch again once with the full path of an existing executable; for a Windows 11 Store app use the .exe inside (Get-AppxPackage <name>).InstallLocation. No approval or setup step is involved.'),
  observe_app_no_picker:entry(A,'snapshot','No filename was entered. The control did not open a picker; observe the app and send file_dialog only after a picker is seen.'),
  retry_file_dialog_with_keyboard:entry(A,'file_dialog','Nothing was pasted and no confirmation was sent. Observe the dialog, then run file_dialog alone once with --entry-method keyboard; a filename mismatch is refused before confirmation.'),
  enter_without_clipboard:entry(A,'snapshot','Nothing was pasted. Observe again, then enter short text with type, a file name with file_dialog --entry-method keyboard, or ask the human to copy something else first.'),

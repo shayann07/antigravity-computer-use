@@ -600,7 +600,7 @@
     },
     {
       "path": "skills/computer-use/SKILL.md",
-      "sha256": "4ab92dafcab327e24678dc5e19237eddd16f534210431dd597868d22209a4973"
+      "sha256": "0ab5833d15b2e66a38df4af72bc0b28275bc6802faf7c9bfa2df764331f73f9a"
     },
     {
       "path": "docs/MACOS.md",
@@ -708,7 +708,7 @@
     },
     {
       "path": "server/recovery.mjs",
-      "sha256": "f6900e50d7f211422c56e6730c96b902546a351205319b50a459707eecdaff7a"
+      "sha256": "b8aab1a7c05d1683cb185a6aa1cf592e8600e90bd96592c1ad416a31fe56946e"
     },
     {
       "path": "scripts/qualify-guardian-desktop.mjs",
