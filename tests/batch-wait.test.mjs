@@ -376,3 +376,26 @@ test('wait takes exactly one of until or until_gone, and until_gone works as a b
  const result=await call(runtime,'computer_run',plan);
  assert.deepEqual(seen,['click','wait:Stop upscaling']);assert.equal(result.batch.completed.length,2);
 });
+
+test('a step followed by a pixel action captures the screenshot that action needs',async()=>{
+ const flags=[];
+ const runtime={async action(op,a){flags.push([op,a.observe?.with_image]);return{metadata:{observation_id:'f'+flags.length}};}};
+ await call(runtime,'computer_run',args([{kind:'click',name:'Fill'},{kind:'click',x:10,y:20},{kind:'click',name:'Gold'},{kind:'drag',points:[[1,2],[3,4],[5,6]]},{kind:'click',name:'Brushes'},{kind:'click',name:'Done'}]));
+ assert.deepEqual(flags.map(f=>f[1]),[true,false,true,false,false,true]);
+});
+
+test('drag accepts multi-point points instead of from/to',()=>{
+ validate('computer_drag',{hwnd:7,observation_id:'f',reason:'r',points:[[1,2],[3,4],[5,6]]});
+ validate('computer_drag',{hwnd:7,observation_id:'f',reason:'r',from:[1,2],to:[3,4]});
+ assert.throws(()=>validate('computer_drag',{hwnd:7,observation_id:'f',reason:'r',points:[[1,2]]}));
+ const plan=parseRunArguments(describe('run').inputSchema,['--hwnd','7','--observation-id','i','--reason','r','--step','drag','--points','[[1,2],[3,4],[5,6]]','--risk','routine'],describe);
+ assert.deepEqual(plan.steps[0].points,[[1,2],[3,4],[5,6]]);
+});
+
+test('a CLI-built run forces the screenshot before a pixel step even when with_image was sent as false',async()=>{
+ const flags=[];
+ const runtime={async action(op,a){flags.push(a.observe?.with_image);return{metadata:{observation_id:'f'+flags.length}};}};
+ const plan=parseRunArguments(describe('run').inputSchema,['--hwnd','7','--observation-id','i','--reason','r','--step','click','--name','Fill','--role','Button','--risk','routine','--step','click','--x','10','--y','20','--risk','routine','--step','click','--name','Brushes','--risk','routine'],describe);
+ await call(runtime,'computer_run',plan);
+ assert.deepEqual(flags,[true,false,true]);
+});

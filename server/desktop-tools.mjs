@@ -18,7 +18,7 @@ export const TOOLS=[
  tool('computer_set_value','Set an observed field by index or exact unique name/role/automation_id. Supply exactly one of text or numeric value. Inspect the result.',{...target,text:str,value:{type:'number'}},['hwnd','observation_id','reason']),
  tool('computer_key','Press a chord: ctrl+a, enter, tab, etc. Optional index focuses and verifies that control first; otherwise uses current focus. Native sensitive checks apply.',{...target,keys:str},['hwnd','observation_id','keys','reason']),
  tool('computer_scroll','Scroll element or screenshot point. Negative amount scrolls down.',{...target,amount:{...num,minimum:-20,maximum:20},horizontal:bool,into_view:bool},['hwnd','observation_id','reason']),
- tool('computer_drag','Drag real cursor; from/to are screenshot pixels.',{...target,from:{type:'array',items:num,minItems:2,maxItems:2},to:{type:'array',items:num,minItems:2,maxItems:2},steps:{...num,minimum:2,maximum:120},button:str},['hwnd','observation_id','from','to','reason']),
+ tool('computer_drag','Drag real cursor; from/to are screenshot pixels. Or pass points (2-400 [x,y] screenshot points) for one continuous stroke through every point, such as a curve on a canvas.',{...target,from:{type:'array',items:num,minItems:2,maxItems:2},to:{type:'array',items:num,minItems:2,maxItems:2},points:{type:'array',items:{type:'array',items:num,minItems:2,maxItems:2},minItems:2,maxItems:400},steps:{...num,minimum:2,maximum:120},button:str},['hwnd','observation_id','reason']),
  tool('computer_focus','Activate an approved app.',{hwnd:num,reason:str,risk:{type:'string',enum:['routine','sensitive']}},['hwnd','reason']),
  tool('computer_fit_window','Explicitly restore and fit an approved window onto its nearest display working area, shrinking only as needed. Clears old observations and returns fresh state. Never moves between virtual desktops.',{hwnd:num,reason:str,risk:{type:'string',enum:['routine','sensitive']},observe:target.observe},['hwnd','reason']),
  tool('computer_close_window','Ask window to close under the host permission policy. Can discard unsaved work.',{hwnd:num,reason:str},['hwnd','reason']),
@@ -100,7 +100,12 @@ export async function call(r,name,a){
    if(Object.hasOwn(rest,'hwnd')||Object.hasOwn(rest,'observation_id'))throw new Error('Batch steps cannot replace the owner window or frame.');
    const args={hwnd:a.hwnd,reason:a.reason,...rest};
    const framed=Object.hasOwn(properties,'observation_id');if(framed)args.observation_id=a.observation_id;
-   if(properties.observe)args.observe={with_image:i===a.steps.length-1,...rest.observe};
+   // A pixel step (move, drag or x/y) needs a screenshot of the frame it acts
+   // on, so the step before it captures one automatically.
+   const following=a.steps[i+1],nextPixel=!!following&&(['move','drag'].includes(following.kind)||Object.hasOwn(following,'x')||Object.hasOwn(following,'y'));
+   // The CLI always sends an explicit with_image, so a following pixel step
+   // must override it; an extra capture is always safe.
+   if(properties.observe)args.observe={with_image:i===a.steps.length-1,...rest.observe,...(nextPixel?{with_image:true}:{})};
    validate(n,args);return {kind,n,args,framed};
   });
   const waitBudget=plan.filter(step=>['computer_wait','computer_wait_change'].includes(step.n)).reduce((sum,step)=>sum+(step.args.timeout_ms??15000),0);
