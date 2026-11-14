@@ -60,7 +60,7 @@
     {
       "path": "server/native/AxonHost.cs",
       "upstream_sha256": "bef101afecbdf8f75df2a1f8b45d224eade39f09e3c8e25cf7b450e3fa49a8ef",
-      "local_sha256": "4a0082bfc653405d3690d55a5f5af97e77a5b4a4340c7a1ff032a102b60042a8",
+      "local_sha256": "87fef501d63ed7a7f4a3dd561dbeef7ac75c1464cf28c67bd345ce494126bf17",
       "modified": true
     },
     {
@@ -708,7 +708,7 @@
     },
     {
       "path": "server/recovery.mjs",
-      "sha256": "b8aab1a7c05d1683cb185a6aa1cf592e8600e90bd96592c1ad416a31fe56946e"
+      "sha256": "bc1ee2f43596efd6dbaa7d81ddaa9472fc8f073b725fbf6a408671285a74e201"
     },
     {
       "path": "scripts/qualify-guardian-desktop.mjs",
