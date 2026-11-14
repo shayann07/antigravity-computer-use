@@ -1285,6 +1285,23 @@ namespace Axon
                 catch { }
                 foreach (string b in new string[] { "chrome", "msedge", "opera", "brave", "vivaldi", "chromium" })
                     if (proc == b || proc.StartsWith(b)) return true;
+                // Apps that embed a browser engine (WebView2 in Tauri, WinUI and
+                // many other desktop apps) keep their own top-level class, but
+                // the page is hosted in a Chrome_* child window. Their trees are
+                // as deep as a browser page's, so they need the same budget.
+                IntPtr top = new IntPtr(win.Current.NativeWindowHandle);
+                if (top != IntPtr.Zero)
+                {
+                    bool embedded = false;
+                    Native.EnumChildWindows(top, delegate(IntPtr h, IntPtr lp)
+                    {
+                        System.Text.StringBuilder sb = new System.Text.StringBuilder(128);
+                        Native.GetClassName(h, sb, sb.Capacity);
+                        if (sb.ToString().StartsWith("Chrome_")) { embedded = true; return false; }
+                        return true;
+                    }, IntPtr.Zero);
+                    if (embedded) return true;
+                }
             }
             catch { }
             return false;
@@ -1790,6 +1807,12 @@ namespace Axon
                             for (int j = ks.Count - 1; j >= 0; j--) stack.Push(new Frame(ks[j], f.Depth + 1));
                         }
                     }
+                    else
+                    {
+                        // The depth cut drops this element's children; say so,
+                        // so the reply is not presented as the whole window.
+                        try { if (el.CachedChildren != null && el.CachedChildren.Count > 0) truncated = true; } catch { }
+                    }
                 }
             }
             else
@@ -1861,6 +1884,11 @@ namespace Axon
                         }
                         catch { }
                         for (int j = kids.Count - 1; j >= 0; j--) stack.Push(new Frame(kids[j], f.Depth + 1));
+                    }
+                    else
+                    {
+                        // As above: children past the depth cut make the tree partial.
+                        try { if (walker.GetFirstChild(el) != null) truncated = true; } catch { }
                     }
                 }
             }

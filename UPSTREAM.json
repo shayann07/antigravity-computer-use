@@ -60,7 +60,7 @@
     {
       "path": "server/native/AxonHost.cs",
       "upstream_sha256": "bef101afecbdf8f75df2a1f8b45d224eade39f09e3c8e25cf7b450e3fa49a8ef",
-      "local_sha256": "8eea2212ffdc7d9242795b17e54c5ef9056802187273bec57d4b246ac7f51007",
+      "local_sha256": "4928d01ec3750b191f5785ebaef42fb973a6b298cd2d713f7de972a18742cff3",
       "modified": true
     },
     {
@@ -732,7 +732,7 @@
     },
     {
       "path": "server/atomic-json.mjs",
-      "sha256": "f2a7fe5576d554caa0f6026cbdb461245ea7210df2a90c7dea630e8471403a99"
+      "sha256": "0b3e7a46a84b1f0f2aafd8b7e11aaf88807d3b278354bc97388224841d2340f9"
     },
     {
       "path": "tests/atomic-json.test.mjs",

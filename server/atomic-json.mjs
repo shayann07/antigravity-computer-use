@@ -28,8 +28,10 @@ export function writeAtomicJSON(file,value,{exclusive=false,io=fs}={}){
 }
 // On Windows, replacing a file fails briefly with EPERM/EACCES/EBUSY while
 // another process (antivirus, the search indexer, a reader) still holds the
-// destination open. Retry for at most RENAME_RETRY_MS, then fail as before.
-const RENAME_RETRY_MS=500;
+// destination open (a scan of a freshly written file can last seconds under
+// load; npm graceful-fs retries for up to 60 s). Retry for at most
+// RENAME_RETRY_MS, then fail as before.
+const RENAME_RETRY_MS=5000;
 export function renameReplacing(io,from,to,{platform=process.platform,sleep=ms=>Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,ms),now=()=>performance.now()}={}){
  const deadline=now()+RENAME_RETRY_MS;
  for(let delay=10;;delay=Math.min(delay*2,100)){
