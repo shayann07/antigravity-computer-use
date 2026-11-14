@@ -7,6 +7,7 @@
 - WebView2 apps are read as web content, and native windows are walked 24 levels deep, so lists such as Explorer rows are visible (#70, #84).
 - `drag --points` draws one continuous stroke through up to 400 points, for curves and handwriting-like input. macOS refuses points drags for now (#85).
 - A check capture spoiled by a passing overlay is retried once instead of skipping the rest of a batch. The launch refusal now says how to find a Windows Store app's real executable (#86).
+- A bad `launch` path now advises fixing the path instead of collecting diagnostics, and the skill tells the model plainly to run the commands itself (#87).
 - This release is Windows-only; macOS remains experimental and unqualified on hardware.
 
 ## 0.3.0-beta.5 - Stop, ownership and recovery (Windows)

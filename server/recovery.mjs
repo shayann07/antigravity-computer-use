@@ -220,6 +220,7 @@ export function recoveryAdvice(result,operation){
  // already ran returned inspect_effect_without_replay above.
  if(code==='obscured')return {...extra,next_action:'observe_and_retarget',replay_allowed:false};
  if(['bad_points','points_unsupported'].includes(code))return {...extra,next_action:'fix_drag_points',replay_allowed:false};
+ if(code==='invalid_application')return {...extra,next_action:'fix_app_path',replay_allowed:false};
  if(code==='no_file_dialog')return {...extra,next_action:'observe_app_no_picker',replay_allowed:false};
  if(code==='clipboard_unsafe')return {...extra,next_action:operation==='computer_file_dialog'?'retry_file_dialog_with_keyboard':'enter_without_clipboard',replay_allowed:false};
  return {...extra,next_action:'inspect_diagnostics',replay_allowed:false};
