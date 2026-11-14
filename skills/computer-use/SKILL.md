@@ -63,7 +63,7 @@ Run `ready` once. Follow `next_action`:
 If `update_notice` is returned, mention its short message once. Do not dump update
 state, restart the host or interrupt the requested task to investigate it.
 
-- `discover_or_launch`: choose `apps` for an existing/unknown window or `launch --app 'D:\Apps\Example.exe' --observe --reason 'Open the requested app'` for a known executable.
+- `discover_or_launch`: choose `apps` for an existing/unknown window or `launch --app 'D:\Apps\Example.exe' --observe --reason 'Open the requested app'` for a known executable. Windows 11 Store apps (Paint, Calculator, Notepad) need the real `.exe` inside their package: `(Get-AppxPackage Microsoft.Paint).InstallLocation`; aliases in System32 or WindowsApps are refused.
 - `awaiting_human_rearm` / `awaiting_human_resume`: controls were requested. Tell the human what action is needed, then wait. Never claim a bar is visible unless `controls_visible:true` was returned.
 - `human_start_on_visible_desktop`: ask the human to open **`{{CONTROLLER_START}}`** once on their normal desktop. Do not switch desktops or repeatedly start helpers. If controls still fail, collect diagnostics and report the incident instead of inventing another launch method.
 - `inspect_diagnostics`: run `{{DESKTOP_COMMAND}} diagnostics` once, report the incident ID and stop repeating startup. Do not invent an Antigravity Sidecar panel or repeatedly ask the user to rerun the starter.

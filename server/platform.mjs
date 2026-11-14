@@ -28,7 +28,7 @@ export function verifyNativeContract(info,platform=process.platform){
 export function launchTarget(raw,platform=process.platform){
   const app=path.resolve(raw);
   if(platform==='win32'){
-    if(!fs.existsSync(app)||path.extname(app).toLowerCase()!=='.exe')throw Object.assign(Error('Supply an existing .exe path.'),{code:'invalid_application'});
+    if(!fs.existsSync(app)||path.extname(app).toLowerCase()!=='.exe')throw Object.assign(Error('Supply an existing .exe path. Store apps (Paint, Calculator, Notepad on Windows 11) have no usable alias in System32 or WindowsApps; pass the real executable inside the package, found with (Get-AppxPackage <name>).InstallLocation.'),{code:'invalid_application'});
     return {app,executable:app};
   }
   if(platform!=='darwin'||path.extname(app)!=='.app'||!fs.statSync(app,{throwIfNoEntry:false})?.isDirectory())
