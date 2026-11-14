@@ -445,7 +445,16 @@ export class Runtime {
         if(args.x!=null||args.y!=null){if(!f.image)fail('no_image','Observe with_image first.');payload.point=imagePoint(f.image,args.x,args.y);delete payload.x;delete payload.y;}
         if(op==='drag'){
           if(!f.image)fail('no_image','Observe with_image first.');
-          payload.from=imagePoint(f.image,...args.from);payload.to=imagePoint(f.image,...args.to);
+          // points is one continuous stroke through every point; from/to alone
+          // is a straight drag. Both are screenshot pixels mapped to the screen.
+          if(Array.isArray(args.points)){
+            if(args.from||args.to)fail('bad_points','Use either points or from/to, not both. No input was sent.');
+            // The macOS host draws only from/to, so a curve would silently become a line.
+            if(process.platform==='darwin')fail('points_unsupported','Multi-point drags are not available on macOS yet. Use from/to segments. No input was sent.');
+            payload.points=args.points.map(p=>imagePoint(f.image,...p));payload.from=payload.points[0];payload.to=payload.points.at(-1);
+          }
+          else if(args.from&&args.to){payload.from=imagePoint(f.image,...args.from);payload.to=imagePoint(f.image,...args.to);}
+          else fail('bad_points','A drag needs from and to, or 2 to 400 points. No input was sent.');
         }
         if(op==='click'&&(payload.point||payload.physical!==false)){
           if(payload.point)hudRegion=[...payload.point,1,1];

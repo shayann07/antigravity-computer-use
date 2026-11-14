@@ -2465,8 +2465,18 @@ namespace Axon
             if (from == null || to == null)
                 throw new AxonError("bad_points", "drag needs from:[x,y] and to:[x,y] in screen coordinates.",
                     "Read the window with with_rects:true to find the points.");
-            // Validate BOTH endpoints before moving or holding a button.
-            Native.RequirePhysicalPoint(from[0],from[1]);Native.RequirePhysicalPoint(to[0],to[1]);
+            // Optional points draw one continuous stroke through every point
+            // (curves on a canvas); from/to are its first and last points.
+            List<int[]> path = new List<int[]>();
+            System.Collections.IEnumerable rawPath = Get(a, "points") as System.Collections.IEnumerable;
+            if (rawPath != null && !(Get(a, "points") is string))
+            {
+                foreach (object p in rawPath) { int[] q = Pair(p); if (q == null) throw new AxonError("bad_points", "Every point must be [x,y].", null); path.Add(q); }
+                if (path.Count < 2 || path.Count > 400) throw new AxonError("bad_points", "A points drag needs 2 to 400 points.", null);
+            }
+            else { path.Add(from); path.Add(to); }
+            // Validate EVERY point before moving or holding a button.
+            foreach (int[] p in path) Native.RequirePhysicalPoint(p[0], p[1]);
             string button = Str(Get(a, "button"));
             if (button == null || button.Length == 0) button = "left";
             int steps = Int(Get(a, "steps"), 12);
@@ -2489,28 +2499,52 @@ namespace Axon
             Native.POINT saved;
             bool haveSaved = Native.GetCursorPos(out saved);
             bool held = Exclusive(a) && Native.BeginExclusive();
+            // Bound the time the button is held: about 8 px per hop, at most
+            // MaxStrokeHops hops in total (roughly 6 s), whatever the point count.
+            const int MaxStrokeHops = 1500;
+            int[] hops = new int[path.Count];
+            long wanted = 0;
+            for (int s = 1; s < path.Count; s++)
+            {
+                int[] p0 = path[s - 1], p1 = path[s];
+                hops[s] = path.Count == 2 ? steps : Math.Max(1, Math.Min(40, (int)(Math.Sqrt((double)(p1[0] - p0[0]) * (p1[0] - p0[0]) + (double)(p1[1] - p0[1]) * (p1[1] - p0[1])) / 8)));
+                wanted += hops[s];
+            }
+            if (wanted > MaxStrokeHops)
+                for (int s = 1; s < path.Count; s++) hops[s] = Math.Max(1, (int)(hops[s] * (long)MaxStrokeHops / wanted));
             bool steppedAside = Overlay.BeginClickThrough(from[0], from[1]);
+            bool pressed = false, released = false;
             try
             {
                 Presence.NoteSelfInput();
                 res["approach_motion"]=Native.MoveCursorTo(from[0], from[1]);
                 System.Threading.Thread.Sleep(30);
                 Native.MouseButton(button, true);
+                pressed = true;
                 System.Threading.Thread.Sleep(holdMs);
-                for (int i = 1; i <= steps; i++)
+                for (int s = 1; s < path.Count; s++)
                 {
-                    int x = from[0] + (to[0] - from[0]) * i / steps;
-                    int y = from[1] + (to[1] - from[1]) * i / steps;
-                    Presence.NoteSelfInput();
-                    Native.SetCursorPos(x, y);
-                    System.Threading.Thread.Sleep(12);
+                    int[] p0 = path[s - 1], p1 = path[s];
+                    int n = hops[s];
+                    for (int i = 1; i <= n; i++)
+                    {
+                        int x = p0[0] + (p1[0] - p0[0]) * i / n;
+                        int y = p0[1] + (p1[1] - p0[1]) * i / n;
+                        Presence.NoteSelfInput();
+                        Native.SetCursorPos(x, y);
+                        System.Threading.Thread.Sleep(path.Count == 2 ? 12 : 4);
+                    }
                 }
                 System.Threading.Thread.Sleep(holdMs);
                 Native.MouseButton(button, false);
+                released = true;
                 System.Threading.Thread.Sleep(30);
             }
             finally
             {
+                // A Stop or Esc mid-stroke throws from the cursor fence; never
+                // leave the button held. Releasing skips the fence by design.
+                if (pressed && !released) { try { Native.MouseButton(button, false); } catch { } }
                 if (held) Native.EndExclusive();
                 if (steppedAside) Overlay.EndClickThrough();
             }

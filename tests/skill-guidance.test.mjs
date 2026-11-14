@@ -61,3 +61,14 @@ test('computer-use skill documents wait --until-gone and it parses with the real
  const args = parseArguments(describeCommand('wait').inputSchema, ['--hwnd', '1', '--until-gone', 'Stop upscaling', '--timeout-ms', '30000', '--reason', 'r']);
  assert.equal(args.until_gone, 'Stop upscaling');
 });
+
+test('computer-use skill teaches multi-point drags, chained pixel steps and steps files', () => {
+ assert.match(skill, /--points '\[\[X,Y\],\[X,Y\],\.\.\.\]'/);
+ assert.match(skill, /Pixel steps \(`click --x --y`, `move`, `drag`\) may follow each other in one `run`/);
+ assert.match(skill, /--steps-file FILE/);
+ assert.match(skill, /Do not drive the CLI from a script loop/);
+ const file = /A steps file for the same idea holds `(\[.*?\])`/.exec(skill);
+ assert.ok(file, 'the steps file example is present');
+ const steps = JSON.parse(file[1]);
+ assert.equal(steps[1].kind, 'drag'); assert.equal(steps[1].points.length, 3);
+});

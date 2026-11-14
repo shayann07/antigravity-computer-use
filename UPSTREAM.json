@@ -60,7 +60,7 @@
     {
       "path": "server/native/AxonHost.cs",
       "upstream_sha256": "bef101afecbdf8f75df2a1f8b45d224eade39f09e3c8e25cf7b450e3fa49a8ef",
-      "local_sha256": "d5c4b8f7d89fd6576316c12b9b5d6707d630ea732ffcfe09f9b60606dd197ca4",
+      "local_sha256": "4a0082bfc653405d3690d55a5f5af97e77a5b4a4340c7a1ff032a102b60042a8",
       "modified": true
     },
     {
@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "a8a9469de9d87fcdf6cac66f1de7608ce12f632be7a4d5dca402e7668bb77708"
+      "sha256": "e616bc5d282709fb06768709bf87f13a6e5c229e3d73cd89c9a6c109df546dc0"
     },
     {
       "path": "server/mcp.mjs",
@@ -296,7 +296,7 @@
     },
     {
       "path": "server/desktop-tools.mjs",
-      "sha256": "6efc4215a936b250859330dfec5b9881f02fdee750bfba8386c23f294f9a66ae"
+      "sha256": "f79424a086de8d19ba962c927dd7680b4781f4cb76f695816d0ea324c1b154d7"
     },
     {
       "path": "scripts/desktop.mjs",
@@ -472,7 +472,7 @@
     },
     {
       "path": "tests/batch-wait.test.mjs",
-      "sha256": "21589d64343f692e8acc76573dc772239671d92991a4cf90150aaf1128abc618"
+      "sha256": "7bf675f60828120a1ec1ef2039e7920a4d302517cc05f6a5a7f9557a76540bf0"
     },
     {
       "path": "skills/computer-use/references/recovery.md",
@@ -600,7 +600,7 @@
     },
     {
       "path": "skills/computer-use/SKILL.md",
-      "sha256": "d006d089e5e7c7aee7ae9debe0f6999fafb57f53466cc0f4ad1fd9cde804e16b"
+      "sha256": "89783ae69af1b8f27730d4b3b2124fdcd5e7a98f3ba2a81bb60f159cda5f3a03"
     },
     {
       "path": "docs/MACOS.md",
@@ -708,7 +708,7 @@
     },
     {
       "path": "server/recovery.mjs",
-      "sha256": "6896e729305b983ca275bb6505f7cc7441891e77cde25e53c10ba932a937e640"
+      "sha256": "f6900e50d7f211422c56e6730c96b902546a351205319b50a459707eecdaff7a"
     },
     {
       "path": "scripts/qualify-guardian-desktop.mjs",
@@ -864,7 +864,7 @@
     },
     {
       "path": "tests/skill-guidance.test.mjs",
-      "sha256": "530735b06316b19e00c4a1a6d7bfcca0397aaf43e82e6431d2e385d8008e5b90"
+      "sha256": "81d35437e9f4243cca4206c7762d92884a7884829f5abdeb5f382a9a204b8467"
     },
     {
       "path": "tests/brief-reply.test.mjs",
