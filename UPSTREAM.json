@@ -60,7 +60,7 @@
     {
       "path": "server/native/AxonHost.cs",
       "upstream_sha256": "bef101afecbdf8f75df2a1f8b45d224eade39f09e3c8e25cf7b450e3fa49a8ef",
-      "local_sha256": "4928d01ec3750b191f5785ebaef42fb973a6b298cd2d713f7de972a18742cff3",
+      "local_sha256": "d5c4b8f7d89fd6576316c12b9b5d6707d630ea732ffcfe09f9b60606dd197ca4",
       "modified": true
     },
     {
@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "692f0a61ce31f45e7a7987d2bb01c6310bdfc0360bc2ba58dbc014dcd2058cf0"
+      "sha256": "a8a9469de9d87fcdf6cac66f1de7608ce12f632be7a4d5dca402e7668bb77708"
     },
     {
       "path": "server/mcp.mjs",
@@ -472,7 +472,7 @@
     },
     {
       "path": "tests/batch-wait.test.mjs",
-      "sha256": "ca485880f6760bc2fd491822a926b3bb1ed7de9506a4aa950cdcc201b2e88047"
+      "sha256": "21589d64343f692e8acc76573dc772239671d92991a4cf90150aaf1128abc618"
     },
     {
       "path": "skills/computer-use/references/recovery.md",

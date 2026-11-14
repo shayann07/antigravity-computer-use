@@ -525,6 +525,10 @@ export class Runtime {
     // an incomplete tree never counts as gone, and the text must be visible
     // when the wait starts, so a mistyped label cannot read as finished.
     const gone=typeof args.until_gone==='string',label=(gone?args.until_gone:args.until).toLowerCase();let seen=false;
+    // Absence is only meaningful in a whole view: an 80-row reply omits rows in
+    // ordinary windows such as File Explorer, so failure-aware and until_gone
+    // waits read up to 500 rows.
+    const wide=gone||!!args.abort_on?.length;
     const matches=view=>{const present=view.metadata.tree.toLowerCase().includes(label);return gone?seen&&!present&&view.metadata.tree_incomplete!==true:present;};
     const labelRefusal=view=>{
       if(view.metadata.tree_incomplete!==true)return finish({matched:false,label_not_observed:true,ok:false,error:{code:'wait_label_not_observed',message:'The text to wait on never appeared; the job may already have finished. This reply carries a fresh frame: act on it. The wait itself sent no input; never replay earlier steps.'},...view});
@@ -532,7 +536,7 @@ export class Runtime {
       fail('wait_label_not_observed','The text to wait on never appeared and the tree was incomplete. Observe again. The wait itself sent no input; never replay earlier steps.');
     };
     do {
-      this.check();latest=await observe({hwnd:args.hwnd,with_image:false,query:args.query,native_snapshot_deadline:until,require_native_budget:true,...(args.abort_on?.length?{max_nodes:500}:{})});
+      this.check();latest=await observe({hwnd:args.hwnd,with_image:false,query:args.query,native_snapshot_deadline:until,require_native_budget:true,...(wide?{max_nodes:500}:{})});
       const failure=waitFailure(latest,args.abort_on);
       if(failure){
         if(args.with_image===false)return finish({matched:false,aborted:true,abort_match:failure,...latest});
@@ -549,7 +553,7 @@ export class Runtime {
         // Do not authorize the next batch step based on a transient match in
         // an older frame. Confirm both success and failure on the returned view.
         this.frames.delete(latest.metadata.observation_id);
-        const verified=await observe({hwnd:args.hwnd,query:args.query,with_image:args.with_image,native_snapshot_deadline:until,require_native_budget:true,...(args.abort_on?.length?{max_nodes:500}:{})});
+        const verified=await observe({hwnd:args.hwnd,query:args.query,with_image:args.with_image,native_snapshot_deadline:until,require_native_budget:true,...(wide?{max_nodes:500}:{})});
         const verifiedFailure=waitFailure(verified,args.abort_on);
         if(verifiedFailure)return finish({matched:false,aborted:true,abort_match:verifiedFailure,...verified});
         if(args.abort_on?.length&&verified.metadata.tree_incomplete)return finish({matched:false,incomplete:true,...verified});
@@ -577,7 +581,7 @@ export class Runtime {
     // only trustworthy frame. Starting another capture here adds latency and
     // can change the answer after the wait has already timed out.
     if(latest)return finish({matched:false,timed_out:true,...latest});
-    const final=await observe({hwnd:args.hwnd,query:args.query,with_image:args.with_image,native_snapshot_deadline:until,...(args.abort_on?.length?{max_nodes:500}:{})});
+    const final=await observe({hwnd:args.hwnd,query:args.query,with_image:args.with_image,native_snapshot_deadline:until,...(wide?{max_nodes:500}:{})});
     const finalFailure=waitFailure(final,args.abort_on);
     if(finalFailure)return finish({matched:false,aborted:true,abort_match:finalFailure,...final});
     return finish({matched:false,timed_out:true,...final});

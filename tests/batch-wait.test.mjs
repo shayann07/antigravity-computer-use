@@ -315,9 +315,10 @@ test('batched wait_change passes the fresh frame forward and stops after timeout
 
 test('until_gone returns once observed text disappears, confirmed on a fresh frame',async()=>{
  const trees=['Upscaling 40% Stop upscaling','Upscaling 90% Stop upscaling','Done in 25 s','Done in 25 s'];const frames=new Map();let n=0;
- const runtime={frames,generation:0,check(){},async observe(){const id='s'+(++n);frames.set(id,{});return{metadata:{observation_id:id,tree:trees[Math.min(n-1,trees.length-1)]}};}};
+ const caps=[];const runtime={frames,generation:0,check(){},async observe(o){caps.push(o.max_nodes);const id='s'+(++n);frames.set(id,{});return{metadata:{observation_id:id,tree:trees[Math.min(n-1,trees.length-1)]}};}};
  const result=await Runtime.prototype.wait.call(runtime,{hwnd:7,until_gone:'Stop upscaling',timeout_ms:5000,with_image:false});
  assert.equal(result.matched,true);assert.equal(result.metadata.tree,'Done in 25 s');assert.equal(result.wait_metrics.observations,4);
+ assert.deepEqual([...new Set(caps)],[500],'absence is judged on a whole view, not an 80-row reply');
 });
 
 test('until_gone never treats an incomplete tree as gone',async()=>{
