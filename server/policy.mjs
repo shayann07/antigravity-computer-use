@@ -750,7 +750,7 @@ export function accessTier(win) {
 // scrolling: no typing, keys, right/middle/modified clicks, drags, pastes,
 // value writes, file pickers or document opens.
 const READ_OPS = new Set(['focus']);
-const CLICK_OPS = new Set(['focus', 'click', 'move', 'scroll', 'fit_window']);
+const CLICK_OPS = new Set(['focus', 'click', 'move', 'scroll', 'fit_window', 'resize_window']);
 export function accessRefusal(tier, op, args = {}) {
   if (tier === ACCESS.FULL) return null;
   if (tier === ACCESS.READ && !READ_OPS.has(op)) {

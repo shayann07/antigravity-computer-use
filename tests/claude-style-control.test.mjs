@@ -23,7 +23,7 @@ test('terminals and IDEs are click tier, browsers and other apps are full, prote
 });
 
 test('click tier allows only plain left clicks, moves, scrolls and focus; refusals name the tier',()=>{
- for(const op of ['click','move','scroll','focus','fit_window'])assert.equal(accessRefusal(ACCESS.CLICK,op,{}),null,op);
+ for(const op of ['click','move','scroll','focus','fit_window','resize_window'])assert.equal(accessRefusal(ACCESS.CLICK,op,{}),null,op);
  assert.equal(accessRefusal(ACCESS.CLICK,'click',{button:'left'}),null);
  for(const [op,args] of [['type',{}],['key',{}],['paste',{}],['set_value',{}],['drag',{}],['paste_files',{}],['file_dialog',{}],['open',{}],['click',{button:'right'}],['click',{button:'middle'}],['click',{modifiers:'ctrl'}]]){
   const refusal=accessRefusal(ACCESS.CLICK,op,args);assert.equal(refusal?.code,'app_tier_click',op);assert.match(refusal.message,/tier "click"/);assert.match(refusal.message,/no input was sent/);

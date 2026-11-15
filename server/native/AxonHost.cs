@@ -652,6 +652,7 @@ namespace Axon
                 case "scroll": return OpScroll(a);
                 case "focus": return OpFocus(a);
                 case "fit_window": return OpFitWindow(a);
+                case "resize_window": return OpResizeWindow(a);
                 case "close_window": return OpCloseWindow(a);
                 case "wait_for": return OpWaitFor(a);
                 case "screenshot": return OpScreenshot(a);
@@ -3981,6 +3982,73 @@ namespace Axon
             return new Dictionary<string,object>{{"before",new int[]{before.Left,before.Top,before.Right-before.Left,before.Bottom-before.Top}},{"rect",new int[]{actual.X,actual.Y,actual.Width,actual.Height}},{"work_area",new int[]{work.X,work.Y,work.Width,work.Height}},{"fully_visible",work.Contains(actual)},{"fresh_observation_required",true},{"hint",work.Contains(actual)?"Inspect the new layout before acting.":"The app may enforce a minimum size larger than this display. Use accessible controls or an app-supported layout; do not click an unreachable point."}};
         }
 
+        [DllImport("user32.dll")] static extern bool GetClientRect(IntPtr h, out Native.RECT r);
+        [DllImport("user32.dll")] static extern uint GetDpiForWindow(IntPtr h);
+        [DllImport("user32.dll")] static extern bool IsZoomed(IntPtr h);
+        [DllImport("user32.dll")] static extern IntPtr GetMenu(IntPtr h);
+        [DllImport("user32.dll")] static extern bool AdjustWindowRectExForDpi(ref Native.RECT r, uint style, bool menu, uint exStyle, uint dpi);
+
+        // Sets the client area of a resizable top-level window to an exact
+        // size, DPI aware, for responsive-layout checks. It never moves the
+        // window and refuses one the user could not resize by its border.
+        static object OpResizeWindow(Dictionary<string, object> a)
+        {
+            IntPtr h = HwndArg(a);
+            if (h == IntPtr.Zero || Native.GetAncestor(h, 2) != h) throw new AxonError("invalid_window", "Choose a top-level application window from apps.", null);
+            int wantW = Int(Get(a, "client_width"), 0), wantH = Int(Get(a, "client_height"), 0);
+            string units = Str(Get(a, "units"));
+            if (string.IsNullOrEmpty(units)) units = "physical";
+            if (units != "physical" && units != "logical") throw new AxonError("bad_arguments", "units must be physical or logical.", null);
+            if (wantW < 120 || wantH < 80 || wantW > 16384 || wantH > 16384)
+                throw new AxonError("bad_arguments", "client_width must be 120 to 16384 and client_height 80 to 16384.", null);
+            ControlFence.Check();
+            uint style = unchecked((uint)Native.GetWindowLongW(h, -16)), exStyle = unchecked((uint)Native.GetWindowLongW(h, -20));
+            // WS_THICKFRAME: without a sizing border the app does not expect to be resized.
+            if ((style & 0x00040000) == 0)
+                throw new AxonError("window_not_resizable", "This window has no sizing border, so it was not resized.", "Pick a resizable window. Nothing was changed.");
+            uint dpi = 96;
+            try { dpi = GetDpiForWindow(h); } catch { }
+            if (dpi == 0) dpi = 96;
+            double scale = dpi / 96.0;
+            if (units == "logical") { wantW = (int)Math.Round(wantW * scale); wantH = (int)Math.Round(wantH * scale); }
+            if (Native.IsIconic(h) || IsZoomed(h)) { Native.ShowWindow(h, 9); System.Threading.Thread.Sleep(120); ControlFence.Check(); }
+            Native.RECT before;
+            if (!GetClientRect(h, out before)) throw new AxonError("window_gone", "The selected window closed.", null);
+            Native.RECT outer = new Native.RECT();
+            outer.Left = 0; outer.Top = 0; outer.Right = wantW; outer.Bottom = wantH;
+            if (!AdjustWindowRectExForDpi(ref outer, style, GetMenu(h) != IntPtr.Zero, exStyle, dpi))
+                throw new AxonError("window_placement_failed", "Windows could not compute the frame size for this window.", "Nothing was changed.");
+            int outerW = outer.Right - outer.Left, outerH = outer.Bottom - outer.Top;
+            Native.RECT client = before;
+            // Apps that draw their own frame do not match the computed frame
+            // size; one correction from the measured difference settles them.
+            for (int attempt = 0; attempt < 2; attempt++)
+            {
+                // SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE
+                if (!Native.SetWindowPos(h, IntPtr.Zero, 0, 0, outerW, outerH, 0x16))
+                    throw new AxonError("window_placement_failed", "Windows refused the requested size.", "Observe again; do not repeat an uncertain resize.");
+                System.Threading.Thread.Sleep(120); ControlFence.Check();
+                if (!GetClientRect(h, out client)) throw new AxonError("window_gone", "The window closed while it was resized.", null);
+                int gotW = client.Right - client.Left, gotH = client.Bottom - client.Top;
+                if (gotW == wantW && gotH == wantH) break;
+                outerW += wantW - gotW; outerH += wantH - gotH;
+            }
+            int cw = client.Right - client.Left, ch = client.Bottom - client.Top;
+            Native.RECT win;
+            Native.GetWindowRect(h, out win);
+            Dictionary<string, object> res = new Dictionary<string, object>();
+            res["requested_physical"] = new int[] { wantW, wantH };
+            res["client_physical"] = new int[] { cw, ch };
+            res["client_logical"] = new int[] { (int)Math.Round(cw / scale), (int)Math.Round(ch / scale) };
+            res["before_client_physical"] = new int[] { before.Right - before.Left, before.Bottom - before.Top };
+            res["rect"] = new int[] { win.Left, win.Top, win.Right - win.Left, win.Bottom - win.Top };
+            res["dpi"] = (int)dpi;
+            res["scale"] = scale;
+            // False when the app enforces a minimum or maximum size.
+            res["matched"] = cw == wantW && ch == wantH;
+            return res;
+        }
+
         static object OpCloseWindow(Dictionary<string, object> a)
         {
             GuardStopped();
@@ -4949,7 +5017,7 @@ namespace Axon
             switch (op)
             {
                 case "move": case "click": case "type": case "set_value": case "key": case "scroll":
-                case "focus": case "fit_window": case "close_window": case "drag": case "paste":
+                case "focus": case "fit_window": case "resize_window": case "close_window": case "drag": case "paste":
                     return true;
             }
             return false;

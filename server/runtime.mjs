@@ -19,7 +19,7 @@ import {updateNotice} from './update-notice.mjs';
 import {clearConfirmedStop,currentStopNonce,persistRecoveryStop,settlePriorStop,recoveryAdvice,priorWindowsCleanupVerified,priorMacCleanupVerified,priorUndispatchedCleanupVerified,readStopLatch,persistStopLatch,settleFreshStopLatch} from './recovery.mjs';
 import {writeAtomicJSON,readTaskRecord} from './atomic-json.mjs';
 
-const input=new Set(['move','click','type','set_value','key','scroll','drag','focus','fit_window','close_window','paste','paste_files','clipboard','open','file_dialog']);
+const input=new Set(['move','click','type','set_value','key','scroll','drag','focus','fit_window','resize_window','close_window','paste','paste_files','clipboard','open','file_dialog']);
 const fail=(code,message)=>{throw new HostError(code,message,null);};
 // Post-launch observation settles on the app's main window (#72).
 const LAUNCH_SETTLE_MS=1200,LAUNCH_SETTLE_LIMIT_MS=5000,SMALL_WINDOW=[480,320];
@@ -548,7 +548,8 @@ export class Runtime {
     this.check();if(Date.now()>=this.deadline||this.remaining<=0)fail('session_limit','Session expired or action budget exhausted. Renew the task (end, then ready) and continue from a fresh observation.');
     // Per-app access tier, enforced against the target before any input.
     if(w){const refusal=accessRefusal(accessTier(w),op,args);if(refusal)throw Object.assign(Error(refusal.message),{code:refusal.code,tier:accessTier(w)});}
-    if(op==='focus'||op==='fit_window'){
+    if(op==='resize_window'&&process.platform==='darwin')fail('unsupported_action','resize_window is not available on macOS yet. No window was changed.');
+    if(op==='focus'||op==='fit_window'||op==='resize_window'){
       if(w?.fullscreen)throw Object.assign(Error('Bring the approved window out of macOS full-screen mode yourself before focusing or fitting it. No Space switch was performed.'),{code:'window_fullscreen',recovery_attempts_remaining:0});
       if(w?.other_desktop)throw Object.assign(Error('Bring the approved window to the current virtual desktop before fitting or focusing it. No desktop switch was performed.'),{code:'other_desktop',recovery_attempts_remaining:0});
       const failures=(this.windowFailures??=new Map());
@@ -557,7 +558,7 @@ export class Runtime {
         if(prior.recoveryTried)throw Object.assign(Error(`Bounded recovery attempt already used for this window (${prior.code}). Wait for human recovery instead of polling repeatedly.`),{code:prior.code,repeated_failure:true,recovery_attempts_remaining:0});
         prior.recoveryTried=true;prior.recoveryCleared=true;
       }
-      if(op==='fit_window')this.frames.clear();
+      if(op==='fit_window'||op==='resize_window')this.frames.clear();
     }
     const generation=this.generation;
     const payload={...args,...this.stamp(),mode:'take',__risk:args.risk==='routine'?'routine':'sensitive'};
@@ -565,7 +566,7 @@ export class Runtime {
     delete payload.risk;delete payload.reason;delete payload.observation_id;delete payload.observe;
     if(w){
       payload.hwnd=Number(w.hwnd);payload.__pid=w.pid;payload.__started=w.started;
-      if(!['focus','fit_window','close_window'].includes(op)){
+      if(!['focus','fit_window','resize_window','close_window'].includes(op)){
         const f=requireObservation(this.frames,args.observation_id,w.hwnd);
         if(f.workerEpoch!==this.driver.epoch)fail('stale_observation','The native worker restarted. Observe again; old element indexes cannot be reused.');
         payload.__worker_epoch=f.workerEpoch;

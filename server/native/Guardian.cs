@@ -90,7 +90,7 @@ namespace Axon {
         // a terminal that comes forward between check and dispatch cannot
         // receive typing meant for another app.
         internal static bool ClickTierAllows(string op,Dictionary<string,object> a) {
-            if(op=="focus"||op=="move"||op=="scroll"||op=="fit_window")return true;
+            if(op=="focus"||op=="move"||op=="scroll"||op=="fit_window"||op=="resize_window")return true;
             if(op!="click")return false;
             object value;
             if(a.TryGetValue("button",out value)&&value!=null) {string button=Convert.ToString(value);if(button!=""&&button!="left")return false;}

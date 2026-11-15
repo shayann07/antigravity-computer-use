@@ -11,7 +11,7 @@
     {
       "path": "server/driver.mjs",
       "upstream_sha256": "31c16f2c7d97d7c69a796a537996d1da3b6637150571a19361e1ba86dda8b6df",
-      "local_sha256": "4dd192904452e2fc271d9a71f875e70504ebf1f3740b13f64fa6dce6ce3800fb",
+      "local_sha256": "e4d474a9a4d9d440e16ed17f4de3a0be20c277d845b200be581d0c0b351bb16a",
       "modified": true
     },
     {
@@ -30,7 +30,7 @@
     {
       "path": "server/policy.mjs",
       "upstream_sha256": "673a749426c458b254d991d7f6fc75e7e5415f32b64e05011476a90803d7001b",
-      "local_sha256": "58d1869fd3b788604dc459559fa5c4cb6997876d47e556f839e76969d1193d00",
+      "local_sha256": "2924cecca163ddcf7d10b3ce7a262640ac83487c2e12aefe1612db77d83b71c7",
       "modified": true
     },
     {
@@ -60,7 +60,7 @@
     {
       "path": "server/native/AxonHost.cs",
       "upstream_sha256": "bef101afecbdf8f75df2a1f8b45d224eade39f09e3c8e25cf7b450e3fa49a8ef",
-      "local_sha256": "855817ce62c4852dc20bed32a63f373cbca5fd0f3010171b09d0f3fb93066d2c",
+      "local_sha256": "2ca25cd4d1e4bf0960bb8cfa7c3c8cf748d9f6bdc23e3d42282d79244924f853",
       "modified": true
     },
     {
@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "d2cc579e78a01684e4000f01d4eba9e377154bcb07821d1088f3483ab387c8a6"
+      "sha256": "b42f597f9847fcef3b4bbfa1802b952095a79afe89eedb774eb276ec1ab3cbbb"
     },
     {
       "path": "server/mcp.mjs",
@@ -268,7 +268,7 @@
     },
     {
       "path": "server/native/Guardian.cs",
-      "sha256": "f276d0fbbd6822dba03292371c7cc2d6ec389de103d60a5167a1ad230c09d715"
+      "sha256": "3b46fe91f6174bd3d95668003fc8d81aaee1912024e34278fb8fc2f09d43bb56"
     },
     {
       "path": "server/native/CursorSafety.cs",
@@ -296,7 +296,7 @@
     },
     {
       "path": "server/desktop-tools.mjs",
-      "sha256": "32baaeafdf76750829b4c1ac9a158de3f62121a00a55d1631960f999676152b2"
+      "sha256": "bf15d555836c41239c986be6cd1e15fde359eacf7031a14fc1ffb8c8b802c258"
     },
     {
       "path": "scripts/desktop.mjs",
