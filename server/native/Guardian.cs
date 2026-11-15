@@ -1018,6 +1018,189 @@ namespace Axon {
                 cache=beforeRows=afterRows=null;base.OnFormClosed(e);
             }
         }
+        // The access prompt. It stays a modal dialog with a real text box and
+        // real buttons, so focus, the keyboard and screen readers behave as in
+        // any dialog; only the drawing is ours. The card behind it (shadow,
+        // round corners) is a second window that takes no input.
+        internal sealed class AccessPrompt : Form {
+            [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h,IntPtr after,int x,int y,int cx,int cy,uint flags);
+            [DllImport("uxtheme.dll",CharSet=CharSet.Unicode)] static extern int SetWindowTheme(IntPtr h,string app,string ids);
+            readonly float zoom;readonly bool contrast;readonly Rectangle anchor;readonly string title;
+            readonly TextBox body=new TextBox();readonly PromptButton allow,deny;readonly Font face;readonly float rule;
+            Shade shade;
+            internal bool Unmarked;   // the bench's trial stays visible to screenshots
+            int Px(float logical) {return (int)Math.Round(logical*zoom);}
+            // bar: the control bar's bounds when it is on screen, or empty.
+            internal AccessPrompt(string message,float scale,bool highContrast,Rectangle bar) {
+                zoom=scale;contrast=highContrast;anchor=bar;
+                AutoScaleMode=AutoScaleMode.None;FormBorderStyle=FormBorderStyle.None;ShowInTaskbar=false;StartPosition=FormStartPosition.Manual;
+                BackColor=DesktopVisuals.PromptSurface(contrast);
+                SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer,true);
+                // The first line is the question. Anything else is shown whole.
+                string text=(message??"").Replace("\r\n","\n").Trim();int cut=text.IndexOf('\n');
+                if(cut>0&&cut<=64){title=text.Substring(0,cut).Trim();text=text.Substring(cut).Trim();}
+                else title="Computer Use needs your answer";
+                AccessibleName=title;AccessibleRole=AccessibleRole.Dialog;
+                int pad=Px(DesktopVisuals.PromptPad),wide=Px(DesktopVisuals.PromptWidth-2*DesktopVisuals.PromptInset),most=Px(DesktopVisuals.PromptBodyMost);
+                face=DesktopVisuals.PromptFont(zoom);
+                body.Multiline=true;body.ReadOnly=true;body.BorderStyle=BorderStyle.None;body.Font=face;body.TabIndex=2;
+                body.BackColor=BackColor;body.ForeColor=DesktopVisuals.PromptInk(contrast);body.AccessibleName="Request";
+                body.Text=text.Replace("\n","\r\n");body.SetBounds(pad-Px(3),Px(DesktopVisuals.PromptPad+DesktopVisuals.PromptTitle+8),wide-2*pad+Px(3),most);   // the box insets its own text by 3
+                body.HandleCreated+=delegate {if(!contrast)try {SetWindowTheme(body.Handle,"DarkMode_Explorer",null);}catch {}};
+                // As tall as its text, up to the limit; past that it scrolls, and nothing is cut.
+                int tall=Fill();
+                if(tall>most){body.ScrollBars=ScrollBars.Vertical;tall=most;}
+                body.Height=tall;body.Select(0,0);Controls.Add(body);
+                rule=DesktopVisuals.PromptPad+DesktopVisuals.PromptTitle+8+tall/zoom+12;
+                int ring=Px(DesktopVisuals.PromptRing),across=Px(DesktopVisuals.PromptButtonWidth)+2*ring,down=Px(DesktopVisuals.PromptButtonHeight)+2*ring,row=Px(rule+12)-ring;
+                deny=new PromptButton(this,"Deny",false);allow=new PromptButton(this,"Allow",true);
+                deny.SetBounds(wide-pad-across+ring,row,across,down);allow.SetBounds(deny.Left-Px(8)+2*ring-across,row,across,down);
+                deny.DialogResult=DialogResult.No;allow.DialogResult=DialogResult.Yes;deny.TabIndex=0;allow.TabIndex=1;
+                Controls.Add(deny);Controls.Add(allow);
+                // Enter and Esc both mean Deny, and Deny holds the focus when the prompt opens.
+                CancelButton=deny;AcceptButton=deny;ActiveControl=deny;
+                ClientSize=new Size(wide,Px(rule+12+DesktopVisuals.PromptButtonHeight+DesktopVisuals.PromptPad));
+                Place();
+            }
+            // The text's height at the box's width, as the box itself wraps it.
+            int Fill() {
+                int lines=body.GetLineFromCharIndex(body.TextLength)+1,line=face.Height;
+                if(lines>1) {
+                    int step=body.GetPositionFromCharIndex(body.GetFirstCharIndexFromLine(1)).Y-body.GetPositionFromCharIndex(0).Y;
+                    if(step>0)line=step;
+                }
+                return lines*line+Px(2);
+            }
+            // 8 px under the bar and centred on it, above it when the bar is
+            // docked low; in the middle of the screen when there is no bar.
+            void Place() {
+                Rectangle work=(anchor.IsEmpty?Screen.PrimaryScreen:Screen.FromRectangle(anchor)).WorkingArea;
+                int inset=Px(DesktopVisuals.PromptInset),keep=Px(12)+inset,x,y;
+                if(anchor.IsEmpty){x=work.Left+(work.Width-Width)/2;y=work.Top+(work.Height-Height)/2;}
+                else {
+                    bool low=anchor.Top+anchor.Height/2>work.Top+work.Height/2;
+                    x=anchor.Left+(anchor.Width-Width)/2;y=low?anchor.Top-Px(8)-inset-Height:anchor.Bottom+Px(8)+inset;
+                }
+                x=Math.Max(work.Left+keep,Math.Min(x,work.Right-keep-Width));y=Math.Max(work.Top+keep,Math.Min(y,work.Bottom-keep-Height));
+                Location=new Point(x,y);
+            }
+            float NoteWidth {get {return (allow.Left+Px(DesktopVisuals.PromptRing))/zoom-DesktopVisuals.PromptPad-12;}}
+            protected override void OnPaint(PaintEventArgs e) {
+                e.Graphics.Clear(BackColor);e.Graphics.ScaleTransform(zoom,zoom);
+                DesktopVisuals.PromptFace(e.Graphics,Width/zoom,title,rule,NoteWidth,contrast);
+            }
+            protected override void OnLoad(EventArgs e) {base.OnLoad(e);shade=new Shade();shade.Lay(Bounds,zoom,contrast);}
+            protected override void OnShown(EventArgs e) {
+                base.OnShown(e);
+                if(shade!=null&&!Unmarked)Mark(shade);
+                Under();
+            }
+            protected override void OnActivated(EventArgs e) {base.OnActivated(e);Under();}
+            protected override void OnMove(EventArgs e) {base.OnMove(e);if(shade!=null&&!shade.IsDisposed)shade.Lay(Bounds,zoom,contrast);}
+            // The card stays directly behind the dialog.
+            void Under() {if(shade!=null&&!shade.IsDisposed&&IsHandleCreated)SetWindowPos(shade.Handle,Handle,0,0,0,0,0x0013);}
+            // The title strip moves the prompt, so it can be slid off whatever it covers.
+            protected override void WndProc(ref Message m) {
+                base.WndProc(ref m);
+                if(m.Msg==0x0084&&m.Result==(IntPtr)1) {
+                    Point at=PointToClient(new Point(unchecked((short)(long)m.LParam),unchecked((short)((long)m.LParam>>16))));
+                    if(at.Y<body.Top)m.Result=(IntPtr)2;
+                }
+            }
+            protected override void OnFormClosed(FormClosedEventArgs e) {if(shade!=null&&!shade.IsDisposed)shade.Close();base.OnFormClosed(e);}
+            protected override void Dispose(bool disposing) {
+                if(disposing){if(shade!=null&&!shade.IsDisposed)shade.Dispose();face.Dispose();}
+                base.Dispose(disposing);
+            }
+            // The bench's picture of the prompt: the same layout, with the
+            // text and buttons drawn in place of the live controls.
+            // hover and focus: 0 none, 1 Allow, 2 Deny.
+            internal Bitmap Picture(int hover,int focus) {
+                int margin=Px(DesktopVisuals.PromptMargin+DesktopVisuals.PromptInset),ring=Px(DesktopVisuals.PromptRing);
+                Bitmap sheet=new Bitmap(Width+2*margin,Height+2*margin,System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                using(Graphics g=Graphics.FromImage(sheet)) {
+                    g.Clear(Color.FromArgb(31,33,40));
+                    var saved=g.Save();g.ScaleTransform(zoom,zoom);
+                    DesktopVisuals.PromptCard(g,new RectangleF(DesktopVisuals.PromptMargin,DesktopVisuals.PromptMargin,sheet.Width/zoom-2*DesktopVisuals.PromptMargin,sheet.Height/zoom-2*DesktopVisuals.PromptMargin),contrast);
+                    g.Restore(saved);
+                    using(Bitmap inner=new Bitmap(Width,Height,System.Drawing.Imaging.PixelFormat.Format32bppArgb)) {
+                        using(Graphics f=Graphics.FromImage(inner)) {
+                            f.Clear(BackColor);
+                            TextRenderer.DrawText(f,body.Text,face,body.Bounds,body.ForeColor,BackColor,TextFormatFlags.WordBreak|TextFormatFlags.TextBoxControl|TextFormatFlags.NoPrefix);
+                            f.ScaleTransform(zoom,zoom);
+                            DesktopVisuals.PromptFace(f,Width/zoom,title,rule,NoteWidth,contrast);
+                            foreach(PromptButton button in new PromptButton[]{allow,deny}) {
+                                int which=button==allow?1:2;
+                                DesktopVisuals.PromptButton(f,new RectangleF((button.Left+ring)/zoom,(button.Top+ring)/zoom,DesktopVisuals.PromptButtonWidth,DesktopVisuals.PromptButtonHeight),button.Text,button==allow,hover==which,false,focus==which,contrast);
+                            }
+                        }
+                        g.DrawImage(inner,new Rectangle(margin,margin,Width,Height));
+                    }
+                }
+                return sheet;
+            }
+            sealed class PromptButton : Button {
+                readonly AccessPrompt owner;readonly bool filled;bool hover,down;
+                internal PromptButton(AccessPrompt o,string text,bool fill) {
+                    owner=o;filled=fill;Text=text;Cursor=Cursors.Hand;
+                    SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer,true);
+                }
+                protected override void OnPaint(PaintEventArgs e) {
+                    e.Graphics.Clear(owner.BackColor);e.Graphics.ScaleTransform(owner.zoom,owner.zoom);
+                    DesktopVisuals.PromptButton(e.Graphics,new RectangleF(DesktopVisuals.PromptRing,DesktopVisuals.PromptRing,DesktopVisuals.PromptButtonWidth,DesktopVisuals.PromptButtonHeight),Text,filled,hover,down,Focused,owner.contrast);
+                }
+                void Set(ref bool field,bool value) {if(field!=value){field=value;Invalidate();}}
+                protected override void OnMouseEnter(EventArgs e) {Set(ref hover,true);base.OnMouseEnter(e);}
+                protected override void OnMouseLeave(EventArgs e) {Set(ref hover,false);Set(ref down,false);base.OnMouseLeave(e);}
+                protected override void OnMouseDown(MouseEventArgs e) {if(e.Button==MouseButtons.Left)Set(ref down,true);base.OnMouseDown(e);}
+                protected override void OnMouseUp(MouseEventArgs e) {Set(ref down,false);base.OnMouseUp(e);}
+                protected override void OnKeyDown(KeyEventArgs e) {if(e.KeyCode==Keys.Space)Set(ref down,true);base.OnKeyDown(e);}
+                protected override void OnKeyUp(KeyEventArgs e) {Set(ref down,false);base.OnKeyUp(e);}
+                protected override void OnGotFocus(EventArgs e) {base.OnGotFocus(e);Invalidate();}
+                protected override void OnLostFocus(EventArgs e) {Set(ref down,false);base.OnLostFocus(e);Invalidate();}
+            }
+            sealed class Shade : Form {
+                Bitmap card;
+                internal Shade() {
+                    FormBorderStyle=FormBorderStyle.None;ShowInTaskbar=false;TopMost=true;StartPosition=FormStartPosition.Manual;
+                    SetStyle(ControlStyles.Opaque,true);
+                }
+                protected override bool ShowWithoutActivation {get {return true;}}
+                protected override CreateParams CreateParams {get {CreateParams p=base.CreateParams;p.ExStyle|=0x08000080|0x00080000|0x00000020;return p;}}
+                protected override void OnPaint(PaintEventArgs e) {}
+                protected override void OnPaintBackground(PaintEventArgs e) {}
+                // Draws the card around the dialog's bounds and follows them.
+                internal void Lay(Rectangle dialog,float zoom,bool contrast) {
+                    int margin=(int)Math.Round((DesktopVisuals.PromptMargin+DesktopVisuals.PromptInset)*zoom);
+                    Rectangle place=Rectangle.Inflate(dialog,margin,margin);
+                    if(card==null||card.Size!=place.Size) {
+                        if(card!=null)card.Dispose();
+                        card=new Bitmap(place.Width,place.Height,System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+                        using(Graphics g=Graphics.FromImage(card)) {
+                            g.Clear(Color.Transparent);g.ScaleTransform(zoom,zoom);
+                            DesktopVisuals.PromptCard(g,new RectangleF(DesktopVisuals.PromptMargin,DesktopVisuals.PromptMargin,place.Width/zoom-2*DesktopVisuals.PromptMargin,place.Height/zoom-2*DesktopVisuals.PromptMargin),contrast);
+                        }
+                    }
+                    Bounds=place;
+                    if(!Visible)Show();
+                    try {Overlay.Present(Handle,card,place.X,place.Y,255);}catch {}
+                }
+                protected override void Dispose(bool disposing) {if(disposing&&card!=null){card.Dispose();card=null;}base.Dispose(disposing);}
+            }
+        }
+        // Bench: shows one sample prompt for a few seconds, visible to
+        // screenshots, and prints how it was answered. kind: 0 app, 1 action, 2 launch.
+        internal static void PromptTrial(int seconds,int kind) {
+            Application.EnableVisualStyles();
+            Screen screen=Screen.PrimaryScreen;float scale=Overlay.ScreenScale(screen);
+            using(AccessPrompt prompt=new AccessPrompt(DesktopVisuals.PromptSamples[Math.Max(0,Math.Min(2,kind))],scale,SystemInformation.HighContrast,Rectangle.Empty)) {
+                prompt.Unmarked=true;prompt.Text="Computer Use — prompt trial";prompt.TopMost=true;
+                System.Windows.Forms.Timer end=new System.Windows.Forms.Timer();end.Interval=Math.Max(1,seconds)*1000;
+                end.Tick+=delegate {end.Stop();prompt.Close();};end.Start();
+                DialogResult answer=prompt.ShowDialog();end.Dispose();
+                Console.Out.WriteLine("prompt trial: answer="+answer+" bounds="+prompt.Bounds+" scale="+scale);
+            }
+        }
         internal static void Mark(Form f) {
             SetPropW(f.Handle, "ComputerUseOverlayWindow", new IntPtr(1));
             SetWindowDisplayAffinity(f.Handle, 0x11);
@@ -1303,16 +1486,9 @@ namespace Axon {
             bool allowed=hostManaged||known; bool timedOut=false;
             if(!allowed) {
             prompting=true; Overlay.HideAll();
-            using (Form dialog = new Form()) {
+            using (Form dialog = new AccessPrompt(Convert.ToString(m["message"]),visualScale,SystemInformation.HighContrast,BarShown?Bounds:Rectangle.Empty)) {
                 activePrompt=dialog;
                 dialog.Text="Computer Use — local permission"; dialog.TopMost=true;
-                dialog.ClientSize=new Size(700,440); dialog.StartPosition=FormStartPosition.CenterScreen;
-                TextBox body=new TextBox(); body.Multiline=true; body.ReadOnly=true; body.ScrollBars=ScrollBars.Vertical;
-                body.Font=new Font("Segoe UI",11); body.SetBounds(16,16,668,350);
-                body.Text=Convert.ToString(m["message"]); dialog.Controls.Add(body);
-                Button yes=new Button(); yes.Text="Allow"; yes.SetBounds(16,385,120,32); yes.DialogResult=DialogResult.Yes; dialog.Controls.Add(yes);
-                Button no=new Button(); no.Text="Deny"; no.SetBounds(152,385,120,32); no.DialogResult=DialogResult.No; dialog.Controls.Add(no);
-                dialog.CancelButton=no; dialog.AcceptButton=no;
                 System.Windows.Forms.Timer expiry=new System.Windows.Forms.Timer(); expiry.Interval=90000;
                 expiry.Tick += delegate { timedOut=true; dialog.DialogResult=DialogResult.No; dialog.Close(); }; expiry.Start();
                 dialog.Shown += delegate { Mark(dialog); };

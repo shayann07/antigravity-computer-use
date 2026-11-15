@@ -237,6 +237,66 @@ namespace Axon {
             Plate(g,ModeRect,Color.White,m.ModeHover,m.Pressed==3);
             Icon(g,"settings",ModeRect.X+12,ModeRect.Y+12,Mix(rest,strong,m.ModeHover),Pressing(m.ModePress));
         }
+        // ---- The access prompt: the bar's surface as a card. The question
+        // is its title, the whole request sits under it, and Deny and Allow
+        // are real buttons. One window draws the card (shadow, round
+        // corners); the dialog inside it holds the text and the buttons.
+        internal const int PromptWidth=496,PromptMargin=36,PromptInset=6,PromptPad=10,PromptTitle=22,PromptBodyMost=300;
+        internal const int PromptButtonWidth=104,PromptButtonHeight=44,PromptRing=3;
+        internal const string PromptNote="No answer in 90 s counts as Deny";
+        internal static Color PromptSurface(bool contrast) {return contrast?SystemColors.Window:InkSurface;}
+        internal static Color PromptInk(bool contrast) {return contrast?SystemColors.WindowText:Rest;}
+        internal static Font PromptFont(float zoom) {return Face(13*zoom,false);}
+        internal static void PromptCard(Graphics g,RectangleF panel,bool contrast) {
+            Raised(g,panel,18,PromptSurface(contrast));
+            using(GraphicsPath shape=Overlay.RoundRect(panel,18))using(Pen edge=new Pen(contrast?SystemColors.WindowText:Color.FromArgb(41,255,255,255),contrast?2:1))g.DrawPath(edge,shape);
+        }
+        // The dialog's own drawing: the title, the rule over the buttons, and the note beside them.
+        internal static void PromptFace(Graphics g,float width,string title,float rule,float noteWidth,bool contrast) {
+            g.SmoothingMode=SmoothingMode.AntiAlias;g.PixelOffsetMode=PixelOffsetMode.HighQuality;g.TextRenderingHint=System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+            using(Font head=Face(16,true))using(Font small=Face(12,false)) {
+                Text(g,title,head,contrast?SystemColors.WindowText:PaperText,new RectangleF(PromptPad,PromptPad,width-2*PromptPad,PromptTitle));
+                using(Pen line=new Pen(contrast?SystemColors.WindowText:Color.FromArgb(26,255,255,255),1))g.DrawLine(line,PromptPad,rule+.5f,width-PromptPad,rule+.5f);
+                Text(g,PromptNote,small,contrast?SystemColors.WindowText:Mist,new RectangleF(PromptPad,rule+12,noteWidth,PromptButtonHeight));
+            }
+        }
+        // Allow is filled and Deny is outlined. Hover lifts the plate, a press
+        // lands at PressScale, and the focus ring sits outside the shape.
+        internal static void PromptButton(Graphics g,RectangleF box,string text,bool filled,bool hover,bool pressed,bool focus,bool contrast) {
+            g.SmoothingMode=SmoothingMode.AntiAlias;g.PixelOffsetMode=PixelOffsetMode.HighQuality;g.TextRenderingHint=System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+            Color accent=contrast?SystemColors.Highlight:Violet,ink=contrast?SystemColors.WindowText:PaperText;
+            if(focus) {
+                RectangleF ring=box;ring.Inflate(PromptRing-.75f,PromptRing-.75f);
+                using(GraphicsPath shape=Overlay.RoundRect(ring,12+PromptRing))using(Pen pen=new Pen(accent,1.5f))g.DrawPath(pen,shape);
+            }
+            var saved=g.Save();
+            if(pressed){float cx=box.X+box.Width/2,cy=box.Y+box.Height/2;g.TranslateTransform(cx,cy);g.ScaleTransform(PressScale,PressScale);g.TranslateTransform(-cx,-cy);}
+            Color label;
+            using(GraphicsPath shape=Overlay.RoundRect(box,12)) {
+                if(filled) {
+                    Color fill=contrast?accent:pressed?Mix(Violet,InkSurface,.16f):hover?Mix(Violet,Color.White,.28f):Violet;
+                    using(SolidBrush brush=new SolidBrush(fill))g.FillPath(brush,shape);
+                    label=contrast?SystemColors.HighlightText:InkSurface;
+                    if(contrast&&(hover||pressed))using(Pen pen=new Pen(ink,2))g.DrawPath(pen,shape);
+                } else {
+                    if(!contrast&&(hover||pressed))using(SolidBrush brush=new SolidBrush(Color.FromArgb(pressed?36:22,255,255,255)))g.FillPath(brush,shape);
+                    RectangleF inner=box;inner.Inflate(-.5f,-.5f);
+                    using(GraphicsPath line=Overlay.RoundRect(inner,11.5f))using(Pen pen=new Pen(contrast?ink:Color.FromArgb(hover||pressed?140:102,255,255,255),contrast&&(hover||pressed)?2:1))g.DrawPath(pen,line);
+                    label=ink;
+                }
+            }
+            using(Font face=Face(13,true)) {
+                float wide=TextWidth(g,text,face);
+                Text(g,text,face,label,new RectangleF(box.X+(box.Width-wide)/2,box.Y,wide+2,box.Height));
+            }
+            g.Restore(saved);
+        }
+        // The three questions the runtime asks, as it words them.
+        internal static readonly string[] PromptSamples={
+            "Allow this application for this session?\r\n\r\nMeeting notes - Notepad\r\nC:\\Windows\\System32\\notepad.exe\r\nPID 18244\r\nAccess: full.\r\n\r\nTask: Type the meeting notes into Notepad and save them.\r\n\r\nIts screenshots and accessibility text go to Antigravity's configured model. Ordinary actions run autonomously. Consequential effects need a separate confirmation. Your real mouse/keyboard will be used. Esc or Ctrl+Alt+F12 stops. Use a disposable account/VM for important data.",
+            "Approve ONE sensitive operation?\r\n\r\nSave the notes as meeting.txt in Documents.\r\n\r\nApplication: C:\\Windows\\System32\\notepad.exe\r\nControl: Save\r\n\r\n{\r\n  \"operation\": \"file_dialog\",\r\n  \"args\": {\r\n    \"hwnd\": 7210712,\r\n    \"path\": \"C:\\\\Users\\\\owner\\\\Documents\\\\Projects\\\\Quarterly\\\\A-long-folder-name-that-has-no-spaces-anywhere\\\\meeting.txt\",\r\n    \"entry_method\": \"type\",\r\n    \"reason\": \"Save the notes as meeting.txt in Documents.\"\r\n  }\r\n}\r\n\r\nCheck the actual target. Never let an agent approve this dialog. Deny if the result is unclear.",
+            "Launch this application?\r\n\r\nOpen the calculator to check the totals.\r\n\r\n{\r\n  \"app\": \"calc.exe\",\r\n  \"args\": []\r\n}\r\n\r\nThis starts software with your account's privileges. No shell is used. Approve only if intended."
+        };
         // ---- The Settings menu: a raised panel under the bar. A header that
         // says whose menu it is, 44-high rows, a hairline, and a footer that
         // repeats how to stop.
@@ -267,14 +327,16 @@ namespace Axon {
             MenuBody(g,panel);MenuRows(g,items,panel.Location,hover,pressed);MenuEdge(g,panel);
         }
         // The panel's chrome at any height: one neutral drop shadow, the body, and its hairline edge.
-        internal static void MenuBody(Graphics g,RectangleF panel) {
+        internal static void MenuBody(Graphics g,RectangleF panel) {Raised(g,panel,12,InkRaised);}
+        // A surface that floats over the desktop: one neutral drop shadow, then the body.
+        static void Raised(Graphics g,RectangleF panel,float radius,Color surface) {
             g.SmoothingMode=SmoothingMode.AntiAlias;g.PixelOffsetMode=PixelOffsetMode.HighQuality;
             // One neutral drop shadow: 0 12 28, black 34%.
             for(int i=14;i>=1;i--) {
                 RectangleF soft=panel;soft.Offset(0,12);soft.Inflate(i*2-6,i*2-6);
-                using(GraphicsPath shape=Overlay.RoundRect(soft,12+i*2))using(SolidBrush shade=new SolidBrush(Color.FromArgb(7,0,0,0)))g.FillPath(shade,shape);
+                using(GraphicsPath shape=Overlay.RoundRect(soft,radius+i*2))using(SolidBrush shade=new SolidBrush(Color.FromArgb(7,0,0,0)))g.FillPath(shade,shape);
             }
-            using(GraphicsPath shape=Overlay.RoundRect(panel,12))using(SolidBrush fill=new SolidBrush(InkRaised))g.FillPath(fill,shape);
+            using(GraphicsPath shape=Overlay.RoundRect(panel,radius))using(SolidBrush fill=new SolidBrush(surface))g.FillPath(fill,shape);
         }
         // menu.page: the panel at a height between two pages, the old page's
         // rows leaving and the new page's arriving. Each page is a picture of
@@ -494,6 +556,19 @@ namespace Axon {
                     }
                     sheet.Save(Path.Combine(directory,"menu-page.png"),ImageFormat.Png);
                 }
+            }
+            // The access prompt, laid out by the dialog itself: the three
+            // questions at rest, then one with Allow hovered and one in a contrast theme.
+            {
+                var shots=new System.Collections.Generic.List<Bitmap>();
+                try {
+                    for(int i=0;i<5;i++)using(Guardian.AccessPrompt prompt=new Guardian.AccessPrompt(PromptSamples[i<3?i:i-3],2,i==4,Rectangle.Empty))shots.Add(prompt.Picture(i==3?1:0,i==3?2:0));
+                    int wide=0,tall=0;foreach(Bitmap shot in shots){wide+=shot.Width;tall=Math.Max(tall,shot.Height);}
+                    using(Bitmap sheet=new Bitmap(wide,tall,PixelFormat.Format32bppArgb)) {
+                        using(Graphics g=Graphics.FromImage(sheet)){g.Clear(Color.FromArgb(31,33,40));int x=0;foreach(Bitmap shot in shots){g.DrawImage(shot,new Rectangle(x,0,shot.Width,shot.Height));x+=shot.Width;}}
+                        sheet.Save(Path.Combine(directory,"prompt.png"),ImageFormat.Png);
+                    }
+                } finally {foreach(Bitmap shot in shots)shot.Dispose();}
             }
             foreach(uint role in new uint[]{32512,32513,32649,32650})
             using(Bitmap image=new Bitmap(96,96,PixelFormat.Format32bppArgb)) {

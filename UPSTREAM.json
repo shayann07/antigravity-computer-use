@@ -60,7 +60,7 @@
     {
       "path": "server/native/AxonHost.cs",
       "upstream_sha256": "bef101afecbdf8f75df2a1f8b45d224eade39f09e3c8e25cf7b450e3fa49a8ef",
-      "local_sha256": "45f4a4166be7df21f4ecd7d60d71ec1b7f175ea5e4c18a85c7065b49a71555c5",
+      "local_sha256": "dc24d1546dac790aa87e486b958a82ab4fba670670584b2c7014b3bf1c5c7081",
       "modified": true
     },
     {
@@ -268,7 +268,7 @@
     },
     {
       "path": "server/native/Guardian.cs",
-      "sha256": "9facbf465f9f6f07995f1b3b29f8c0d8dd1d5bdfce19afe7000ad4775babfb27"
+      "sha256": "3d69e507901a2eadc90dfe47d12daa7e419d0641f302266f0d4b31bf2a043830"
     },
     {
       "path": "server/native/CursorSafety.cs",
@@ -276,7 +276,7 @@
     },
     {
       "path": "server/native/DesktopVisuals.cs",
-      "sha256": "d4754d31377cb284556f80053163e6ce264ab9827dbd640e88def49c4d700494"
+      "sha256": "c282e01379344164d17e92fbf0ad36a0e658e4120a06b807ae0e02d6ccbb9a6a"
     },
     {
       "path": "server/native/Glow.cs",
