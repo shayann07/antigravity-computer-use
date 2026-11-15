@@ -60,7 +60,7 @@
     {
       "path": "server/native/AxonHost.cs",
       "upstream_sha256": "bef101afecbdf8f75df2a1f8b45d224eade39f09e3c8e25cf7b450e3fa49a8ef",
-      "local_sha256": "02767adc812993f55d3048185800dba75d7d98eddb5e41ecc5e9f6cabe067dc1",
+      "local_sha256": "855817ce62c4852dc20bed32a63f373cbca5fd0f3010171b09d0f3fb93066d2c",
       "modified": true
     },
     {
@@ -284,7 +284,7 @@
     },
     {
       "path": "server/native/CursorMotion.cs",
-      "sha256": "dca4a5d368af1b9642cddfd27897fd1b2d4c0d4ba756cb7294212b9c1b744448"
+      "sha256": "6c00295e7fb08744e8c151ea2668170b0b1868373604e0a277e5e88242781419"
     },
     {
       "path": "server/native/TakeoverPolicy.cs",

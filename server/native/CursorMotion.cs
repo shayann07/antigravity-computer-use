@@ -21,6 +21,8 @@ namespace Axon {
             double distance=Math.Sqrt(dx*dx+dy*dy)/Math.Max(.5,scale);
             DurationMs=!animate||distance<3?0:(int)Math.Max(120,Math.Min(600,100+10*Math.Sqrt(distance)));
         }
+        // A stroke that follows another one keeps only a short approach.
+        internal void Cap(int maximumMs) {if(maximumMs>=0&&DurationMs>maximumMs)DurationMs=maximumMs;}
         internal Point At(double t) {
             if(t<=0)return start;if(t>=1)return end;
             double eased=t*t*t*(10+t*(-15+6*t));

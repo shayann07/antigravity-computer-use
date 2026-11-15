@@ -38,10 +38,17 @@ namespace Axon
             INPUT input=MouseInput(0x0001|0x8000|0x4000,0); // MOVE | ABSOLUTE | VIRTUALDESK
             input.u.mi.dx=absolute.X;input.u.mi.dy=absolute.Y;Presence.NoteSelfInput();Inject(new INPUT[]{input});return true;
         }
-        internal static Dictionary<string,object> MoveCursorTo(int x,int y) {
+        // The system timer ticks every 15.6 ms unless a process asks for
+        // more. A drag sleeps a few milliseconds per hop, so without this
+        // each hop cost about 19 ms. Always paired with timeEndPeriod.
+        [DllImport("winmm.dll")] internal static extern uint timeBeginPeriod(uint period);
+        [DllImport("winmm.dll")] internal static extern uint timeEndPeriod(uint period);
+        internal static Dictionary<string,object> MoveCursorTo(int x,int y) {return MoveCursorTo(x,y,-1);}
+        internal static Dictionary<string,object> MoveCursorTo(int x,int y,int capMs) {
             ControlFence.Check();RequirePhysicalPoint(x,y);
             POINT p;if(!GetCursorPos(out p))throw new AxonError("cursor_unavailable","Cannot read the cursor position.",null);
             CursorPath path=new CursorPath(new Point(p.X,p.Y),new Point(x,y),Overlay.ScreenScale(Screen.FromPoint(new Point(x,y))),DesktopVisuals.MotionEnabled);
+            path.Cap(capMs);
             int frames=path.Run(delegate(Point point) {SetCursorPos(point.X,point.Y);},ControlFence.Check);
             System.Threading.Thread.Sleep(16);ControlFence.Check();
             return new Dictionary<string,object>{{"frames",frames},{"duration_ms",path.DurationMs},{"animated",path.DurationMs>0}};
@@ -2638,6 +2645,9 @@ namespace Axon
         // Codex added it for exactly those. Physical by nature: it needs the
         // pointer and the window in front, and follows the same coexistence
         // rules as a physical click.
+        static readonly System.Diagnostics.Stopwatch _lastStroke = new System.Diagnostics.Stopwatch();
+        const int ChainedStrokeMs = 3000, ChainedApproachMs = 48;
+
         static object OpDrag(Dictionary<string, object> a)
         {
             Dictionary<string, object> res = new Dictionary<string, object>();
@@ -2663,7 +2673,11 @@ namespace Axon
             int steps = Int(Get(a, "steps"), 12);
             if (steps < 2) steps = 2;
             if (steps > 200) steps = 200;
-            int holdMs = Int(Get(a, "hold_ms"), 60);
+            // A stroke that follows another within a few seconds (one run
+            // drawing several strokes) needs no long settle or approach: the
+            // app is already tracking this cursor.
+            bool chained = _lastStroke.IsRunning && _lastStroke.ElapsedMilliseconds < ChainedStrokeMs;
+            int holdMs = Int(Get(a, "hold_ms"), chained ? 20 : 60);
             if (holdMs < 0) holdMs = 0;
             if (holdMs > 2000) holdMs = 2000;
 
@@ -2695,11 +2709,12 @@ namespace Axon
                 for (int s = 1; s < path.Count; s++) hops[s] = Math.Max(1, (int)(hops[s] * (long)MaxStrokeHops / wanted));
             bool steppedAside = Overlay.BeginClickThrough(from[0], from[1]);
             bool pressed = false, released = false;
+            bool fineTimer = Native.timeBeginPeriod(1) == 0;
             try
             {
                 Presence.NoteSelfInput();
-                res["approach_motion"]=Native.MoveCursorTo(from[0], from[1]);
-                System.Threading.Thread.Sleep(30);
+                res["approach_motion"]=Native.MoveCursorTo(from[0], from[1], chained ? ChainedApproachMs : -1);
+                System.Threading.Thread.Sleep(10);
                 Native.MouseButton(button, true);
                 pressed = true;
                 System.Threading.Thread.Sleep(holdMs);
@@ -2719,10 +2734,12 @@ namespace Axon
                 System.Threading.Thread.Sleep(holdMs);
                 Native.MouseButton(button, false);
                 released = true;
-                System.Threading.Thread.Sleep(30);
+                System.Threading.Thread.Sleep(10);
+                _lastStroke.Restart();
             }
             finally
             {
+                if (fineTimer) Native.timeEndPeriod(1);
                 // A Stop or Esc mid-stroke throws from the cursor fence; never
                 // leave the button held. Releasing skips the fence by design.
                 if (pressed && !released) { try { Native.MouseButton(button, false); } catch { } }
@@ -2735,6 +2752,7 @@ namespace Axon
                 res["cursor_restored"] = true;
             }
             if (held) res["input_held"] = true;
+            if (chained) res["chained"] = true;
             res["from"] = from;
             res["to"] = to;
             res["button"] = button;
