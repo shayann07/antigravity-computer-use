@@ -296,7 +296,7 @@
     },
     {
       "path": "server/desktop-tools.mjs",
-      "sha256": "258211c1a55ad69be7a8bff7c9c2be99f3cbce4d371694f92206f4ab49792a92"
+      "sha256": "469b0bf82a3317960762c0f3105f4fa0eb4f3811965795b54dfe4a07529a636d"
     },
     {
       "path": "scripts/desktop.mjs",
