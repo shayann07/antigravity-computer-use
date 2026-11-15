@@ -193,6 +193,25 @@ namespace Axon
             try {_marker.BeginInvoke((MethodInvoker)delegate {try {_glow.Target(new IntPtr(hwnd),x,y,hasPoint,pulse,sampleNow);}catch {}});}catch {}
         }
         // glow.stop: 67 ms from whatever it was doing. Safe from any thread.
+        // The bench, live: lights one window for a few seconds and prints what
+        // the glow achieved (frame times, processor time). Not used by the product.
+        internal static void GlowTrial(long hwnd,int seconds) {
+            Glow glow=new Glow();glow.Trial=true;System.Diagnostics.Process self=System.Diagnostics.Process.GetCurrentProcess();
+            System.Windows.Forms.Timer tick=new System.Windows.Forms.Timer();tick.Interval=1000;int passed=0;TimeSpan before=TimeSpan.Zero;
+            tick.Tick+=delegate {
+                passed++;
+                if(passed==1)Console.WriteLine("entered "+new System.Web.Script.Serialization.JavaScriptSerializer().Serialize(glow.Report()));
+                // The first two seconds hold the entrance; the rest is the glow at rest.
+                if(passed==2){self.Refresh();before=self.TotalProcessorTime;}
+                if(passed>=seconds) {
+                    self.Refresh();double share=(self.TotalProcessorTime-before).TotalMilliseconds/((passed-2)*10.0);
+                    Console.WriteLine("rest "+new System.Web.Script.Serialization.JavaScriptSerializer().Serialize(glow.Report())+" cpu_percent_of_one_core="+share.ToString("0.0")+" frames="+glow.composed+" compose_ms_each="+(glow.composing/Math.Max(1,glow.composed)).ToString("0.00")+" present_ms_each="+(glow.presenting/Math.Max(1,glow.composed)).ToString("0.00"));
+                    tick.Stop();Application.ExitThread();
+                }
+            };
+            tick.Start();try {glow.Target(new IntPtr(hwnd),0,0,false,false,false);}catch(Exception e){Console.WriteLine(e.ToString());}
+            Application.Run();
+        }
         internal static void GlowBrightness(float level) {
             GlowLevel=level;
             if(_marker==null||_glow==null)return;
@@ -667,10 +686,16 @@ namespace Axon
             protected void Push()
             {
                 if (_hBitmap == IntPtr.Zero || !IsHandleCreated) return;
-                IntPtr screenDc = GetDC(IntPtr.Zero);
-                IntPtr memDc = CreateCompatibleDC(screenDc);
-                IntPtr old = SelectObject(memDc, _hBitmap);
-                try
+                // The drawing context is kept with the surface, so a frame
+                // does not make and destroy one.
+                if (_memDc == IntPtr.Zero)
+                {
+                    IntPtr screen = GetDC(IntPtr.Zero);
+                    _memDc = CreateCompatibleDC(screen); ReleaseDC(IntPtr.Zero, screen);
+                    if (_memDc == IntPtr.Zero) return;
+                    _memOld = SelectObject(_memDc, _hBitmap);
+                }
+                IntPtr screenDc = IntPtr.Zero, memDc = _memDc;
                 {
                     NSIZE size = new NSIZE(_cached.Width, _cached.Height);
                     NPOINT src = new NPOINT(0, 0);
@@ -682,16 +707,12 @@ namespace Axon
                     blend.AlphaFormat = AC_SRC_ALPHA;
                     UpdateLayeredWindow(Handle, screenDc, ref dst, ref size, memDc, ref src, 0, ref blend, ULW_ALPHA);
                 }
-                finally
-                {
-                    SelectObject(memDc, old);
-                    DeleteDC(memDc);
-                    ReleaseDC(IntPtr.Zero, screenDc);
-                }
             }
+            IntPtr _memDc = IntPtr.Zero, _memOld = IntPtr.Zero;
 
             void ReleaseBitmap()
             {
+                if (_memDc != IntPtr.Zero) { SelectObject(_memDc, _memOld); DeleteDC(_memDc); _memDc = IntPtr.Zero; }
                 if (_hBitmap != IntPtr.Zero) { DeleteObject(_hBitmap); _hBitmap = IntPtr.Zero; }
                 _bits = IntPtr.Zero;
             }
@@ -752,6 +773,8 @@ namespace Axon
             }
 
             protected void PlaceAt(int x, int y) { Location = new Point(x, y); Push(); }
+            // A move alone: the picture is already there, so nothing is uploaded.
+            protected void SlideTo(int x, int y) { if (Left != x || Top != y) Location = new Point(x, y); }
 
             // Entering elements ease out: quick to arrive, gentle to settle.
             protected void Animate(int durationMs, Action<float> step, Action done)
@@ -802,7 +825,7 @@ namespace Axon
             internal GlowStrip() : base(true) { TopMost = false; Bounds = new Rectangle(-10000, -10000, 10, 10); }
             protected override void Render(Graphics g) { }
             internal void Surface(int[] pixels, Rectangle where) { SetBounds(where.X, where.Y, where.Width, where.Height); SetSurface(pixels, where.Width, where.Height); }
-            internal void Shift(int x, int y) { PlaceAt(x, y); }
+            internal void Shift(int x, int y) { SlideTo(x, y); }
             internal float Level { get { return Alpha; } set { Alpha = value; } }
         }
 
@@ -849,9 +872,10 @@ namespace Axon
             internal Glow()
             {
                 for (int i = 0; i < 8; i++) { strips[i] = new GlowStrip(); strips[i].CreateControl(); IntPtr handle = strips[i].Handle; }
-                watch.Interval = 40; watch.Tick += delegate { try { Watch(); } catch { } };
+                watch.Interval = 40; watch.Tick += delegate { try { Watch(); } catch (Exception e) { if (Trial) Console.WriteLine(e.ToString()); } };
                 pacer = new Thread(Pace); pacer.IsBackground = true; pacer.Name = "glow frames"; pacer.Start();
             }
+            internal bool Trial; internal double composing, presenting; internal int composed;
             internal IntPtr[] Handles() { IntPtr[] all = new IntPtr[8]; for (int i = 0; i < 8; i++) all[i] = strips[i].Handle; return all; }
             bool Lit { get { return shown && !suspended && !leaving && !passing; } }
             // What a caller is told: there or not, never a value part-way.
@@ -1074,9 +1098,11 @@ namespace Axon
                         Job job; lock (gate) job = Next();
                         next = Now + (job == null ? DesktopVisuals.GlowRestFrame : job.Every);
                         if (job == null) { Interlocked.Exchange(ref inFlight, 0); continue; }
+                        double began = Now;
                         if (job.Band) job.Edge.Compose(job.Time, job.X, job.Y, job.Grow, job.Bright);
                         if (job.Wash) job.Veil.Compose(job.Time, job.X, job.Y, 1, job.Bright);
-                        strips[0].BeginInvoke((MethodInvoker)delegate { try { Apply(job); } catch { } finally { Interlocked.Exchange(ref inFlight, 0); } });
+                        composing += Now - began; composed++;
+                        strips[0].BeginInvoke((MethodInvoker)delegate { double start = Now; try { Apply(job); } catch { } finally { presenting += Now - start; Interlocked.Exchange(ref inFlight, 0); } });
                     }
                     catch { Interlocked.Exchange(ref inFlight, 0); Thread.Sleep(50); }
                 }
@@ -1503,7 +1529,7 @@ namespace Axon
                     if(!_following||Interlocked.Exchange(ref _posted,1)!=0)return;
                     try {BeginInvoke((MethodInvoker)delegate {
                         Interlocked.Exchange(ref _posted,0);
-                        if(_following&&Visible)PlaceAt(_atX-(int)(48*_scale),_atY-(int)(48*_scale));
+                        if(_following&&Visible)SlideTo(_atX-(int)(48*_scale),_atY-(int)(48*_scale));
                     });}catch {Interlocked.Exchange(ref _posted,0);}
                 };
             }

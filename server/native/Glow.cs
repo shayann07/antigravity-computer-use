@@ -268,7 +268,8 @@ namespace Axon {
                         if((pa[at]|pb[at])==0) {
                             // Past the band there is only the bloom: most of the strip.
                             int faint=(pc[at]*gainC[i]+noise[at])>>8,tint=tone[i];
-                            output[at]=(faint<<24)|(((faint*((tint>>16)&255))>>8)<<16)|(((faint*((tint>>8)&255))>>8)<<8)|((faint*(tint&255))>>8);
+                            uint level=(uint)faint,shade=(uint)tint;
+                            output[at]=(int)((level<<24)|((((shade&0xFF00FF)*level)>>8)&0xFF00FF)|((((shade&0xFF00)*level)>>8)&0xFF00));
                             continue;
                         }
                         int ribbon=(pa[at]*gainA[i])>>8,body=(pb[at]*gainB[i]+pc[at]*gainC[i]+noise[at])>>8;

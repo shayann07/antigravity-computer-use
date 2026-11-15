@@ -467,6 +467,7 @@ namespace Axon
             if(argv.Length==3 && argv[0]=="--cursor-probe") {SetDpiAwareness();CursorSafety.Probe(argv[1],UInt32.Parse(argv[2]));return 0;}
             if(argv.Length==2 && argv[0]=="--shown-cursor-probe") {SetDpiAwareness();CursorSafety.Probe(argv[1],32512,true);return 0;}
             if(argv.Length==2 && argv[0]=="--visual-preview") { SetDpiAwareness();DesktopVisuals.Export(argv[1]);return 0; }
+            if(argv.Length==3 && argv[0]=="--glow-trial") { SetDpiAwareness();Overlay.GlowTrial(Int64.Parse(argv[1]),Int32.Parse(argv[2]));return 0; }
             if (Array.IndexOf(argv, "--guardian") >= 0) SetDpiAwareness();
             if (Array.IndexOf(argv, "--guardian") >= 0) { int code=0; var ui=new System.Threading.Thread(delegate(){ code=Guardian.Run(); }); ui.SetApartmentState(System.Threading.ApartmentState.STA); ui.Start(); ui.Join(); return code; }
             if (Array.IndexOf(argv, "--release-inputs") >= 0) { try { ControlFence.Recover(); return InputLedger.HasHeld()?2:0; } catch { return 2; } }
