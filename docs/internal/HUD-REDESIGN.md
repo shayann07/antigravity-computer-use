@@ -43,9 +43,12 @@ painted by `DesktopVisuals.Edge`; the Mac equivalents are in `MacVisuals.swift`.
    re-arm control with it. Session expiry dismisses the bar with no message.
 9. **The bar cannot be moved** (#68). Avoidance moves it for a click and never
    brings it back.
-10. **During a permission prompt the bar's Stop button is dead.** The prompt is
-    `dialog.ShowDialog(this)`, which disables the bar. Esc and Ctrl+Alt+F12
-    still stop. This is a gap against "Stop must always be reachable" by mouse.
+10. **During a permission prompt the bar's Stop button is probably dead.** The
+    prompt is `dialog.ShowDialog(this)`, which disables its owner, the bar.
+    Esc and Ctrl+Alt+F12 still stop. This is read from the code and was not
+    observed live; it needs a check on a real desktop. If confirmed, it is a
+    gap against "Stop must always be reachable" by mouse. `Overlay.HideAll()`
+    also runs first, so the glow is gone during a prompt.
 11. **Three sizes disagree.** `control-contract.json` says 384 × 44,
     `DesktopVisuals` says 470 × 52, the Mac bar is 396 × 44.
 12. **Text glyphs stand in for icons** when the glass helper is missing
@@ -77,7 +80,7 @@ painted by `DesktopVisuals.Edge`; the Mac equivalents are in `MacVisuals.swift`.
 ## 3. State model
 
 The underlying states do not change: `idle`, `active`, `paused`, `stopped`.
-The bar shows nine presentations of them. "New" marks behaviour that does not
+The bar shows ten presentations of them. "New" marks behaviour that does not
 exist today.
 
 | Presentation | Underlying | Line 1 | Line 2 | Primary | Secondary | Glow |
@@ -90,6 +93,7 @@ exist today.
 | Waiting for your answer (new) | `prompting` | Waiting for your answer | Answer in the permission window · Esc stops | in the dialog | Stop (needs native change, section 9) | amber line |
 | Stopped | `stopped` | Stopped | reason · nothing can act | Re-arm | Hide (×), Settings | none |
 | Can't re-arm yet (new) | `stopped` + a refusal | Can't re-arm yet | reason, see below | Check again | Hide (×), Settings | none |
+| Can't resume yet (new) | `paused` + a refusal | Paused · can't resume yet | reason, see below | Check again | Stop, Settings | amber line |
 | Session ended (new) | `idle` after expiry | Session ended | The time limit ran out · hides in 8 s | Hide (×) | Settings | none |
 
 Rules:
@@ -104,6 +108,8 @@ Rules:
   `InputLedger.HasHeld`, `WorkersExited`, latch inspection). It cannot clear a
   lock by itself. If the checks still fail it stays in this state and line 2
   keeps the reason. Settlement rules in `STOP-UNCERTAINTY.md` are unchanged.
+  The same refusals apply to Resume from Paused (`rearmLocked`, held input,
+  live workers); there Stop keeps its slot and stays live.
 - **Waiting for your answer** exists only when the guardian shows its own
   prompt. It does not exist in host-managed mode.
 
@@ -124,11 +130,11 @@ Every reason the guardian already produces maps to one line of text.
 | `input_desktop_changed` | Stopped | The screen was locked or switched |
 | `cursor_watchdog_failed`, `watchdog_unavailable` | Stopped | A safety check failed |
 | `guard_persistence_failed` | Stopped | Could not save the stopped state |
-| `rearmLocked` | Can't re-arm yet | The last task's cleanup is not confirmed |
-| `input_cleanup_failed`, held input, live workers | Can't re-arm yet | A key or button may still be held |
+| `rearmLocked` | Can't re-arm / resume yet | The last task's cleanup is not confirmed |
+| `input_cleanup_failed`, held input, live workers | Can't re-arm / resume yet | A key or button may still be held |
 | `guardian_stop_unconfirmed`, `.unconfirmed` marker | Can't re-arm yet | Stop was not confirmed |
 | latch unreadable or undeletable | Can't re-arm yet | Could not read the stop record |
-| deadline cannot be established | Can't re-arm yet | Could not start the session timer |
+| deadline cannot be established | Can't re-arm / resume yet | Could not start the session timer |
 
 Two warnings stay off the bar because they need no action: "Custom pointer
 unavailable" and "Could not save control preference".
@@ -206,7 +212,7 @@ surface gives known contrast in every case.
 | `rose` | `#FF8FA0` | stopped | 8.4:1 on ink |
 | `slate` | `#1B2735` | hairline beside glow lines | 15.1:1 on white |
 | edge | white at 16% | bar and menu border | — |
-| outline | paper at 40% | outlined button border | about 3.6:1 on ink |
+| outline | paper at 40% | outlined button border | 3.6:1 on ink (computed) |
 
 `ice`, `amber` and `rose` come from today's `StateColor` and `accent_rgb`, so
 the product keeps its colours. Filled button text is `ink` on `paper`, 16.6:1.
@@ -274,11 +280,15 @@ control. The glow says where.
 
 ### Phasing
 
-- **Phase 1, no protocol change.** Keep the monitor-edge glow and change its
-  numbers in `control-contract.json`: `edge_depth` 82 → 18, `edge_sigma`
-  27 → 7, add the slate hairline, `breath_amplitude` → 0, add the per-state
-  rule above. This is the "maximised" picture in the mockup, used for every
-  window.
+- **Phase 1, no protocol change.** Keep the monitor-edge glow and slim it:
+  depth 82 → 18, sigma 27 → 7, breathing amplitude → 0, slate hairline, and
+  the per-state rule above. This is the "maximised" picture in the mockup,
+  used for every window. It is not a numbers-only change on Windows:
+  `DesktopVisuals.Edge` hardcodes sigma, depth, core and both alphas, and only
+  `MacGlowView` reads `edge_*` from the contract. `Edge` must read the
+  contract, draw the hairline, and take a colour. `SetState` hides the overlay
+  for every state except `active`, so the amber line in Paused needs that
+  call changed to keep the ring up.
 - **Phase 2, per-window glow.** The guardian does not know the target window
   today. The runtime already sends `{op:'activity', action}` before each
   action; add the target `hwnd` to it. The guardian accepts it only if
@@ -322,7 +332,9 @@ Rules:
   apart.
 - Everything is interruptible. Stop, Esc and the hotkey never wait for an
   animation. Buttons accept input during every transition.
-- Only opacity and position animate. Nothing resizes during a transition.
+- Only transform (position, scale) and opacity animate. No layout size
+  changes during a transition. A colour change, such as ice to amber, is two
+  layers cross-fading in opacity.
 - `bar.stepAside` must finish **before** `avoid_input` is acknowledged, or the
   acknowledgement must report the final bounds. The click waits for the
   acknowledgement today; that order stays.
@@ -392,7 +404,9 @@ macOS Reduce Motion is on:
   - Dragging does not change state, grants, the latch or visibility.
   - Dragging the bar must not count as takeover input. Smart takeover pauses
     on deliberate movement and on any click; a press or drag that starts on
-    the bar is exempt, as the Mac bar's `.hud` bounds already are.
+    the bar is exempt, as the Mac bar's `.hud` bounds already are. No such
+    exemption was found in `Presence.cs` or `TakeoverPolicy.cs` on Windows
+    (only the open-menu check in `Tick`); this was read, not tested live.
   - While the agent's own injected click is in flight, a drag cannot start.
   - Stop, Resume and Re-arm stay live while the bar is being dragged or is
     settling.
@@ -409,14 +423,14 @@ No file is changed by this document.
 
 | File | Change |
 |---|---|
-| `server/control-contract.json` | One bar size (496 × 56) replacing three. New glow numbers, per-state glow rule, motion tokens, colour tokens. `breath_*` retired or zeroed. |
-| `server/native/DesktopVisuals.cs` | `Hud` redrawn: two lines, state mark, slot layout, filled/outlined/icon buttons, new `HudWidth`/`HudHeight` and rects, a fourth rect for the close mark. Takes line 2 and the presentation as input. Icons drawn from the Phosphor path data, no text glyphs. `Edge` takes state and draws line + hairlines + short field. `BreathLevel` removed or flattened. `Export` renders all nine presentations over a dark and a light backdrop. |
-| `server/native/Guardian.cs` | Keep the last reason and map it to line 2. Add the presentations "can't re-arm yet", "waiting" and "session ended". Refusals in the toggle handler set the bar text as well as emitting `visual_warning`. 600 ms click guard after entering `stopped`. Hold verbs 1.2 s. Stopped bar no longer auto-hides (owner decision). Expiry shows "Session ended" for 8 s. Drag handling, home position, return after avoidance, per-monitor preference, DPI change. Menu text and "Move bar". Accessible names and live region. Show the permission prompt without disabling the bar, so Stop works by mouse during a prompt. |
+| `server/control-contract.json` | One bar size (496 × 56) replacing three. New glow numbers, per-state glow rule, motion tokens, colour tokens. `breath_*` retired or zeroed. Windows reads the glow numbers only after the `Edge` change below. |
+| `server/native/DesktopVisuals.cs` | `Hud` redrawn: two lines, state mark, slot layout, filled/outlined/icon buttons, new `HudWidth`/`HudHeight` and rects, a fourth rect for the close mark. Takes line 2 and the presentation as input. Icons drawn from the Phosphor path data, no text glyphs. `Edge` reads `edge_*` from the contract instead of its hardcoded values, takes state, and draws line + hairlines + short field. `BreathLevel` removed or flattened. `Export` renders all ten presentations over a dark and a light backdrop. |
+| `server/native/Guardian.cs` | Keep the last reason and map it to line 2. Add the presentations "can't re-arm yet", "can't resume yet", "waiting" and "session ended". Map `observe` to "Reading the screen" (it falls to "Checking" today). Keep the ring visible in Paused. Refusals in the toggle handler set the bar text as well as emitting `visual_warning`. 600 ms click guard after entering `stopped`. Hold verbs 1.2 s. Stopped bar no longer auto-hides (owner decision). Expiry shows "Session ended" for 8 s. Drag handling, home position, return after avoidance, per-monitor preference, DPI change. Menu text and "Move bar". Accessible names and live region. Show the permission prompt without disabling the bar, so Stop works by mouse during a prompt. |
 | `server/native/Overlay.cs` | `RingForm`: per-state alpha and colour, `glow.action` lift, `glow.stop` at 67 ms, no breath timer. Phase 2: bounds from the target window, z-order above the target, not topmost. One shared motion-token table for `Animate`. `BannerForm` is unused in guardian mode and is not touched. |
 | `server/native/WindowGeometry.cs` | `AvoidHud` candidates include the six docks; return the home position for the way back. Clamp helper for drag. |
 | `server/native/TakeoverPolicy.cs`, `Presence.cs` | Ignore input that starts on the bar. |
 | `server/liquidglass-host/Program.cs`, `LiquidGlassPackageClient.cs` | The helper bakes three icons into the surface at fixed coordinates. Either the helper renders the surface only and `DesktopVisuals` draws the icons, or the helper is retired with the flat surface (owner decision). |
-| `server/runtime.mjs` | Phase 2: send the target `hwnd` with `activity`. Send `observe` so line 2 can say "Reading the screen". Nothing else. |
+| `server/runtime.mjs` | Phase 2 only: send the target `hwnd` with `activity`. `observe` is already sent. |
 | `server/native/macos/MacVisuals.swift` | `statePresentation` gains line 2, the primary button and the new presentations. Bar 496 × 56. `MacGlowView` per-state and without breathing. Drag, home, docks. |
 | `server/native/macos/MacGuardian.swift` | Reasons to line 2. `.hud` bounds rewritten after every move. |
 | `tests/hud-avoidance.test.mjs`, native geometry checks | New size, docks, return-home, drag clamp. |
