@@ -852,11 +852,11 @@
     },
     {
       "path": "tests/installed-qualification.test.mjs",
-      "sha256": "fc530221ab61dbeef211371f1e2fe5225ed46d6a523222aea3e5755f390d0b76"
+      "sha256": "31a94e5cc999d37c08dfcb106a6c48cb579829bc0d2b980e9cff411d714d8c74"
     },
     {
       "path": "tests/installed-stop-resume.mjs",
-      "sha256": "5b2777a5db9574e01a1ca01d1a8cdca6257577f3e80ba97eee5e494fa724a2c2"
+      "sha256": "09ceffe1a9fd3a10aee8d1d87020f935adf25e451975399720b94cd04c5a22fd"
     },
     {
       "path": "docs/qualification.md",
@@ -876,7 +876,7 @@
     },
     {
       "path": "docs/STOP-UNCERTAINTY.md",
-      "sha256": "b8ee851b9bc50f20296d4d7b7b161b2cbaa29751afcb0db13cad39e16a36a737"
+      "sha256": "89127a5fec5386f9f016186e73cca9955e11e23fae8ce5c6bab44203696c8ea7"
     },
     {
       "path": "tests/stop-acknowledgement.test.mjs",
@@ -908,7 +908,7 @@
     },
     {
       "path": "docs/TASK-OWNERSHIP.md",
-      "sha256": "252cbd2dac3deba33721d173f5aec3515fd9d1a151c0329c230820e049fcc341"
+      "sha256": "b4c138bb6dbf41fdb1e5430c159771371b730f050084b0587ed1cc14daa035e1"
     },
     {
       "path": "tests/hud-avoidance.test.mjs",

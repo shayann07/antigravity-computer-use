@@ -17,10 +17,11 @@ The owner has decided to remove arm and re-arm. The design follows that model:
 - **Per-app access.** The human approves each app before the agent can use it.
 - **Tiers.** Terminals and IDEs are click only. Everything else, browsers
   included, is full control.
-- **Approval lasts for the conversation.** It ends when the person presses Esc
-  or Stop, or starts a new conversation.
-- **Stop ends the task and revokes access.** Stop or Esc halts input at once.
-  There is no latch. The next agent request asks for access again.
+- **Approval lasts for the conversation.** It ends only when the person starts
+  a new conversation. Esc, Stop and the session time limit do not revoke it.
+- **Stop ends the task.** Stop or Esc halts input at once. There is no latch
+  and no approval card afterwards: the person tells the agent to continue and
+  the next request starts a fresh task for the apps already approved.
 - **Human input never pauses the agent.** Only Esc or Stop halts it. Pause
   exists only as an explicit button on the bar.
 
@@ -106,7 +107,7 @@ painted by `DesktopVisuals.Edge`; the Mac equivalents are in `MacVisuals.swift`.
 | Working, nearly out of time | Antigravity is working | *verb* · 1 min left | Stop | Pause, Settings | line + field |
 | Paused | Paused · access kept | You pressed Pause | Resume | Stop, Settings | amber line |
 | Paused, can't resume yet | Paused · can't resume yet | A key or button may still be held | Resume (tries again) | Stop, Settings | amber line |
-| Stopped | Stopped · Antigravity ended its task and lost access | reason, see below | Hide (×) | Settings | none |
+| Stopped | Stopped · Antigravity ended its task | reason, see below | Hide (×) | Settings | none |
 | Session ended | Session ended | The time limit ran out | Hide (×) | Settings | none |
 
 Rules:
@@ -115,9 +116,9 @@ Rules:
   held for at least 1.2 s so the text does not flicker.
 - **Stop is the filled button whenever the agent can act.** In Paused and in
   Asking for access it drops to an outlined button in the same slot.
-- **Stopped is a confirmation, not a place to act.** Access is revoked. It
+- **Stopped is a confirmation, not a place to act.** Access is kept. It
   shows for 4 s, then the bar hides. If a new request arrives first, the bar
-  goes to Asking for access. There is nothing to undo and no button to restore
+  goes to Working, or to Asking for access for an app not yet approved. There is nothing to undo and no button to restore
   control. The bar ignores clicks for 600 ms after a stop, so a second panic
   click lands on nothing.
 - **Session ended** shows for 4 s, then the bar hides.
@@ -153,7 +154,7 @@ unavailable" and "Could not save control preference".
 ### Access prompt
 
 Title: **Allow Antigravity to use these apps?**
-Sub-line: Until you press Esc or start a new conversation
+Sub-line: Until you start a new conversation
 
 One row per app: the app's name, one sentence, and a tier tag.
 
@@ -173,8 +174,8 @@ One row per app: the app's name, one sentence, and a tier tag.
   Esc stops the task, as everywhere.
 - **Stop stays live.** The prompt is not a modal child of the bar.
 - **Deny or timeout** ends the request. The bar shows Stopped with the reason.
-- **Scope:** an approval lasts for the agent's conversation. Esc or Stop
-  revokes it. A later request for an app not yet approved shows a prompt with
+- **Scope:** an approval lasts for the agent's conversation. Esc and Stop
+  do not revoke it. A later request for an app not yet approved shows a prompt with
   only the new apps.
 - **Long lists:** up to five rows are shown; beyond that the list scrolls
   inside the prompt and the title gains the count ("these 7 apps").
@@ -496,14 +497,15 @@ card and live Stop during it; (4) drag and home; (5) per-window glow;
   rendering checks do not cover them.
 - **No latch.** Stopped is now a 4 s message. If a new agent request arrives
   inside that window the bar moves on, and the person may not have read why it
-  stopped. The access prompt is the backstop: nothing acts until the person
-  allows it again.
+  stopped. The backstop is that the agent must report and wait after a Stop,
+  and a new app still needs its own approval.
 - **Stop with unfinished cleanup.** `STOP-UNCERTAINTY.md` describes evidence
   that today rides on the latch. What replaces it is not a design question,
   but the bar needs one honest line for it ("Still releasing a key or button")
   and must not hide while it is true.
-- **Prompt fatigue.** Every Stop revokes access, so the next request prompts
-  again. Keep it to one prompt listing all apps, never one per app.
+- **Prompt fatigue.** Approvals survive Stop, so the prompt appears only for
+  apps not yet approved in the conversation. Keep it to one prompt listing all
+  apps, never one per app.
 - **Tier wording.** "Click only" for a terminal or IDE will surprise people
   who expect the agent to type commands. The sentence on the row is the only
   explanation; it must be accurate to what the runtime enforces.
@@ -522,7 +524,7 @@ card and live Stop during it; (4) drag and home; (5) per-window glow;
 - **Shared input.** The person and the agent can now use the mouse and
   keyboard at the same time. The bar must make Stop and Esc obvious, because
   they are the only ways to halt it. The menu footer says so in words.
-- **Esc is also an app key.** Esc both stops the agent and revokes access. A
+- **Esc is also an app key.** Esc stops the agent and ends its task. A
   person pressing Esc for their own app during a task ends the task. Today's
   code already limits this to when the agent is active.
 - **Wider bar.** 496 × 56 against 470 × 52 covers slightly more and steps
@@ -544,13 +546,13 @@ Decided by the owner:
 1. No breathing.
 2. Per-window glow as phase 2; slim monitor-edge glow first.
 3. Flat dark bar.
-4. Stopped is a brief confirmation; the bar then hides. Stop revokes access.
+4. Stopped is a brief confirmation; the bar then hides. Approvals survive Stop.
 5. No re-arm. Control words are "Stop" and "Resume".
 6. Native change so the bar's Stop works by mouse during a prompt.
 7. Six docks plus free placement.
 8. Human mouse and keyboard never pause the agent. Pause is a bar button only.
 9. Two tiers: click only for terminals and IDEs, full control for the rest.
-10. Approval lasts for the conversation; Esc revokes it.
+10. Approval lasts for the conversation; Esc does not revoke it.
 
 Open questions:
 

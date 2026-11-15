@@ -22,10 +22,11 @@ Swift were deliberately left untouched.
    tier. A `read` tier exists in the code for a future category; no app maps to
    it today. Refusals are `app_tier_click` or `app_tier_read`, name the tier and
    say what to do instead.
-3. **Stop or Esc** halts input at once, ends the task and revokes every app
-   approval. There is no latch for the human to clear. The next `ready` starts
-   a fresh task and the Allow prompt appears again for each app. The skill
-   tells the agent to report and wait, never to retry immediately.
+3. **Stop or Esc** halts input at once and ends the task. App approvals are
+   kept (owner's final decision). There is no latch for the human to clear. The
+   next `ready` starts a fresh task and no Allow prompt appears again for apps
+   already approved. The skill tells the agent to report and wait, never to
+   retry immediately.
 4. **Human input does not pause the agent.** Smart takeover is retired. Only
    Esc, the bar's Stop, or an explicit Pause halts the agent. A pause resumes
    when the human says so; no re-arm is involved.
@@ -46,7 +47,7 @@ that the prior workers are gone.
 | `idle` | startup with no marker; End; a cleared Stop; native session expiry | none until an app is approved | approving an app (`active`) |
 | `active` | an app approval plus native activation | approved apps only, within each tier | Stop/Esc (`stopped`), Pause (`paused`), End (`idle`), deadline (`idle`, reported as `session_limit`) |
 | `paused` | `pause`, or the bar's Pause | none | `resume` when the human says so, or the bar's Resume (`active`); Stop (`stopped`) |
-| `stopped` (confirmed) | Stop, Esc, Ctrl+Alt+F12; a confirmed persisted marker at startup | none; calls fail `control_stopped` with `report_and_wait_for_human` | the next `ready`, after cleanup proof (`idle`, fresh task, approvals reset) |
+| `stopped` (confirmed) | Stop, Esc, Ctrl+Alt+F12; a confirmed persisted marker at startup | none; calls fail `control_stopped` with `report_and_wait_for_human` | the next `ready`, after cleanup proof (`idle`, fresh task, approvals kept) |
 | `stopped` (unconfirmed) | Stop whose native delivery or cleanup is unproven | none | unchanged: inspection and the existing nonce settlement only |
 | `stopped` (storage failure) | Stop marker could not be written or read | none | unchanged: operator inspection |
 | recovered task | controller restarted with a task open | observation only | unchanged: `end` after prior cleanup is verified |
@@ -72,15 +73,13 @@ only ended that installation's task.
 An approval lasts for the agent's conversation. `ready` returns a
 `session_handle`; the agent passes it to later `ready` calls in the same
 conversation. Approvals are remembered per handle and per executable, with no
-idle timer, and native session expiry or End does not drop them. A missing or
-unknown handle starts a new conversation that asks again. Stop or Esc revokes
-the handle and every approval on it.
+idle timer, and native session expiry, End and Stop do not drop them. A missing
+or unknown handle starts a new conversation that asks again.
 
-Gated on native: the guardian only lets input reach an app that a `prompt
-kind:'app'` added to its own grant list, and that list is cleared on End,
-expiry and Stop. So today a remembered app still shows the dialog after the
-native session ends. JS sends `remembered:true` and `session_handle` with that
-prompt; the native change below must honour them. The handle lives in the
+The Windows guardian honours this: JS sends `remembered:true` and
+`session_handle` with the `prompt kind:'app'`, and the guardian adds the grant
+without a dialog for a handle and executable it has seen approved. The handle
+lives in the
 service process memory, so a controller restart also starts a new conversation.
 The `plan` command's automatic renewal calls `ready` without a handle; passing
 it through is a follow-up.
@@ -110,58 +109,59 @@ not run against a real guardian. The cleanup watchdog (`CursorSafety.cs`,
 `CrashCleanup`) can rewrite the marker when its owner exits; if that lands after
 JS removes it, the new guardian comes up stopped and `ready` refuses with
 `native_latch_still_enforced`, which fails closed. The Mac guardian was not
-read for this path. It is also a stopgap: the bar still shows
-Re-arm, the old guardian process is restarted on every post-Stop task, and a
-standalone chat `resume` is still refused by native code.
+read for this path. On Windows this path is superseded by the native
+`clear_stop` op; the restart path remains as the fallback for an old native
+build and the only path on macOS. The bar's Re-arm glyph and tooltip text are still waiting on design
+approval.
 
-## Native work list (not done)
+## Native work list
 
-Windows, `server/native/Guardian.cs` and friends:
+Status on Windows, `server/native/Guardian.cs` and friends. Done items are
+marked; the rest is open.
 
-- **Stop model.** Replace `LatchStop`/`LatchBlocks` semantics: Stop writes a
+- **Stop model. DONE (clear_stop).** Replace `LatchStop`/`LatchBlocks`
+  semantics: Stop writes a
   per-task Stop record that blocks input only for the current task token.
   Add an op such as `clear_stop` that, after `WorkersExited` and
   `!InputLedger.HasHeld()`, moves `stopped` to `idle` without a human epoch, so
   JS no longer needs to restart the guardian. Keep the `.unconfirmed` companion
   and nonce receipts exactly as they are.
-- **`SetState`.** Allow `stopped -> idle` from that op; keep refusing
+- **`SetState`. DONE.** Allow `stopped -> idle` from that op; keep refusing
   `stopped -> active`.
-- **Bar.** Remove the Re-arm path from the toggle button (lines around 350-372)
+- **Bar. OPEN, waiting on design approval.** Remove the Re-arm path from the toggle button (lines around 350-372)
   and its tooltip text. The toggle becomes Pause/Resume only. Stop keeps its
   button, Esc and Ctrl+Alt+F12. Drop `rearm_locked` and `AGCU_REARM_LOCKED`;
   for a recovered task, show the bar with Stop only.
-- **Resume.** Let `resume` succeed in standalone mode for a pause that the
+- **Resume. DONE.** Let `resume` succeed in standalone mode for a pause that the
   agent or the bar requested, under the same cleanup checks; today it requires
   `hostManaged`.
-- **Takeover.** `Presence` and `TakeoverPolicy` must never pause on human
+- **Takeover. DONE.** `Presence` and `TakeoverPolicy` must never pause on human
   input. Remove the Smart option from the mode menu and ignore a saved `smart`
   value. JS already forces `AGCU_TAKEOVER_MODE=manual`, but a human can still
   pick Smart in the current bar menu, and `LoadTakeoverMode` reads the saved
   preference.
-- **Access dialog.** Replace the single-app `prompt kind:'app'` dialog with a
+- **Access dialog. OPEN, waiting on design approval.** Replace the single-app `prompt kind:'app'` dialog with a
   list dialog: one row per requested app with its tier (full or click), Allow
   and Deny per row, and a single confirm. JS currently calls the existing
   dialog once per app and puts the tier in its text.
-- **Tier enforcement in native.** The JS checks the target app. Native should
+- **Tier enforcement in native. DONE.** The JS checks the target app. Native should
   also check the frontmost app at dispatch (the keyboard target check in
   `KeyboardTargetPolicy.cs` already verifies the foreground window for keys),
   so a click-tier window that comes to the front between check and dispatch
   cannot receive typing.
-- **Remembered approvals.** For a `prompt kind:'app'` carrying
+- **Remembered approvals. DONE.** For a `prompt kind:'app'` carrying
   `remembered:true` and a `session_handle` the guardian has seen approved, add
-  the grant without a dialog. Clear the remembered set on Stop and Esc.
-- **Host-managed mode.** The prompt handler starts with `allowed=hostManaged`,
-  so no dialog is ever shown there and an app is re-approved silently after
-  Stop. This conflicts with the owner rule that Stop must not let the agent
-  regain control silently. Owner decision needed: show the dialog after a Stop
-  even in host-managed mode, or accept host approval.
-- **Session expiry.** `Tick` goes `idle` with no reason at the deadline. Emit a
-  reason such as `session_expired`; JS currently infers expiry from an
-  unexplained `active -> idle`.
+  the grant without a dialog. Per the owner's final decision the remembered set is not cleared on Stop or Esc.
+- **Host-managed mode. RESOLVED.** The prompt handler starts with
+  `allowed=hostManaged`, so no dialog is shown there. Since approvals now
+  survive Stop, this is no longer a conflict; host approval is accepted.
+- **Session expiry. DONE (`session_expired`).** `Tick` went `idle` with no reason at the
+  deadline. It now emits `session_expired`; JS previously inferred expiry from
+  an unexplained `active -> idle`.
 - **CursorSafety watchdog** reads the marker (`CursorSafety.cs` around line
   206); keep it consistent with the per-task Stop record.
 
-macOS, not read in detail for this change; the same list applies:
+macOS, NOT STARTED; not read in detail for this change, the same list applies:
 
 - `MacOperations.swift` and `MacGuardian.swift`: the latch read and write
   (`LatchBlocks`/`LatchStop` equivalents, 38 and 20 references), the re-arm
@@ -189,10 +189,10 @@ macOS, not read in detail for this change; the same list applies:
 
 ## Risks
 
-- **Silent regain of control.** In standalone mode Stop clears every grant in
-  JS and native and the next task must show the Allow prompt again (tested
-  against a fake guardian only). In host-managed mode native auto-allows the
-  prompt, so control returns without a dialog; see the native list.
+- **Control returning after Stop.** Approvals survive Stop by owner decision,
+  so the next task proceeds without a new prompt. The mitigation is the
+  cleanup proof, the skill's report-and-wait rule and the human telling the
+  agent to continue.
 - **Clearing a Stop whose input is still held.** Mitigated by the receipt or
   exited-actor proof and by never touching unconfirmed markers. The receipt is
   transport evidence from the guardian process, not physical proof.
@@ -205,9 +205,9 @@ macOS, not read in detail for this change; the same list applies:
 - **Click tier gaps.** Enforced on the target hwnd only. Window-free clipboard
   operations are not tier-checked. Scroll is allowed at click tier, as in the
   reference model.
-- **Old docs.** `docs/STOP-UNCERTAINTY.md`, `docs/TASK-OWNERSHIP.md`, README,
-  SECURITY and the history files still describe human re-arm. Update them
-  when the native change ships.
+- **Old docs.** README, SECURITY, `docs/STOP-UNCERTAINTY.md` and
+  `docs/TASK-OWNERSHIP.md` were updated to the unlatched model. The history
+  files may still describe human re-arm.
 
 ## Issues affected
 

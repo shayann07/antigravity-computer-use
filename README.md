@@ -81,15 +81,19 @@ when it doesn't have to search for things.
 | **Type and use shortcuts** | Native keyboard input, Unicode text, and paste that restores your clipboard. |
 | **Work across apps** | Find, launch, focus and pick windows, including the app's own file pickers and dialogs. |
 | **Check each step** | Fresh observations after actions, short ordered batches, and no automatic replay when an input's outcome is uncertain. |
-| **Hand control back** | Pause, optional take-over on human input, and an independent Stop that releases held keys and buttons. |
+| **Hand control back** | Pause and Resume, and an independent Stop that releases held keys and buttons. Your own mouse and keyboard use never pauses the agent. |
 
 ## You stay in control
 
 - **You can see when it's working.** A breathing blue edge glow and a small
   control bar appear while the agent is in control.
 - **Stop is always yours.** Esc, Ctrl+Alt+F12 or the bar's Stop button halts it
-  immediately and releases anything it was holding. Only a human can re-arm it;
-  restarting the service does not clear Stop.
+  immediately, releases anything it was holding and ends the current task.
+  Nothing needs re-arming: tell the agent to continue and the next request
+  starts a fresh task once the runtime has proved that keys and buttons were
+  released. Apps you already approved stay approved for that conversation, so no
+  approval prompt appears again. An unconfirmed Stop is never cleared
+  automatically.
 - **Approvals have one owner.** The one-line install uses the sidecar, which
   relies on Antigravity's own approval of each command (`host-managed`). A
   manual install asks you directly instead (`standalone`): you approve each app
@@ -110,7 +114,7 @@ keyboard. [Security model](SECURITY.md).
 | --- | --- |
 | **Automated checks** | Windows and four macOS CI runners pass on every code change. The local suite has 607 tests: 594 passed, 0 failed, 13 skipped for platform or folder permissions. |
 | **Releases** | Update metadata is signed through a protected release environment. Each release's signature, payload hashes and inventory are verified independently against the public key. A real beta.4 install updated itself to beta.5 from GitHub and can roll back. |
-| **Desk test** | On a real install: normal task, physical Esc while typing, human re-arm, and recovery after a crash, both before and after input was sent. |
+| **Desk test** | On a real install: normal task, physical Esc while typing, continuing after Esc, and recovery after a crash, both before and after input was sent. |
 | **Speed** | Steps can be batched into one command. An Upscaly task that took 30 turns and about 4.5 minutes now takes 9 commands and about 2 minutes. Most remaining time is the model thinking between commands. |
 | **Known gaps** | The bar can't be dragged yet ([#68](https://github.com/shayann07/antigravity-computer-use/issues/68)). Text-only models can't see screenshots, so visual tasks suffer ([#57](https://github.com/shayann07/antigravity-computer-use/issues/57)). Mixed-DPI and multi-monitor hardware remain untested. |
 | **Platforms** | Windows x64. macOS (Apple Silicon and Intel) shares the same controller and skill but is **experimental**: it is built in CI only and not part of this release ([Mac guide](docs/MACOS.md)). Linux is unsupported. |
