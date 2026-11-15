@@ -708,7 +708,7 @@
     },
     {
       "path": "server/recovery.mjs",
-      "sha256": "3bc6df95b0ed7eee56399612cc3f98be5ac22c57ca127bb445f5bb8281fee374"
+      "sha256": "56786bb7c8efc86a9905a42a0cd2ef8e4e61eef3063dec13b02d503ab8e1ad06"
     },
     {
       "path": "scripts/qualify-guardian-desktop.mjs",
