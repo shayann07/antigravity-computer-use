@@ -30,7 +30,7 @@ namespace Axon {
         // the band, one wander of the colours. And its frame times, in
         // milliseconds: in a transition, at rest, and for the deep wash.
         internal const double GlowLap=60,GlowBreath=7,GlowWander=13;
-        internal const int GlowFrame=16,GlowRestFrame=33,GlowVeilFrame=1000;
+        internal const int GlowFrame=16,GlowRestFrame=66,GlowVeilFrame=1000;
         // Entering and leaving ease out: quick to answer, gentle to settle.
         // Moving on screen eases in and out. Both are strong curves.
         static readonly float[] OutCurve=Curve(.23,1,.32,1),InOutCurve=Curve(.77,0,.175,1);
@@ -521,6 +521,14 @@ namespace Axon {
             if(AlphaAt(clear,800,400,148)<120)throw new Exception("The glow is too faint to see at the edge");
             if(AlphaAt(clear,800,400,146)<=AlphaAt(clear,800,400,130))throw new Exception("The outside glow must fade away from the window");
             if(AlphaAt(clear,800,400,150-GlowField.Reach(GlowField.Veil,0)-2)!=0)throw new Exception("The outside glow must end within its reach");
+            {
+                bool[] none={false,false,false,false};Rectangle app=new Rectangle(400,200,1100,700),all=new Rectangle(0,0,1920,1080);
+                GlowField band=new GlowField(GlowField.Edge,app,none,1.25f,10,all),wash=new GlowField(GlowField.Veil,app,none,1.25f,10,all);
+                int pixels=0;foreach(Rectangle strip in band.Strips)pixels+=strip.Width*strip.Height;
+                var watch=System.Diagnostics.Stopwatch.StartNew();for(int i=0;i<60;i++)band.Compose(4+i*.033,600,880,1,.55f);double each=watch.Elapsed.TotalMilliseconds/60;
+                watch.Restart();for(int i=0;i<20;i++)wash.Compose(4+i,600,880,1,.55f);
+                Console.WriteLine("TIMING band "+each.ToString("0.00")+" ms over "+pixels+" px; wash "+(watch.Elapsed.TotalMilliseconds/20).ToString("0.00")+" ms");
+            }
             Console.WriteLine("Visual renders and glow checks passed.");
         }
     }

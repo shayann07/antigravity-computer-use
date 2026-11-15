@@ -72,7 +72,7 @@
     {
       "path": "server/native/Overlay.cs",
       "upstream_sha256": "eaadd8bc72befd9f42aa214dbb1a3ba45f2e28d0c40ed3491ece4414280a4551",
-      "local_sha256": "0a2ea47a78fb62955dc24b187087a0e826847e39a8efbcc1502dc1fe86c5622a",
+      "local_sha256": "be5eabda7dbd93796f7342ce4f239d19c734cb543212e52f39d082f4c48f7ca6",
       "modified": true
     },
     {
@@ -276,11 +276,11 @@
     },
     {
       "path": "server/native/DesktopVisuals.cs",
-      "sha256": "626aa571664d7ef12e8cc4543d0f973127453c48ae5c248e26e1ba9e3e8edf36"
+      "sha256": "d4754d31377cb284556f80053163e6ce264ab9827dbd640e88def49c4d700494"
     },
     {
       "path": "server/native/Glow.cs",
-      "sha256": "4fafc286da19b91dd3777bfcf464da5aa155cecc6d44ce0e38df19b34449e70b"
+      "sha256": "b6ea02f4f79847e6c41c5f16da2f40f58ba363ce3992b9c358c2059b41af244e"
     },
     {
       "path": "server/native/InputLedger.cs",

@@ -72,7 +72,9 @@ namespace Axon
         [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int w, int height, uint flags);
         [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr h, int attribute, out NRECT value, int size);
         [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr h, int attribute, out int value, int size);
-        [DllImport("dwmapi.dll")] static extern int DwmFlush();
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern IntPtr CreateWaitableTimerExW(IntPtr attributes, string name, uint flags, uint access);
+        [DllImport("kernel32.dll")] static extern bool SetWaitableTimer(IntPtr timer, ref long due, int period, IntPtr routine, IntPtr argument, bool resume);
+        [DllImport("kernel32.dll")] static extern uint WaitForMultipleObjects(uint count, IntPtr[] handles, bool all, uint milliseconds);
 
         const uint WDA_EXCLUDEFROMCAPTURE = 0x00000011;
         const int ULW_ALPHA = 0x02;
@@ -835,7 +837,7 @@ namespace Axon
             sealed class Job
             {
                 internal GlowField Edge, Veil; internal int Generation; internal bool Band, Wash, Done;
-                internal double Time; internal float X, Y, Grow, Bright, Master;
+                internal double Time; internal float X, Y, Grow, Bright, Master; internal int Every;
             }
             GlowField edge, veil;
             int generation; volatile bool live; bool bandDue, washDue;
@@ -1046,23 +1048,32 @@ namespace Axon
                 shown = true; waiting = true; Wake();
             }
 
-            // ---- The frame clock's side.
+            // ---- The frame clock's side. It sleeps on a high-resolution
+            // timer until the next frame is due, or until it is woken, so a
+            // resting glow costs only its frames.
             void Pace()
             {
-                double last = 0;
+                IntPtr timer = CreateWaitableTimerExW(IntPtr.Zero, null, 2, 0x1F0003);   // high resolution where Windows has it
+                if (timer == IntPtr.Zero) timer = CreateWaitableTimerExW(IntPtr.Zero, null, 0, 0x1F0003);
+                IntPtr[] either = { timer, wake.SafeWaitHandle.DangerousGetHandle() };
+                double next = 0;
                 while (true)
                 {
                     try
                     {
-                        if (!live) { wake.WaitOne(); continue; }
-                        double before = Now; int failed = DwmFlush(); double waited = Now - before;
-                        // No compositor to wait for (a remote session, a display that is off): keep our own time.
-                        if (failed != 0) Thread.Sleep(DesktopVisuals.GlowFrame); else if (waited < 4) Thread.Sleep(8);
-                        if (Now - last < DesktopVisuals.GlowFrame - 4) continue;   // never faster than one frame time, whatever the display
-                        if (Interlocked.CompareExchange(ref inFlight, 1, 0) != 0) continue;
+                        if (!live) { wake.WaitOne(); next = 0; continue; }
+                        double wait = next - Now;
+                        if (wait > 1)
+                        {
+                            long due = -(long)(wait * 10000);
+                            if (timer == IntPtr.Zero || !SetWaitableTimer(timer, ref due, 0, IntPtr.Zero, IntPtr.Zero, false)) Thread.Sleep((int)wait);
+                            else WaitForMultipleObjects(2, either, false, 1000);
+                            if (!live) continue;
+                        }
+                        if (Interlocked.CompareExchange(ref inFlight, 1, 0) != 0) { next = Now + 2; continue; }
                         Job job; lock (gate) job = Next();
+                        next = Now + (job == null ? DesktopVisuals.GlowRestFrame : job.Every);
                         if (job == null) { Interlocked.Exchange(ref inFlight, 0); continue; }
-                        last = Now;
                         if (job.Band) job.Edge.Compose(job.Time, job.X, job.Y, job.Grow, job.Bright);
                         if (job.Wash) job.Veil.Compose(job.Time, job.X, job.Y, 1, job.Bright);
                         strips[0].BeginInvoke((MethodInvoker)delegate { try { Apply(job); } catch { } finally { Interlocked.Exchange(ref inFlight, 0); } });
@@ -1107,12 +1118,14 @@ namespace Axon
                     job.Master = (float)(masterFrom + (masterTo - masterFrom) * DesktopVisuals.EaseOut((float)t));
                     job.Done = t >= 1;
                 }
-                // The light is never quite still: at rest it is composed at
-                // half the transition rate. With motion reduced it is
-                // composed when something changes, and then holds.
+                // The light is never quite still, but at rest it changes by
+                // less than one level a frame, so it is composed at the rest
+                // rate. With motion reduced it is composed when something
+                // changes, and then holds.
                 if (motion) still = now / 1000.0;
                 job.Time = still; job.X = aimX; job.Y = aimY; job.Bright = bright;
                 job.Band = bandDue || quick || (motion && now - bandAt >= DesktopVisuals.GlowRestFrame - 4);
+                job.Every = quick || masterAt >= 0 ? DesktopVisuals.GlowFrame : DesktopVisuals.GlowRestFrame;
                 job.Wash = washDue || dimming || (motion && now - washAt >= DesktopVisuals.GlowVeilFrame);
                 if (job.Band) { bandDue = false; bandAt = now; }
                 if (job.Wash) { washDue = false; washAt = now; }

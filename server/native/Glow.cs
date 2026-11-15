@@ -265,6 +265,12 @@ namespace Axon {
                 if(Kind==Edge) {
                     for(int at=0;at<ix.Length;at++) {
                         int i=ix[at];if(i<0)continue;
+                        if((pa[at]|pb[at])==0) {
+                            // Past the band there is only the bloom: most of the strip.
+                            int faint=(pc[at]*gainC[i]+noise[at])>>8,tint=tone[i];
+                            output[at]=(faint<<24)|(((faint*((tint>>16)&255))>>8)<<16)|(((faint*((tint>>8)&255))>>8)<<8)|((faint*(tint&255))>>8);
+                            continue;
+                        }
                         int ribbon=(pa[at]*gainA[i])>>8,body=(pb[at]*gainB[i]+pc[at]*gainC[i]+noise[at])>>8;
                         int alpha=ribbon+body;if(alpha>255)alpha=255;
                         int h=hot[i],c=tone[i];
