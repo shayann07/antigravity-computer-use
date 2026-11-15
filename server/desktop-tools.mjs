@@ -43,7 +43,7 @@ export function validate(name,args){
  const s=TOOLS.find(t=>t.name===name)?.inputSchema;if(!s)throw new Error('Unknown tool');
  const visit=(t,v,k)=>{
   if(t.type==='integer'&&!Number.isSafeInteger(v))throw new Error(k+' must be integer');
-  if((t.type==='integer'||t.type==='number')&&(!Number.isFinite(v)||(t.minimum!=null&&v<t.minimum)||(t.maximum!=null&&v>t.maximum)))throw new Error(k+' is outside the allowed range');
+  if((t.type==='integer'||t.type==='number')&&(!Number.isFinite(v)||(t.minimum!=null&&v<t.minimum)||(t.maximum!=null&&v>t.maximum)))throw new Error(k+' is outside the allowed range'+(t.minimum!=null&&t.maximum!=null?' ('+t.minimum+' to '+t.maximum+')':t.minimum!=null?' (at least '+t.minimum+')':t.maximum!=null?' (at most '+t.maximum+')':'')+'; no input was sent');
   if(t.type==='string'&&typeof v!=='string')throw new Error(k+' must be text');
   if(t.type==='string'&&t.maxLength!=null&&v.length>t.maxLength)throw new Error(k+' exceeds the allowed length');
   if(t.type==='string'&&t.minLength&&v.trim().length<t.minLength)throw new Error(k+' is empty');

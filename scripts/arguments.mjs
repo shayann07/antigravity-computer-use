@@ -27,11 +27,13 @@ export function parseArguments(schema,words,{read=readText,defaultImage=false}={
    const file=inline??words[++i];if(!file||file.startsWith('--'))bad('--'+flag+' needs a file path.');
    result[target]=target==='text'?read(file):JSON.parse(read(file));continue;
   }
+  // key takes --keys; guessing --text by analogy with type/set_value is common.
+  if(key==='text'&&!properties.text&&properties.keys)key='keys';
   let type=properties[key];
   if(!type&&properties.observe?.properties?.[key]){nested=true;type=properties.observe.properties[key];}
   if(!type)bad('Unknown flag --'+flag+'. Run describe for this command.');
   if((nested&&seen.has('observe'))||(key==='observe'&&[...seen].some(k=>k.startsWith('observe.'))))bad('Use --observe JSON or observation flags, not both.');
-  const identity=(nested?'observe.':'')+key;if(seen.has(identity))bad('Duplicate argument '+identity+'.');seen.add(identity);
+  const identity=(nested?'observe.':'')+key;if(seen.has(identity))bad('Duplicate argument '+identity+'.'+(properties[key]?.type==='array'?' Write an array once, as --'+flag+' X,Y or JSON such as --'+flag+" '[X,Y]'.":''));seen.add(identity);
   let value;
   if(forced!==undefined){if(inline!==undefined)bad('--'+flag+' takes no value.');value=forced;}
   else if(type.type==='boolean'){

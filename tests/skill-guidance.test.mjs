@@ -34,6 +34,8 @@ test('every command example in the computer-use skill parses with the real CLI',
   // Pixel rows in the command table, with placeholders filled.
   examples.push(['click', '--hwnd', '1', '--observation-id', 'F', '--x', '10', '--y', '20', '--risk', 'routine', '--reason', 'r']);
   examples.push(['move', '--hwnd', '1', '--observation-id', 'F', '--x', '10', '--y', '20', '--risk', 'routine', '--reason', 'r']);
+  examples.push(['key', '--hwnd', '1', '--observation-id', 'F', '--keys', 'F5', '--risk', 'routine', '--reason', 'r']);
+  examples.push(['run', '--hwnd', '1', '--observation-id', 'F', '--reason', 'r', '--step', 'key', '--keys', 'F5', '--risk', 'routine', '--step', 'click', '--x', '10', '--y', '20', '--risk', 'routine']);
   assert(examples.length >= 7, 'expected the skill examples to be found');
   assert(examples.some(([command, ...rest]) => command === 'run' && rest.includes('wait')), 'a batch example must end with a wait');
   for (const [command, ...rest] of examples) {
