@@ -106,6 +106,12 @@ export async function call(r,name,a){
    // The CLI always sends an explicit with_image, so a following pixel step
    // must override it; an extra capture is always safe.
    if(properties.observe)args.observe={with_image:i===a.steps.length-1,...rest.observe,...(nextPixel?{with_image:true}:{})};
+   // Between two strokes of one chain, the hand-off frame is never shown to the
+   // model; it only carries fresh geometry and the occlusion-checked capture for
+   // the next pixel step. The post-drag paint settle buys nothing there, so skip
+   // it. Every other step, the last step and an explicit settle_ms keep it.
+   const pureFollowing=nextPixel&&!['index','name','role','automation_id'].some(k=>Object.hasOwn(following,k));
+   if(kind==='drag'&&pureFollowing&&properties.observe&&!Object.hasOwn(rest.observe||{},'settle_ms'))args.observe.settle_ms=0;
    validate(n,args);return {kind,n,args,framed};
   });
   const waitBudget=plan.filter(step=>['computer_wait','computer_wait_change'].includes(step.n)).reduce((sum,step)=>sum+(step.args.timeout_ms??15000),0);
