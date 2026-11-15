@@ -5,7 +5,7 @@ import {Driver} from '../server/driver.mjs';
 import fs from 'node:fs';import path from 'node:path';
 import {spawn} from 'node:child_process';
 import {storageOperation} from '../server/storage.mjs';
-import {priorWindowsCleanupVerified} from '../server/recovery.mjs';
+import {priorWindowsCleanupVerified,persistRecoveryStop,readStopLatch} from '../server/recovery.mjs';
 function fixture(){
  const guardian=new EventEmitter();guardian.messages=[];guardian.send=m=>guardian.messages.push(m);guardian.request=async m=>{guardian.messages.push(m);return {state:'stopped',controls_visible:true};};guardian.close=()=>{};guardian.pid=998;
  const driver={abortCalls:0,async abort(){this.abortCalls++;},info:{pid:999}};
@@ -300,4 +300,19 @@ test('a guardian created for a recovered unverified task starts with re-arm lock
   fs.writeFileSync(file,JSON.stringify({schema:1,open:true,guard:'guard-2147483647-12345678-1234-1234-1234-123456789abc.state',children:[],dispatched:false,watchdogs_complete:true}));
   const recovered=make();assert.equal(recovered.status().recovered_task,true);assert.equal(recovered.guardian.env.AGCU_REARM_LOCKED,'1');
  }finally{if(previous===undefined)delete process.env.AGCU_DATA_DIR;else process.env.AGCU_DATA_DIR=previous;fs.rmSync(dir,{recursive:true,force:true});}
+});
+test('recovered End closes an undispatched task under an unconfirmed Stop, settles it to ordinary Stop and still refuses a live watchdog',{skip:process.platform!=='win32'},async t=>{
+ const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'undispatched-unconfirmed-')),file=path.join(dir,'task-state.json'),latch=path.join(dir,'emergency.stop'),guard='guard-2147483647-12345678-1234-1234-1234-123456789abc.state';
+ const restart=()=>{const guardian=new EventEmitter();guardian.send=()=>{};return new Runtime({guardian,driver:{async abort(){}},sessions:{register(){},close(){},async clearVerifiedStale(){}},taskFile:file,latchFile:latch});};
+ try{
+  try{storageOperation('data',dir);}catch(error){if(['storage_unsafe_ancestor','insecure_storage_ancestor','storage_permissions_conflict'].includes(error.code)){t.skip('native private storage qualification refused: '+error.code);return;}throw error;}
+  fs.writeFileSync(file,JSON.stringify({schema:1,open:true,guard,children:[],dispatched:false,watchdogs_complete:true}));fs.writeFileSync(path.join(dir,guard),'idle||0|');fs.writeFileSync(path.join(dir,guard+'.inputs'),'');
+  persistRecoveryStop(latch,guard,{unconfirmed:true,nonce:'b'.repeat(32)});
+  // A watchdog recorded before dispatch that is still alive keeps Stop unconfirmed.
+  fs.writeFileSync(path.join(dir,guard+'.watchdog'),`${process.pid}|12345`);
+  await assert.rejects(restart().finish(),e=>e.code==='guardian_stop_unconfirmed');assert(readStopLatch(latch).unconfirmed);assert.equal(JSON.parse(fs.readFileSync(file)).open,true);
+  fs.rmSync(path.join(dir,guard+'.watchdog'));
+  const r=restart();assert.equal((await r.finish()).ended,true);assert.equal(JSON.parse(fs.readFileSync(file)).open,false);
+  assert.equal(readStopLatch(latch).value,'stopped');assert(!readStopLatch(latch).unconfirmed);
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
