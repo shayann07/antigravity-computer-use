@@ -4,7 +4,7 @@
 // the same desktop draws its own cursor, marker, ring and banner in the next
 // hue along, so two agents working at once are two things you can tell apart
 // rather than one thing behaving strangely:
-//   - a ring around the whole desktop while it is working (click-through)
+//   - a glow around the window it is working in (click-through)
 //   - a banner reading "Claude is using your computer", with Stop
 //   - a Claude-coloured cursor showing where it is, alongside yours
 //   - a marker naming each control as it is touched
@@ -61,6 +61,18 @@ namespace Axon
         [StructLayout(LayoutKind.Sequential)]
         internal struct BLENDFUNCTION { public byte BlendOp, BlendFlags, SourceConstantAlpha, AlphaFormat; }
 
+        [DllImport("gdi32.dll")] static extern IntPtr CreateDIBSection(IntPtr hdc, ref BITMAPINFOHEADER header, uint usage, out IntPtr bits, IntPtr section, uint offset);
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct BITMAPINFOHEADER { public int biSize, biWidth, biHeight; public short biPlanes, biBitCount; public int biCompression, biSizeImage, biXPelsPerMeter, biYPelsPerMeter, biClrUsed, biClrImportant; }
+        [DllImport("user32.dll")] static extern bool IsWindow(IntPtr h);
+        [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+        [DllImport("user32.dll")] static extern bool IsIconic(IntPtr h);
+        [DllImport("user32.dll")] static extern bool IsZoomed(IntPtr h);
+        [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr h, uint relation);
+        [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int w, int height, uint flags);
+        [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr h, int attribute, out NRECT value, int size);
+        [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr h, int attribute, out int value, int size);
+
         const uint WDA_EXCLUDEFROMCAPTURE = 0x00000011;
         const int ULW_ALPHA = 0x02;
         const byte AC_SRC_OVER = 0x00, AC_SRC_ALPHA = 0x01;
@@ -110,14 +122,19 @@ namespace Axon
 
         static Thread _thread;
         static MarkerForm _marker;
-        static RingForm _ring;
+        static Glow _glow;
         static BannerForm _banner;
         static CursorForm _cursor;
         static System.Windows.Forms.Timer _idleTimer;
         static volatile bool _stopRequested;
         static volatile bool _enabled = true;
         static volatile bool _ready;
-        static IntPtr _markerHwnd, _ringHwnd, _bannerHwnd, _cursorHwnd;
+        static IntPtr _markerHwnd, _bannerHwnd, _cursorHwnd;
+        static IntPtr[] _glowHwnds = new IntPtr[0];
+        static IntPtr[] OwnWindows() {
+            IntPtr[] glow=_glowHwnds;IntPtr[] all=new IntPtr[glow.Length+3];
+            all[0]=_markerHwnd;all[1]=_bannerHwnd;all[2]=_cursorHwnd;Array.Copy(glow,0,all,3,glow.Length);return all;
+        }
         static string _fontName;
 
         // Which banner row this session owns, and what to call it. Two Claude
@@ -165,7 +182,22 @@ namespace Axon
         }
 
         internal static bool Enabled { get { return _enabled && _ready; } }
-        internal static float GlowOpacity {get {return _ring==null?0:_ring.OpacityValue;}}
+        internal static float GlowOpacity {get {Glow glow=_glow;return glow==null?0:glow.OpacityValue;}}
+        // The window the agent is working in, and where in it the last action
+        // landed. The glow follows that window; nothing else is decided here.
+        internal static void GlowTarget(long hwnd,int x,int y,bool hasPoint,bool pulse,bool sampleNow) {
+            if(!Enabled||_marker==null||_glow==null)return;
+            try {_marker.BeginInvoke((MethodInvoker)delegate {try {_glow.Target(new IntPtr(hwnd),x,y,hasPoint,pulse,sampleNow);}catch {}});}catch {}
+        }
+        // glow.stop: 67 ms from whatever it was doing. Safe from any thread.
+        internal static void GlowStop() {
+            if(_marker==null||_glow==null)return;
+            try {_marker.BeginInvoke((MethodInvoker)delegate {try {_glow.Exit(DesktopVisuals.FastLeave);}catch {}});}catch {}
+        }
+        internal static object GlowReport() {
+            if(!Enabled||_marker==null||_glow==null)return null;
+            try {return _marker.Invoke((Func<object>)delegate {return _glow.Report();});}catch {return null;}
+        }
         internal static void ClickFeedback() {
             if(!Enabled||_marker==null)return;
             try {_marker.BeginInvoke((MethodInvoker)delegate {if(_cursor.Visible)_cursor.Ping();});}catch {}
@@ -175,7 +207,9 @@ namespace Axon
         internal static bool IsOwnWindow(IntPtr h)
         {
             if (h == IntPtr.Zero) return false;
-            return h == _markerHwnd || h == _ringHwnd || h == _bannerHwnd || h == _cursorHwnd;
+            if (h == _markerHwnd || h == _bannerHwnd || h == _cursorHwnd) return true;
+            foreach (IntPtr strip in _glowHwnds) if (h == strip) return true;
+            return false;
         }
 
         // Every overlay window carries a window property naming it as ours, so
@@ -314,7 +348,7 @@ namespace Axon
             try
             {
                 _marker = new MarkerForm(); _marker.CreateControl(); _markerHwnd = _marker.Handle; Exclude(_markerHwnd); Mark(_markerHwnd);
-                _ring = new RingForm(); _ring.CreateControl(); _ringHwnd = _ring.Handle; Exclude(_ringHwnd); Mark(_ringHwnd);
+                _glow = new Glow(); _glowHwnds = _glow.Handles(); foreach (IntPtr strip in _glowHwnds) { Exclude(strip); Mark(strip); }
                 _banner = new BannerForm(); _banner.CreateControl(); _bannerHwnd = _banner.Handle; Exclude(_bannerHwnd); Mark(_bannerHwnd);
                 _cursor = new CursorForm(); _cursor.CreateControl(); _cursorHwnd = _cursor.Handle; Exclude(_cursorHwnd); Mark(_cursorHwnd);
 
@@ -323,7 +357,7 @@ namespace Axon
                 _idleTimer.Tick += delegate
                 {
                     _idleTimer.Stop();
-                    try { _ring.Vanish(); } catch { }
+                    try { _glow.Exit(DesktopVisuals.Normal); } catch { }
                     try { _banner.Vanish(); } catch { }
                     try { _cursor.Vanish(); } catch { }
                 };
@@ -335,7 +369,7 @@ namespace Axon
             finally
             {
                 _ready = false;
-                _markerHwnd = _ringHwnd = _bannerHwnd = _cursorHwnd = IntPtr.Zero;
+                _markerHwnd = _bannerHwnd = _cursorHwnd = IntPtr.Zero; _glowHwnds = new IntPtr[0];
             }
         }
 
@@ -349,7 +383,7 @@ namespace Axon
             if(!Enabled||_marker==null)return;
             _marker.Invoke((MethodInvoker)delegate {
                 CaptureExcluded=!enabled;
-                foreach(IntPtr h in new IntPtr[]{_markerHwnd,_ringHwnd,_bannerHwnd,_cursorHwnd})
+                foreach(IntPtr h in OwnWindows())
                     if(h!=IntPtr.Zero)Exclude(h);
             });
         }
@@ -450,7 +484,8 @@ namespace Axon
                 Guid id;
                 if (vdm.GetWindowDesktopId(fg, out id) != 0 || id == Guid.Empty) return;
 
-                IntPtr[] all = new IntPtr[] { _markerHwnd, _ringHwnd, _bannerHwnd, _cursorHwnd };
+                // The glow is not moved: it belongs to its window's desktop.
+                IntPtr[] all = new IntPtr[] { _markerHwnd, _bannerHwnd, _cursorHwnd };
                 foreach (IntPtr h in all)
                 {
                     if (h == IntPtr.Zero) continue;
@@ -462,11 +497,11 @@ namespace Axon
 
         internal static void HideImmediate() {
             if(_marker==null)return;
-            try { _marker.Invoke((MethodInvoker)delegate { _ring.Hide(); _banner.Hide(); _cursor.Hide(); _marker.Hide(); }); } catch { }
+            try { _marker.Invoke((MethodInvoker)delegate { _glow.Suspend(); _banner.Hide(); _cursor.Hide(); _marker.Hide(); }); } catch { }
         }
         internal static void HideAll() {
             if (_marker == null) return;
-            try { _marker.BeginInvoke((MethodInvoker)delegate { _ring.Vanish(); _banner.Vanish(); _cursor.Vanish(); _marker.Hide(); }); } catch { }
+            try { _marker.BeginInvoke((MethodInvoker)delegate { _glow.Exit(DesktopVisuals.Normal); _banner.Vanish(); _cursor.Vanish(); _marker.Hide(); }); } catch { }
         }
         internal static void MarkActive()
         {
@@ -479,7 +514,7 @@ namespace Axon
                 {
                     try
                     {
-                        _ring.Appear();
+                        _glow.Resume();
                         if (Environment.GetEnvironmentVariable("AGCU_GUARDIAN") == "1") _cursor.FollowRealCursor();
                         if (Environment.GetEnvironmentVariable("AGCU_GUARDIAN") != "1") _banner.Appear();
                         if (_idleTimer != null) { _idleTimer.Stop(); _idleTimer.Start(); }
@@ -635,6 +670,28 @@ namespace Axon
             void ReleaseBitmap()
             {
                 if (_hBitmap != IntPtr.Zero) { DeleteObject(_hBitmap); _hBitmap = IntPtr.Zero; }
+                _bits = IntPtr.Zero;
+            }
+
+            // A surface written as raw premultiplied BGRA rows, for content
+            // that is computed per pixel. The section is kept between frames,
+            // so an animation only copies bytes and blits.
+            IntPtr _bits = IntPtr.Zero;
+            protected void SetSurface(byte[] pixels, int width, int height)
+            {
+                if (!IsHandleCreated || width <= 0 || height <= 0 || pixels == null) return;
+                if (_bits == IntPtr.Zero || _cached.Width != width || _cached.Height != height)
+                {
+                    ReleaseBitmap();
+                    BITMAPINFOHEADER header = new BITMAPINFOHEADER();
+                    header.biSize = 40; header.biWidth = width; header.biHeight = -height; header.biPlanes = 1; header.biBitCount = 32;
+                    IntPtr bits;
+                    _hBitmap = CreateDIBSection(IntPtr.Zero, ref header, 0, out bits, IntPtr.Zero, 0);
+                    if (_hBitmap == IntPtr.Zero) return;
+                    _bits = bits; _cached = new Size(width, height);
+                }
+                Marshal.Copy(pixels, 0, _bits, Math.Min(pixels.Length, width * height * 4));
+                Push();
             }
 
             protected float Alpha
@@ -691,48 +748,341 @@ namespace Axon
         }
 
         // ------------------------------------------------------------------
-        sealed class RingForm : GhostForm
+        // The glow around the app the agent is working in. Four thin strips,
+        // one per edge, so only bands are ever uploaded and never the empty
+        // interior. They sit directly above the target window, not topmost: a
+        // window in front of the target covers the glow too.
+        sealed class GlowStrip : GhostForm
         {
-            bool wanted;
-            readonly System.Windows.Forms.Timer breath;
-            internal float OpacityValue {get {return Alpha;}}
-            internal RingForm() : base(true) {
-                Bounds = SystemInformation.VirtualScreen;
-                // Opacity uses the cached bitmap; 50 ms reduces visible stepping
-                // without redrawing the full multi-monitor edge surface.
-                breath=new System.Windows.Forms.Timer();breath.Interval=50;
-                breath.Tick+=delegate {if(Visible&&wanted)Alpha=DesktopVisuals.BreathLevel;};
+            internal GlowStrip() : base(true) { TopMost = false; Bounds = new Rectangle(-10000, -10000, 10, 10); }
+            protected override void Render(Graphics g) { }
+            internal void Surface(byte[] pixels, Rectangle where) { SetBounds(where.X, where.Y, where.Width, where.Height); SetSurface(pixels, where.Width, where.Height); }
+            internal void Shift(int x, int y) { PlaceAt(x, y); }
+            internal float Level { get { return Alpha; } set { Alpha = value; } }
+        }
+
+        sealed class Glow
+        {
+            const uint GW_HWNDPREV = 3;
+            const uint SWP_QUIET = 0x0001 | 0x0002 | 0x0010 | 0x0200 | 0x0400;   // no size, move, activate, owner z-order or change notice
+            readonly GlowStrip[] strips = new GlowStrip[4];
+            // Follows the window. Runs while a target is set.
+            readonly System.Windows.Forms.Timer watch = new System.Windows.Forms.Timer();
+            // Runs only during a transition; nothing is drawn at rest.
+            readonly System.Windows.Forms.Timer frame = new System.Windows.Forms.Timer();
+            readonly System.Diagnostics.Stopwatch clock = System.Diagnostics.Stopwatch.StartNew();
+            IntPtr target = IntPtr.Zero;
+            GlowField field;
+            readonly bool[] inside = new bool[4];
+            Rectangle seen = Rectangle.Empty;       // the last bounds read
+            double seenAt, lastFrame;
+            Point shift = Point.Empty;              // where the window has moved since the bake
+            bool shown, leaving, suspended, moved;
+            float master, lift;
+            double enterAt = -1, masterAt = -1, masterFrom, masterTo, masterMs;
+            double lastAction = -1e9, lastPulse = -1e9, sampleAt = -1, pointAt = -1;
+            float pointFromX, pointFromY, pointToX, pointToY;
+            bool hasPoint; int pointX, pointY;
+            readonly System.Collections.Generic.List<double> pulses = new System.Collections.Generic.List<double>();
+
+            internal Glow()
+            {
+                for (int i = 0; i < 4; i++) { strips[i] = new GlowStrip(); strips[i].CreateControl(); IntPtr handle = strips[i].Handle; }
+                watch.Interval = 40; watch.Tick += delegate { try { Watch(); } catch { } };
+                frame.Interval = 16; frame.Tick += delegate { try { Frame(); } catch { } };
+            }
+            internal IntPtr[] Handles() { IntPtr[] all = new IntPtr[4]; for (int i = 0; i < 4; i++) all[i] = strips[i].Handle; return all; }
+            internal float OpacityValue { get { return shown && !suspended ? master : 0; } }
+            double Now { get { return clock.Elapsed.TotalMilliseconds; } }
+
+            internal object Report()
+            {
+                Rectangle f = field == null ? Rectangle.Empty : field.Frame;
+                return new { shown = shown && !suspended, target = target.ToInt64(), frame = new int[] { f.X + shift.X, f.Y + shift.Y, f.Width, f.Height }, inside = (bool[])inside.Clone(), opacity = master, lift = lift, animating = frame.Enabled };
             }
 
-            protected override void Render(Graphics g)
+            internal void Target(IntPtr hwnd, int x, int y, bool point, bool pulse, bool sampleNow)
             {
-                foreach(Screen screen in Screen.AllScreens) {
-                    Rectangle r=screen.Bounds; r.Offset(-Left,-Top);
-                    DesktopVisuals.Edge(g,r,ScreenScale(screen));
+                if (hwnd == IntPtr.Zero) return;
+                if (hwnd != target)
+                {
+                    // The agent moved to another window: this one's glow goes,
+                    // and the new one enters on its own bounds.
+                    HideNow(); target = hwnd; field = null; seen = Rectangle.Empty; hasPoint = false;
+                    for (int i = 0; i < 4; i++) inside[i] = false;
+                }
+                if (leaving) { leaving = false; if (shown) FadeTo(1, DesktopVisuals.Normal); }
+                suspended = false;
+                if (point) SetPoint(x, y);
+                else if (sampleNow) SamplePointer();
+                else if (pulse) sampleAt = Now + 180;
+                if (pulse) Action();
+                if (!watch.Enabled) { watch.Start(); Watch(); }
+            }
+
+            // The pointer is where a click, drag or scroll just landed. It is
+            // read once, just after the action, never followed.
+            void SamplePointer()
+            {
+                NPOINT p; if (!GetCursorPos(out p)) return;
+                Rectangle f = seen; f.Inflate(24, 24);
+                if (f.Contains(p.X, p.Y)) SetPoint(p.X, p.Y);
+            }
+
+            void SetPoint(int x, int y)
+            {
+                hasPoint = true; pointX = x; pointY = y;
+                if (field == null || !shown) return;
+                float fx = x - shift.X, fy = y - shift.Y;
+                if (!DesktopVisuals.MotionEnabled) { field.SetAction(fx, fy); Paint(1, 1); return; }
+                // The bright zone travels to the new point; it does not jump.
+                pointFromX = field.ActionX; pointFromY = field.ActionY; pointToX = fx; pointToY = fy; pointAt = Now; frame.Start();
+            }
+
+            // glow.action. Actions closer than 250 ms merge into one held
+            // lift, and pulses are never closer than 350 ms, so a run of
+            // typing reads as one steady swell and never as a flicker.
+            void Action()
+            {
+                double now = Now;
+                if (!DesktopVisuals.MotionEnabled || !shown || leaving || enterAt >= 0) { lastAction = now; return; }
+                if (now - lastAction >= 250 && now - lastPulse >= 350) { pulses.Add(now); lastPulse = now; }
+                lastAction = now; frame.Start();
+            }
+
+            bool Read(out Rectangle bounds, out Rectangle monitor, out Rectangle work, out float scale)
+            {
+                bounds = monitor = work = Rectangle.Empty; scale = 1;
+                IntPtr h = target;
+                if (h == IntPtr.Zero || !IsWindow(h) || !IsWindowVisible(h) || IsIconic(h)) return false;
+                int cloaked;
+                if (DwmGetWindowAttribute(h, 14, out cloaked, 4) == 0 && cloaked != 0) return false;
+                if (OnCurrentDesktop(h) == 0) return false;
+                NRECT r;
+                if (DwmGetWindowAttribute(h, 9, out r, 16) != 0 && !GetWindowRect(h, out r)) return false;
+                Screen screen = Screen.FromHandle(h);
+                monitor = screen.Bounds; work = screen.WorkingArea; scale = ScreenScale(screen);
+                // The visible frame: a maximised window ends at the work area,
+                // and nothing is ever drawn on another monitor.
+                bounds = Rectangle.Intersect(Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom), IsZoomed(h) ? work : monitor);
+                return bounds.Width >= 48 && bounds.Height >= 48;
+            }
+
+            // Each edge decides for itself: outside when it has room on its
+            // own monitor, inside when it does not. 26 px to go in, 34 to come
+            // back out, so a window resting near an edge does not flicker.
+            static bool[] Sides(Rectangle bounds, Rectangle work, float scale, bool[] before)
+            {
+                int[] room = { bounds.Top - work.Top, work.Right - bounds.Right, work.Bottom - bounds.Bottom, bounds.Left - work.Left };
+                bool[] result = new bool[4];
+                for (int i = 0; i < 4; i++) result[i] = room[i] < (before[i] ? 34 : 26) * scale;
+                return result;
+            }
+
+            int CornerRadius(float scale)
+            {
+                // Rounded window corners exist where this attribute does.
+                int preference;
+                if (DwmGetWindowAttribute(target, 33, out preference, 4) != 0 || preference == 1) return 0;
+                return (int)Math.Round((preference == 3 ? 4 : 8) * scale);
+            }
+
+            void Watch()
+            {
+                if (target == IntPtr.Zero) { watch.Stop(); return; }
+                if (suspended || leaving) return;
+                double now = Now;
+                Rectangle bounds, monitor, work; float scale;
+                if (!Read(out bounds, out monitor, out work, out scale))
+                {
+                    // Minimised, hidden, closed or on another desktop: no glow.
+                    if (shown) HideNow();
+                    seen = Rectangle.Empty;
+                    if (!IsWindow(target)) { target = IntPtr.Zero; field = null; watch.Stop(); }
+                    return;
+                }
+                if (sampleAt >= 0 && now >= sampleAt) { sampleAt = -1; SamplePointer(); }
+                if (bounds != seen)
+                {
+                    bool first = seen.IsEmpty;
+                    if (shown && bounds.Size == seen.Size)
+                    {
+                        // glow.follow: locked to the frame, 1:1, no easing.
+                        shift = new Point(bounds.X - field.Frame.X, bounds.Y - field.Frame.Y);
+                        for (int i = 0; i < 4; i++) if (!field.Strips[i].IsEmpty) strips[i].Shift(field.Strips[i].X + shift.X, field.Strips[i].Y + shift.Y);
+                        moved = true;
+                    }
+                    else if (shown) HideNow();   // a jump: the old geometry is wrong at once
+                    seen = bounds; seenAt = first ? now - 1000 : now;
+                    if (!first) return;
+                }
+                // Sides are decided on settled bounds only.
+                if (now - seenAt < 120) return;
+                if (!shown) Enter(bounds, work, monitor, scale);
+                else if (moved)
+                {
+                    moved = false;
+                    bool[] sides = Sides(bounds, work, scale, inside);
+                    bool same = sides[0] == inside[0] && sides[1] == inside[1] && sides[2] == inside[2] && sides[3] == inside[3];
+                    if (!same) { HideNow(); Enter(bounds, work, monitor, scale); }
+                    else
+                    {
+                        // Same sides: bake again where the window now rests.
+                        float ax = field.ActionX + shift.X, ay = field.ActionY + shift.Y;
+                        field = new GlowField(bounds, inside, scale, CornerRadius(scale), monitor); shift = Point.Empty;
+                        field.SetAction(ax, ay); Paint(1, 1);
+                    }
+                }
+                Order();
+            }
+
+            // glow.enter: the line draws on from the action point around both
+            // sides; the haze follows.
+            void Enter(Rectangle bounds, Rectangle work, Rectangle monitor, float scale)
+            {
+                bool[] sides = Sides(bounds, work, scale, inside);
+                for (int i = 0; i < 4; i++) inside[i] = sides[i];
+                field = new GlowField(bounds, inside, scale, CornerRadius(scale), monitor); shift = Point.Empty; moved = false;
+                Rectangle near = bounds; near.Inflate(24, 24);
+                if (hasPoint && near.Contains(pointX, pointY)) field.SetAction(pointX, pointY);
+                bool motion = DesktopVisuals.MotionEnabled;
+                pulses.Clear(); lift = 0; pointAt = -1; masterAt = -1; leaving = false;
+                enterAt = motion ? Now : -1;
+                master = 1;
+                Paint(motion ? 0 : 1, motion ? 0 : 1);
+                for (int i = 0; i < 4; i++)
+                {
+                    if (field.Strips[i].IsEmpty) { strips[i].Hide(); continue; }
+                    strips[i].Level = 1;
+                    if (!strips[i].Visible) strips[i].Show();
+                }
+                shown = true; Order();
+                if (motion) { lastFrame = Now; frame.Start(); }
+            }
+
+            void Paint(float haze, float reveal)
+            {
+                if (field == null) return;
+                float[] running = null;
+                if (pulses.Count > 0)
+                {
+                    double now = Now; running = new float[pulses.Count];
+                    for (int i = 0; i < running.Length; i++) running[i] = (float)((now - pulses[i]) / DesktopVisuals.Slow);
+                }
+                field.Compose(lift, haze, reveal, running);
+                for (int i = 0; i < 4; i++)
+                {
+                    Rectangle strip = field.Strips[i]; if (strip.IsEmpty) continue;
+                    strip.Offset(shift); strips[i].Surface(field.Pixels[i], strip);
                 }
             }
 
-            internal void Appear()
+            void Frame()
             {
-                if (Visible && wanted) return;
-                wanted=true;StopAnimation();float from=Visible?Alpha:0;
-                Bounds = SystemInformation.VirtualScreen;
-                Alpha = from;
-                Redraw();
-                Show();
-                TopMost = true;
-                Animate(220, delegate(float t) { Alpha = Lerp(from,DesktopVisuals.BreathLevel,t); }, delegate {breath.Start();});
+                double now = Now, elapsed = Math.Max(0, Math.Min(100, now - lastFrame)); lastFrame = now;
+                bool paint = false, busy = false; float reveal = 1, haze = 1;
+                if (field != null && shown)
+                {
+                    if (pointAt >= 0)
+                    {
+                        float t = (float)((now - pointAt) / DesktopVisuals.Normal), e = DesktopVisuals.EaseInOut(t);
+                        field.SetAction(pointFromX + (pointToX - pointFromX) * e, pointFromY + (pointToY - pointFromY) * e);
+                        if (t >= 1) pointAt = -1; else busy = true;
+                        paint = true;
+                    }
+                    if (enterAt >= 0)
+                    {
+                        double t = now - enterAt;
+                        reveal = DesktopVisuals.EaseOut((float)(t / DesktopVisuals.Slow));
+                        haze = t < 120 ? 0 : DesktopVisuals.EaseOut((float)((t - 120) / DesktopVisuals.Normal));
+                        if (t >= 120 + DesktopVisuals.Normal) { enterAt = -1; reveal = haze = 1; } else busy = true;
+                        paint = true;
+                    }
+                    int before = pulses.Count;
+                    pulses.RemoveAll(delegate(double started) { return now - started >= DesktopVisuals.Slow; });
+                    if (before > 0) paint = true;
+                    if (pulses.Count > 0) busy = true;
+                    // The lift rises fast, holds while actions keep arriving, then falls once.
+                    float wanted = now - lastAction < 250 && DesktopVisuals.MotionEnabled ? 1 : 0;
+                    if (lift != wanted)
+                    {
+                        lift = wanted > lift ? Math.Min(1, lift + (float)(elapsed / DesktopVisuals.Fast)) : Math.Max(0, lift - (float)(elapsed / DesktopVisuals.Slow));
+                        paint = true;
+                    }
+                    if (lift > 0 || now - lastAction < 250) busy = true;
+                    if (paint) Paint(haze, reveal);
+                }
+                if (masterAt >= 0)
+                {
+                    double t = masterMs <= 0 ? 1 : (now - masterAt) / masterMs;
+                    float e = leaving ? DesktopVisuals.EaseIn((float)t) : DesktopVisuals.EaseOut((float)t);
+                    master = (float)(masterFrom + (masterTo - masterFrom) * e);
+                    for (int i = 0; i < 4; i++) strips[i].Level = master;
+                    if (t >= 1)
+                    {
+                        masterAt = -1;
+                        if (leaving) { HideNow(); target = IntPtr.Zero; field = null; leaving = false; watch.Stop(); }
+                    }
+                    else busy = true;
+                }
+                if (!busy) frame.Stop();
             }
 
-            internal void Vanish()
+            void FadeTo(float level, int milliseconds)
             {
-                if (!Visible || !wanted) return;
-                wanted=false;
-                breath.Stop();
-                float from = Alpha;
-                Animate(180, delegate(float t) { Alpha = from * (1 - t); }, delegate { Hide(); });
+                masterFrom = master; masterTo = level; masterAt = Now; masterMs = DesktopVisuals.MotionEnabled ? milliseconds : 0;
+                lastFrame = Now; frame.Start();
             }
-            protected override void Dispose(bool disposing) {if(disposing)breath.Dispose();base.Dispose(disposing);}
+
+            // glow.exit (Normal) and glow.stop (67 ms): opacity only, from
+            // whatever it has now. A stop is never slowed by a running exit.
+            internal void Exit(int milliseconds)
+            {
+                sampleAt = -1;
+                if (!shown) { target = IntPtr.Zero; field = null; leaving = false; watch.Stop(); return; }
+                if (leaving && masterMs <= milliseconds) return;
+                leaving = true; FadeTo(0, milliseconds);
+            }
+
+            void HideNow()
+            {
+                for (int i = 0; i < 4; i++) if (strips[i].Visible) strips[i].Hide();
+                shown = false; master = 0; enterAt = -1; masterAt = -1; pointAt = -1; lift = 0; pulses.Clear(); shift = Point.Empty; moved = false;
+            }
+
+            // A screenshot is being taken: out of the picture at once, and
+            // back without ceremony when the agent carries on.
+            internal void Suspend()
+            {
+                if (!shown || suspended) return;
+                suspended = true;
+                for (int i = 0; i < 4; i++) if (strips[i].Visible) strips[i].Hide();
+            }
+            internal void Resume()
+            {
+                if (!suspended) return;
+                suspended = false;
+                if (!shown || field == null) return;
+                for (int i = 0; i < 4; i++) if (!field.Strips[i].IsEmpty) strips[i].Show();
+                Order();
+            }
+
+            bool IsStrip(IntPtr h) { for (int i = 0; i < 4; i++) if (strips[i].IsHandleCreated && strips[i].Handle == h) return true; return false; }
+
+            // Directly above the target in z-order, never topmost unless the
+            // target itself is.
+            void Order()
+            {
+                if (!shown || target == IntPtr.Zero) return;
+                IntPtr above = GetWindow(target, GW_HWNDPREV);
+                if (above != IntPtr.Zero && IsStrip(above)) return;
+                bool targetTop = (GetWindowLongW(target, GWL_EXSTYLE) & 0x8) != 0;
+                IntPtr after = above;
+                if (above == IntPtr.Zero) after = targetTop ? new IntPtr(-1) : IntPtr.Zero;
+                else if (!targetTop && (GetWindowLongW(above, GWL_EXSTYLE) & 0x8) != 0) after = IntPtr.Zero;
+                for (int i = 0; i < 4; i++)
+                    if (strips[i].Visible) SetWindowPos(strips[i].Handle, after, 0, 0, 0, 0, SWP_QUIET);
+            }
         }
 
         // ------------------------------------------------------------------
@@ -904,7 +1254,7 @@ namespace Axon
                 {
                     RequestStop();
                     Vanish();
-                    try { _ring.Vanish(); _cursor.Vanish(); } catch { }
+                    try { _glow.Exit(DesktopVisuals.FastLeave); _cursor.Vanish(); } catch { }
                 }
                 else Redraw();
                 base.OnMouseUp(e);
@@ -977,8 +1327,7 @@ namespace Axon
                     float scale=ScreenScale(Screen.FromPoint(new Point(p.X,p.Y)));
                     if(scale!=_scale) {_scale=scale;Size=new Size((int)(96*scale),(int)(96*scale));Redraw();}
                     PlaceAt(p.X-(int)(48*scale),p.Y-(int)(48*scale));
-                    Alpha=DesktopVisuals.BreathLevel;
-                    if(_ripple) {if((DateTime.UtcNow-_clicked).TotalMilliseconds>260)_ripple=false;Redraw();}
+                    if(_ripple) {if((DateTime.UtcNow-_clicked).TotalMilliseconds>DesktopVisuals.Slow)_ripple=false;Redraw();}
                 };
             }
 
@@ -1054,8 +1403,7 @@ namespace Axon
                 if(Environment.GetEnvironmentVariable("AGCU_GUARDIAN")=="1") {
                     g.ScaleTransform(_scale,_scale);DesktopVisuals.Pointer(g,0);
                     if(_ripple) {
-                        float t=(float)Math.Min(1,(DateTime.UtcNow-_clicked).TotalMilliseconds/260),radius=DesktopVisuals.MotionEnabled?12+18*(1-(1-t)*(1-t)):15;
-                        using(Pen pulse=new Pen(Color.FromArgb((int)(150*(1-t)),DesktopVisuals.Violet),1.4f))g.DrawEllipse(pulse,48-radius,48-radius,2*radius,2*radius);
+                        DesktopVisuals.Ripple(g,(float)Math.Min(1,(DateTime.UtcNow-_clicked).TotalMilliseconds/DesktopVisuals.Slow));
                     }
                     return;
                 }

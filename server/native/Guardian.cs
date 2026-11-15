@@ -387,13 +387,22 @@ namespace Axon {
         [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern bool SetPropW(IntPtr h, string key, IntPtr value);
         readonly JavaScriptSerializer js = new JavaScriptSerializer();
         readonly ToolTip tips = new ToolTip();
-        HudButton toggle, stopButton, modeButton;
+        HudButton stopButton, modeButton;
         readonly ContextMenuStrip modeMenu=new ContextMenuStrip();
         // Human mouse and keyboard input never pauses the agent. The policy
         // object stays in manual mode; only Esc, the hotkey and Stop halt it.
         readonly TakeoverPolicy takeover=new TakeoverPolicy("manual");
-        float visualScale=1, phase;
-        int visualTick;
+        float visualScale=1;
+        // Bar presentation only. None of these grants or changes control.
+        string lastReason="";bool ended,releasing,lowTime;DateTime stoppedAt=DateTime.MinValue,releaseChecked;
+        internal float hoverStop,hoverMode;internal int pressedButton;
+        Image hostIcon;string hostIconPath="";
+        float textIn=1;DateTime textAt;string shownLine2="";int shownSlot=-1;
+        readonly System.Windows.Forms.Timer motion=new System.Windows.Forms.Timer();
+        static readonly string[] Docks={"top-left","top-centre","top-right","bottom-left","bottom-centre","bottom-right"};
+        // Where the person keeps the bar: a dock, or a fraction of the work area.
+        string dock="top-centre";double dockX,dockY;
+        bool dragging,dragArmed,displaced,sliding,entering;Point dragGrab,dragStart,slideFrom,slideTo;DateTime displacedAt,slideAt,enterAt;int slideMs;
         string activity="";DateTime activityAt;
         // Where the current action lands and who is acting. Carried by the
         // activity message for the control bar and a per-window glow; nothing
@@ -446,36 +455,20 @@ namespace Axon {
             ShowInTaskbar=false; StartPosition = FormStartPosition.Manual;
             SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer,true);
             BackColor=Color.FromArgb(22,23,35);
-            visualScale=Overlay.ScreenScale(Screen.FromPoint(Cursor.Position));
-            ClientSize = new Size((int)(DesktopVisuals.HudWidth*visualScale),(int)(DesktopVisuals.HudHeight*visualScale));
-            Rectangle monitor=Screen.FromPoint(Cursor.Position).WorkingArea;
-            Location=new Point(monitor.Left+(monitor.Width-Width)/2,monitor.Top+(int)(18*visualScale));
-            using(GraphicsPath rounded=Overlay.RoundRect(new RectangleF(0,0,Width,Height),21*visualScale))Region=new Region(rounded);
-            toggle=ButtonAt(1,DesktopVisuals.ToggleRect); toggle.Click += delegate {
-                if(state=="active")SetState("paused");
-                // A Stop is not cleared from the bar. It ended the task; the
-                // next task clears it after cleanup proof (clear_stop).
-                else if(state!="paused")return;
-                else if(rearmLocked){Emit(new {ev="visual_warning",message="A previous task's input cleanup is unverified; resume stays locked"});}
-                else {
-                    long humanEpoch=Interlocked.Read(ref stopEpoch);
-                    try {ControlFence.Recover();}catch {}
-                    if(InputLedger.HasHeld()||!WorkersExited(50)){Emit(new {ev="visual_warning",message="Worker/input cleanup is incomplete; control stays paused/stopped"});return;}
-                    deadline=DateTime.UtcNow.AddMinutes(10).Ticks;bootDeadline=NativeDeadline.Create(deadline,DateTime.UtcNow.Ticks,NativeDeadline.GetTickCount64(),ControlContract.Number("session_ms",600000));
-                    if(bootDeadline==0){Emit(new {ev="error",message="Cannot establish the native session deadline; control stays paused/stopped"});return;}
-                    if(Interlocked.Read(ref stopEpoch)!=humanEpoch||state!="paused")return;
-                    SetState("active",null,true,humanEpoch);if(state=="active")Emit(new {ev="human_resume",state=state});
-                }
+            BackColor=DesktopVisuals.InkSurface;Opacity=.999;
+            stopButton=new HudButton(this,2,DesktopVisuals.StopRect);Controls.Add(stopButton);stopButton.Click += delegate {
+                DesktopVisuals.HudModel now=Model();
+                if(now.Slot==0)return;
+                // Hide takes Stop's slot, so clicks are ignored just after a
+                // stop: a second panic click must not dismiss the bar.
+                if(now.Slot==2){if((DateTime.UtcNow-stoppedAt).TotalMilliseconds>=600)DismissControls();}
+                else Emergency("button");
             };
-            stopButton=ButtonAt(2,DesktopVisuals.StopRect); stopButton.Click += delegate {
-                if(state=="stopped")DismissControls();else Emergency("button");
-            };
-            modeButton=ButtonAt(3,DesktopVisuals.ModeRect);modeButton.Click+=delegate {OpenModeMenu();};
+            modeButton=new HudButton(this,3,DesktopVisuals.ModeRect);Controls.Add(modeButton);modeButton.Click+=delegate {OpenModeMenu();};
             LoadTakeoverMode();
-            tips.SetToolTip(stopButton,"Stop immediately · Esc or Ctrl+Alt+F12");
-            tips.SetToolTip(toggle,"Pause, resume, or re-arm control. Resuming requires a fresh observation.");
+            ApplyScale(Overlay.ScreenScale(Screen.FromPoint(Cursor.Position)),Screen.FromPoint(Cursor.Position));
+            motion.Interval=16;motion.Tick+=delegate {Motion();};
             FormClosing += delegate(object sender, FormClosingEventArgs e) { if(!normalClose&&state!="idle")SetState("stopped",null,false);DismissControls(); };
-            LiquidGlassPackageClient.SurfaceReady += PackageSurfaceReady;
             timer.Interval = 70; timer.Tick += Tick; timer.Start();
         }
         // Initialize the message handle/hooks without ever showing a window.
@@ -509,41 +502,187 @@ namespace Axon {
                 return true;
         }
         protected override void SetVisibleCore(bool value) {base.SetVisibleCore(value && initialized && controlsRequested && !captureHidden);}
-        void SyncVisibility() {if(controlsRequested&&!captureHidden){if(!Visible)Show();}else if(Visible)Hide();}
+        void SyncVisibility() {
+            if(controlsRequested&&!captureHidden) {
+                // bar.enter: a fresh appearance fades in; a return from a screenshot does not.
+                if(!Visible){if(!captureReturn){entering=true;enterAt=DateTime.UtcNow;Opacity=0;motion.Start();}captureReturn=false;Show();}
+            }
+            else if(Visible){entering=false;Hide();}
+        }
+        bool captureReturn;
         void ShowControls(int milliseconds) {Interlocked.Increment(ref visibilityEpoch);controlsRequested=true;controlsUntil=milliseconds>0?DateTime.UtcNow.AddMilliseconds(milliseconds):DateTime.MaxValue;SyncVisibility();}
         void DismissControls() {Interlocked.Increment(ref visibilityEpoch);controlsRequested=false;SyncVisibility();}
         protected override bool ShowWithoutActivation { get { return true; } }
         protected override CreateParams CreateParams { get { CreateParams p=base.CreateParams;p.ExStyle|=0x08000080;return p; } }
         protected override void OnPaint(PaintEventArgs e) {
-            e.Graphics.ScaleTransform(visualScale,visualScale);DesktopVisuals.Hud(e.Graphics,state,0,phase,activity);
+            e.Graphics.ScaleTransform(visualScale,visualScale);DesktopVisuals.Hud(e.Graphics,Model());
         }
-        HudButton ButtonAt(int index,Rectangle rect) {
-            HudButton b=new HudButton(this,index,rect);
-            b.SetBounds((int)(rect.X*visualScale),(int)(rect.Y*visualScale),(int)(rect.Width*visualScale),(int)(rect.Height*visualScale));
-            Controls.Add(b);return b;
+        // Size, shape and place for one monitor's scale.
+        void ApplyScale(float scale,Screen screen) {
+            visualScale=scale;
+            ClientSize=new Size((int)Math.Round(DesktopVisuals.HudWidth*scale),(int)Math.Round(DesktopVisuals.HudHeight*scale));
+            using(GraphicsPath rounded=Overlay.RoundRect(new RectangleF(0,0,Width,Height),Height/2f))Region=new Region(rounded);
+            stopButton.Place();modeButton.Place();
+            Location=Home(screen.WorkingArea);
+        }
+        Point Home(Rectangle work) {return HomeFor(dock,work);}
+        Point HomeFor(string name,Rectangle work) {
+            int side=(int)Math.Ceiling(12*visualScale),edge=(int)Math.Round(18*visualScale);
+            int left=work.Left+side,right=work.Right-Width-side,centre=work.Left+(work.Width-Width)/2,up=work.Top+edge,down=work.Bottom-Height-edge;
+            switch(name) {
+                case "top-left":return new Point(left,up);case "top-right":return new Point(right,up);
+                case "bottom-left":return new Point(left,down);case "bottom-centre":return new Point(centre,down);case "bottom-right":return new Point(right,down);
+                case "free":
+                    try {return WindowGeometry.Fit(new Rectangle(work.Left+(int)(dockX*(work.Width-Width)),work.Top+(int)(dockY*(work.Height-Height)),Width,Height),work).Location;}
+                    catch {return new Point(centre,up);}
+                default:return new Point(centre,up);
+            }
+        }
+        // What the bar says. State is carried by the words; line 1 never
+        // changes inside a state, only line 2 does.
+        internal DesktopVisuals.HudModel Model() {
+            DesktopVisuals.HudModel m=new DesktopVisuals.HudModel();
+            string host=hostName.Length>0?hostName:"Computer Use";
+            m.State=prompting?"asking":state;m.Icon=hostIcon;m.StopHover=hoverStop;m.ModeHover=hoverMode;m.Pressed=pressedButton;m.TextIn=textIn;m.HighContrast=SystemInformation.HighContrast;
+            if(prompting) {m.Line1="Waiting for your answer";m.Line2="Allow or deny below";m.Hint=true;m.Slot=1;}
+            else if(state=="active") {
+                m.Line1=host+" is working";m.Line2=activity.Length>0?activity:"Waiting for the next step";
+                if(lowTime)m.Line2+=" · 1 min left";
+                m.Hint=true;m.Slot=1;
+            }
+            else if(state=="paused") {m.Line1="Paused";m.Line2="Waiting to continue";m.Hint=true;m.Slot=1;}
+            else if(state=="stopped") {m.Line1="Stopped";m.Line2=releasing?"Still releasing a key or button":StopReason(lastReason);m.Slot=releasing?0:2;}
+            else if(ended) {m.Line1="Session ended";m.Line2="The time limit ran out";m.Slot=2;}
+            else {m.Line1=host+" is ready";m.Line2="Not controlling anything";m.Slot=2;}
+            return m;
+        }
+        internal static string StopReason(string reason) {
+            switch(reason) {
+                case "escape":return "You pressed Esc";
+                case "button":return "You pressed Stop";
+                case "hotkey":return "You pressed Ctrl+Alt+F12";
+                case "input_desktop_changed":return "The screen was locked or switched";
+                case "cursor_watchdog_failed":case "watchdog_unavailable":case "guard_persistence_failed":return "A safety check failed";
+                default:return "The task was ended";
+            }
         }
         sealed class HudButton : Button {
-            readonly Guardian owner;readonly int index;readonly Rectangle logical;bool hover;
-            internal HudButton(Guardian o,int i,Rectangle r) {owner=o;index=i;logical=r;FlatStyle=FlatStyle.Flat;FlatAppearance.BorderSize=0;TabStop=false;Cursor=Cursors.Hand;}
+            readonly Guardian owner;readonly int index;readonly Rectangle logical;bool over;
+            readonly System.Windows.Forms.Timer fade=new System.Windows.Forms.Timer();
+            internal HudButton(Guardian o,int i,Rectangle r) {
+                owner=o;index=i;logical=r;FlatStyle=FlatStyle.Flat;FlatAppearance.BorderSize=0;TabStop=false;Cursor=Cursors.Hand;
+                SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer,true);
+                fade.Interval=16;fade.Tick+=delegate {Step();};
+            }
+            internal void Place() {float s=owner.visualScale;SetBounds((int)Math.Round(logical.X*s),(int)Math.Round(logical.Y*s),(int)Math.Round(logical.Width*s),(int)Math.Round(logical.Height*s));}
+            float Level {get {return index==2?owner.hoverStop:owner.hoverMode;} set {if(index==2)owner.hoverStop=value;else owner.hoverMode=value;}}
+            // button.hover: the plate arrives over Fast and leaves a third quicker.
+            void Step() {
+                float target=over?1:0,level=Level;
+                if(!DesktopVisuals.MotionEnabled)level=target;
+                else level=over?Math.Min(1,level+16f/DesktopVisuals.Fast):Math.Max(0,level-16f/DesktopVisuals.FastLeave);
+                Level=level;if(level==target)fade.Stop();Invalidate();
+            }
             protected override void OnPaint(PaintEventArgs e) {
                 e.Graphics.ScaleTransform(owner.visualScale,owner.visualScale);
                 e.Graphics.TranslateTransform(-logical.X,-logical.Y);
-                DesktopVisuals.Hud(e.Graphics,owner.state,hover?index:0,owner.phase,owner.activity);
+                DesktopVisuals.Hud(e.Graphics,owner.Model());
             }
-            protected override void OnMouseEnter(EventArgs e) {hover=true;Invalidate();base.OnMouseEnter(e);}
-            protected override void OnMouseLeave(EventArgs e) {hover=false;Invalidate();base.OnMouseLeave(e);}
+            protected override void OnMouseEnter(EventArgs e) {over=true;fade.Start();base.OnMouseEnter(e);}
+            protected override void OnMouseLeave(EventArgs e) {over=false;if(owner.pressedButton==index)owner.pressedButton=0;fade.Start();base.OnMouseLeave(e);}
+            // button.press: confirmed on pointer-down.
+            protected override void OnMouseDown(MouseEventArgs e) {owner.pressedButton=index;Invalidate();base.OnMouseDown(e);}
+            protected override void OnMouseUp(MouseEventArgs e) {owner.pressedButton=0;Invalidate();base.OnMouseUp(e);}
+            protected override void Dispose(bool disposing) {if(disposing)fade.Dispose();base.Dispose(disposing);}
         }
         void RefreshHud() {
-            toggle.AccessibleName=state=="active"?"Pause computer use":state=="paused"?"Resume computer use":"Re-arm computer use";
-            stopButton.AccessibleName=state=="stopped"?"Dismiss stopped computer use controls":"Stop computer use immediately";
-            tips.SetToolTip(stopButton,state=="stopped"?"Dismiss controls. Emergency Stop stays latched.":"Stop immediately · Esc or Ctrl+Alt+F12");
-            modeButton.AccessibleName="Control settings. Takeover mode: "+takeover.Mode;
-            tips.SetToolTip(modeButton,takeover.Mode=="manual"?"Manual pause: mouse and keyboard do not interrupt. Click for control settings.":"Smart takeover: ignores jitter; deliberate input pauses. Click for control settings.");
-            AccessibleName="Antigravity computer use: "+state;
-            Invalidate();toggle.Invalidate();stopButton.Invalidate();modeButton.Invalidate();
+            DesktopVisuals.HudModel m=Model();
+            if(m.Slot!=shownSlot) {
+                shownSlot=m.Slot;
+                stopButton.AccessibleName=m.Slot==2?"Hide controls":"Stop computer use (Esc)";
+                tips.SetToolTip(stopButton,m.Slot==2?"Hide controls":m.Slot==1?"Stop computer use · Esc or Ctrl+Alt+F12":"");
+                stopButton.Cursor=m.Slot==0?Cursors.Default:Cursors.Hand;
+                modeButton.AccessibleName="Settings";tips.SetToolTip(modeButton,"Settings");
+            }
+            // bar.textChange: line 2 only; the new text arrives over Fast.
+            if(m.Line2!=shownLine2) {shownLine2=m.Line2;if(Visible&&DesktopVisuals.MotionEnabled){textIn=0;textAt=DateTime.UtcNow;motion.Start();}else textIn=1;}
+            AccessibleRole=AccessibleRole.ToolBar;
+            AccessibleName=(hostName.Length>0?hostName:"Computer Use")+" computer use: "+m.Line1+", "+m.Line2;
+            Invalidate();stopButton.Invalidate();modeButton.Invalidate();
         }
-        void PackageSurfaceReady() {
-            try { if(!IsDisposed && IsHandleCreated) BeginInvoke((MethodInvoker)delegate { if(!IsDisposed) RefreshHud(); }); } catch { }
+        // One frame timer for the bar's own motion. It runs only while
+        // something is moving.
+        void Motion() {
+            bool busy=false;DateTime now=DateTime.UtcNow;
+            if(textIn<1) {textIn=DesktopVisuals.EaseOut((float)((now-textAt).TotalMilliseconds/DesktopVisuals.Fast));if((now-textAt).TotalMilliseconds>=DesktopVisuals.Fast)textIn=1;else busy=true;Invalidate();}
+            if(entering) {
+                // bar.enter: opacity over Normal; a short fade when motion is reduced.
+                double t=(now-enterAt).TotalMilliseconds/(DesktopVisuals.MotionEnabled?DesktopVisuals.Normal:DesktopVisuals.Fast);
+                if(t>=1){entering=false;Opacity=.999;}else {Opacity=.999*DesktopVisuals.EaseOut((float)t);busy=true;}
+            }
+            if(sliding) {
+                double t=(now-slideAt).TotalMilliseconds/slideMs;
+                if(t>=1||!DesktopVisuals.MotionEnabled){sliding=false;Location=slideTo;}
+                else {float e=DesktopVisuals.EaseInOut((float)t);Location=new Point((int)Math.Round(slideFrom.X+(slideTo.X-slideFrom.X)*e),(int)Math.Round(slideFrom.Y+(slideTo.Y-slideFrom.Y)*e));busy=true;}
+            }
+            if(!busy)motion.Stop();
+        }
+        void SlideTo(Point target,int milliseconds) {
+            if(target==Location){sliding=false;return;}
+            slideFrom=Location;slideTo=target;slideAt=DateTime.UtcNow;slideMs=milliseconds;sliding=true;motion.Start();
+        }
+        // Drag and reposition. The handle is everything that is not a button:
+        // the buttons are separate controls, so a press on one never arrives here.
+        protected override void OnMouseDown(MouseEventArgs e) {
+            // Only the person's own press may move the bar, never injected input.
+            bool physical=(DateTime.UtcNow.Ticks-Presence.LastUserClickTicks)<TimeSpan.TicksPerSecond;
+            if(e.Button==MouseButtons.Left&&physical){dragArmed=true;dragStart=Cursor.Position;dragGrab=new Point(Cursor.Position.X-Left,Cursor.Position.Y-Top);}
+            base.OnMouseDown(e);
+        }
+        protected override void OnMouseMove(MouseEventArgs e) {
+            if(dragArmed) {
+                Point p=Cursor.Position;
+                if(!dragging&&(Math.Abs(p.X-dragStart.X)>=4||Math.Abs(p.Y-dragStart.Y)>=4)){dragging=true;sliding=false;}
+                if(dragging) {
+                    // bar.drag: 1:1 from the grab point, always fully on a monitor.
+                    Rectangle work=Screen.FromPoint(p).WorkingArea;int margin=(int)Math.Ceiling(12*visualScale);
+                    if(work.Width>Width+2*margin&&work.Height>Height+2*margin)work.Inflate(-margin,-margin);
+                    try {Location=WindowGeometry.Fit(new Rectangle(p.X-dragGrab.X,p.Y-dragGrab.Y,Width,Height),work).Location;}catch {}
+                }
+            }
+            base.OnMouseMove(e);
+        }
+        protected override void OnMouseUp(MouseEventArgs e) {
+            bool settle=dragging;dragArmed=dragging=false;
+            if(settle)Settle();
+            base.OnMouseUp(e);
+        }
+        // bar.settle: land on a dock when dropped within 12 px of one, and
+        // remember the place.
+        void Settle() {
+            Screen screen=Screen.FromRectangle(Bounds);float scale=Overlay.ScreenScale(screen);Rectangle work=screen.WorkingArea;
+            if(scale!=visualScale) {
+                Point dropped=Location;ApplyScale(scale,screen);
+                try {Location=WindowGeometry.Fit(new Rectangle(dropped,Size),work).Location;}catch {}
+            }
+            int snap=(int)Math.Ceiling(12*visualScale);string near="free";
+            foreach(string name in Docks){Point home=HomeFor(name,work);if(Math.Abs(home.X-Left)<=snap&&Math.Abs(home.Y-Top)<=snap){near=name;break;}}
+            dock=near;
+            if(near=="free"){dockX=work.Width>Width?(Left-work.Left)/(double)(work.Width-Width):0;dockY=work.Height>Height?(Top-work.Top)/(double)(work.Height-Height):0;}
+            displaced=false;SlideTo(Home(work),DesktopVisuals.Normal);SavePreferences();
+        }
+        void MoveToDock(string name) {
+            dock=name;displaced=false;SlideTo(Home(Screen.FromRectangle(Bounds).WorkingArea),DesktopVisuals.Slow);SavePreferences();
+        }
+        void SetHost(string name,string file) {
+            if(name!=null&&name.Length>0&&name.Length<=40)hostName=name;
+            if(file==null||file==hostIconPath||file.Length>520)return;
+            hostIconPath=file;
+            // The host's own icon, read from its executable. Decorative only.
+            try {
+                if(file.EndsWith(".exe",StringComparison.OrdinalIgnoreCase)&&File.Exists(file))
+                    using(Icon icon=Icon.ExtractAssociatedIcon(file)){Image old=hostIcon;hostIcon=icon.ToBitmap();if(old!=null)old.Dispose();}
+            } catch {hostIcon=null;}
         }
         string PreferenceFile {get {return Path.Combine(Path.GetDirectoryName(ControlFence.FileName),"control-preferences.json");}}
         void LoadTakeoverMode() {
@@ -551,10 +690,16 @@ namespace Axon {
                 // A saved "smart" takeover preference from an older build is
                 // ignored; the next save rewrites it as manual.
                 recordVisuals=prefs.ContainsKey("record_visuals")&&Convert.ToBoolean(prefs["record_visuals"]);
+                string saved=prefs.ContainsKey("bar_dock")?Convert.ToString(prefs["bar_dock"]):null;
+                if(saved=="free") {
+                    double x=Convert.ToDouble(prefs["bar_x"],System.Globalization.CultureInfo.InvariantCulture),y=Convert.ToDouble(prefs["bar_y"],System.Globalization.CultureInfo.InvariantCulture);
+                    if(x>=0&&x<=1&&y>=0&&y<=1){dock="free";dockX=x;dockY=y;}
+                }
+                else if(Array.IndexOf(Docks,saved)>=0)dock=saved;
             }catch {}
         }
         void SavePreferences() {
-            try {string file=PreferenceFile,temp=file+".tmp";File.WriteAllText(temp,js.Serialize(new {takeover_mode=takeover.Mode,record_visuals=recordVisuals}));if(File.Exists(file))File.Replace(temp,file,null);else File.Move(temp,file);}catch {Emit(new {ev="visual_warning",message="Could not save control preference"});}
+            try {string file=PreferenceFile,temp=file+".tmp";File.WriteAllText(temp,js.Serialize(new {takeover_mode=takeover.Mode,record_visuals=recordVisuals,bar_dock=dock,bar_x=dockX,bar_y=dockY}));if(File.Exists(file))File.Replace(temp,file,null);else File.Move(temp,file);}catch {Emit(new {ev="visual_warning",message="Could not save control preference"});}
         }
         void ApplyRecordingPreference() {
             // Unlike the recording chrome, permission dialogs always remain excluded.
@@ -565,34 +710,64 @@ namespace Axon {
             recordVisuals=!recordVisuals;ApplyRecordingPreference();Overlay.RecordVisuals(recordVisuals);SavePreferences();
             Emit(new {ev="settings",takeover_mode=takeover.Mode,record_visuals=recordVisuals});
         }
-        void ChangeTakeoverMode(string mode) {
-            takeover.SetMode(mode,Presence.Capture());
-            SavePreferences();
-            RefreshHud();Emit(new {ev="settings",takeover_mode=takeover.Mode});
-        }
         void OpenModeMenu() {
-            modeMenu.Items.Clear();modeMenu.BackColor=Color.FromArgb(32,35,40);modeMenu.ForeColor=Color.FromArgb(234,237,239);
-            modeMenu.ShowImageMargin=true;modeMenu.ShowCheckMargin=false;modeMenu.Font=new Font(Overlay.UiFont,10);modeMenu.Padding=new Padding(6);
-            modeMenu.Renderer=new ToolStripProfessionalRenderer(new ControlMenuColors());
-            ToolStripMenuItem manual=new ToolStripMenuItem("Keep working — Pause or Esc to interrupt");manual.Checked=takeover.Mode=="manual";manual.Click+=delegate {ChangeTakeoverMode("manual");};
-            ToolStripMenuItem smart=new ToolStripMenuItem("Yield on input — deliberate input pauses");smart.Enabled=false;
-            modeMenu.Items.Add(manual);modeMenu.Items.Add(smart);modeMenu.Items.Add(new ToolStripSeparator());
-            ToolStripMenuItem recording=new ToolStripMenuItem("Show glow and controls in screen recordings");recording.Checked=recordVisuals;recording.Click+=delegate {ChangeRecordingPreference();};modeMenu.Items.Add(recording);
-            ToolStripMenuItem hint=new ToolStripMenuItem("Esc always stops immediately");hint.Enabled=false;modeMenu.Items.Add(hint);
-            ToolStripMenuItem dismiss=new ToolStripMenuItem("End session and hide");dismiss.Click+=delegate {if(state!="stopped")Emergency("human_end");DismissControls();Emit(new {ev="human_end",state=state});};modeMenu.Items.Add(dismiss);
-            modeMenu.Show(modeButton,new Point(0,modeButton.Height));
+            modeMenu.Items.Clear();modeMenu.BackColor=DesktopVisuals.InkRaised;modeMenu.ForeColor=DesktopVisuals.PaperText;
+            modeMenu.ShowImageMargin=false;modeMenu.ShowCheckMargin=true;modeMenu.Font=new Font(Overlay.UiFont,13*visualScale,FontStyle.Regular,GraphicsUnit.Pixel);modeMenu.Padding=new Padding(6);
+            modeMenu.Renderer=new ControlMenuRenderer();
+            ToolStripMenuItem title=new ToolStripMenuItem("Computer Use");title.Enabled=false;modeMenu.Items.Add(title);
+            modeMenu.Items.Add(new ToolStripSeparator());
+            ToolStripMenuItem recording=new ToolStripMenuItem("Show bar and glow in recordings");recording.Checked=recordVisuals;recording.Click+=delegate {ChangeRecordingPreference();};modeMenu.Items.Add(recording);
+            // Moving the bar without a mouse: the six docks, and Reset.
+            ToolStripMenuItem move=new ToolStripMenuItem("Move bar");
+            string[] labels={"Top left","Top centre","Top right","Bottom left","Bottom centre","Bottom right"};
+            for(int i=0;i<Docks.Length;i++) {
+                string name=Docks[i];ToolStripMenuItem item=new ToolStripMenuItem(labels[i]);item.Checked=dock==name;item.ForeColor=DesktopVisuals.PaperText;
+                item.Click+=delegate {MoveToDock(name);};move.DropDownItems.Add(item);
+            }
+            move.DropDownItems.Add(new ToolStripSeparator());
+            ToolStripMenuItem reset=new ToolStripMenuItem("Reset");reset.ForeColor=DesktopVisuals.PaperText;reset.Click+=delegate {MoveToDock("top-centre");};move.DropDownItems.Add(reset);
+            move.DropDown.BackColor=DesktopVisuals.InkRaised;move.DropDown.Renderer=modeMenu.Renderer;move.DropDown.Font=modeMenu.Font;
+            ToolStripDropDownMenu places=move.DropDown as ToolStripDropDownMenu;if(places!=null){places.ShowImageMargin=false;places.ShowCheckMargin=true;}
+            move.DropDown.Opened+=delegate {try {SetPropW(move.DropDown.Handle,"ComputerUseOverlayWindow",new IntPtr(1));SetWindowDisplayAffinity(move.DropDown.Handle,0x11);}catch {}};
+            modeMenu.Items.Add(move);modeMenu.Items.Add(new ToolStripSeparator());
+            foreach(string line in new string[]{"Esc or Ctrl Alt F12 stops at once.","Your own mouse and keyboard don't pause it."}) {
+                ToolStripMenuItem note=new ToolStripMenuItem(line);note.Enabled=false;modeMenu.Items.Add(note);
+            }
+            // menu.open: from the Settings button; above it when the bar is docked low.
+            Size size=modeMenu.GetPreferredSize(Size.Empty);bool low=Top+Height/2>Screen.FromRectangle(Bounds).WorkingArea.Top+Screen.FromRectangle(Bounds).WorkingArea.Height/2;
+            modeMenu.Show(modeButton,new Point(modeButton.Width-size.Width,low?-size.Height-4:modeButton.Height+4));
             SetPropW(modeMenu.Handle,"ComputerUseOverlayWindow",new IntPtr(1));SetWindowDisplayAffinity(modeMenu.Handle,0x11);
         }
+        sealed class ControlMenuRenderer:ToolStripProfessionalRenderer {
+            internal ControlMenuRenderer():base(new ControlMenuColors()) {RoundedEdges=false;}
+            protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e) {
+                e.TextColor=e.Item.Enabled?DesktopVisuals.PaperText:DesktopVisuals.Mist;base.OnRenderItemText(e);
+            }
+            // The tick and the chevron come from the bar's own icon set.
+            protected override void OnRenderItemCheck(ToolStripItemImageRenderEventArgs e) {
+                e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;Rectangle r=e.ImageRectangle;float scale=Math.Min(r.Width,r.Height)/20f;
+                var saved=e.Graphics.Save();e.Graphics.TranslateTransform(r.X+(r.Width-20*scale)/2,r.Y+(r.Height-20*scale)/2);e.Graphics.ScaleTransform(scale,scale);
+                DesktopVisuals.Icon(e.Graphics,"check",0,0,DesktopVisuals.PaperText);e.Graphics.Restore(saved);
+            }
+            protected override void OnRenderArrow(ToolStripArrowRenderEventArgs e) {
+                e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;Rectangle r=e.ArrowRectangle;float scale=Math.Min(r.Width,r.Height)/20f;
+                var saved=e.Graphics.Save();e.Graphics.TranslateTransform(r.X+(r.Width-20*scale)/2,r.Y+(r.Height-20*scale)/2);e.Graphics.ScaleTransform(scale,scale);
+                DesktopVisuals.Icon(e.Graphics,"chevron",0,0,DesktopVisuals.Rest);e.Graphics.Restore(saved);
+            }
+        }
         sealed class ControlMenuColors:ProfessionalColorTable {
-            public override Color ToolStripDropDownBackground {get{return Color.FromArgb(32,35,40);}}
+            public override Color ToolStripDropDownBackground {get{return DesktopVisuals.InkRaised;}}
             public override Color ImageMarginGradientBegin {get{return ToolStripDropDownBackground;}}
             public override Color ImageMarginGradientMiddle {get{return ToolStripDropDownBackground;}}
             public override Color ImageMarginGradientEnd {get{return ToolStripDropDownBackground;}}
-            public override Color MenuItemSelected {get{return Color.FromArgb(55,67,77);}}
-            public override Color MenuItemBorder {get{return Color.FromArgb(75,90,103);}}
-            public override Color MenuBorder {get{return Color.FromArgb(63,70,77);}}
-            public override Color CheckBackground {get{return MenuItemSelected;}}
+            public override Color MenuItemSelected {get{return Color.FromArgb(48,57,71);}}
+            public override Color MenuItemBorder {get{return Color.FromArgb(48,57,71);}}
+            public override Color MenuBorder {get{return Color.FromArgb(63,70,82);}}
+            public override Color SeparatorDark {get{return Color.FromArgb(55,62,74);}}
+            public override Color SeparatorLight {get{return Color.FromArgb(55,62,74);}}
+            public override Color CheckBackground {get{return ToolStripDropDownBackground;}}
             public override Color CheckSelectedBackground {get{return MenuItemSelected;}}
+            public override Color CheckPressedBackground {get{return MenuItemSelected;}}
         }
         internal static void Mark(Form f) {
             SetPropW(f.Handle, "ComputerUseOverlayWindow", new IntPtr(1));
@@ -616,6 +791,10 @@ namespace Axon {
             long capturedStop=humanRearmEpoch>=0?humanRearmEpoch:Interlocked.Read(ref stopEpoch);
             if (state == "stopped" && next != "stopped" && humanRearmEpoch<0) return;
             if(next=="stopped")ControlFence.LatchStop();
+            if(next=="stopped"&&state!="stopped")stoppedAt=DateTime.UtcNow;
+            if(next=="stopped"&&reason!=null)lastReason=reason;
+            if(next=="active"){ended=false;lowTime=false;releasing=false;}
+            if(next=="idle")ended=reason=="session_expired";
             state = next; if(state=="stopped")ClearGrants(); takeover.Reset(Presence.Capture());
             try { WriteState(capturedStop); }
             catch {
@@ -631,8 +810,9 @@ namespace Axon {
                 // Missing or failed ledgers must not interrupt the remaining
                 // cleanup or leave the guardian claiming an idle/paused state.
                 GuardCleanup.Run(StopWorkers,ControlFence.Recover,Overlay.HideAll,CursorSafety.Restore);
+                activityHwnd=0;activityX=Int32.MinValue;activityY=Int32.MinValue;activity="";
                 if(InputLedger.HasHeld()) {
-                    state="stopped";ClearGrants();ControlFence.LatchStop();reason="input_cleanup_failed";
+                    state="stopped";ClearGrants();ControlFence.LatchStop();reason="input_cleanup_failed";releasing=true;releaseChecked=DateTime.UtcNow;
                     try {WriteState();}catch {reason="guard_persistence_failed";}
                     try {RefreshHud();}catch {}
                 }
@@ -643,7 +823,9 @@ namespace Axon {
             }
             if(updateVisibility) {
                 if(state=="active"||state=="paused")ShowControls(0);
-                else if(state=="stopped")ShowControls(4000);
+                else if(state=="stopped")ShowControls(releasing?0:4000);
+                // Session ended is a confirmation too: 4 s, then the bar leaves.
+                else if(ended&&Visible)ShowControls(4000);
                 else DismissControls();
             }
             Emit(new { ev="state", state=state, reason=reason, custom_cursor=CursorSafety.Applied });
@@ -651,7 +833,11 @@ namespace Axon {
         void Emergency(string reason="request") {
             // Hook thread invalidates the native fence BEFORE waiting for the UI thread.
             Interlocked.Increment(ref stopEpoch);
+            if(state!="stopped")stoppedAt=DateTime.UtcNow;
+            lastReason=reason;
             state="stopped"; ControlFence.LatchStop(); try { WriteState(); } catch { }
+            // glow.stop: the glow leaves at once, whatever it was doing.
+            Overlay.GlowStop();
             GuardCleanup.Run(StopWorkers,ControlFence.Recover); Emit(new { ev="state", state="stopped", reason=reason });
             long emergencyEpoch=Interlocked.Increment(ref visibilityEpoch);
             MethodInvoker cleanup=delegate { if(activePrompt!=null) activePrompt.Close(); ClearGrants(); SetState("stopped",null,Interlocked.Read(ref visibilityEpoch)==emergencyEpoch); };
@@ -676,12 +862,26 @@ namespace Axon {
             if(File.Exists(file))File.Replace(temp,file,null);else File.Move(temp,file);
         }
         void Tick(object sender, EventArgs e) {
-            if(controlsRequested && DateTime.UtcNow>=controlsUntil)DismissControls();
+            if(controlsRequested && DateTime.UtcNow>=controlsUntil) {
+                // The pointer over the bar, or its open menu, holds the timer.
+                if(Bounds.Contains(Cursor.Position)||modeMenu.Visible)controlsUntil=DateTime.UtcNow.AddMilliseconds(600);
+                else DismissControls();
+            }
             if((state=="active"||state=="paused"||prompting)&&ControlFence.LatchBlocks(StopLatch)) {Emergency(ControlFence.LatchEntryBlocks(StopLatch+".unconfirmed")?"guardian_stop_unconfirmed":"persisted_emergency_stop");return;}
             if((state=="active"||state=="paused"||prompting)&&!(bool)DesktopContext.Inspect()["interactive"]) {Emergency("input_desktop_changed");DismissControls();return;}
             if (prompting || captureHidden) return;
             if(activity!="" && (DateTime.UtcNow-activityAt).TotalMilliseconds>1200) {activity="";RefreshHud();}
-            if(++visualTick%3==0 && state=="active" && DesktopVisuals.MotionEnabled) {phase+=.14f;Invalidate();}
+            if(state=="active"&&!lowTime&&deadline-DateTime.UtcNow.Ticks<=60*TimeSpan.TicksPerSecond){lowTime=true;RefreshHud();}
+            // A stop that could not release held input at once keeps the bar
+            // up, without Hide, until the release is confirmed.
+            if(releasing&&(DateTime.UtcNow-releaseChecked).TotalMilliseconds>=1000) {
+                releaseChecked=DateTime.UtcNow;
+                if(state!="stopped"||!InputLedger.HasHeld()){releasing=false;if(state=="stopped")ShowControls(4000);RefreshHud();}
+            }
+            // bar.return: home again once the click that needed the room is over.
+            if(displaced&&!dragging&&(DateTime.UtcNow-displacedAt).TotalMilliseconds>1500&&(DateTime.UtcNow-activityAt).TotalMilliseconds>1200) {
+                displaced=false;SlideTo(Home(Screen.FromRectangle(Bounds).WorkingArea),DesktopVisuals.Slow);
+            }
             if (state == "active") {
                 if(!CursorSafety.CheckWatchdog()){Emergency("cursor_watchdog_failed");return;}
                 if (DateTime.UtcNow.Ticks >= deadline || !NativeDeadline.Valid(bootDeadline,NativeDeadline.GetTickCount64())) { SetState("idle","session_expired"); return; }
@@ -701,7 +901,7 @@ namespace Axon {
         }
         void Receive(Dictionary<string, object> m) {
             string op = Convert.ToString(m["op"]); object id=m.ContainsKey("id")?m["id"]:null;
-            if(op=="visual_status") {Emit(new {id=id,state=state,controls_visible=Visible,bounds=new int[]{Left,Top,Width,Height},cursor=CursorSafety.Applied,watchdog_pid=CursorSafety.WatchdogPid,glow_opacity=Overlay.GlowOpacity,takeover_mode=takeover.Mode,record_visuals=recordVisuals,activity_hwnd=activityHwnd,activity_point=activityX==Int32.MinValue?null:new int[]{activityX,activityY},host_name=hostName});return;}
+            if(op=="visual_status") {Emit(new {id=id,state=state,controls_visible=Visible,bounds=new int[]{Left,Top,Width,Height},cursor=CursorSafety.Applied,watchdog_pid=CursorSafety.WatchdogPid,glow_opacity=Overlay.GlowOpacity,takeover_mode=takeover.Mode,record_visuals=recordVisuals,activity_hwnd=activityHwnd,activity_point=activityX==Int32.MinValue?null:new int[]{activityX,activityY},host_name=hostName,line1=Model().Line1,line2=Model().Line2,dock=dock,glow=Overlay.GlowReport()});return;}
             if(op=="avoid_input") {
                 bool canAvoid=state=="active"&&m.ContainsKey("token")&&Convert.ToString(m["token"])==token;
                 bool moved=false;
@@ -714,7 +914,8 @@ namespace Axon {
                     if(canAvoid&&Visible) {
                         Rectangle placement;
                         canAvoid=WindowGeometry.AvoidHud(Bounds,new Rectangle(rect[0],rect[1],rect[2],rect[3]),Screen.FromRectangle(Bounds).WorkingArea,(int)Math.Ceiling(12*visualScale),out placement);
-                        if(canAvoid&&placement!=Bounds){Location=placement.Location;moved=true;}
+                        // bar.stepAside is a jump, so the reply always reports the final place.
+                        if(canAvoid&&placement!=Bounds){sliding=false;Location=placement.Location;moved=true;displaced=true;displacedAt=DateTime.UtcNow;}
                     }
                 }catch{canAvoid=false;}
                 // This operation never changes Stop, state, grants or visibility.
@@ -724,27 +925,30 @@ namespace Axon {
                 rearmLocked=m.ContainsKey("rearm_locked")&&Convert.ToBoolean(m["rearm_locked"]);
                 var context=DesktopContext.Inspect();
                 if(!(bool)context["interactive"]) {DismissControls();Emit(new {id=id,state=state,controls_visible=false,desktop_context=context,error=new {code="desktop_context_unavailable",message="Controls cannot be shown on the visible input desktop. Use the installed local launcher; no desktop was switched."}});return;}
-                ShowControls(0);Emit(new {id=id,state=state,controls_visible=Visible,desktop_context=context,human_rearm_required=false,rearm_locked=rearmLocked});return;
+                ended=false;ShowControls(0);RefreshHud();Emit(new {id=id,state=state,controls_visible=Visible,desktop_context=context,human_rearm_required=false,rearm_locked=rearmLocked});return;
             }
             if(op=="dismiss_controls") {if(state=="active"||state=="paused")Emergency("dismiss");DismissControls();Emit(new {id=id,state=state,controls_visible=Visible});return;}
             if(op=="activity" && state=="active") {
-                string action=Convert.ToString(m["action"]);
-                switch(action) {case "move":activity="Moving";break;case "click":activity="Clicking";break;case "drag":activity="Dragging";break;case "scroll":activity="Scrolling";break;case "type":case "set_value":case "key":activity="Typing";break;default:activity="Checking";break;}
+                string action=Convert.ToString(m["action"]);bool feedback=m.ContainsKey("click_feedback")&&Convert.ToBoolean(m["click_feedback"]);
+                switch(action) {case "move":activity="Moving";break;case "click":activity="Clicking";break;case "drag":activity="Dragging";break;case "scroll":activity="Scrolling";break;case "type":case "set_value":case "key":activity="Typing";break;case "observe":activity="Reading the screen";break;default:activity="Working";break;}
                 activityAt=DateTime.UtcNow;
-                activityHwnd=0;activityX=Int32.MinValue;activityY=Int32.MinValue;
                 try {
                     long target;
                     if(m.ContainsKey("hwnd")&&Int64.TryParse(Convert.ToString(m["hwnd"]),out target)&&target>0) {
-                        // Only a window of an app approved for this task is accepted.
+                        // Only a window of an app approved for this task is
+                        // accepted. A message that names no window keeps the last one.
                         string key=Convert.ToString(ControlFence.Identity(target)["key"]);
-                        if(grants.Contains(key))activityHwnd=target;
+                        if(grants.Contains(key)){if(activityHwnd!=target){activityX=Int32.MinValue;activityY=Int32.MinValue;}activityHwnd=target;}
                     }
                     object[] point=m.ContainsKey("point")?m["point"] as object[]:null;int px,py;
                     if(activityHwnd!=0&&point!=null&&point.Length==2&&Int32.TryParse(Convert.ToString(point[0]),out px)&&Int32.TryParse(Convert.ToString(point[1]),out py)&&Math.Abs((long)px)<10000000&&Math.Abs((long)py)<10000000) {activityX=px;activityY=py;}
-                    if(m.ContainsKey("host_name")) {string name=Convert.ToString(m["host_name"]);if(name!=null&&name.Length<=40)hostName=name;}
-                } catch {activityHwnd=0;}
+                    if(m.ContainsKey("host_name"))SetHost(Convert.ToString(m["host_name"]),m.ContainsKey("host_path")?Convert.ToString(m["host_path"]):null);
+                } catch {}
+                // The glow follows the last window that received an action.
+                // Reading the screen shows it without a pulse.
+                if(activityHwnd!=0)Overlay.GlowTarget(activityHwnd,activityX,activityY,activityX!=Int32.MinValue,action!="observe",feedback);
                 RefreshHud();
-                if(m.ContainsKey("click_feedback")&&Convert.ToBoolean(m["click_feedback"]))Overlay.ClickFeedback();
+                if(feedback)Overlay.ClickFeedback();
                 return;
             }
             if(op=="attach") {
@@ -823,7 +1027,7 @@ namespace Axon {
                 if(!captureExcluded || !Overlay.CaptureExcluded) { Overlay.HideImmediate(); Hide(); }
                 Emit(new {id=id,allowed=true}); return;
             }
-            if (op == "capture_end") { captureHidden=false;SyncVisibility();return; }
+            if (op == "capture_end") { captureHidden=false;captureReturn=true;SyncVisibility();captureReturn=false;return; }
             if (op == "activate") {
                 bool accepted=false;
                 if (!rearmLocked && state != "stopped" && state != "paused" && !InputLedger.HasHeld()) {
@@ -902,7 +1106,7 @@ namespace Axon {
         }
         protected override void OnClosed(EventArgs e) {
             if (registered) UnregisterHotKey(Handle,1);
-            LiquidGlassPackageClient.SurfaceReady -= PackageSurfaceReady;LiquidGlassPackageClient.Close();
+            LiquidGlassPackageClient.Close();motion.Dispose();
             CursorSafety.Close();Presence.Stop(); Overlay.Stop(); InputLease.Release(); base.OnClosed(e);
         }
     }

@@ -19,7 +19,7 @@ try {
  const roles=[32512,32649,32513,32650],baselines=new Map(roles.map(role=>[role,probe('baseline-'+role,role)]));
  const baseline=baselines.get(32512);current=await session('pause');await active(current);
  const levels=[];for(let i=0;i<12;i++){levels.push((await current.g.request({op:'visual_status'})).glow_opacity);await delay(130);}
- assert(Math.max(...levels)-Math.min(...levels)>.03,'Live glow opacity must breathe');checks.push('Cached native glow actually animates over time');
+ assert(levels.every(level=>level===0||level===1),'The glow is steady: absent with no target window, full when shown');checks.push('Glow does not breathe; it is absent until the agent works in a window');
  assert(!probe('active').equals(baseline),'System arrow pixels must differ while active');checks.push('Actual Windows system arrow replaced, with independent watchdog armed');
  for(const role of roles)assert(!probe('active-'+role,role).equals(baselines.get(role)),'Native role '+role+' must have custom artwork');checks.push('Arrow, link, text and background-work cursor roles all have actual native artwork');
  assert(!probe('text-role',32513).equals(probe('arrow-role',32512)),'Text fields must retain a distinct insertion cursor');checks.push('Text cursor retains its distinct insertion affordance');

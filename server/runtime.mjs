@@ -274,6 +274,9 @@ export class Runtime {
   }
   // #60: the verified caller host for this task, from the native gate. Null
   // (the default, and after end or stop) keeps every AI app blocked.
+  // Name and executable of the verified calling app, for the bar's label and
+  // icon only. Orientation, never authority: nothing is granted from it.
+  hostLabel(){const h=this.callerHost?.host;if(!h)return {};const names={claude:'Claude',chatgpt:'ChatGPT',codex:'Codex',antigravity:'Antigravity'};return names[h.group]?{host_name:names[h.group],host_path:h.path}:{};}
   callerPolicy(){return {release:this.callerHost?.release??[]};}
   callerReport(){const h=this.callerHost;return h?{self_excluded_app:h.host.name,self_excluded_path:h.host.path,released_ai_groups:h.release}:{self_excluded_app:null,released_ai_groups:[]};}
   async openCallerGate(){
@@ -504,7 +507,7 @@ export class Runtime {
     if(w.minimized)failWindowState('window_minimized','Target is minimized. Focus it, then take a fresh observation.',true);
     if(w.hidden)failWindowState('window_hidden','Target application is hidden. Focus it once, then take a fresh observation.',true);
     if(args.require_native_budget===true&&Number.isFinite(args.native_snapshot_deadline)&&performance.now()>=args.native_snapshot_deadline)fail('wait_observation_timeout','The wait budget expired before the snapshot could start. Inspect the app; do not replay prior input.');
-    this.guardian.send({op:'activity',action:'observe'});
+    this.guardian.send({op:'activity',action:'observe',hwnd:handle,...Runtime.prototype.hostLabel.call(this)});
     const metadata={...this.stamp(),hwnd:handle,__pid:w.pid,__started:w.started};
     const query=String(args.query||'').trim().toLowerCase();
     // Query the larger bounded tree before filtering; a compact reply must not
@@ -666,9 +669,9 @@ export class Runtime {
       this.remaining--;
       // The target window rides along for the control bar and a per-window
       // glow; native accepts it only for an approved app.
-      this.guardian.send({op:'activity',action:op,...(w?{hwnd:Number(w.hwnd)}:{})});
+      this.guardian.send({op:'activity',action:op,...(w?{hwnd:Number(w.hwnd)}:{}),...Runtime.prototype.hostLabel.call(this)});
       const result=(await this.driver.call(op,payload)).result;
-      if(op==='click'&&payload.physical)this.guardian.send({op:'activity',action:op,click_feedback:true});
+      if(op==='click'&&payload.physical)this.guardian.send({op:'activity',action:op,click_feedback:true,...(w?{hwnd:Number(w.hwnd)}:{})});
       return result;
     });
     try {
