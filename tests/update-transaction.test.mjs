@@ -26,11 +26,11 @@ function fixture({omitFresh=null,badFreshHash=false}={}){
  installer({bundle:old.bundle,target,sidecar:true});
  const {privateKey,publicKey}=generateKeyPairSync('ed25519'),keyFile=path.join(directory,'public.pem');fs.writeFileSync(keyFile,publicKey.export({type:'spki',format:'pem'}));
  const payload={};const files={};const walk=folder=>{for(const entry of fs.readdirSync(folder,{withFileTypes:true})){const file=path.join(folder,entry.name);if(entry.isDirectory())walk(file);else {const name=path.relative(fresh.bundle,file).replaceAll('\\','/'),bytes=fs.readFileSync(file),url='https://github.com/shayann07/antigravity-computer-use/releases/download/v1.1.0/'+sha256(bytes);files[name]={size:bytes.length,sha256:sha256(bytes),url};payload[url]=bytes;}}};walk(fresh.bundle);
- const bytes=Buffer.from(JSON.stringify({schema:1,version:'1.1.0',build_id:fresh.build_id,platform:process.platform,arch:process.arch,sequence:2,min_os:'0.0.0',expires:'2099-01-01',files}));
- const envelope={manifest:bytes.toString('base64'),signature:sign(null,bytes,privateKey).toString('base64')};let fetches=0,state='idle',failHealth=false;const calls=[];
+ const note=(sequence,expires)=>{const bytes=Buffer.from(JSON.stringify({schema:1,version:'1.1.0',build_id:fresh.build_id,platform:process.platform,arch:process.arch,sequence,min_os:'0.0.0',expires,files}));return {manifest:bytes.toString('base64'),signature:sign(null,bytes,privateKey).toString('base64')};};
+ let envelope=note(2,'2099-01-01');let fetches=0,state='idle',failHealth=false;const calls=[];
  const adapters={storage,install:installer,keyFile,rollback,prepare:async()=>({ok:true,prepared:true}),cli(record,args){calls.push(args[0]);if(args[0]==='shutdown'){state='not_running';return {ok:true,closed:true};}if(args[0]==='start'){const b=JSON.parse(fs.readFileSync(path.join(record.release,'bundle-manifest.json')));if(failHealth&&b.build_id===fresh.build_id)throw Error('native health fixture failure');state='idle';return {ok:true,state,task_open:false,build_id:b.build_id};}return {ok:true,state,task_open:false,approved_apps:[]};}};
  const fetcher=async url=>{fetches++;if(url.includes('api.github.com'))return {ok:true,json:async()=>({assets:[{name:`update-${process.platform}-${process.arch}.json`,browser_download_url:'https://github.com/shayann07/antigravity-computer-use/releases/download/v1.1.0/metadata.json'}]})};if(url.endsWith('/metadata.json'))return {ok:true,text:async()=>JSON.stringify(envelope)};return {ok:true,body:(async function*(){yield payload[url];})()};};
- return {directory,target,home,old,fresh,adapters,fetcher,calls,setState:v=>state=v,setFailHealth:()=>failHealth=true,fetches:()=>fetches,cleanup:()=>fs.rmSync(directory,{recursive:true,force:true})};
+ return {directory,target,home,old,fresh,adapters,fetcher,calls,setState:v=>state=v,setFailHealth:()=>failHealth=true,setNote:(sequence,expires)=>envelope=note(sequence,expires),fetches:()=>fetches,cleanup:()=>fs.rmSync(directory,{recursive:true,force:true})};
 }
 test('uncertain Stop defers apply, rollback and recovery before service reservation or shutdown',async()=>{
  const f=fixture();try{
@@ -450,5 +450,30 @@ test('legacy divergent project pointers stay pinned when the global installation
   const updated=JSON.parse(fs.readFileSync(registryFile));assert.equal(updated[key].release,registry[key].release);
   f.adapters.install({bundle:f.old.bundle,target:f.target,workspace});assert.equal(JSON.parse(fs.readFileSync(registryFile))[key].update_pin,true);
   f.adapters.install({bundle:f.old.bundle,target:f.target,workspace,updatePin:false});assert.equal(JSON.parse(fs.readFileSync(registryFile))[key].update_pin,false);
+ }finally{f.cleanup();}
+});
+
+test('an expired signed note is quiet, keeps polling and yields to a later higher-sequence note',async()=>{
+ const f=fixture();try{
+  f.setNote(2,'2020-01-01');
+  assert.deepEqual(await update(f.target,'check',f),{available:false,next_action:'continue_task'});
+  let status=await update(f.target,'status',f);
+  assert.equal(status.update_note_expired,true);assert.equal(status.last_error,undefined);assert.equal(status.next_action,'continue_task');assert(!f.calls.includes('shutdown'));
+  assert.equal(updateNotice(path.join(f.target,'data')),undefined);
+  // The daily scheduler still checks after an expired note and applies a re-signed one.
+  const statePath=path.join(f.target,'update-state.json'),state=JSON.parse(fs.readFileSync(statePath));fs.writeFileSync(statePath,JSON.stringify({...state,attempt_at:Date.now()-86400001}));
+  f.setNote(3,new Date(Date.now()+365*86400000).toISOString());
+  assert.deepEqual(await update(f.target,'scheduled',f),{applied:true,version:'1.1.0'});
+  status=await update(f.target,'status',f);assert.equal(status.update_note_expired,false);assert.equal(status.sequence,3);assert.equal(status.last_error,undefined);
+ }finally{f.cleanup();}
+});
+test('a staged note that expires before apply is dropped quietly without shutdown',async()=>{
+ const f=fixture();try{
+  await update(f.target,'check',f);const statePath=path.join(f.target,'update-state.json'),state=JSON.parse(fs.readFileSync(statePath));
+  const bytes=JSON.parse(Buffer.from(state.envelope.manifest,'base64'));f.setNote(bytes.sequence,'2020-01-01');
+  const fetched=await (await f.fetcher('https://github.com/shayann07/antigravity-computer-use/releases/download/v1.1.0/metadata.json')).text();
+  fs.writeFileSync(statePath,JSON.stringify({...state,envelope:JSON.parse(fetched)}));f.calls.length=0;
+  assert.deepEqual(await update(f.target,'apply',f),{available:false,next_action:'continue_task'});
+  assert(!f.calls.includes('shutdown'));const status=await update(f.target,'status',f);assert.equal(status.update_note_expired,true);assert.equal(status.available,false);assert.equal(status.last_error,undefined);
  }finally{f.cleanup();}
 });

@@ -67,7 +67,7 @@ async function updateLocked(target,command,{fetcher,adapters}){
   const safeCode=value=>typeof value==='string'&&/^[a-z_]{1,80}$/.test(value)?value:undefined;
   const safeVersion=value=>typeof value==='string'&&/^\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(value)?value:undefined;
   if(rawWorker&&typeof rawWorker==='object')worker={applied:rawWorker.applied===true,rolled_back:rawWorker.rolled_back===true,deferred:rawWorker.deferred===true,version:safeVersion(rawWorker.version),next_action:safeCode(rawWorker.next_action),error_code:safeCode(rawWorker.error?.code)};
-  return {settings,sequence:state.sequence,available:state.available==null?undefined:state.available===true,available_version:safeVersion(state.available_version),applied_version:safeVersion(state.applied_version),staged:typeof state.staged==='string',rollback_available:Array.isArray(state.rollback)&&state.rollback.length>0,last_error:safeCode(state.last_error),checked_at:Number.isFinite(state.checked_at)?state.checked_at:undefined,worker,interrupted_switch:interrupted,next_action:interrupted?'inspect_interrupted_update':state.last_error?'inspect_update_result':state.available===true?(settings.mode==='automatic'?'apply_when_idle':'update_available'):'continue_task'};
+  return {settings,sequence:state.sequence,available:state.available==null?undefined:state.available===true,available_version:safeVersion(state.available_version),applied_version:safeVersion(state.applied_version),staged:typeof state.staged==='string',rollback_available:Array.isArray(state.rollback)&&state.rollback.length>0,last_error:safeCode(state.last_error),update_note_expired:state.update_note_expired===true,checked_at:Number.isFinite(state.checked_at)?state.checked_at:undefined,worker,interrupted_switch:interrupted,next_action:interrupted?'inspect_interrupted_update':state.last_error?'inspect_update_result':state.available===true?(settings.mode==='automatic'?'apply_when_idle':'update_available'):'continue_task'};
  }
  if(!['check','apply','rollback','recover'].includes(command))throw Error('Use update status|check|apply|rollback');
  const switchingFile=path.join(target,'update-switching.json');let switching=false,safeToUnlock=true;
@@ -111,14 +111,19 @@ async function updateLocked(target,command,{fetcher,adapters}){
    const assetURL=new URL(asset.browser_download_url);if(assetURL.protocol!=='https:'||assetURL.hostname!=='github.com'||!assetURL.pathname.startsWith('/shayann07/antigravity-computer-use/releases/download/'))throw Error('update_metadata_origin_invalid');
    const envelopeResponse=await fetcher(asset.browser_download_url,{signal:AbortSignal.timeout(15000)});if(!envelopeResponse.ok)throw Error('update_metadata_unavailable');
    const envelope=await readBoundedJSON(envelopeResponse);
-   const bytes=Buffer.from(envelope.manifest,'base64'),m=verifyRelease(bytes,envelope.signature,fs.readFileSync(keyFile),{channel:settings.channel});
-   if(m.sequence<=(state.sequence||0)||!newerVersion(m.version,bundle.version)){save({...state,available:false,attempt_at:Date.now()});return {available:false};}
+   const bytes=Buffer.from(envelope.manifest,'base64');let m;
+   // An expired but correctly signed note is not a failure: keep the working
+   // installation, record it quietly and accept a later higher-sequence note.
+   try{m=verifyRelease(bytes,envelope.signature,fs.readFileSync(keyFile),{channel:settings.channel});}
+   catch(error){if(error.message!=='release_metadata_expired')throw error;save({...state,available:false,attempt_at:Date.now(),checked_at:Date.now(),update_note_expired:true,last_error:null});return {available:false,next_action:'continue_task'};}
+   const {update_note_expired,...prior}=state;
+   if(m.sequence<=(state.sequence||0)||!newerVersion(m.version,bundle.version)){save({...prior,available:false,attempt_at:Date.now()});return {available:false};}
    // A fresh directory lets an interrupted download retry without adopting partial bytes.
    const stage=path.join(target,'updates',String(m.sequence)+'-'+randomUUID());fs.mkdirSync(stage,{recursive:true,mode:0o700});
    try{
    const required=Object.values(m.files).reduce((n,f)=>n+f.size,0)*2+100*1024*1024;const disk=adapters.diskInfo?adapters.diskInfo(stage):fs.statfsSync(stage);if(disk.bavail*disk.bsize<required)throw Error('update_insufficient_space');
    for(const [name,f]of Object.entries(m.files)){const destination=path.join(stage,name);fs.mkdirSync(path.dirname(destination),{recursive:true});await downloadFile(f.url,destination,{size:f.size,hash:f.sha256,fetcher});if(process.platform!=='win32'&&(name==='node'||name.startsWith('bin/')||name.endsWith('.command')))fs.chmodSync(destination,0o700);}
-   verifyStaged(stage,m);verifyUpdateBundle(stage,m,nativePlatform());save({...state,attempt_at:Date.now(),checked_at:Date.now(),staged:stage,envelope,available:true,available_version:m.version,last_error:null});return {available:true,version:m.version,next_action:settings.mode==='automatic'?'apply_when_idle':'update_available'};
+   verifyStaged(stage,m);verifyUpdateBundle(stage,m,nativePlatform());save({...prior,attempt_at:Date.now(),checked_at:Date.now(),staged:stage,envelope,available:true,available_version:m.version,last_error:null});return {available:true,version:m.version,next_action:settings.mode==='automatic'?'apply_when_idle':'update_available'};
    }catch(error){
     // Only this invocation's freshly created stage may be removed. Never touch
     // retained releases, rollback journals, previous stages or user folders.
@@ -161,7 +166,8 @@ async function updateLocked(target,command,{fetcher,adapters}){
    const restored=passiveRecord(JSON.parse(fs.readFileSync(path.join(target,'installation.json'))));startVerified(restored,'update_rollback_health_failed');save({...state,available:false,rollback:[]});safeToUnlock=true;return {rolled_back:true};
   }
   if(state.available!==true||!state.staged||!state.envelope)throw Error('update_not_staged');
-  const m=verifyRelease(Buffer.from(state.envelope.manifest,'base64'),state.envelope.signature,fs.readFileSync(adapters.keyFile||path.join(root,'release-public-key.pem')),{channel:settings.channel});
+  let m;try{m=verifyRelease(Buffer.from(state.envelope.manifest,'base64'),state.envelope.signature,fs.readFileSync(adapters.keyFile||path.join(root,'release-public-key.pem')),{channel:settings.channel});}
+  catch(error){if(error.message!=='release_metadata_expired')throw error;save({...state,available:false,update_note_expired:true});return {available:false,next_action:'continue_task'};}
   if(path.dirname(state.staged)!==path.join(target,'updates'))throw Error('update_stage_outside_installation');
   storage('verify-tree',target);verifyStaged(state.staged,m);
   if(m.sequence<=(state.sequence||0)||!newerVersion(m.version,bundle.version))throw Error('update_downgrade_refused');
