@@ -5,7 +5,7 @@
     {
       "path": "server/build.mjs",
       "upstream_sha256": "81260b378fffb46573cfe475a3a336930113c8abc465d3d278bbb0851d8a4377",
-      "local_sha256": "8dc6625db62e64b4452cc12b9a81b7b55695d031812bf3b4a44cac0a6fee3721",
+      "local_sha256": "2035cea83ce9db04a88a6e82f625f7a082d3991a894580ef61ea2f6980bbac4b",
       "modified": true
     },
     {
@@ -72,7 +72,7 @@
     {
       "path": "server/native/Overlay.cs",
       "upstream_sha256": "eaadd8bc72befd9f42aa214dbb1a3ba45f2e28d0c40ed3491ece4414280a4551",
-      "local_sha256": "2487a76236b764512298d9df482a47b2223c588600d4b1fe24d977a6dc8179b9",
+      "local_sha256": "ce5cd1121a87f8a5afbf62a48d03c3d3b9c42e7646474ae92041e3e6f5ffb92d",
       "modified": true
     },
     {
@@ -224,7 +224,7 @@
     },
     {
       "path": "tests/cursor-recovery.mjs",
-      "sha256": "1a7c84765574ccf0e51398c248766e4634a059dc4223bcfd3101fbf35b64f54c"
+      "sha256": "16cfeeb210b59dad96ff1d867cc977789ce4deaf3b6fc3c6aeccd0f8d55e9c3b"
     },
     {
       "path": "tests/physical-escape.mjs",
@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "36d7acc8af61cb99764f7da947f46943c73f3962adcf16e0e2621aec4fffa404"
+      "sha256": "d6d95246a8fa4928c4ce43b96e73d32f0368e89977bf321a5f1ed5e99bd0790a"
     },
     {
       "path": "server/mcp.mjs",
@@ -268,7 +268,7 @@
     },
     {
       "path": "server/native/Guardian.cs",
-      "sha256": "df91171deaf62d0570cc3db6e314c52d42154cdef8d4d9ee8dcb38586d6cfad1"
+      "sha256": "8948a0796b8cfa2700df7b050f8c87624c06223d64ac8b759e5135d4ee34adc1"
     },
     {
       "path": "server/native/CursorSafety.cs",
@@ -276,7 +276,11 @@
     },
     {
       "path": "server/native/DesktopVisuals.cs",
-      "sha256": "25595bae104d7f473efebd28a64ba89e93226f98677fddef106b1f1af63438f8"
+      "sha256": "bf2a191fdb71961790e45639f30220c48968a7dbc94bc48533af74fffe56629f"
+    },
+    {
+      "path": "server/native/Glow.cs",
+      "sha256": "d874fc036f8f1e5edb1c1025c7c497addd16879f21cfac2acb85f4ed805743d6"
     },
     {
       "path": "server/native/InputLedger.cs",
@@ -548,7 +552,7 @@
     },
     {
       "path": "server/control-contract.json",
-      "sha256": "cac66ca32b992a98d2a1d092c22e3d95e1acf04154daaa816fbae31026b73810"
+      "sha256": "e6ffc3c4d300eeb81893a306313cf132091efe4f7615671e1016250cd82b19f8"
     },
     {
       "path": "server/macos-build.mjs",
@@ -592,7 +596,7 @@
     },
     {
       "path": "server/native/ControlContract.cs",
-      "sha256": "0cb87095d31963dd4b582b54b1a8c585c0546578dedddc389344789089d8c3ab"
+      "sha256": "18fe213a1a4923f154bb48a8c0dd7cb01aea9ab1908c97791c670ef7cdf39edc"
     },
     {
       "path": "scripts/macos-install-check.mjs",
