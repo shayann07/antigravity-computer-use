@@ -4,7 +4,7 @@ This describes what the Windows runtime draws while the agent controls the deskt
 
 ## One place for the values
 
-Every colour, size and duration lives in `server/native/DesktopVisuals.cs`. The windows in `Guardian.cs` and `Overlay.cs` use those names and hold no raw durations or easings.
+Every colour, size and duration lives in `server/native/DesktopVisuals.cs`. The windows in `Guardian.cs` and `Overlay.cs` take their motion from those names.
 
 | Token | Value | Used for |
 |---|---|---|
@@ -60,6 +60,6 @@ The agent's pointer carries a small glow that follows it, and a brief ripple mar
 
 ## Reviewing without a desktop session
 
-`--visual-preview <directory>` exports the same drawing code to pictures: the glow at several scales and on light and dark, the bar in every state, the menu and its page change, the access prompt, and the pointer. It also checks the glow's alpha and times one frame. `--glow-trial <hwnd> <seconds>` lights one real window and reports frame times and processor share. `--prompt-trial <seconds> <kind>` shows a sample prompt that screenshots can see.
+`--visual-preview <directory>` exports the same drawing code to pictures: the glow at several scales and on light and dark, the bar in every state, the menu and its page change, the access prompt, and the pointer. It also checks the glow's alpha and times one frame. `--glow-trial <hwnd> <seconds>` lights one real window and reports frame times and processor share. `--prompt-trial <seconds> <kind> [top|bottom|corner]` shows a sample prompt that screenshots can see, alone or against a bar docked there.
 
 Pictures prove the drawing, not the feel. Motion, a second monitor, mixed scaling and a real Antigravity task each need a person at the machine.

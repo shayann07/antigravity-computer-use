@@ -1034,6 +1034,7 @@ namespace Axon {
             internal AccessPrompt(string message,float scale,bool highContrast,Rectangle bar) {
                 zoom=scale;contrast=highContrast;anchor=bar;
                 AutoScaleMode=AutoScaleMode.None;FormBorderStyle=FormBorderStyle.None;ShowInTaskbar=false;StartPosition=FormStartPosition.Manual;
+                MaximizeBox=false;MinimizeBox=false;   // a double-click or a drag to the screen edge must not resize it
                 BackColor=DesktopVisuals.PromptSurface(contrast);
                 SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer,true);
                 // The first line is the question. Anything else is shown whole.
@@ -1114,8 +1115,8 @@ namespace Axon {
             }
             // The bench's picture of the prompt: the same layout, with the
             // text and buttons drawn in place of the live controls.
-            // hover and focus: 0 none, 1 Allow, 2 Deny.
-            internal Bitmap Picture(int hover,int focus) {
+            // hover, press and focus: 0 none, 1 Allow, 2 Deny.
+            internal Bitmap Picture(int hover,int press,int focus) {
                 int margin=Px(DesktopVisuals.PromptMargin+DesktopVisuals.PromptInset),ring=Px(DesktopVisuals.PromptRing);
                 Bitmap sheet=new Bitmap(Width+2*margin,Height+2*margin,System.Drawing.Imaging.PixelFormat.Format32bppArgb);
                 using(Graphics g=Graphics.FromImage(sheet)) {
@@ -1131,7 +1132,7 @@ namespace Axon {
                             DesktopVisuals.PromptFace(f,Width/zoom,title,rule,NoteWidth,contrast);
                             foreach(PromptButton button in new PromptButton[]{allow,deny}) {
                                 int which=button==allow?1:2;
-                                DesktopVisuals.PromptButton(f,new RectangleF((button.Left+ring)/zoom,(button.Top+ring)/zoom,DesktopVisuals.PromptButtonWidth,DesktopVisuals.PromptButtonHeight),button.Text,button==allow,hover==which,false,focus==which,contrast);
+                                DesktopVisuals.PromptButton(f,new RectangleF((button.Left+ring)/zoom,(button.Top+ring)/zoom,DesktopVisuals.PromptButtonWidth,DesktopVisuals.PromptButtonHeight),button.Text,button==allow,hover==which,press==which,focus==which,contrast);
                             }
                         }
                         g.DrawImage(inner,new Rectangle(margin,margin,Width,Height));
@@ -1189,11 +1190,17 @@ namespace Axon {
             }
         }
         // Bench: shows one sample prompt for a few seconds, visible to
-        // screenshots, and prints how it was answered. kind: 0 app, 1 action, 2 launch.
-        internal static void PromptTrial(int seconds,int kind) {
+        // screenshots, and prints how it was answered. kind: 0 app, 1 action,
+        // 2 launch. bar: "top", "bottom" or "corner" places it against a bar
+        // docked there; anything else is no bar.
+        internal static void PromptTrial(int seconds,int kind,string bar) {
             Application.EnableVisualStyles();
-            Screen screen=Screen.PrimaryScreen;float scale=Overlay.ScreenScale(screen);
-            using(AccessPrompt prompt=new AccessPrompt(DesktopVisuals.PromptSamples[Math.Max(0,Math.Min(2,kind))],scale,SystemInformation.HighContrast,Rectangle.Empty)) {
+            Screen screen=Screen.PrimaryScreen;float scale=Overlay.ScreenScale(screen);Rectangle work=screen.WorkingArea,dock=Rectangle.Empty;
+            Size pill=new Size((int)Math.Round(DesktopVisuals.HudWidth*scale),(int)Math.Round(DesktopVisuals.HudHeight*scale));int inset=(int)Math.Ceiling(12*scale);
+            if(bar=="top")dock=new Rectangle(new Point(work.Left+(work.Width-pill.Width)/2,work.Top+inset),pill);
+            else if(bar=="bottom")dock=new Rectangle(new Point(work.Left+(work.Width-pill.Width)/2,work.Bottom-inset-pill.Height),pill);
+            else if(bar=="corner")dock=new Rectangle(new Point(work.Right-inset-pill.Width,work.Bottom-inset-pill.Height),pill);
+            using(AccessPrompt prompt=new AccessPrompt(DesktopVisuals.PromptSamples[Math.Max(0,Math.Min(2,kind))],scale,SystemInformation.HighContrast,dock)) {
                 prompt.Unmarked=true;prompt.Text="Computer Use — prompt trial";prompt.TopMost=true;
                 System.Windows.Forms.Timer end=new System.Windows.Forms.Timer();end.Interval=Math.Max(1,seconds)*1000;
                 end.Tick+=delegate {end.Stop();prompt.Close();};end.Start();

@@ -558,11 +558,11 @@ namespace Axon {
                 }
             }
             // The access prompt, laid out by the dialog itself: the three
-            // questions at rest, then one with Allow hovered and one in a contrast theme.
+            // questions at rest, each button hovered and pressed, and a contrast theme.
             {
                 var shots=new System.Collections.Generic.List<Bitmap>();
                 try {
-                    for(int i=0;i<5;i++)using(Guardian.AccessPrompt prompt=new Guardian.AccessPrompt(PromptSamples[i<3?i:i-3],2,i==4,Rectangle.Empty))shots.Add(prompt.Picture(i==3?1:0,i==3?2:0));
+                    for(int i=0;i<8;i++)using(Guardian.AccessPrompt prompt=new Guardian.AccessPrompt(PromptSamples[i<3?i:i<7?2:1],2,i==7,Rectangle.Empty))shots.Add(prompt.Picture(i==3?1:i==5?2:0,i==4?1:i==6?2:0,i>=3&&i<7?(i<5?1:2):i==7?2:0));
                     int wide=0,tall=0;foreach(Bitmap shot in shots){wide+=shot.Width;tall=Math.Max(tall,shot.Height);}
                     using(Bitmap sheet=new Bitmap(wide,tall,PixelFormat.Format32bppArgb)) {
                         using(Graphics g=Graphics.FromImage(sheet)){g.Clear(Color.FromArgb(31,33,40));int x=0;foreach(Bitmap shot in shots){g.DrawImage(shot,new Rectangle(x,0,shot.Width,shot.Height));x+=shot.Width;}}
