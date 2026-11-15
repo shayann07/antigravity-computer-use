@@ -113,9 +113,10 @@ namespace Axon {
                     try {foreach(FontFamily family in FontFamily.Families)if(family.Name=="Segoe UI Semibold"){semibold=family.Name;break;}}catch {}
                 }
                 if(semibold.Length>0)return new Font(semibold,pixels,FontStyle.Regular,GraphicsUnit.Pixel);
-                return new Font(Overlay.UiFont,pixels,FontStyle.Bold,GraphicsUnit.Pixel);
+                return new Font("Segoe UI",pixels,FontStyle.Bold,GraphicsUnit.Pixel);
             }
-            return new Font(Overlay.UiFont,pixels,FontStyle.Regular,GraphicsUnit.Pixel);
+            // The static face: GDI+ draws the variable one thin and loosely spaced.
+            return new Font("Segoe UI",pixels,FontStyle.Regular,GraphicsUnit.Pixel);
         }
         static float TextWidth(Graphics g,string text,Font font) {
             using(StringFormat format=(StringFormat)StringFormat.GenericTypographic.Clone()) {
@@ -156,14 +157,15 @@ namespace Axon {
         }
         static void Plate(Graphics g,Rectangle target,Color tint,float level,bool pressed) {
             if(level<=0&&!pressed)return;
-            float alpha=(pressed?.22f:.13f)*Math.Max(level,pressed?1:0);
+            float alpha=(tint==Rose?.16f:.10f)*(pressed?1.5f:1)*Math.Max(level,pressed?1:0);
             using(SolidBrush plate=new SolidBrush(Color.FromArgb((int)(255*alpha),tint)))g.FillEllipse(plate,target.X+4,target.Y+4,36,36);
         }
         internal static void Hud(Graphics g,HudModel m) {
-            g.SmoothingMode=SmoothingMode.AntiAlias;g.PixelOffsetMode=PixelOffsetMode.HighQuality;g.TextRenderingHint=System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+            g.SmoothingMode=SmoothingMode.AntiAlias;g.PixelOffsetMode=PixelOffsetMode.HighQuality;g.TextRenderingHint=System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
             Color surface=m.HighContrast?SystemColors.Window:InkSurface,strong=m.HighContrast?SystemColors.WindowText:PaperText,soft=m.HighContrast?SystemColors.WindowText:Mist,rest=m.HighContrast?SystemColors.WindowText:Rest;
             RectangleF panel=new RectangleF(0,0,HudWidth,HudHeight);
-            using(SolidBrush fill=new SolidBrush(surface))g.FillRectangle(fill,panel);
+            // The pill is drawn, not cut: its edge is antialiased against whatever is behind it.
+            using(GraphicsPath body=Overlay.RoundRect(panel,HudHeight/2f))using(SolidBrush fill=new SolidBrush(surface))g.FillPath(fill,body);
             using(GraphicsPath edge=Overlay.RoundRect(new RectangleF(.5f,.5f,HudWidth-1,HudHeight-1),HudHeight/2f))
             using(Pen border=new Pen(m.HighContrast?SystemColors.WindowText:Color.FromArgb(41,255,255,255),m.HighContrast?2:1))g.DrawPath(border,edge);
             float left=16;

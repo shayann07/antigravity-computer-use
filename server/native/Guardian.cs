@@ -453,9 +453,8 @@ namespace Axon {
         Guardian() {
             Text = "Antigravity Computer Use"; TopMost = true; FormBorderStyle = FormBorderStyle.None;
             ShowInTaskbar=false; StartPosition = FormStartPosition.Manual;
-            SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer,true);
-            BackColor=Color.FromArgb(22,23,35);
-            BackColor=DesktopVisuals.InkSurface;Opacity=.999;
+            SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.Opaque,true);
+            BackColor=DesktopVisuals.InkSurface;
             stopButton=new HudButton(this,2,DesktopVisuals.StopRect);Controls.Add(stopButton);stopButton.Click += delegate {
                 DesktopVisuals.HudModel now=Model();
                 if(now.Slot==0)return;
@@ -505,25 +504,37 @@ namespace Axon {
         void SyncVisibility() {
             if(controlsRequested&&!captureHidden) {
                 // bar.enter: a fresh appearance fades in; a return from a screenshot does not.
-                if(!Visible){if(!captureReturn){entering=true;enterAt=DateTime.UtcNow;Opacity=0;motion.Start();}captureReturn=false;Show();}
+                if(!Visible){if(!captureReturn){entering=true;enterAt=DateTime.UtcNow;barAlpha=0;motion.Start();}else barAlpha=1;captureReturn=false;Show();}
             }
-            else if(Visible){entering=false;Hide();}
+            else if(Visible){entering=false;barAlpha=1;Hide();}
         }
         bool captureReturn;
         void ShowControls(int milliseconds) {Interlocked.Increment(ref visibilityEpoch);controlsRequested=true;controlsUntil=milliseconds>0?DateTime.UtcNow.AddMilliseconds(milliseconds):DateTime.MaxValue;SyncVisibility();}
         void DismissControls() {Interlocked.Increment(ref visibilityEpoch);controlsRequested=false;SyncVisibility();}
         protected override bool ShowWithoutActivation { get { return true; } }
-        protected override CreateParams CreateParams { get { CreateParams p=base.CreateParams;p.ExStyle|=0x08000080;return p; } }
-        protected override void OnPaint(PaintEventArgs e) {
-            e.Graphics.ScaleTransform(visualScale,visualScale);DesktopVisuals.Hud(e.Graphics,Model());
+        protected override CreateParams CreateParams { get { CreateParams p=base.CreateParams;p.ExStyle|=0x08000080|0x00080000;return p; } }
+        // The bar is a layered window with per-pixel alpha, so the pill's
+        // edge is smooth. The whole surface, buttons included, is drawn here;
+        // the buttons stay real controls for input, tooltips and screen readers.
+        protected override void OnPaint(PaintEventArgs e) {}
+        protected override void OnPaintBackground(PaintEventArgs e) {}
+        float barAlpha=1;
+        internal void Present() {
+            if(!IsHandleCreated||Width<=0||Height<=0)return;
+            try {
+                using(Bitmap surface=new Bitmap(Width,Height,System.Drawing.Imaging.PixelFormat.Format32bppPArgb)) {
+                    using(Graphics g=Graphics.FromImage(surface)) {g.Clear(Color.Transparent);g.ScaleTransform(visualScale,visualScale);DesktopVisuals.Hud(g,Model());}
+                    Overlay.Present(Handle,surface,Left,Top,(byte)Math.Max(0,Math.Min(255,(int)Math.Round(255*barAlpha))));
+                }
+            } catch {}
         }
+        protected override void OnVisibleChanged(EventArgs e) {base.OnVisibleChanged(e);if(Visible)Present();}
         // Size, shape and place for one monitor's scale.
         void ApplyScale(float scale,Screen screen) {
             visualScale=scale;
             ClientSize=new Size((int)Math.Round(DesktopVisuals.HudWidth*scale),(int)Math.Round(DesktopVisuals.HudHeight*scale));
-            using(GraphicsPath rounded=Overlay.RoundRect(new RectangleF(0,0,Width,Height),Height/2f))Region=new Region(rounded);
             stopButton.Place();modeButton.Place();
-            Location=Home(screen.WorkingArea);
+            Location=Home(screen.WorkingArea);Present();
         }
         Point Home(Rectangle work) {return HomeFor(dock,work);}
         Point HomeFor(string name,Rectangle work) {
@@ -571,7 +582,7 @@ namespace Axon {
             readonly System.Windows.Forms.Timer fade=new System.Windows.Forms.Timer();
             internal HudButton(Guardian o,int i,Rectangle r) {
                 owner=o;index=i;logical=r;FlatStyle=FlatStyle.Flat;FlatAppearance.BorderSize=0;TabStop=false;Cursor=Cursors.Hand;
-                SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer,true);
+                SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.Opaque,true);
                 fade.Interval=16;fade.Tick+=delegate {Step();};
             }
             internal void Place() {float s=owner.visualScale;SetBounds((int)Math.Round(logical.X*s),(int)Math.Round(logical.Y*s),(int)Math.Round(logical.Width*s),(int)Math.Round(logical.Height*s));}
@@ -581,18 +592,16 @@ namespace Axon {
                 float target=over?1:0,level=Level;
                 if(!DesktopVisuals.MotionEnabled)level=target;
                 else level=over?Math.Min(1,level+16f/DesktopVisuals.Fast):Math.Max(0,level-16f/DesktopVisuals.FastLeave);
-                Level=level;if(level==target)fade.Stop();Invalidate();
+                Level=level;if(level==target)fade.Stop();owner.Present();
             }
-            protected override void OnPaint(PaintEventArgs e) {
-                e.Graphics.ScaleTransform(owner.visualScale,owner.visualScale);
-                e.Graphics.TranslateTransform(-logical.X,-logical.Y);
-                DesktopVisuals.Hud(e.Graphics,owner.Model());
-            }
+            // Drawn by the bar's own surface; a layered window never shows a child's paint.
+            protected override void OnPaint(PaintEventArgs e) {}
+            protected override void OnPaintBackground(PaintEventArgs e) {}
             protected override void OnMouseEnter(EventArgs e) {over=true;fade.Start();base.OnMouseEnter(e);}
             protected override void OnMouseLeave(EventArgs e) {over=false;if(owner.pressedButton==index)owner.pressedButton=0;fade.Start();base.OnMouseLeave(e);}
             // button.press: confirmed on pointer-down.
-            protected override void OnMouseDown(MouseEventArgs e) {owner.pressedButton=index;Invalidate();base.OnMouseDown(e);}
-            protected override void OnMouseUp(MouseEventArgs e) {owner.pressedButton=0;Invalidate();base.OnMouseUp(e);}
+            protected override void OnMouseDown(MouseEventArgs e) {owner.pressedButton=index;owner.Present();base.OnMouseDown(e);}
+            protected override void OnMouseUp(MouseEventArgs e) {owner.pressedButton=0;owner.Present();base.OnMouseUp(e);}
             protected override void Dispose(bool disposing) {if(disposing)fade.Dispose();base.Dispose(disposing);}
         }
         void RefreshHud() {
@@ -608,17 +617,18 @@ namespace Axon {
             if(m.Line2!=shownLine2) {shownLine2=m.Line2;if(Visible&&DesktopVisuals.MotionEnabled){textIn=0;textAt=DateTime.UtcNow;motion.Start();}else textIn=1;}
             AccessibleRole=AccessibleRole.ToolBar;
             AccessibleName=(hostName.Length>0?hostName:"Computer Use")+" computer use: "+m.Line1+", "+m.Line2;
-            Invalidate();stopButton.Invalidate();modeButton.Invalidate();
+            Present();
         }
         // One frame timer for the bar's own motion. It runs only while
         // something is moving.
         void Motion() {
             bool busy=false;DateTime now=DateTime.UtcNow;
-            if(textIn<1) {textIn=DesktopVisuals.EaseOut((float)((now-textAt).TotalMilliseconds/DesktopVisuals.Fast));if((now-textAt).TotalMilliseconds>=DesktopVisuals.Fast)textIn=1;else busy=true;Invalidate();}
+            if(textIn<1) {textIn=DesktopVisuals.EaseOut((float)((now-textAt).TotalMilliseconds/DesktopVisuals.Fast));if((now-textAt).TotalMilliseconds>=DesktopVisuals.Fast)textIn=1;else busy=true;Present();}
             if(entering) {
                 // bar.enter: opacity over Normal; a short fade when motion is reduced.
                 double t=(now-enterAt).TotalMilliseconds/(DesktopVisuals.MotionEnabled?DesktopVisuals.Normal:DesktopVisuals.Fast);
-                if(t>=1){entering=false;Opacity=.999;}else {Opacity=.999*DesktopVisuals.EaseOut((float)t);busy=true;}
+                if(t>=1){entering=false;barAlpha=1;}else {barAlpha=DesktopVisuals.EaseOut((float)t);busy=true;}
+                Present();
             }
             if(sliding) {
                 double t=(now-slideAt).TotalMilliseconds/slideMs;

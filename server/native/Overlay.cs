@@ -551,6 +551,20 @@ namespace Axon
             catch { }
         }
 
+        // Puts a premultiplied surface on a layered window, at a place and an
+        // overall opacity. The control bar uses it, so its pill has a smooth edge.
+        internal static void Present(IntPtr hwnd, Bitmap surface, int x, int y, byte alpha)
+        {
+            IntPtr screenDc = GetDC(IntPtr.Zero), memDc = CreateCompatibleDC(screenDc), bitmap = surface.GetHbitmap(Color.FromArgb(0)), old = SelectObject(memDc, bitmap);
+            try
+            {
+                NSIZE size = new NSIZE(surface.Width, surface.Height); NPOINT src = new NPOINT(0, 0), dst = new NPOINT(x, y);
+                BLENDFUNCTION blend = new BLENDFUNCTION(); blend.BlendOp = AC_SRC_OVER; blend.SourceConstantAlpha = alpha; blend.AlphaFormat = AC_SRC_ALPHA;
+                UpdateLayeredWindow(hwnd, screenDc, ref dst, ref size, memDc, ref src, 0, ref blend, ULW_ALPHA);
+            }
+            finally { SelectObject(memDc, old); DeleteObject(bitmap); DeleteDC(memDc); ReleaseDC(IntPtr.Zero, screenDc); }
+        }
+
         internal static GraphicsPath RoundRect(RectangleF r, float radius)
         {
             GraphicsPath p = new GraphicsPath();
