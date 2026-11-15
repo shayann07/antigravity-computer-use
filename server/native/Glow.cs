@@ -17,23 +17,14 @@ using System;
 using System.Drawing;
 
 namespace Axon {
-    // The colours of the light. They follow the app that is driving, so the
-    // glow, the icon on the bar and the pointer read as one thing: this app's
-    // light. An unrecognised host gets the product's own cool tones.
+    // The colours of the light: one palette for every app, so the product
+    // has one look. Warm and cool tones follow one another round the window
+    // and blend where they meet.
     internal static class GlowTones {
-        static readonly int[][] Cool={new int[]{96,200,255},new int[]{188,232,255},new int[]{72,150,255},new int[]{110,226,244},new int[]{148,160,255},new int[]{84,176,255}};
-        // Antigravity's arch: mostly blue, with the warm colours of its apex
-        // travelling round as one ember.
-        static readonly int[][] Antigravity={new int[]{86,170,255},new int[]{128,222,255},new int[]{98,152,255},new int[]{110,228,238},new int[]{86,170,255},new int[]{140,226,255},new int[]{98,152,255},new int[]{110,228,238},new int[]{104,232,176},new int[]{255,206,100},new int[]{255,128,108},new int[]{176,144,255}};
-        static readonly int[][] Claude={new int[]{255,138,96},new int[]{255,190,112},new int[]{255,120,84},new int[]{255,160,140},new int[]{242,104,64},new int[]{255,214,170}};
+        static readonly int[][] Aurora={new int[]{84,150,255},new int[]{150,112,255},new int[]{255,108,178},new int[]{255,152,88},new int[]{255,206,112},new int[]{98,208,255}};
         const int Steps=1024;
-        static volatile int[] ramp=Build(Cool);
-        internal static volatile int Version;
-        internal static void Use(string host) {
-            int[][] stops=ControlContract.Tones(host);
-            if(stops==null)stops=host=="Antigravity"?Antigravity:host=="Claude"?Claude:(ControlContract.Tones("default")??Cool);
-            ramp=Build(stops);Version++;
-        }
+        static volatile int[] ramp=Build(ControlContract.Tones("default")??Aurora);
+        internal static int Version {get {return 0;}}
         // The stops follow one another in a loop. Every blend is lifted to
         // full brightness, so the light never passes through a dull mix.
         static int[] Build(int[][] stops) {
@@ -72,10 +63,10 @@ namespace Axon {
         // window from an edge that is lit outside.
         internal static int Reach(int kind,int zone) {return kind==Edge?(zone==2?Lip:84):(zone==0?120:zone==1?160:80);}
         static readonly double MinBright=ControlContract.UiNumber("glow_min",.5,0,1),Spread=ControlContract.UiNumber("glow_reach",.42,.05,4);
-        static readonly double Strength=ControlContract.UiNumber("glow_strength",.82,0,1),Lift=ControlContract.UiNumber("glow_lift",.3,0,2);
+        static readonly double Strength=ControlContract.UiNumber("glow_strength",.6,0,1),Lift=ControlContract.UiNumber("glow_lift",.3,0,2);
         // One lap of colour around the window, in seconds.
         static readonly double Lap=ControlContract.UiNumber("glow_lap_seconds",18,2,120);
-        const double RibbonWeight=.9,SwellWeight=.9,BloomWeight=.52,WashWeight=.24;
+        const double RibbonWeight=.62,SwellWeight=.9,BloomWeight=.55,WashWeight=.24;
         internal readonly int Kind;
         internal readonly Rectangle Frame,Clip;internal readonly bool[] Inside;internal readonly float Scale;internal readonly int Radius;
         internal readonly Rectangle[] Strips=new Rectangle[4];
@@ -120,7 +111,7 @@ namespace Axon {
             if(u>reach)return;
             if(kind==Edge) {
                 if(zone==2)return;
-                a=Math.Exp(-Math.Pow(u/6.5,2.2));b=Math.Exp(-Math.Pow(u/18,1.8));c=Math.Exp(-u/22)*Fade(u,reach);
+                a=Math.Exp(-Math.Pow(u/7,1.6));b=Math.Exp(-Math.Pow(u/22,1.7));c=Math.Exp(-u/22)*Fade(u,reach);
             }
             else a=(zone==0?Math.Exp(-u/30):zone==1?Math.Exp(-u/54):.5*Math.Exp(-u/24))*Fade(u,reach);
         }
@@ -240,16 +231,16 @@ namespace Axon {
                     shown=Math.Max(0,Math.Min(1,(front-d)/(40*Scale)+1));surge+=.7*Math.Exp(-k*k)*shown;
                 }
                 // The colours travel one way; the thickness wanders the other.
-                int colour=GlowTones.At(place-turn+.05*Sine(place*3+turn*.6)+.025*Sine(place*7-turn*1.3));
-                double thick=Math.Max(0,Math.Min(1,.5+.32*Sine(place*3+time/7.3)+.22*Sine(place*5-time/4.9+.37)));
+                int colour=GlowTones.At(place*2-turn+.09*Sine(place*3+turn*.6)+.04*Sine(place*7-turn*1.3));
+                double thick=Math.Max(0,Math.Min(1,.5+.3*Sine(place*5+time/6.1)+.24*Sine(place*8-time/4.3+.37)+.16*Sine(place*13+time/3.1+.71)));
                 double breath=Math.Max(0,Math.Min(1,.55+.28*Sine(place*2-time/9.1)+.17*Sine(place*4+time/6.3+.21)));
                 int cr=(colour>>16)&255,cg=(colour>>8)&255,cb=colour&255;
-                tone[i]=((cr+(255-cr)*22/100)<<16)|((cg+(255-cg)*22/100)<<8)|(cb+(255-cb)*22/100);
-                // The ribbon's centre is the same colour, most of the way to white.
-                hot[i]=((cr+(255-cr)*62/100)<<16)|((cg+(255-cg)*62/100)<<8)|(cb+(255-cb)*62/100);
+                tone[i]=((cr+(255-cr)*10/100)<<16)|((cg+(255-cg)*10/100)<<8)|(cb+(255-cb)*10/100);
+                // The band's centre is the same colour, a little lighter. Never white.
+                hot[i]=((cr+(255-cr)*30/100)<<16)|((cg+(255-cg)*30/100)<<8)|(cb+(255-cb)*30/100);
                 if(Kind==Edge) {
                     gainA[i]=(int)(256*Strength*RibbonWeight*(.84+.16*near)*shown);
-                    gainB[i]=(int)(256*Strength*SwellWeight*Math.Min(1,(.6+.4*thick)*(.65+.35*near)+.8*surge)*raise*shown);
+                    gainB[i]=(int)(256*Strength*SwellWeight*Math.Min(1,(.22+.78*thick)*(.7+.3*near)+.8*surge)*raise*shown);
                     gainC[i]=(int)(256*Strength*BloomWeight*Math.Min(1.25,(.6+.4*breath)*(.6+.4*near)+.6*surge)*raise*shown);
                 } else gainA[i]=(int)(256*Strength*WashWeight*(.55+.45*near)*(.8+.2*breath)*raise*shown);
             }

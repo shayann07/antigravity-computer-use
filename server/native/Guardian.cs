@@ -688,8 +688,7 @@ namespace Axon {
             dock=name;displaced=false;SlideTo(Home(Screen.FromRectangle(Bounds).WorkingArea),DesktopVisuals.Slow);SavePreferences();
         }
         void SetHost(string name,string file) {
-            // The glow and the pointer take the host's colours, like the icon.
-            if(name!=null&&name.Length>0&&name.Length<=40){if(name!=hostName)GlowTones.Use(name);hostName=name;}
+            if(name!=null&&name.Length>0&&name.Length<=40)hostName=name;
             if(file==null||file==hostIconPath||file.Length>520)return;
             hostIconPath=file;
             // The host's own icon, read from its executable. Decorative only.

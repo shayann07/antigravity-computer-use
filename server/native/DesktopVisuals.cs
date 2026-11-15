@@ -36,8 +36,8 @@ namespace Axon {
         internal static void Pointer(Graphics g,float phase) {
             PointF centre=new PointF(54,56);
             Color tone=GlowTones.ColorAt(0);
-            Halo(g,centre,38,tone,96);
-            Halo(g,centre,18,Mix(tone,Color.White,.5f),128);
+            Halo(g,centre,38,tone,78);
+            Halo(g,centre,18,Mix(tone,Color.White,.35f),104);
         }
         static void Halo(Graphics g,PointF c,float radius,Color colour,int peak) {
             using(GraphicsPath circle=new GraphicsPath()) {
@@ -317,8 +317,8 @@ namespace Axon {
         internal static void Export(string directory) {
             Directory.CreateDirectory(directory);
             int w=1280,h=800;Rectangle screen=new Rectangle(0,0,w,h),window=new Rectangle(190,140,900,520);
-            foreach(string host in new string[]{"Antigravity","Claude","Computer Use"}) {
-                GlowTones.Use(host);string tag=host.Replace(" ","").ToLowerInvariant();
+            foreach(string host in new string[]{"aurora"}) {
+                string tag=host;
                 foreach(bool dark in new bool[]{true,false}) {
                     // Maximised: lit inside. At full size: a corner, the edge by the action, the far edge.
                     using(Bitmap image=Backdrop(w,h,dark,screen))using(Bitmap sheet=new Bitmap(1200,400,PixelFormat.Format32bppArgb)) {
@@ -350,7 +350,6 @@ namespace Axon {
                     image.Save(Path.Combine(directory,"pointer-"+tag+".png"),ImageFormat.Png);
                 }
             }
-            GlowTones.Use("Antigravity");
             string[][] states={
                 new string[]{"active","Antigravity is working","Reading the screen · 1 min left","1","1"},
                 new string[]{"active","Computer Use is working","Waiting for the next step","1","1"},
@@ -391,7 +390,7 @@ namespace Axon {
             }
             using(Bitmap image=new Bitmap(96,96,PixelFormat.Format32bppArgb)) {
                 using(Graphics g=Graphics.FromImage(image)){g.SmoothingMode=SmoothingMode.AntiAlias;Pointer(g,0);}
-                if(image.GetPixel(54,56).A<130)throw new Exception("The pointer glow is too faint to see");
+                if(image.GetPixel(54,56).A<110)throw new Exception("The pointer glow is too faint to see");
                 if(image.GetPixel(2,2).A!=0)throw new Exception("The pointer glow must end inside its surface");
             }
             // What the glow may never do, checked at its strongest (a click
@@ -400,14 +399,14 @@ namespace Axon {
             foreach(GlowField field in Glow(new Rectangle(0,0,800,700),true,new Rectangle(0,0,800,700),400,0,4,1,new float[]{.2f}))field.Over(clear,800,700);
             if(AlphaAt(clear,800,400,350)!=0)throw new Exception("The glow covers the middle of the app");
             if(AlphaAt(clear,800,400,GlowField.Reach(GlowField.Veil,1)+2)!=0)throw new Exception("The inside glow must end within its reach");
-            if(AlphaAt(clear,800,400,1)<170)throw new Exception("The glow is too faint to see at the edge");
+            if(AlphaAt(clear,800,400,1)<120)throw new Exception("The glow is too faint to see at the edge");
             if(AlphaAt(clear,800,400,4)<=AlphaAt(clear,800,400,14)||AlphaAt(clear,800,400,14)<=AlphaAt(clear,800,400,40))throw new Exception("The glow must fade inward");
             if(AlphaAt(clear,800,400,72)>=96)throw new Exception("The glow fogs the app beyond its band");
             clear=new int[800*700];
             foreach(GlowField field in Glow(new Rectangle(100,150,600,400),false,new Rectangle(0,0,800,700),400,150,4,1,new float[]{.2f}))field.Over(clear,800,700);
             if(AlphaAt(clear,800,400,350)!=0)throw new Exception("The glow covers the middle of the app");
             if(AlphaAt(clear,800,400,156)>=40||AlphaAt(clear,800,106,350)>=40)throw new Exception("The outside glow tints the app");
-            if(AlphaAt(clear,800,400,148)<170)throw new Exception("The glow is too faint to see at the edge");
+            if(AlphaAt(clear,800,400,148)<120)throw new Exception("The glow is too faint to see at the edge");
             if(AlphaAt(clear,800,400,146)<=AlphaAt(clear,800,400,130))throw new Exception("The outside glow must fade away from the window");
             if(AlphaAt(clear,800,400,150-GlowField.Reach(GlowField.Veil,0)-2)!=0)throw new Exception("The outside glow must end within its reach");
             Console.WriteLine("Visual renders and glow checks passed.");
