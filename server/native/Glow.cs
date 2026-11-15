@@ -18,10 +18,10 @@ using System.Drawing;
 
 namespace Axon {
     // The colours of the light: one palette for every app, so the product
-    // has one look. Warm and cool tones follow one another round the window
-    // and blend where they meet.
+    // has one look. One family, blue through to a touch of violet; the
+    // tones follow one another round the window and blend where they meet.
     internal static class GlowTones {
-        static readonly int[][] Aurora={new int[]{84,150,255},new int[]{150,112,255},new int[]{255,108,178},new int[]{255,152,88},new int[]{255,206,112},new int[]{98,208,255}};
+        static readonly int[][] Aurora={new int[]{84,150,255},new int[]{124,206,255},new int[]{98,132,255},new int[]{150,128,255},new int[]{104,184,255},new int[]{132,216,255}};
         const int Steps=1024;
         static volatile int[] ramp=Build(ControlContract.Tones("default")??Aurora);
         internal static int Version {get {return 0;}}
