@@ -188,7 +188,7 @@ export async function main(){
   if(command==='plan'){
     const steps=loadPlan(args.plan_file);
     const call=(name,input)=>{if(name==='run')validate('computer_run',input);return request(session,name,input,100000,policy.permission_mode).catch(failureReply);};
-    const renew=async()=>{const ended=await request(session,'end',{},100000,policy.permission_mode).catch(failureReply);if(!ended.ok)return ended;session.task_token=undefined;return request(session,'ready',{},15000,policy.permission_mode).catch(failureReply);};
+    const renew=async()=>{const ended=await request(session,'end',{},100000,policy.permission_mode).catch(failureReply);if(!ended.ok)return ended;session.task_token=undefined;const handle=ended.session_handle??ended.result?.session_handle;return request(session,'ready',handle?{session_handle:handle}:{},15000,policy.permission_mode).catch(failureReply);};
     const result=await runPlan({steps,hwnd:args.hwnd,observationId:args.observation_id,reason:args.reason,ledgerFile:args.ledger,call,renew,checkpointEvery:args.checkpoint_every??6,maxRenewals:args.renew_budget??1});
     printReply(result);if(!result.ok)process.exitCode=1;return;
   }

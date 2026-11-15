@@ -43,7 +43,7 @@ test('runtime refuses typing into a click-tier app before any input',async()=>{
  }finally{fs.unlinkSync(r.guardFile);}
 });
 
-test('request_access asks once per app, reports tiers, and Stop revokes every approval',async()=>{
+test('request_access asks once per app, reports tiers, and Stop ends the grants of the task',async()=>{
  const r=runtime({request:async m=>m.op==='activate'?{allowed:true}:{state:'idle',controls_visible:true}});
  const apps={1:{hwnd:1,pid:11,started:'a',path:'C:/x/mspaint.exe',process:'mspaint',title:'Paint'},2:{hwnd:2,pid:12,started:'b',path:'C:/x/Code.exe',process:'Code',title:'Editor'}};
  r.app=async h=>apps[h];
@@ -54,7 +54,7 @@ test('request_access asks once per app, reports tiers, and Stop revokes every ap
   await r.grant(1,'again');assert.equal(r.guardian.prompts,2,'an approved app is not asked again');
   await r.stop();assert.equal(r.grants.size,0);assert.equal(r.status().approved_apps.length,0);
   const ready=await r.ready();assert.equal(ready.ready,true);assert.equal(ready.task_started,true);
-  await r.grant(1,'after stop');assert.equal(r.guardian.prompts,3,'after Stop the Allow prompt appears again');
+  await r.grant(1,'after stop');assert.equal(r.guardian.prompts,3,'a new conversation (no handle) is asked again');
   await assert.rejects(r.requestAccess({hwnds:[]}),e=>e.code==='bad_arguments');
  }finally{fs.unlinkSync(r.guardFile);}
 });
@@ -65,7 +65,9 @@ test('native session expiry reaches in-flight calls as a renewable session_limit
   r.state='active';r.token='t';r.guardian.emit('state','idle');
   assert.throws(()=>r.check(),e=>e.code==='session_limit');
   assert.equal(recoveryAdvice({error:{code:'session_limit'}}).next_action,'renew_task_and_continue');
-  // An idle state with a reason (End, shutdown) is not an expiry.
+  // Native controls that name the reason report the same renewable limit.
+  const named=runtime();named.state='active';named.token='t';named.guardian.emit('state','idle','session_expired');assert.throws(()=>named.check(),e=>e.code==='session_limit');fs.unlinkSync(named.guardFile);
+  // An idle state with another reason (End, shutdown) is not an expiry.
   const other=runtime();other.state='active';other.token='t';other.guardian.emit('state','idle','completed');assert.throws(()=>other.check(),e=>e.code==='control_inactive');fs.unlinkSync(other.guardFile);
  }finally{fs.unlinkSync(r.guardFile);}
 });
@@ -85,6 +87,37 @@ test('ready clears a confirmed Stop only after a live guardian confirms input re
  }finally{fs.unlinkSync(r.guardFile);fs.rmSync(dir,{recursive:true,force:true});}
 });
 
+test('ready clears a confirmed Stop through native clear_stop without restarting the controls',async()=>{
+ const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'agcu-native-clear-')),latchFile=path.join(dir,'emergency.stop');
+ const ops=[];let answer={cleared:false,state:'stopped',reason:'input_cleanup_unverified'};
+ const r=runtime({latchFile,request:async m=>{ops.push(m.op);if(m.op==='clear_stop'){if(answer.cleared)fs.unlinkSync(latchFile);return answer;}return m.op==='activate'?{allowed:true}:{state:'idle',controls_visible:true};}});
+ try{
+  r.state='active';await r.stop();assert(fs.existsSync(latchFile));
+  let closed=0;r.guardian.proc={};r.guardian.initialized=true;r.guardian.capabilities={clear_stop:true};r.guardian.close=async()=>{closed++;};
+  r.guardian.stopAcknowledged=async nonce=>({stop_nonce:nonce,workers_stopped:true,input_cleanup_confirmed:true});
+  const refused=await r.ready();assert.equal(refused.ready,false);assert.equal(refused.error.code,'stop_cleanup_unverified');assert(fs.existsSync(latchFile),'a refused clear leaves the marker');
+  answer={cleared:false,state:'stopped',reason:'guardian_stop_unconfirmed'};
+  const unconfirmed=await r.ready();assert.equal(unconfirmed.error.code,'guardian_stop_unconfirmed');assert(fs.existsSync(latchFile));
+  r.lastControlReason='requested_stop';answer={cleared:true,state:'idle',reason:null};
+  const ready=await r.ready();assert.equal(ready.ready,true);assert.equal(closed,0,'the controls are not restarted');assert(!fs.existsSync(latchFile));assert(ops.includes('clear_stop'));
+  // A reply that claims success while the marker is still there is refused.
+  r.state='stopped';r.lastControlReason='requested_stop';fs.writeFileSync(latchFile,'stopped');
+  r.guardian.request=async m=>m.op==='clear_stop'?{cleared:true,state:'idle'}:{state:'idle',controls_visible:true};
+  const lied=await r.ready();assert.equal(lied.error.code,'stop_persistence_failed');
+ }finally{fs.unlinkSync(r.guardFile);fs.rmSync(dir,{recursive:true,force:true});}
+});
+
+test('every app prompt carries the tier and the conversation handle, and End returns the handle for renewal',async()=>{
+ const r=runtime({request:async m=>m.op==='activate'?{allowed:true}:{state:'idle',controls_visible:true}});
+ const prompts=[];r.guardian.prompt=async m=>{prompts.push(m);return {allowed:true};};
+ r.app=async()=>({hwnd:2,pid:12,started:'b',path:'C:/x/Code.exe',process:'Code',title:'Editor'});
+ try{
+  const first=await r.ready();await r.grant(2,'first');
+  assert.equal(prompts[0].tier,'click');assert.equal(prompts[0].session_handle,first.session_handle);assert.equal(prompts[0].remembered,undefined);
+  const ended=await r.finish();assert.equal(ended.session_handle,first.session_handle);
+ }finally{fs.unlinkSync(r.guardFile);}
+});
+
 test('clearConfirmedStop never removes an unconfirmed or invalid marker',()=>{
  const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'agcu-clear-marker-')),file=path.join(dir,'emergency.stop');
  try{
@@ -96,7 +129,7 @@ test('clearConfirmedStop never removes an unconfirmed or invalid marker',()=>{
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
 
-test('approvals last for the conversation handle, survive End and expiry, and Stop revokes them',async()=>{
+test('approvals last for the conversation handle and survive End, expiry and Stop',async()=>{
  const r=runtime({request:async m=>m.op==='activate'?{allowed:true}:{state:'idle',controls_visible:true}});
  const seen=[];r.guardian.prompt=async m=>{seen.push(m.remembered===true);return {allowed:true};};
  r.app=async()=>({hwnd:1,pid:11,started:'a',path:'C:/x/mspaint.exe',process:'mspaint',title:'Paint'});
@@ -106,10 +139,12 @@ test('approvals last for the conversation handle, survive End and expiry, and St
   r.guardian.emit('state','idle');
   const later=await r.ready({session_handle:first.session_handle});assert.equal(later.session_handle,first.session_handle);
   await r.grant(1,'later');assert.deepEqual(seen,[false,true],'same conversation marks the app as already approved');
-  await r.stop();assert.equal(r.sessionHandle,null);
-  const after=await r.ready({session_handle:first.session_handle});assert.notEqual(after.session_handle,first.session_handle,'Stop revoked the handle');
-  await r.grant(1,'after stop');assert.equal(seen.at(-1),false);
+  // Owner rule: Esc or Stop ends the task but no approval card follows it.
+  await r.stop();assert.equal(r.sessionHandle,first.session_handle);
+  const after=await r.ready({session_handle:first.session_handle});assert.equal(after.session_handle,first.session_handle,'Stop keeps the conversation');
+  await r.grant(1,'after stop');assert.equal(seen.at(-1),true,'the app is still marked as approved after Stop');
   const other=await r.ready();assert.notEqual(other.session_handle,after.session_handle,'a new conversation asks again');
+  await r.grant(1,'new conversation');assert.equal(seen.at(-1),false);
  }finally{fs.unlinkSync(r.guardFile);}
 });
 

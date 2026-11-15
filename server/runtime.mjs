@@ -191,9 +191,10 @@ export class Runtime {
       // attempted reached the native guardian. Preserve the uncertain state.
       const priorStopUnconfirmed=previousState==='stopped'&&this.lastControlReason==='guardian_stop_unconfirmed';
       if((reason||s!==this.state)&&(!priorStopUnconfirmed||persistenceFailure(reason)))this.lastControlReason=reason||s;
-      // Native ends an active session at its deadline by going idle with no
-      // reason. Report that to in-flight calls as a renewable session_limit.
-      if(previousState==='active'&&s==='idle'&&!reason&&this.token)this.sessionExpired=true;
+      // Native ends an active session at its deadline by going idle, with
+      // reason session_expired (older controls give no reason). Report that
+      // to in-flight calls as a renewable session_limit.
+      if(previousState==='active'&&s==='idle'&&(!reason||reason==='session_expired')&&this.token)this.sessionExpired=true;
       this.state=s;
       if((reason==='guardian_exited'&&previousState!=='idle'||reason==='guardian_unresponsive')&&this.latchFile)try{persistRecoveryStop(this.latchFile,this.recoveredTask&&this.priorGuard?this.priorGuard:path.basename(this.guardFile),{unconfirmed:reason==='guardian_unresponsive'||priorStopUnconfirmed});}catch{}
       if(s==='stopped'&&this.latchFile){try{const latch=readStopLatch(this.latchFile);if(!latch||latch.value!=='stopped'&&!latch.unconfirmed)throw Error('invalid latch');if(latch.unconfirmed&&!persistenceFailure(reason))this.lastControlReason='guardian_stop_unconfirmed';}catch{this.lastControlReason='stop_persistence_failed';this.diagnosticError='stop_persistence_failed';}}
@@ -202,7 +203,6 @@ export class Runtime {
       if(s!=='active'){
         this.generation++;this.frames.clear();
         if(s==='stopped'||s==='idle'){this.grants.clear();this.token='';}
-        if(s==='stopped')Runtime.prototype.revokeSession.call(this);
         if(s==='stopped'||s==='paused')this.driver.abort?.().catch(()=>{});
       }
     });
@@ -265,8 +265,8 @@ export class Runtime {
   }
   // App approvals last for the agent's conversation: ready returns a
   // session_handle that later ready calls present. A new conversation (no or
-  // unknown handle) asks again; Stop revokes the handle and its approvals.
-  revokeSession(){if(this.sessionHandle)this.conversationGrants?.delete(this.sessionHandle);this.sessionHandle=null;}
+  // unknown handle) asks again. Stop and Esc end the task but keep the
+  // conversation's approvals, so continuing afterwards shows no new prompt.
   bindSession(handle){
     const sessions=(this.conversationGrants??=new Map());
     if(typeof handle==='string'&&sessions.has(handle)){this.sessionHandle=handle;return;}
@@ -329,8 +329,20 @@ export class Runtime {
     }else if(this.taskOpen&&this.dispatchStarted&&!(await this.exitedCurrentCleanupVerified()))return refuse('stop_cleanup_unverified','inspect_input_cleanup','Input release after Stop could not be verified. Inspect diagnostics; do not replay.');
     if(this.taskFile&&this.taskOpen)try{writeAtomicJSON(this.taskFile,{schema:1,open:false});}catch{return refuse('task_state_write_failed','inspect_diagnostics','The stopped task could not be closed. Inspect private storage.');}
     this.taskOpen=false;this.dispatchChildren=[];this.dispatchStarted=false;this.watchdogsComplete=true;this.taskDurable=true;
-    if(latch){
-      // Current native controls still enforce the marker until they restart,
+    if(latch&&this.guardian?.proc&&this.guardian.initialized&&this.guardian.capabilities?.clear_stop===true){
+      // Native controls clear a confirmed Stop themselves once their own
+      // cleanup checks pass; they refuse an unconfirmed or unreadable marker.
+      let reply;
+      try{reply=await this.guardian.request({op:'clear_stop'});}
+      catch{return refuse('stop_cleanup_unverified','inspect_input_cleanup','Native controls did not confirm that the Stop could be cleared. Inspect diagnostics; do not replay.');}
+      if(reply.cleared!==true||reply.state!=='idle'){
+        if(reply.reason==='guardian_stop_unconfirmed'){this.lastControlReason='guardian_stop_unconfirmed';return refuse('guardian_stop_unconfirmed','inspect_input_cleanup','Stop delivery is unconfirmed. Inspect diagnostics and input cleanup; do not restart or replay.');}
+        if(reply.reason==='stop_persistence_failed'){this.lastControlReason='stop_persistence_failed';return refuse('stop_persistence_failed','inspect_stop_persistence_without_restart','The Stop marker cannot be read or cleared. Inspect private storage; do not send input.');}
+        return refuse('stop_cleanup_unverified','inspect_input_cleanup','Input release after Stop could not be verified by the native controls. Inspect diagnostics; do not replay.');
+      }
+      if(readStopLatch(this.latchFile)){this.lastControlReason='stop_persistence_failed';return refuse('stop_persistence_failed','inspect_stop_persistence_without_restart','The Stop marker is still present after it was cleared. Inspect private storage; do not send input.');}
+    }else if(latch){
+      // Older native controls still enforce the marker until they restart,
       // so close them, clear the confirmed marker and let ready start fresh.
       if(this.guardian.proc)try{await this.guardian.close({normal:true});}catch{return refuse('guardian_cleanup_unconfirmed','inspect_diagnostics','The previous controls did not exit. Inspect diagnostics before starting another task.');}
       try{clearConfirmedStop(this.latchFile);}catch(error){this.lastControlReason=error.code||'stop_persistence_failed';return refuse(this.lastControlReason,error.code==='guardian_stop_unconfirmed'?'inspect_input_cleanup':'inspect_stop_persistence_without_restart','The Stop marker changed or could not be cleared. Inspect diagnostics; do not replay.');}
@@ -414,7 +426,7 @@ export class Runtime {
     // Already approved in this conversation: native controls that support it
     // (see CLAUDE-STYLE-CONTROL.md) restore the grant without a new dialog.
     const remembered=!!this.sessionHandle&&this.conversationGrants?.get(this.sessionHandle)?.has(executableKey(w.path))===true;
-    const answer=await this.guardian.prompt({kind:'app',hwnd:Number(hwnd),app_pid:w.pid,host_pid:this.driver.info?.pid,...(remembered?{remembered:true,session_handle:this.sessionHandle}:{}),
+    const answer=await this.guardian.prompt({kind:'app',hwnd:Number(hwnd),app_pid:w.pid,host_pid:this.driver.info?.pid,tier,...(this.sessionHandle?{session_handle:this.sessionHandle}:{}),...(remembered?{remembered:true}:{}),
       message:`Allow this application for this session?\r\n\r\n${w.title}\r\n${w.path}\r\nPID ${w.pid}\r\n${tierText}\r\n\r\nTask: ${purpose}\r\n\r\nIts screenshots and accessibility text go to Antigravity's configured model. Ordinary actions run autonomously. Consequential effects need a separate confirmation. Your real mouse/keyboard will be used. Esc or Ctrl+Alt+F12 stops. Use a disposable account/VM for important data.`});
     if(!answer.allowed)fail(answer.decision==='timeout'?'approval_timeout':'permission_denied',answer.decision==='timeout'?'Local application approval timed out.':'The human denied this application.');
     this.guardian.send({op:'attach',pid:this.driver.info?.pid});
@@ -802,7 +814,7 @@ export class Runtime {
       if(stopped?.unconfirmed||this.lastControlReason==='guardian_stop_unconfirmed')fail('guardian_stop_unconfirmed','Stop remains unconfirmed. Keep the task recovery record; inspect prior actors and input cleanup without replay.');
       if(stopped?.invalid||persistenceFailure(this.lastControlReason))fail('stop_persistence_failed','Stop storage is unverified. Keep the task recovery record and inspect private storage.');
       try{if(this.taskFile)writeAtomicJSON(this.taskFile,{schema:1,open:false});this.taskOpen=false;this.recoveredTask=false;this.dispatchChildren=[];this.dispatchStarted=false;this.watchdogsComplete=true;this.taskDurable=true;}catch{this.taskOpen=true;this.taskDurable=false;throw Object.assign(Error('Input cleanup finished, but task state could not be saved. Updates remain deferred.'),{code:'task_state_write_failed'});}
-    }return {ended:true,state:this.state,restart_required:false};}
+    }return {ended:true,state:this.state,restart_required:false,session_handle:this.sessionHandle??null};}
   async feedback(args){
     // Revalidate at the persistence boundary too; never store model text,
     // application content, screenshots, paths or arbitrary error messages.
@@ -904,7 +916,7 @@ export class Runtime {
   async stop(){
     if(this.stopping)return this.stopping;
     const priorUnconfirmed=this.lastControlReason==='guardian_stop_unconfirmed';
-    this.generation++;this.frames.clear();this.grants.clear();Runtime.prototype.revokeSession.call(this);this.state='stopped';this.lastControlReason='requested_stop';
+    this.generation++;this.frames.clear();this.grants.clear();this.state='stopped';this.lastControlReason='requested_stop';
     const work=Promise.resolve().then(()=>this.stopTransaction(priorUnconfirmed));this.stopping=work;
     try{return await work;}finally{if(this.stopping===work)this.stopping=null;}
   }
