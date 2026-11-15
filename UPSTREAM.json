@@ -920,7 +920,7 @@
     },
     {
       "path": "package.json",
-      "sha256": "404bf29b6a0555771e3d29218e824330059805e6c0681fec8dfc6d7e0f59d2b8"
+      "sha256": "6cf86f9af353819936e5398543ca91f3dfec16827e401ed53f12b0eab3fe7d67"
     },
     {
       "path": "server/native/macos/MacPhosphorIcons.swift",
