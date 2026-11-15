@@ -18,6 +18,7 @@ export const RECOVERY_GUIDE=Object.freeze({
  observe_app_no_picker:entry(A,'snapshot','No filename was entered. The control did not open a picker; observe the app and send file_dialog only after a picker is seen.'),
  retry_file_dialog_with_keyboard:entry(A,'file_dialog','Nothing was pasted and no confirmation was sent. Observe the dialog, then run file_dialog alone once with --entry-method keyboard; a filename mismatch is refused before confirmation.'),
  enter_without_clipboard:entry(A,'snapshot','Nothing was pasted. Observe again, then enter short text with type, a file name with file_dialog --entry-method keyboard, or ask the human to copy something else first.'),
+ fix_arguments_and_resume_after_completed:entry(A,'describe','Earlier steps in this batch were already sent (see completed). Do not replay the batch. Correct the step at failed_index, observe again, and send only the steps from failed_index on.'),
  fix_arguments_and_retry:entry(A,'describe','Nothing was sent to the desktop, so replay is allowed. Correct the flag, selector, path or text named in the error (describe COMMAND lists the accepted flags) and run the command once more.'),
  choose_permitted_target:entry(A,'apps','No input was sent. Do not retry this target or key; pick a different window or action, or tell the human which step they must do themselves.'),
  await_human_unlock:entry(H,null,'The human unlocks the desktop; then run ready again.','The lock screen is human-only.'),
