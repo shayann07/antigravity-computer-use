@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0-beta.7 - Long planned tasks (Windows)
+
+- `plan` runs a long pre-computed list of steps (drawing, form filling, data entry) as checked batches of 8, records progress in a ledger, resumes without replaying input that may have landed, returns a frame every few batches to check, and can renew the task when the action budget runs out (#92).
+- The skill teaches complex work: measure and calibrate first, plan offline with a scored preview, run with `plan`, then compare the result with the goal (#92).
+- When another window covers the target during a capture, the window is rendered directly instead of failing, and capture refusals point back to observing again (#91).
+- This release is Windows-only; macOS remains experimental and unqualified on hardware.
+
 ## 0.3.0-beta.6 - Faster app operation (Windows)
 
 - `run` batches several steps in one command, and pixel steps chained inside one `run` each get a fresh screenshot (#82, #85).
