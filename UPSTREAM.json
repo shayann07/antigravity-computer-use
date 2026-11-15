@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "3c1920dbbd6861956a0d4d8548232dd3325be36a216b637a61950a6729e8b3b4"
+      "sha256": "00706c7dc1fff779507d17800797bb16c13b0d6cc5e688e5a9beee46706eb85f"
     },
     {
       "path": "server/mcp.mjs",

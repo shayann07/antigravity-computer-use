@@ -91,6 +91,26 @@ export function imagePoint(image,x,y){
   const r=image.source;
   return [r[0]+Math.floor(x*r[2]/image.width),r[1]+Math.floor(y*r[3]/image.height)];
 }
+// Worst-case time a native drag holds the button, mirroring the Windows host's
+// hop plan. Each hop sleeps 4 or 12 ms, which Windows rounds up to its ~16 ms
+// timer tick, so a capped 1500-hop stroke can take about 25 s, not 6 s. The
+// guardian ends the session at its deadline by terminating the worker, so a
+// stroke that cannot finish first must not start.
+const HOP_MS=16,MAX_STROKE_HOPS=1500;
+export function dragBudgetMs(payload){
+  const path=Array.isArray(payload.points)?payload.points:[payload.from,payload.to];
+  const clamp=(v,lo,hi,d)=>Number.isFinite(v)?Math.min(hi,Math.max(lo,Math.trunc(v))):d;
+  const steps=clamp(payload.steps,2,200,12),hold=clamp(payload.hold_ms,0,2000,60);
+  let hops=0;
+  for(let s=1;s<path.length;s++){
+    const [x0,y0]=path[s-1],[x1,y1]=path[s];
+    hops+=path.length===2?steps:Math.max(1,Math.min(40,Math.trunc(Math.hypot(x1-x0,y1-y0)/8)));
+  }
+  // Scaling never drops a segment below one hop, so the cap can be exceeded by
+  // up to one hop per segment.
+  if(hops>MAX_STROKE_HOPS)hops=MAX_STROKE_HOPS+path.length;
+  return 60+2*hold+hops*HOP_MS+1000;
+}
 
 // Snapshot IDs and row indexes are observation-scoped transport handles, not
 // visible content. Mac can renumber unchanged controls on the next capture.
@@ -515,6 +535,7 @@ export class Runtime {
       // Recheck after a sensitive prompt or a wait for the shared input lease.
       await avoidHud();
       if(Date.now()>=this.deadline||this.remaining<=0)fail('session_limit','Session expired while positioning local controls. No app input was sent.');
+      if(op==='drag'&&Date.now()+dragBudgetMs(payload)>=this.deadline)fail('session_limit','Too little session time is left to finish this drag before control ends. No input was sent. End and obtain a new human grant.');
       Runtime.prototype.recordDispatch.call(this);
       // Count an attempted dispatch, including uncertain delivery, but not a
       // rejected lease or a cancellation that never reached the native worker.

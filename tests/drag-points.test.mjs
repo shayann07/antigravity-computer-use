@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {Runtime,appKey} from '../server/runtime.mjs';
+import {Runtime,appKey,dragBudgetMs} from '../server/runtime.mjs';
 import {recoveryAdvice} from '../server/recovery.mjs';
 import {recoveryFor} from '../server/recovery-guide.mjs';
 
@@ -57,6 +57,27 @@ test('macOS refuses a points drag instead of silently drawing a straight line',a
  await asPlatform('darwin',()=>assert.rejects(f.drag({points:[[0,0],[50,20],[100,50]]}),e=>e.code==='points_unsupported'));
  assert.equal(f.drags().length,0);
  assert.equal(recoveryAdvice({error:{code:'points_unsupported'}}).next_action,'fix_drag_points');
+});
+
+// On 2026-11-14 a long brush stroke started about 9 s before the 10-minute
+// session deadline; the guardian ended the session mid-stroke by terminating
+// the worker (exit -1, host_exited). A stroke that cannot finish must not start.
+test('a long stroke that cannot finish before the session deadline is refused before any input',async()=>{
+ const points=Array.from({length:400},(_,i)=>[i%2?199:0,Math.floor(i/4)]);
+ const f=fixture();f.runtime.deadline=Date.now()+9000;
+ await asPlatform('win32',()=>assert.rejects(f.drag({points}),e=>e.code==='session_limit'&&/No input was sent/.test(e.message)));
+ assert.equal(f.drags().length,0);
+ assert.equal(f.runtime.remaining,10);
+ const roomy=fixture();roomy.runtime.deadline=Date.now()+60000;
+ await asPlatform('win32',()=>roomy.drag({points}));
+ assert.equal(roomy.drags().length,1);
+});
+
+test('the drag budget covers the capped hop plan at the Windows timer tick',()=>{
+ const long=Array.from({length:400},(_,i)=>[i%2?2000:0,i]);
+ assert.ok(dragBudgetMs({points:long})>=1500*16+120);
+ assert.ok(dragBudgetMs({from:[0,0],to:[10,10],steps:12})<3000);
+ assert.ok(dragBudgetMs({from:[0,0],to:[10,10],hold_ms:2000})>=4000);
 });
 
 test('a bad launch path is the agent\'s to fix, not an operator incident',()=>{
