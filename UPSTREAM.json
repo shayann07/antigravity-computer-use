@@ -280,7 +280,7 @@
     },
     {
       "path": "server/native/Glow.cs",
-      "sha256": "0216e7b7df889c397419cb2f66dc78c453661761cc58faeb676278a20d90cad7"
+      "sha256": "78accdad9ff6982842ea89ed44107127b9a6305480dcd5c650ae2f84b35bc5ba"
     },
     {
       "path": "server/native/InputLedger.cs",

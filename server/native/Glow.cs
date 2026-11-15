@@ -76,6 +76,10 @@ namespace Axon {
         internal readonly int[][] Pixels=new int[4][];
         readonly byte[][] first=new byte[4][],second=new byte[4][],third=new byte[4][];   // Edge: ribbon, swell, bloom. Veil: wash.
         readonly int[][] index=new int[4][];
+        // Per-pixel grain, added just before the light is rounded to 8 bits.
+        // Faint light has only a few levels to use; without this it falls
+        // away in visible steps that trace the window's shape.
+        readonly byte[][] grain=new byte[4][];
         readonly int perimeter;readonly float[] rest;
         readonly int[] gainA,gainB,gainC,tone,hot;
         float actionX,actionY;int actionIndex;
@@ -157,7 +161,7 @@ namespace Axon {
             }
             for(int k=0;k<4;k++) {
                 Rectangle strip=Strips[k];int count=strip.Width*strip.Height;
-                Pixels[k]=new int[count];first[k]=new byte[count];second[k]=new byte[count];third[k]=new byte[count];index[k]=new int[count];
+                Pixels[k]=new int[count];first[k]=new byte[count];second[k]=new byte[count];third[k]=new byte[count];index[k]=new int[count];grain[k]=new byte[count];
                 for(int yy=0;yy<strip.Height;yy++)for(int xx=0;xx<strip.Width;xx++) {
                     int at=yy*strip.Width+xx,x=strip.Left+xx,y=strip.Top+yy;index[k][at]=-1;
                     double px=x+.5,py=y+.5,away=-1;int edge=-1;
@@ -193,7 +197,7 @@ namespace Axon {
                     if(va==0&&vb==0&&vc==0)continue;
                     // Dither the long falloffs, so they do not band on 8-bit displays.
                     uint hash=(uint)(x*73856093)^(uint)(y*19349663);hash^=hash>>13;hash*=0x5bd1e995;hash^=hash>>15;
-                    int nudge=(int)(hash&3)-1;
+                    int nudge=(int)(hash&3)-1;grain[k][at]=(byte)((hash>>8)&255);
                     if(Kind==Veil){if(va>2)va=Math.Max(0,Math.Min(255,va+nudge));}
                     else if(vc>2)vc=Math.Max(0,Math.Min(255,vc+nudge));
                     first[k][at]=(byte)va;second[k][at]=(byte)vb;third[k][at]=(byte)vc;
@@ -247,11 +251,11 @@ namespace Axon {
                 } else gainA[i]=(int)(256*power*WashWeight*(.55+.45*near)*(.8+.2*breath)*raise*shown);
             }
             for(int k=0;k<4;k++) {
-                int[] output=Pixels[k],ix=index[k];byte[] pa=first[k],pb=second[k],pc=third[k];
+                int[] output=Pixels[k],ix=index[k];byte[] pa=first[k],pb=second[k],pc=third[k],noise=grain[k];
                 if(Kind==Edge) {
                     for(int at=0;at<ix.Length;at++) {
                         int i=ix[at];if(i<0)continue;
-                        int ribbon=(pa[at]*gainA[i])>>8,body=(pb[at]*gainB[i]+pc[at]*gainC[i])>>8;
+                        int ribbon=(pa[at]*gainA[i])>>8,body=(pb[at]*gainB[i]+pc[at]*gainC[i]+noise[at])>>8;
                         int alpha=ribbon+body;if(alpha>255)alpha=255;
                         int h=hot[i],c=tone[i];
                         int red=(ribbon*((h>>16)&255)+body*((c>>16)&255))>>8,green=(ribbon*((h>>8)&255)+body*((c>>8)&255))>>8,blue=(ribbon*(h&255)+body*(c&255))>>8;
@@ -261,7 +265,7 @@ namespace Axon {
                 } else {
                     for(int at=0;at<ix.Length;at++) {
                         int i=ix[at];if(i<0)continue;
-                        int alpha=(pa[at]*gainA[i])>>8;if(alpha>255)alpha=255;
+                        int alpha=(pa[at]*gainA[i]+noise[at])>>8;if(alpha>255)alpha=255;
                         int c=tone[i];
                         output[at]=(alpha<<24)|(((alpha*((c>>16)&255))>>8)<<16)|(((alpha*((c>>8)&255))>>8)<<8)|((alpha*(c&255))>>8);
                     }
