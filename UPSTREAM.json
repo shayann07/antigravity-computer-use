@@ -328,7 +328,7 @@
     },
     {
       "path": "scripts/arguments.mjs",
-      "sha256": "a3b3cc9a59a986465b125028e753105ddfc03ef0d7fa877e76c43dd0de3a4266"
+      "sha256": "dda63076cbc9aae8c5f6e9105e3207887a49f25347026eb075a3617ef512569e"
     },
     {
       "path": "server/receipts.mjs",
@@ -864,7 +864,7 @@
     },
     {
       "path": "tests/skill-guidance.test.mjs",
-      "sha256": "4b0e5fafe7fef51643807e6cb74880963b798827ac74f093354d77208d541bee"
+      "sha256": "d75a3b72a2f1807efb72f82e969a042e4c10c427e5ef250b219122b6af6a072b"
     },
     {
       "path": "tests/brief-reply.test.mjs",
