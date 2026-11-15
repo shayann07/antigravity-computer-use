@@ -782,7 +782,7 @@ namespace Axon
             readonly GlowStrip[] strips = new GlowStrip[4];
             // Follows the window. Runs while a target is set.
             readonly System.Windows.Forms.Timer watch = new System.Windows.Forms.Timer();
-            // Runs only during a transition; nothing is drawn at rest.
+            // Draws the moving light. Stopped whenever the glow is hidden or motion is reduced.
             readonly System.Windows.Forms.Timer frame = new System.Windows.Forms.Timer();
             readonly System.Diagnostics.Stopwatch clock = System.Diagnostics.Stopwatch.StartNew();
             IntPtr target = IntPtr.Zero;
@@ -803,7 +803,7 @@ namespace Axon
             {
                 for (int i = 0; i < 4; i++) { strips[i] = new GlowStrip(); strips[i].CreateControl(); IntPtr handle = strips[i].Handle; }
                 watch.Interval = 40; watch.Tick += delegate { try { Watch(); } catch { } };
-                frame.Interval = 16; frame.Tick += delegate { try { Frame(); } catch { } };
+                frame.Interval = 50; frame.Tick += delegate { try { Frame(); } catch { } };
             }
             internal IntPtr[] Handles() { IntPtr[] all = new IntPtr[4]; for (int i = 0; i < 4; i++) all[i] = strips[i].Handle; return all; }
             internal float OpacityValue { get { return shown && !suspended ? master : 0; } }
@@ -983,7 +983,7 @@ namespace Axon
                     double now = Now; running = new float[pulses.Count];
                     for (int i = 0; i < running.Length; i++) running[i] = (float)((now - pulses[i]) / DesktopVisuals.Slow);
                 }
-                field.Compose(lift, haze, reveal, running);
+                field.Compose(lift, haze, reveal, running, Now / 1000.0);
                 for (int i = 0; i < 4; i++)
                 {
                     Rectangle strip = field.Strips[i]; if (strip.IsEmpty) continue;
@@ -1024,6 +1024,8 @@ namespace Axon
                         paint = true;
                     }
                     if (lift > 0 || now - lastAction < 250) busy = true;
+                    // The aurora is never still: its colours keep travelling the edge.
+                    if (DesktopVisuals.MotionEnabled) { paint = true; busy = true; }
                     if (paint) Paint(haze, reveal);
                 }
                 if (masterAt >= 0)
@@ -1078,7 +1080,7 @@ namespace Axon
                 suspended = false;
                 if (!shown || field == null) return;
                 for (int i = 0; i < 4; i++) if (!field.Strips[i].IsEmpty) strips[i].Show();
-                Order();
+                Order(); lastFrame = Now; frame.Start();
             }
 
             bool IsStrip(IntPtr h) { for (int i = 0; i < 4; i++) if (strips[i].IsHandleCreated && strips[i].Handle == h) return true; return false; }

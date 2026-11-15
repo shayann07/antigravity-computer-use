@@ -219,7 +219,7 @@ namespace Axon {
                         using(Font f=new Font(Overlay.UiFont,20))
                         using(SolidBrush ink=new SolidBrush(desk==0?Color.FromArgb(190,194,211):Color.FromArgb(60,66,80)))g.DrawString("Desktop control · visual preview",f,ink,app.X+40,app.Y+110);
                         GlowField field=new GlowField(app,new bool[]{inside,inside,inside,inside},1,inside?0:8,new Rectangle(0,0,w,h));
-                        field.SetAction(app.X+app.Width*.25f,app.Bottom-40);field.Compose(0,1,1,null);field.Draw(g);
+                        field.SetAction(app.X+app.Width*.25f,app.Bottom-40);field.Compose(0,1,1,null,3);field.Draw(g);
                         HudModel model=new HudModel();model.State="active";model.Line1="Antigravity is working";model.Line2="Clicking";model.Hint=true;model.Slot=1;
                         var state=g.Save();g.TranslateTransform((w-HudWidth)/2,18);
                         using(GraphicsPath pill=Overlay.RoundRect(new RectangleF(0,0,HudWidth,HudHeight),HudHeight/2f)){g.SetClip(pill);Hud(g,model);}
@@ -274,46 +274,50 @@ namespace Axon {
                 if(image.GetPixel(400,GlowField.InsideDepth+1).A!=0)throw new Exception("Inside glow must end within its band");
                 if(image.GetPixel(400,5).A<=image.GetPixel(400,12).A)throw new Exception("Glow must fade inward");
                 if(image.GetPixel(400,8).A>=210)throw new Exception("Glow became an opaque frame");
-                if(image.GetPixel(400,1).A<200)throw new Exception("The glow line is too faint to see");
+                if(image.GetPixel(400,1).A<110)throw new Exception("The glow is too faint to see at the edge");
                 image.Save(Path.Combine(directory,"edge-alpha-inside.png"),ImageFormat.Png);
             }
-            using(Bitmap image=new Bitmap(800,600,PixelFormat.Format32bppArgb)) {
+            using(Bitmap image=new Bitmap(800,700,PixelFormat.Format32bppArgb)) {
                 using(Graphics g=Graphics.FromImage(image)) {
-                    GlowField field=new GlowField(new Rectangle(100,100,600,400),new bool[]{false,false,false,false},1,8,new Rectangle(0,0,800,600));
-                    field.SetAction(400,100);field.Compose(1,1,1,null);field.Draw(g);
+                    GlowField field=new GlowField(new Rectangle(100,150,600,400),new bool[]{false,false,false,false},1,8,new Rectangle(0,0,800,700));
+                    field.SetAction(400,150);field.Compose(1,1,1,null);field.Draw(g);
                 }
-                if(image.GetPixel(400,300).A!=0||image.GetPixel(400,104).A!=0||image.GetPixel(104,300).A!=0)throw new Exception("Outside glow tints the app");
-                if(image.GetPixel(400,90).A<=image.GetPixel(400,70).A)throw new Exception("Outside glow must fade away from the window");
-                if(image.GetPixel(400,98).A<200)throw new Exception("The glow line is too faint to see");
-                if(image.GetPixel(400,100-GlowField.OutsideDepth-1).A!=0)throw new Exception("Outside glow must end within its band");
+                if(image.GetPixel(400,350).A!=0||image.GetPixel(400,154).A!=0||image.GetPixel(104,350).A!=0)throw new Exception("Outside glow tints the app");
+                if(image.GetPixel(400,140).A<=image.GetPixel(400,120).A)throw new Exception("Outside glow must fade away from the window");
+                if(image.GetPixel(400,148).A<110)throw new Exception("The glow is too faint to see at the edge");
+                if(image.GetPixel(400,150-GlowField.OutsideDepth-1).A!=0)throw new Exception("Outside glow must end within its band");
                 image.Save(Path.Combine(directory,"edge-alpha-outside.png"),ImageFormat.Png);
             }
             Console.WriteLine("Visual renders and alpha falloff checks passed.");
         }
     }
-    // The glow around the app the agent is working in ("Ember"): a line on the
-    // window's edge with a tight bloom and a wide haze over a deep shade, all
-    // one hue. Every point of the edge is brighter the nearer it is to the
-    // agent's last action, so the glow says where in the app it is working.
+    // The glow around the app the agent is working in: an aurora. A soft rim
+    // of light on the window's edge and a deep wash behind it, in cool tones
+    // that travel slowly around the window, so it is never still. It is
+    // brighter the nearer it is to the agent's last action, so the glow also
+    // says where in the app it is working. There is no hard line.
     //
-    // The layers are baked once per geometry into four thin strips, one per
-    // edge; a frame only multiplies them by one gain per point of the edge.
+    // The falloff is baked once per geometry into four strips, one per edge;
+    // a frame only multiplies it by one colour and gain per point of the edge.
     // Each edge is drawn outside the window when there is room and inside it
     // when there is not (a maximised or full-screen app).
     internal sealed class GlowField {
-        internal const int OutsideDepth=64,InsideDepth=72;   // DIPs the band reaches from the edge
+        internal const int OutsideDepth=100,InsideDepth=150;   // DIPs the band reaches from the edge
         const int Lip=3;                                      // DIPs an outside strip overlaps the frame, for rounded corners
         static readonly double MinBright=ControlContract.UiNumber("glow_min",.26,0,1),Reach=ControlContract.UiNumber("glow_reach",.42,.05,4);
-        static readonly double HazeOut=ControlContract.UiNumber("glow_haze_out",.82,0,1),HazeIn=ControlContract.UiNumber("glow_haze_in",.74,0,1);
-        static readonly double HazeSigmaOut=ControlContract.UiNumber("glow_haze_sigma_out",15,2,40),HazeSigmaIn=ControlContract.UiNumber("glow_haze_sigma_in",18,1,40);
-        static readonly double Lift=ControlContract.UiNumber("glow_lift",.55,0,2);
+        // How strong the light is at the edge (0..1) and how far it reaches.
+        static readonly double Strength=ControlContract.UiNumber("glow_strength",.86,0,1),Lift=ControlContract.UiNumber("glow_lift",.45,0,2);
+        // One slow lap of colour around the window, in seconds.
+        static readonly double Lap=ControlContract.UiNumber("glow_lap_seconds",16,2,120);
+        // The aurora: cool tones that follow one another around the edge.
+        static readonly float[][] Tones={new float[]{96,214,238},new float[]{70,150,255},new float[]{146,118,255},new float[]{118,196,255}};
         internal readonly Rectangle Frame,Clip;internal readonly bool[] Inside;internal readonly float Scale;internal readonly int Radius;
         // Top, right, bottom, left, in screen pixels. An empty strip draws nothing.
         internal readonly Rectangle[] Strips=new Rectangle[4];
         internal readonly byte[][] Pixels=new byte[4][];
-        readonly byte[][] field=new byte[4][],bloom=new byte[4][],flare=new byte[4][],core=new byte[4][],hair=new byte[4][];
+        readonly byte[][] wide=new byte[4][],rim=new byte[4][];
         readonly int[][] index=new int[4][];
-        readonly int perimeter;readonly float[] rest,gainField,gainLine,gainFlare,heat,visible;
+        readonly int perimeter;readonly float[] rest;readonly int[] wideGain,rimGain;
         float actionX,actionY;int actionIndex;
         internal float ActionX {get {return actionX;}} internal float ActionY {get {return actionY;}}
         internal GlowField(Rectangle frame,bool[] inside,float scale,int radius,Rectangle clip) {
@@ -331,7 +335,7 @@ namespace Axon {
             Strips[1]=inside[1]?Rectangle.FromLTRB(r-n,top,r,bottom):Rectangle.FromLTRB(r-lip,top,r+o,bottom);
             for(int k=0;k<4;k++) {Strips[k]=Rectangle.Intersect(Strips[k],clip);if(Strips[k].Width<=0||Strips[k].Height<=0)Strips[k]=Rectangle.Empty;}
             perimeter=Math.Max(1,2*(frame.Width+frame.Height));
-            rest=new float[perimeter];gainField=new float[perimeter];gainLine=new float[perimeter];gainFlare=new float[perimeter];heat=new float[perimeter];visible=new float[perimeter];
+            rest=new float[perimeter];wideGain=new int[perimeter*4];rimGain=new int[perimeter*4];
             Bake();SetAction(frame.Left+frame.Width/2f,frame.Top+frame.Height/2f);
         }
         static double Gauss(double distance,double sigma) {return Math.Exp(-(distance/sigma)*(distance/sigma));}
@@ -354,7 +358,7 @@ namespace Axon {
             double cx=(l+r)/2.0,cy=(t+b)/2.0,hw=Frame.Width/2.0,hh=Frame.Height/2.0;
             for(int k=0;k<4;k++) {
                 Rectangle strip=Strips[k];int count=strip.Width*strip.Height;
-                Pixels[k]=new byte[count*4];field[k]=new byte[count*4];bloom[k]=new byte[count];flare[k]=new byte[count];core[k]=new byte[count];hair[k]=new byte[count];index[k]=new int[count];
+                Pixels[k]=new byte[count*4];wide[k]=new byte[count];rim[k]=new byte[count];index[k]=new int[count];
                 for(int yy=0;yy<strip.Height;yy++)for(int xx=0;xx<strip.Width;xx++) {
                     int at=yy*strip.Width+xx,x=strip.Left+xx,y=strip.Top+yy;index[k][at]=-1;
                     double px=x+.5,py=y+.5,distance;bool inner;int edge;
@@ -382,31 +386,17 @@ namespace Axon {
                         inner=true;
                     }
                     double u=distance/s;   // DIPs from the edge
-                    // Light, not an outline: a fine line, a tight bloom and a
-                    // long haze, each falling away exponentially the way a real
-                    // glow does. No hairlines. The haze deepens in colour as it
-                    // thins, so it still reads on a white desktop.
+                    // Light, not an outline: no line at all. A soft rim hugs
+                    // the edge and a deep wash reaches well into the window
+                    // (or out from it), both falling away exponentially.
                     double band=inner?InsideDepth:OutsideDepth;
                     if(u>band)continue;
-                    double centre=inner?.75:1.5,off=Math.Abs(u-centre);
-                    double fade=Math.Min(1,(band-u)/(band*.35));fade=fade*fade*(3-2*fade);
-                    double shade=0,hairLine=0;
-                    double coreLine=Math.Exp(-(off/.85)*(off/.85));
-                    double glowBloom=.92*Math.Exp(-off/(inner?4.4:5))*fade;
-                    double glowFlare=Math.Exp(-off/(inner?7:9))*fade;
-                    double haze=(inner?HazeIn:HazeOut)*Math.Exp(-off/(inner?HazeSigmaIn:HazeSigmaOut))*fade;
-                    double deep=Math.Min(1,off/(inner?34:30));
-                    // Dither the haze, so its falloff does not band on 8-bit displays.
+                    double fade=Math.Min(1,(band-u)/(band*.45));fade=fade*fade*(3-2*fade);
+                    double wash=Strength*.6*Math.Exp(-u/(inner?52:34))*fade,edgeLight=Strength*.4*Math.Exp(-u/(inner?13:10))*fade;
+                    // Dither the wash, so its long falloff does not band on 8-bit displays.
                     uint hash=(uint)(x*73856093)^(uint)(y*19349663);hash^=hash>>13;hash*=0x5bd1e995;hash^=hash>>15;
-                    haze=Math.Max(0,haze+((hash&1023)/1023.0-.5)*.012*(haze>.004?1:0));
-                    // The field: haze over shade, premultiplied.
-                    double alpha=haze+shade*(1-haze);
-                    field[k][at*4]=(byte)Math.Round(haze*(DesktopVisuals.GlowHaze.B+(DesktopVisuals.GlowShade.B-DesktopVisuals.GlowHaze.B)*deep));
-                    field[k][at*4+1]=(byte)Math.Round(haze*(DesktopVisuals.GlowHaze.G+(DesktopVisuals.GlowShade.G-DesktopVisuals.GlowHaze.G)*deep));
-                    field[k][at*4+2]=(byte)Math.Round(haze*(DesktopVisuals.GlowHaze.R+(DesktopVisuals.GlowShade.R-DesktopVisuals.GlowHaze.R)*deep));
-                    field[k][at*4+3]=(byte)Math.Round(255*alpha);
-                    bloom[k][at]=(byte)Math.Round(255*Math.Min(1,glowBloom));flare[k][at]=(byte)Math.Round(255*Math.Min(1,glowFlare));
-                    core[k][at]=(byte)Math.Round(255*coreLine);hair[k][at]=(byte)Math.Round(255*hairLine);
+                    wash=Math.Max(0,wash+((hash&1023)/1023.0-.5)*.012*(wash>.004?1:0));
+                    wide[k][at]=(byte)Math.Round(255*Math.Min(1,wash));rim[k][at]=(byte)Math.Round(255*Math.Min(1,edgeLight));
                     index[k][at]=EdgeIndex(edge,x,y);
                 }
             }
@@ -424,52 +414,48 @@ namespace Axon {
                 rest[i]=(float)(MinBright+(1-MinBright)*Gauss(d,reach));
             }
         }
-        // lift 0..1 raises bloom and haze as a whole; haze 0..1 fades the
-        // field; reveal 0..1 draws the line on from the action point; each
-        // pulse 0..1 is one swell travelling away from it, both ways.
-        internal void Compose(float lift,float haze,float reveal,float[] pulses) {
-            double travel=.48*perimeter/2.0,width=64*Scale,raise=1+Lift*Math.Max(0,Math.Min(1,lift));
+        static void Tone(double phase,out float r,out float g,out float b) {
+            phase-=Math.Floor(phase);double at=phase*Tones.Length;int i=(int)at%Tones.Length,j=(i+1)%Tones.Length;
+            double t=at-Math.Floor(at);t=t*t*(3-2*t);
+            r=(float)(Tones[i][0]+(Tones[j][0]-Tones[i][0])*t);g=(float)(Tones[i][1]+(Tones[j][1]-Tones[i][1])*t);b=(float)(Tones[i][2]+(Tones[j][2]-Tones[i][2])*t);
+        }
+        // time (seconds) carries the colours slowly around the edge and lets
+        // the light swell and ebb, so it is never still. lift 0..1 raises it
+        // as a whole when input lands; haze 0..1 fades the deep wash; reveal
+        // 0..1 draws the light on from the action point; each pulse 0..1 is
+        // one swell travelling away from it, both ways.
+        internal void Compose(float lift,float haze,float reveal,float[] pulses,double time=0) {
+            double travel=.48*perimeter/2.0,width=90*Scale,raise=1+Lift*Math.Max(0,Math.Min(1,lift)),turn=time/Lap;
             for(int i=0;i<perimeter;i++) {
                 double d=Math.Abs(i-actionIndex);d=Math.Min(d,perimeter-d);
-                double bright=rest[i],shown=1;
+                double place=i/(double)perimeter,bright=.66+.34*rest[i],shown=1;
+                // Two colour laps around the window, bent by a slower wave so the bands are never even.
+                float r,g,b;Tone(place*2-turn+.11*Math.Sin(2*Math.PI*(place*3+turn*.7)),out r,out g,out b);
+                // A soft swell that travels the other way.
+                bright*=.86+.14*Math.Sin(2*Math.PI*(place*2+turn*1.9));
                 if(pulses!=null)foreach(float q in pulses) {
                     if(q<0||q>=1)continue;
-                    double k=(d-travel*DesktopVisuals.EaseOut(q))/width;bright+=.9*Math.Exp(-k*k)*(1-DesktopVisuals.EaseIn(q));
+                    double k=(d-travel*DesktopVisuals.EaseOut(q))/width;bright+=.5*Math.Exp(-k*k)*(1-DesktopVisuals.EaseIn(q));
                 }
                 if(reveal<1) {
-                    double front=reveal*perimeter/2.0,k=(d-front)/(16*Scale);
-                    shown=Math.Max(0,Math.Min(1,(front-d)/(8*Scale)+1));bright+=.9*Math.Exp(-k*k)*shown;
+                    double front=reveal*perimeter/2.0,k=(d-front)/(40*Scale);
+                    shown=Math.Max(0,Math.Min(1,(front-d)/(30*Scale)+1));bright+=.35*Math.Exp(-k*k)*shown;
                 }
-                gainField[i]=(float)((.2+.8*rest[i])*raise*haze);
-                gainLine[i]=(float)(shown*(.34+.66*bright)*raise);
-                gainFlare[i]=(float)(shown*Math.Min(1,(bright-rest[i])*.85));
-                heat[i]=(float)(shown*Math.Min(1,.7*Math.Pow(Math.Min(1,rest[i]),1.5)+(bright-rest[i])));
-                visible[i]=(float)shown;
+                double level=Math.Min(1.15,bright*raise)*shown,deep=level*haze;
+                int o=i*4;
+                wideGain[o]=(int)(b*deep);wideGain[o+1]=(int)(g*deep);wideGain[o+2]=(int)(r*deep);wideGain[o+3]=(int)(255*deep);
+                // The rim is the same tone, lifted halfway to white.
+                rimGain[o]=(int)((b+255)/2*level);rimGain[o+1]=(int)((g+255)/2*level);rimGain[o+2]=(int)((r+255)/2*level);rimGain[o+3]=(int)(255*level);
             }
-            Color cool=DesktopVisuals.GlowCool,hot=DesktopVisuals.GlowHot,bloomColor=DesktopVisuals.GlowBloom,flareColor=DesktopVisuals.GlowFlare,slate=DesktopVisuals.Slate;
             for(int k=0;k<4;k++) {
-                byte[] output=Pixels[k],f=field[k],bl=bloom[k],fl=flare[k],co=core[k],ha=hair[k];int[] ix=index[k];
+                byte[] output=Pixels[k],w=wide[k],e=rim[k];int[] ix=index[k];
                 for(int at=0;at<ix.Length;at++) {
-                    int o=at*4,i=ix[at];
-                    if(i<0){output[o]=output[o+1]=output[o+2]=output[o+3]=0;continue;}
-                    // Premultiplied "over", bottom to top: field, bloom, flare, hairline, core.
-                    float g=gainField[i];
-                    float pb=Math.Min(255,f[o]*g),pg=Math.Min(255,f[o+1]*g),pr=Math.Min(255,f[o+2]*g),pa=Math.Min(255,f[o+3]*g);
-                    float a=Math.Min(1,bl[at]/255f*gainLine[i]);
-                    if(a>0){pb=bloomColor.B*a+pb*(1-a);pg=bloomColor.G*a+pg*(1-a);pr=bloomColor.R*a+pr*(1-a);pa=255*a+pa*(1-a);}
-                    a=fl[at]/255f*gainFlare[i];
-                    if(a>0){pb=flareColor.B*a+pb*(1-a);pg=flareColor.G*a+pg*(1-a);pr=flareColor.R*a+pr*(1-a);pa=255*a+pa*(1-a);}
-                    float warmth=heat[i],seen=visible[i];
-                    if(seen>0) {
-                        a=ha[at]/255f*seen;
-                        if(a>0){pb=slate.B*a+pb*(1-a);pg=slate.G*a+pg*(1-a);pr=slate.R*a+pr*(1-a);pa=255*a+pa*(1-a);}
-                        a=co[at]/255f*seen;
-                        if(a>0) {
-                            float cb=cool.B+(hot.B-cool.B)*warmth,cg=cool.G+(hot.G-cool.G)*warmth,cr=cool.R+(hot.R-cool.R)*warmth;
-                            pb=cb*a+pb*(1-a);pg=cg*a+pg*(1-a);pr=cr*a+pr*(1-a);pa=255*a+pa*(1-a);
-                        }
-                    }
-                    output[o]=(byte)pb;output[o+1]=(byte)pg;output[o+2]=(byte)pr;output[o+3]=(byte)pa;
+                    int i=ix[at];if(i<0)continue;
+                    int o=at*4,p=i*4,a=w[at],c=e[at];
+                    // Premultiplied; never brighter than fully opaque.
+                    int alpha=(a*wideGain[p+3]+c*rimGain[p+3])>>8;if(alpha>255)alpha=255;
+                    int blue=(a*wideGain[p]+c*rimGain[p])>>8,green=(a*wideGain[p+1]+c*rimGain[p+1])>>8,red=(a*wideGain[p+2]+c*rimGain[p+2])>>8;
+                    output[o]=(byte)(blue>alpha?alpha:blue);output[o+1]=(byte)(green>alpha?alpha:green);output[o+2]=(byte)(red>alpha?alpha:red);output[o+3]=(byte)alpha;
                 }
             }
         }

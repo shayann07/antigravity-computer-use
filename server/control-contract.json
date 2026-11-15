@@ -22,11 +22,9 @@
     "edge_core_alpha": 20,
     "glow_min": 0.26,
     "glow_reach": 0.42,
-    "glow_haze_out": 0.82,
-    "glow_haze_in": 0.74,
-    "glow_haze_sigma_out": 15,
-    "glow_haze_sigma_in": 18,
-    "glow_lift": 0.55
+    "glow_strength": 0.86,
+    "glow_lap_seconds": 16,
+    "glow_lift": 0.45
   },
   "sensitive_operations": ["launch", "clipboard", "close_window", "paste", "paste_files", "open", "file_dialog"],
   "ambiguous_target_operations": ["click", "drag"],
