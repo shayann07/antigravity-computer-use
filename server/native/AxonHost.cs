@@ -1668,6 +1668,90 @@ namespace Axon
 
         class CancelFlag { public volatile bool Set; }
 
+        // Some providers hand back the same element as its own next sibling
+        // (Paint's "Customised colours" grid does). Asking such a container
+        // for all its children in one request never returns, and it wedges
+        // the app itself, not only this host. Three single steps are always
+        // answered, so the first three siblings are compared before any
+        // request that makes the provider enumerate the whole chain.
+        static bool SiblingChainRepeats(int[][] ids)
+        {
+            for (int i = 0; i < ids.Length; i++)
+                for (int j = i + 1; j < ids.Length; j++)
+                {
+                    int[] x = ids[i], y = ids[j];
+                    if (x == null || y == null || x.Length == 0 || x.Length != y.Length) continue;
+                    bool same = true;
+                    for (int k = 0; k < x.Length; k++) if (x[k] != y[k]) { same = false; break; }
+                    if (same) return true;
+                }
+            return false;
+        }
+
+        static CacheRequest _ridReq;
+        static CacheRequest RidRequest()
+        {
+            if (_ridReq != null) return _ridReq;
+            CacheRequest cr = new CacheRequest();
+            cr.TreeScope = TreeScope.Element;
+            cr.AutomationElementMode = AutomationElementMode.Full;
+            cr.Add(AutomationElement.RuntimeIdProperty);
+            _ridReq = cr;
+            return cr;
+        }
+
+        static bool ChildrenLoop(AutomationElement el, out bool hasKids)
+        {
+            hasKids = true;
+            try
+            {
+                TreeWalker w = TreeWalker.ControlViewWalker;
+                CacheRequest rq = RidRequest();
+                AutomationElement c = w.GetFirstChild(el, rq);
+                hasKids = c != null;
+                if (c == null) return false;
+                List<int[]> ids = new List<int[]>();
+                ids.Add(CachedProp(c, AutomationElement.RuntimeIdProperty) as int[]);
+                for (int i = 0; i < 2; i++)
+                {
+                    c = w.GetNextSibling(c, rq);
+                    if (c == null) break;
+                    ids.Add(CachedProp(c, AutomationElement.RuntimeIdProperty) as int[]);
+                }
+                return SiblingChainRepeats(ids.ToArray());
+            }
+            catch { return false; }
+        }
+
+        // A selector is matched against the bounded tree read, never through
+        // a Descendants search: that search runs inside the app and loops
+        // forever on a container whose sibling chain repeats.
+        static List<AutomationElement> MatchInLevels(AutomationElement win, long hwnd, string aid, string name, string role, out bool complete)
+        {
+            LevelFetch levels = FetchLevels(win, hwnd, 24, 3000, 4000);
+            complete = !(levels.TimedOut || levels.Capped || levels.Failed);
+            List<AutomationElement> hits = new List<AutomationElement>();
+            if (levels.Root == null) return hits;
+            Stack<TNode> st = new Stack<TNode>();
+            st.Push(levels.Root);
+            while (st.Count > 0)
+            {
+                TNode n = st.Pop();
+                if (n.Cut) complete = false;
+                if (n != levels.Root)
+                {
+                    bool ok = true;
+                    if (!string.IsNullOrEmpty(aid) && (CachedProp(n.El, AutomationElement.AutomationIdProperty) as string) != aid) ok = false;
+                    if (ok && !string.IsNullOrEmpty(name) && (CachedProp(n.El, AutomationElement.NameProperty) as string) != name) ok = false;
+                    if (ok && !string.IsNullOrEmpty(role) && CachedRole(n.El) != role) ok = false;
+                    if (ok) hits.Add(n.El);
+                }
+                List<TNode> kids = n.Kids;
+                if (kids != null) for (int i = kids.Count - 1; i >= 0; i--) st.Push(kids[i]);
+            }
+            return hits;
+        }
+
         static LevelFetch FetchLevels(AutomationElement win, long hwnd, int maxDepth, int maxFetch, int budgetMs)
         {
             LevelFetch outcome = new LevelFetch();
@@ -1705,8 +1789,16 @@ namespace Axon
                             {
                                 if (kn.Depth < maxDepth)
                                 {
-                                    try { kn.El = k.GetUpdatedCache(LevelRequest()); expanded = true; } catch { }
-                                    calls++;
+                                    // Never ask for the children of a container
+                                    // whose sibling chain loops: the app would
+                                    // enumerate them forever on its own UI thread.
+                                    bool hasKids;
+                                    bool loops = ChildrenLoop(k, out hasKids); calls++;
+                                    if (hasKids && !loops)
+                                    {
+                                        try { kn.El = k.GetUpdatedCache(LevelRequest()); expanded = true; } catch { }
+                                        calls++;
+                                    }
                                 }
                                 else kn.Cut = true;
                             }
@@ -2456,6 +2548,26 @@ namespace Axon
                 throw new AxonError("bad_selector", "Selector needs at least one of automation_id, name, or role.", null);
 
             Condition cond = conds.Count == 1 ? conds[0] : new AndCondition(conds.ToArray());
+            if (!IsChromiumWindow(win))
+            {
+                long hkey = Hwnd(HwndArg(a));
+                if (hkey == 0) try { hkey = (long)win.Current.NativeWindowHandle; } catch { }
+                bool complete;
+                List<AutomationElement> hits = MatchInLevels(win, hkey, aid, name, role, out complete);
+                if (hits.Count == 0)
+                    throw new AxonError("element_not_found", "No element matched the selector.",
+                        "Take a snapshot to see what the window actually exposes.");
+                if (Bool(Get(sel, "unique"), false))
+                {
+                    if (hits.Count > 1)
+                        throw new AxonError("ambiguous_selector", hits.Count + " elements match that name and role.",
+                            "Take a fresh snapshot and act on an index from it.");
+                    if (!complete)
+                        throw new AxonError("ambiguous_selector", "The window could not be read completely, so a single match could not be proven.",
+                            "Take a fresh snapshot and act on an index from it.");
+                }
+                return hits[0];
+            }
             // unique:true is the stale-index fallback: it may only stand in for
             // the element an index named when exactly one element matches.
             if (Bool(Get(sel, "unique"), false))

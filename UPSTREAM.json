@@ -60,7 +60,7 @@
     {
       "path": "server/native/AxonHost.cs",
       "upstream_sha256": "bef101afecbdf8f75df2a1f8b45d224eade39f09e3c8e25cf7b450e3fa49a8ef",
-      "local_sha256": "d6ce7ba72a32dc2fd3096e79d2203ec914e2497d43565d1bc31173657e58471c",
+      "local_sha256": "d69120e8584a6ea56d21f3bdae1de1d8e45e237d6b2de599afda9d5899648388",
       "modified": true
     },
     {
@@ -780,7 +780,7 @@
     },
     {
       "path": "tests/NativeSnapshotBudgetTests.cs",
-      "sha256": "02e39a8e58a470965622902f902abac97e65661f8867e0fc0caac71c252932fd"
+      "sha256": "fd47aa5f8243d83a6f7c3c881bacd3b62aa2dc1b2355540000336c15cd3b52cd"
     },
     {
       "path": "tests/native-snapshot-budget.test.mjs",
