@@ -56,7 +56,7 @@ function fixture(t,{old=false,held=false}={}){
  return {dir,file,guardian,driver,r};
 }
 
-test('fresh receipt waits for independent driver cleanup, coalesces Stop and retains human re-arm',async t=>{
+test('fresh receipt waits for independent driver cleanup, coalesces Stop and keeps it until the next ready',async t=>{
  const f=fixture(t);let release,calls=0,aborts=0;const gate=new Promise(resolve=>release=resolve);
  f.guardian.stopAcknowledged=async n=>{calls++;assert.equal(readStopLatch(f.file).value,'unconfirmed:'+n);return {stop_nonce:n,workers_stopped:true,input_cleanup_confirmed:true};};
  f.driver.abort=async()=>{aborts++;await gate;};
@@ -64,7 +64,7 @@ test('fresh receipt waits for independent driver cleanup, coalesces Stop and ret
  assert(readStopLatch(f.file).unconfirmed);assert.equal(calls,1);assert.equal(aborts,1);
  release();const [first,second]=await Promise.all([a,b]);assert(first.native_stop_confirmed);assert.deepEqual(first,second);
  assert.equal(fs.readFileSync(f.file,'utf8'),'stopped');assert(!fs.existsSync(f.file+'.unconfirmed'));assert.equal(f.r.status().state,'stopped');
- await assert.rejects(f.r.resume(),e=>e.code==='human_rearm_required'||e.code==='human_resume_required'||e.code==='control_inactive');
+ await assert.rejects(f.r.resume(),e=>e.code==='control_stopped');
 });
 
 test('old uncertainty, held inputs and failed driver cleanup cannot be settled by a new receipt',async t=>{

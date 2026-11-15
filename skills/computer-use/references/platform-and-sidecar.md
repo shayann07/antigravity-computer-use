@@ -18,5 +18,5 @@ frames between actions. Coordinate one desktop task at a time; if another task
 may own it, do not start or end its session. A momentarily idle status alone
 does not establish ownership. This limitation is tracked in issue #7.
 
-Passive startup/status never opens the control bar. After Stop, the bar dismisses after eight seconds; `controls` explicitly shows it for human re-arm (30 seconds) without granting permission, sending input or clearing Stop.
-`end` hides it even while Stop remains latched. Do not leave controls open during unrelated code work.
+Passive startup/status never opens the control bar. After Stop, the bar confirms for four seconds and hides; `controls` explicitly shows it without granting permission or sending input.
+`end` hides it. Do not leave controls open during unrelated code work.

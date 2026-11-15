@@ -81,7 +81,19 @@ export function settleFreshStopLatch(file,nonce,rootIdentity,{io=fs}={}){
  if(!rootMatches()||current.dev!==identity.dev||current.ino!==identity.ino||stopRecord(pendingFile,io)?.value!==value)throw Error('Stop episode changed');
  io.unlinkSync(pendingFile);
  const saved=readStopLatch(file,{io});if(saved?.value!=='stopped'||saved.unconfirmed||saved.invalid)throw Error('Stop settlement was not preserved');
- return {stopped:true,human_rearm_required:true};
+ return {stopped:true,task_ended:true,next_action:'report_and_wait_for_human'};
+}
+// Removes a confirmed Stop marker so the next task starts fresh. The caller
+// has already proven input cleanup. An uncertain, invalid or changed marker is
+// never removed: unknown delivery stays fenced for inspection.
+export function clearConfirmedStop(file,{io=fs}={}){
+ if(typeof file!=='string'||!path.isAbsolute(file))throw Error('Invalid Stop path');
+ const saved=readStopLatch(file,{io});
+ if(!saved)return false;
+ if(saved.invalid||saved.unconfirmed||saved.value!=='stopped')throw Object.assign(Error('Stop marker is not a confirmed Stop'),{code:saved.unconfirmed?'guardian_stop_unconfirmed':'stop_persistence_failed'});
+ io.unlinkSync(file);
+ if(readStopLatch(file,{io}))throw Object.assign(Error('Stop marker changed while clearing'),{code:'guardian_stop_unconfirmed'});
+ return true;
 }
 export function preserveStopLatch(source,destination,{io=fs}={}){
  const prior=readStopLatch(source,{io});if(!prior)return false;
@@ -205,7 +217,7 @@ export function recoveryAdvice(result,operation){
   ...(result.repeated_failure===true?{repeated_failure:true}:{}),
   ...(Number.isSafeInteger(result.recovery_attempts_remaining)?{recovery_attempts_remaining:result.recovery_attempts_remaining}:{})
  };
- if(['input_cleanup_failed','guardian_end_unconfirmed','guardian_stop_unconfirmed'].includes(code))return {...extra,next_action:'inspect_input_cleanup',replay_allowed:false};
+ if(['input_cleanup_failed','guardian_end_unconfirmed','guardian_stop_unconfirmed','stop_cleanup_unverified'].includes(code))return {...extra,next_action:'inspect_input_cleanup',replay_allowed:false};
  if(result.delivery_unknown===true||result.input_completed===true&&code||code==='input_outcome_unknown')return {...extra,next_action:'inspect_effect_without_replay',replay_allowed:false};
  if(['wait_failure_observed','wait_observation_incomplete','wait_observation_timeout','wait_condition_timeout','wait_change_timeout','op_timeout','capture_preparation_timeout'].includes(code))return {...extra,next_action:'inspect_effect_without_replay',replay_allowed:false};
  if(code==='wait_label_not_observed'&&typeof result.metadata?.observation_id==='string')return {...extra,next_action:'use_returned_frame',replay_allowed:false};
@@ -218,17 +230,20 @@ export function recoveryAdvice(result,operation){
  if(code==='desktop_context_unavailable')return {...extra,next_action:'human_start_on_visible_desktop',replay_allowed:false};
  if(code==='version_mismatch')return {...extra,next_action:'resolve_version_mismatch',replay_allowed:false};
  if(code==='recovered_task_requires_end')return {...extra,next_action:'inspect_recovered_task',replay_allowed:false};
- if(code==='global_stop_latched')return {...extra,next_action:'awaiting_human_owner_rearm',replay_allowed:false};
+ if(code==='global_stop_latched')return {...extra,next_action:'inspect_owner_stop',replay_allowed:false};
  if(code==='global_owner_unverified')return {...extra,next_action:'inspect_prior_input_cleanup',replay_allowed:false};
  if(code==='legacy_controller_running')return {...extra,next_action:'await_legacy_owner_shutdown',replay_allowed:false};
  if(code==='task_required')return {...extra,next_action:'ready_then_use_task_token',replay_allowed:false};
  if(code==='task_requires_end')return {...extra,next_action:'end_owned_task_then_shutdown',replay_allowed:false};
  if(['another_session_busy','cleanup_in_progress','task_owned'].includes(code))return {...extra,next_action:'wait_for_controller_then_observe',replay_allowed:false};
- if(code==='session_limit')return {...extra,next_action:'end_owned_task_then_reauthorize',replay_allowed:false};
+ if(code==='session_limit')return {...extra,next_action:'renew_task_and_continue',replay_allowed:false};
+ if(code==='native_latch_still_enforced')return {...extra,next_action:'native_update_required',replay_allowed:false};
+ if(['resume_refused','not_paused'].includes(code))return {...extra,next_action:'ask_human_before_resume',replay_allowed:false};
  if(['recovered_cleanup_unverified','input_lease_stale'].includes(code))return {...extra,next_action:'inspect_prior_input_cleanup',replay_allowed:false};
  if(['stop_persistence_failed','guard_persistence_failed'].includes(code))return {...extra,next_action:'inspect_stop_persistence_without_restart',replay_allowed:false};
  if(['permission_denied','approval_timeout','confirmation_required'].includes(code))return {...extra,next_action:'await_user_decision',replay_allowed:false};
- if(['control_stopped','control_inactive'].includes(code))return {...extra,next_action:'inspect_status_then_human_controls',replay_allowed:false};
+ if(code==='control_stopped')return {...extra,next_action:'report_and_wait_for_human',replay_allowed:false};
+ if(code==='control_inactive')return {...extra,next_action:'inspect_status_then_human_controls',replay_allowed:false};
  // Ordinary refusals raised before the input they guard. Any reply where input
  // already ran returned inspect_effect_without_replay above.
  if(code==='obscured')return {...extra,next_action:'observe_and_retarget',replay_allowed:false};
@@ -243,7 +258,6 @@ export function recoveryAdvice(result,operation){
  // A batch that already sent earlier steps must not be replayed whole; resume after failed_index.
  if(FIXABLE_CODES.has(code))return Array.isArray(result.completed)&&result.completed.length?{...extra,next_action:'fix_arguments_and_resume_after_completed',replay_allowed:false}:{...extra,next_action:'fix_arguments_and_retry',replay_allowed:true};
  if(POLICY_BLOCK_CODES.has(code))return {...extra,next_action:'choose_permitted_target',replay_allowed:false};
- if(code==='human_resume_required')return {...extra,next_action:'awaiting_human_resume',replay_allowed:false};
  if(['needs_confirmation','hand_off_required','model_approval_forbidden'].includes(code))return {...extra,next_action:'await_user_decision',replay_allowed:false};
  if(code==='desktop_locked')return {...extra,next_action:'await_human_unlock',replay_allowed:false};
  if(code==='update_in_progress')return {...extra,next_action:'wait_for_update',replay_allowed:false};
@@ -255,4 +269,4 @@ export function recoveryAdvice(result,operation){
  return {...extra,next_action:'inspect_diagnostics',replay_allowed:false};
 }
 const FIXABLE_CODES=new Set('bad_arguments bad_point bad_selector bad_text bad_wait bad_files bad_path invalid_steps no_steps too_many_steps text_limit not_text file_too_large is_directory no_app no_target no_window unsupported_action unknown_command invalid_feedback'.split(' '));
-const POLICY_BLOCK_CODES=new Set('protected_app app_blocked open_blocked key_blocked self_window blocked_on_screen'.split(' '));
+const POLICY_BLOCK_CODES=new Set('protected_app app_blocked open_blocked key_blocked self_window blocked_on_screen app_tier_read app_tier_click'.split(' '));

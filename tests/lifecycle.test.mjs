@@ -189,16 +189,16 @@ test('pause invalidates frames synchronously and keeps per-app session grants',a
 });
 test('emergency stop invalidates grants/frames before awaiting the native worker',async()=>{
  const r=fixture();r.state='active';r.frames.set('old',{});r.grants.set('app',{});const pending=r.stop();assert.equal(r.state,'stopped');assert.equal(r.frames.size,0);assert.equal(r.grants.size,0);await pending;
- await assert.rejects(r.grant(123,'cannot self-rearm'),e=>e.code==='control_inactive');
+ await assert.rejects(r.grant(123,'cannot silently regain control'),e=>e.code==='control_stopped');
 });
-test('a stale guardian state or resume cannot override a persisted Stop',async()=>{
+test('stale guardian events cannot undo Stop; the next ready clears a confirmed Stop and starts fresh',async()=>{
  const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'agcu-stop-event-')),latchFile=path.join(dir,'emergency.stop');const guardian=new EventEmitter();guardian.send=()=>{};guardian.request=async()=>({state:'idle',controls_visible:true});
  const r=new Runtime({guardian,driver:{async abort(){}},sessions:{register(){},close(){}},latchFile});
  try{
   r.state='active';await r.stop();guardian.emit('state','idle','normal_shutdown');guardian.emit('state','active');guardian.emit('resume','idle','human_resume');assert.equal(r.state,'stopped');
-  const ready=await r.ready();assert.equal(ready.ready,false);assert.equal(ready.next_action,'awaiting_human_rearm');assert.equal(r.state,'stopped');
-  r.state='idle';const staleReady=await r.ready();assert.equal(staleReady.ready,false);assert.equal(staleReady.next_action,'awaiting_human_rearm');assert.equal(r.state,'stopped');
-  r.state='idle';r.stop=async()=>{r.state='stopped';r.lastControlReason='stop_persistence_failed';};const failedReady=await r.ready();assert.equal(failedReady.next_action,'inspect_stop_persistence_without_restart');assert.equal(failedReady.error.code,'stop_persistence_failed');
+  assert(fs.existsSync(latchFile));const ready=await r.ready();assert.equal(ready.ready,true);assert.equal(ready.task_started,true);assert.equal(ready.next_action,'discover_or_launch');assert.equal(r.state,'idle');assert(!fs.existsSync(latchFile),'a confirmed Stop is cleared by the next ready');assert.equal(r.grants.size,0);
+  fs.writeFileSync(latchFile,'unconfirmed:'+'a'.repeat(32));r.state='stopped';r.lastControlReason='guardian_stop_unconfirmed';const fenced=await r.ready();assert.equal(fenced.ready,false);assert.equal(fenced.error.code,'guardian_stop_unconfirmed');assert(fs.existsSync(latchFile),'an unconfirmed Stop is never cleared');fs.unlinkSync(latchFile);
+  fs.writeFileSync(latchFile,'stopped');r.state='idle';r.stop=async()=>{r.state='stopped';r.lastControlReason='stop_persistence_failed';};const failedReady=await r.ready();assert.equal(failedReady.next_action,'inspect_stop_persistence_without_restart');assert.equal(failedReady.error.code,'stop_persistence_failed');
   r.state='active';assert.throws(()=>r.check(),e=>e.code==='control_stopped');assert.equal(r.state,'stopped');
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
@@ -247,12 +247,12 @@ test('native human pause notification invalidates cached observations',async()=>
 test('normal end cannot bypass emergency stop or human takeover',async()=>{
  for(const state of ['stopped','paused']) {
   const r=fixture();r.state=state;r.lastControlReason='human_takeover';await r.finish();assert.equal(r.state,state);assert.equal(r.status().control_reason,'human_takeover');
-  await assert.rejects(r.grant(123,'cannot bypass human re-arm'),e=>e.code==='control_inactive');
+  await assert.rejects(r.grant(123,'end does not restart work'),e=>e.code===(state==='stopped'?'control_stopped':'control_inactive'));
  }
 });
 test('launch cannot restart a stopped guardian before checking the stop latch',async()=>{
  const r=fixture();r.state='stopped';let starts=0;r.guardian.start=async()=>{starts++;r.state='idle';};
- await assert.rejects(r.launch({app:'nonexistent.exe',reason:'must not re-arm'}),e=>e.code==='control_inactive');assert.equal(starts,0);
+ await assert.rejects(r.launch({app:'nonexistent.exe',reason:'must not silently restart'}),e=>e.code==='control_stopped');assert.equal(starts,0);
 });
 test('permission authority is fixed at startup and surfaced in status',()=>{
  const r=fixture();assert.equal(r.status().permission_mode,'standalone');
@@ -265,21 +265,24 @@ test('host-authorized soft resume requires native consent and invalidates old ob
  r.guardian.request=async m=>{assert.equal(m.op,'resume');return {allowed:true,state:'active'};};
  const result=await r.resume();assert.equal(r.state,'active');assert.equal(r.frames.size,0);assert(r.generation>generation);assert.equal(result.replayed_actions,0);assert.equal(r.status().control_reason,'host_authorized_resume');
 });
-test('chat resume never clears emergency stop or standalone human approval',async()=>{
- for(const [mode,state] of [['host-managed','stopped'],['standalone','paused'],['host-managed','idle']]){
+test('chat resume never applies to Stop and follows the native answer for a pause',async()=>{
+ for(const [mode,state,code] of [['host-managed','stopped','control_stopped'],['host-managed','idle','not_paused'],['standalone','idle','not_paused']]){
   const r=fixture();r.permissionMode=mode;r.state=state;r.guardian.request=()=>{throw Error('must not ask native');};
-  await assert.rejects(r.resume(),e=>e.code==='human_resume_required');assert.equal(r.state,state);
+  await assert.rejects(r.resume(),e=>e.code===code);assert.equal(r.state,state);
  }
+ // Current native controls refuse a standalone chat resume; the reply says so.
+ const r=fixture();r.state='paused';r.guardian.request=async m=>{assert.equal(m.op,'resume');return {allowed:false,state:'paused'};};
+ await assert.rejects(r.resume(),e=>e.code==='resume_refused'&&/bar/.test(e.message));assert.equal(r.state,'paused');
 });
 
 test('emergency Stop wins a race with a successful native soft-resume reply',async()=>{
  const r=fixture();r.permissionMode='host-managed';r.state='paused';
  r.guardian.request=async()=>{r.guardian.emit('state','stopped','escape');return {allowed:true,state:'active'};};
- await assert.rejects(r.resume(),e=>e.code==='human_resume_required');assert.equal(r.state,'stopped');
+ await assert.rejects(r.resume(),e=>e.code==='resume_refused');assert.equal(r.state,'stopped');
  assert.equal(r.status().control_reason,'escape');
 });
 
-test('emergency Stop survives service replacement; ordinary idle shutdown does not create a latch',async()=>{
+test('Stop survives service replacement until the next ready; ordinary idle shutdown does not create a marker',async()=>{
  const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'agcu-latch-'));const file=path.join(dir,'emergency.stop');
  const make=()=>{const r=fixture();r.latchFile=file;return r;};
  try {
@@ -287,9 +290,11 @@ test('emergency Stop survives service replacement; ordinary idle shutdown does n
   const stopped=make();await stopped.stop();assert(fs.existsSync(file));await stopped.finish();assert(fs.existsSync(file));
   const guardian=new EventEmitter();guardian.send=()=>{};guardian.request=async()=>({state:'stopped',controls_visible:true});
   const replacement=new Runtime({latchFile:file,guardian,driver:{abort:async()=>{}},sessions:{register(){}}});
-  assert.equal(replacement.state,'stopped');await assert.rejects(replacement.grant(1),e=>e.code==='control_inactive');
-  replacement.permissionMode='host-managed';await assert.rejects(replacement.resume(),e=>e.code==='human_resume_required');
-  assert(fs.existsSync(file),'model operations must not remove the native human re-arm latch');
+  assert.equal(replacement.state,'stopped');await assert.rejects(replacement.grant(1),e=>e.code==='control_stopped');
+  replacement.permissionMode='host-managed';await assert.rejects(replacement.resume(),e=>e.code==='control_stopped');
+  assert(fs.existsSync(file),'grant and resume never clear Stop; only ready does');
+  // Native controls that still report stopped after the marker is cleared are an old build.
+  const old=await replacement.ready();assert.equal(old.ready,false);assert.equal(old.error.code,'native_latch_still_enforced');assert.equal(old.next_action,'native_update_required');
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
 test('a guardian created for a recovered unverified task starts with re-arm locked',()=>{

@@ -10,6 +10,7 @@ const tool=(name,description,properties={},required=[])=>({name,description,inpu
 export const TOOLS=[
  tool('computer_apps','List desktop apps and opaque window handles. Set include_hidden to discover minimized windows and apps on other virtual desktops; do not confuse them with closed apps.',{include_hidden:bool}),
  tool('computer_grant','Select application instance for this task under the host permission policy. Native identity checks apply; model approval flags are rejected.',{hwnd:num,reason:str},['hwnd','reason']),
+ tool('computer_request_access','Ask the human to approve up to 8 apps for this task, one local dialog each. Returns the access tier of each app: full, or click for terminals and IDEs (left click and scroll only). Input goes only to approved apps. Stop revokes every approval.',{hwnds:{type:'array',items:num,minItems:1,maxItems:8},reason:str},['hwnds','reason']),
  tool('computer_snapshot','Observe accessibility controls and screenshot. Returns one-use observation_id. Literal query matches include their child controls, preserving indexes/offscreen state. Optional settle_ms waits up to2seconds before reading an animating UI; never repeats input.',{hwnd:num,with_image:bool,max_width:{...num,minimum:100,maximum:1400},max_nodes:nodeCount,query:str,settle_ms:settle,reason:str},['hwnd']),
  tool('computer_move','Move the real pointer to screenshot pixels without clicking; use to hover and inspect.',{...target},['hwnd','observation_id','x','y','reason']),
  tool('computer_click','Click an index, uniquely observed exact name/role/automation_id, or screenshot pixels. Clicks move the real cursor by default; physical:false explicitly requests a semantic action for an indexed control. Names resolve only in the current observation; ambiguity refuses. Pixel clicks always move the cursor.',{...target,button:{type:'string',enum:['left','right','middle']},clicks:{...num,minimum:1,maximum:3},physical:bool},['hwnd','observation_id','reason']),
@@ -31,11 +32,11 @@ export const TOOLS=[
  tool('computer_wait_change','Wait for the accessible text tree to differ from a fresh observation. Returns a fresh text-only observation. A change is not proof of success, and pixel-only changes may be invisible.',{hwnd:num,observation_id:str,timeout_ms:{...num,minimum:100,maximum:30000},reason:str},['hwnd','observation_id','reason']),
  tool('computer_feedback','Record an agent-observed concern as bounded, unverified local metadata. Automatic GitHub submission requires the installation reporting preference and authentication. No free text, screenshots, paths or task content are accepted.',{category:{type:'string',enum:['cursor_visual','focus','observation','workflow','performance','missing_capability','unexpected_pause','other']},operation:{type:'string',enum:['observe','click','type','scroll','drag','keyboard','launch','wait','update','other']},evidence:{type:'string',enum:['suspected','observed','reproduced']}},['category','operation','evidence']),
  tool('computer_end','Finish normally; no Antigravity restart needed.'),
- tool('computer_controls','Explicitly show local controls for human re-arm or pause/stop. Showing controls never clears an emergency Stop, grants an app or sends input. Stopped controls dismiss automatically after30seconds.'),
- tool('computer_ready','Check control readiness and reveal local controls once. Follow next_action; never repeat startup or clear Stop.'),
- tool('computer_pause','Pause for human takeover. Do not replay interrupted input.'),
+ tool('computer_controls','Explicitly show local controls so the human has Stop. Showing controls never grants an app or sends input.'),
+ tool('computer_ready','Start a task: check readiness and reveal local controls once. Pass the session_handle from your previous ready in this conversation so approved apps are not asked again; omit it in a new conversation. Follow next_action.',{session_handle:{type:'string',maxLength:64}}),
+ tool('computer_pause','Pause when the human asks. Do not replay interrupted input.'),
  tool('computer_resume','Resume a soft pause ONLY after the user explicitly says to continue under the host permission policy. Clears observations; never clears emergency Stop.'),
- tool('computer_stop','Emergency stop, release inputs; HUMAN re-arm required.'),
+ tool('computer_stop','Stop: halt input at once, release inputs, end the task and revoke app approvals. Report and wait for the human; never retry immediately.'),
  tool('computer_status','Read status without permission prompts or screenshots.')
 ];
 const OPS={computer_move:'move',computer_click:'click',computer_type:'type',computer_paste:'paste',computer_key:'key',computer_scroll:'scroll',computer_drag:'drag',computer_focus:'focus',computer_fit_window:'fit_window',computer_close_window:'close_window',computer_set_value:'set_value',computer_clipboard:'clipboard',computer_open:'open',computer_file_dialog:'file_dialog'};
@@ -78,9 +79,10 @@ export async function call(r,name,a){
  validate(name,a);
  if(name==='computer_status')return r.status();
  if(name==='computer_controls')return r.showControls();
- if(name==='computer_ready')return r.ready();
+ if(name==='computer_ready')return r.ready(a);
  if(name==='computer_apps')return {windows:(await r.driver.call('list_apps',{include_hidden:a.include_hidden===true})).result.windows.filter(w=>![r.guardian.pid,r.driver.info?.pid,process.pid,process.ppid].includes(w.pid))};
  if(name==='computer_grant')return {approved:await r.grant(a.hwnd,a.reason)};
+ if(name==='computer_request_access')return r.requestAccess(a);
  if(name==='computer_snapshot')return r.observe(a);
  if(name==='computer_wait')return r.wait(a);
  if(name==='computer_wait_change')return r.waitChange(a);

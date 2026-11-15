@@ -30,7 +30,7 @@
     {
       "path": "server/policy.mjs",
       "upstream_sha256": "673a749426c458b254d991d7f6fc75e7e5415f32b64e05011476a90803d7001b",
-      "local_sha256": "493efd224ed4547cbc9a281d5ef783f75dc41d4aa676cb1238c2e55a31314da1",
+      "local_sha256": "58d1869fd3b788604dc459559fa5c4cb6997876d47e556f839e76969d1193d00",
       "modified": true
     },
     {
@@ -256,11 +256,11 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "beb6d025d2d99bb79a2ff15cdf924739e925aa0a53d6eb65fdb4a01540ffd254"
+      "sha256": "f0f710deec7f4bf19e199f615ccdea96761a8da5c37b2538cb4f90c5a2062e10"
     },
     {
       "path": "server/mcp.mjs",
-      "sha256": "ed43f25dffe8f6df4ecf8ddf2da14adcff0e637402fdb134dfd1adc0ffc03cef"
+      "sha256": "0901975a7d8010b43d0c505adc7d93aedff2c403208e55fbb90672e27685ceea"
     },
     {
       "path": "server/guardian.mjs",
@@ -292,15 +292,15 @@
     },
     {
       "path": "server/desktop-service.mjs",
-      "sha256": "b890a5b33544f2439078433329b23a5197e88708b58680419331692b1b5b3c62"
+      "sha256": "e42463195237d2bf91cc948c3fdb2fe0bfe4847680f1524a5a76eb517c789451"
     },
     {
       "path": "server/desktop-tools.mjs",
-      "sha256": "469b0bf82a3317960762c0f3105f4fa0eb4f3811965795b54dfe4a07529a636d"
+      "sha256": "32baaeafdf76750829b4c1ac9a158de3f62121a00a55d1631960f999676152b2"
     },
     {
       "path": "scripts/desktop.mjs",
-      "sha256": "805dab9e51778245aeb316447d0c2b2c383007fc7cae31ab9781248fc995b02f"
+      "sha256": "d3c1c2bd73c030669df7ada5ea2b16a061bc72904739244284f4c9273329a2f3"
     },
     {
       "path": "server/version.mjs",
@@ -372,7 +372,7 @@
     },
     {
       "path": "tests/workflow.test.mjs",
-      "sha256": "52b3b4befd17d34341f4d8b136b4e8ed5a05496c4989bf852c3a5bf75b532022"
+      "sha256": "76bd3502646e51dd0ae473e8b27da056fd8331ecbbb87e2f74ebc92df7a3deab"
     },
     {
       "path": "tests/ProviderFailureTarget.cs",
@@ -476,7 +476,7 @@
     },
     {
       "path": "skills/computer-use/references/recovery.md",
-      "sha256": "2f053da41ec8befb0667e211b93698376b477ffcff1d4fb39ac8cda52afbdf7a"
+      "sha256": "b70fa1bb8815a1129e195989c149e2a9b3a7d9a06066fedb0a3b71227f5b3d05"
     },
     {
       "path": "scripts/measure-run.mjs",
@@ -596,11 +596,11 @@
     },
     {
       "path": "scripts/macos-install-check.mjs",
-      "sha256": "1b9664ff448e9961df4ce73a9916cfc412dfb956498b31b941f4e9bf64000cfe"
+      "sha256": "0a79e617dea44af4a7f2a017d6b98d735c3c0483e9bcdefd6dc85bee7203cf0b"
     },
     {
       "path": "skills/computer-use/SKILL.md",
-      "sha256": "89b838f273b37c6dfcb013589e93ab2924a18c60e33434a31a88d1ee15714d53"
+      "sha256": "f72bd48603b0bf261be09bca9567788e260091495ebab636d5f28042dcb663f6"
     },
     {
       "path": "docs/MACOS.md",
@@ -632,7 +632,7 @@
     },
     {
       "path": "tests/recovery-update.test.mjs",
-      "sha256": "75b109832ba8c00215878c86339db32e852c40605431c030af777e16deaf368a"
+      "sha256": "7fbd73865b3dce153cfbe7b1cce3e7dc7bb4ab05e0c7b58e6af99e62e6817624"
     },
     {
       "path": "tests/update-transaction.test.mjs",
@@ -656,7 +656,7 @@
     },
     {
       "path": "tests/lifecycle.test.mjs",
-      "sha256": "7b01b0be03c7176e7bdad8ead0d69b7bb7b37358f5b83fc0ac99f9decd928d90"
+      "sha256": "9e658299e4507c233576ae09143706203fe8bce7dd1273ced15f8e835e0a0800"
     },
     {
       "path": "server/native/GuardCleanup.cs",
@@ -708,7 +708,7 @@
     },
     {
       "path": "server/recovery.mjs",
-      "sha256": "56786bb7c8efc86a9905a42a0cd2ef8e4e61eef3063dec13b02d503ab8e1ad06"
+      "sha256": "466911728c1aac17a20aa4cd3c14ba7f162adadcb42146c8ab07b321b6987350"
     },
     {
       "path": "scripts/qualify-guardian-desktop.mjs",
@@ -880,7 +880,7 @@
     },
     {
       "path": "tests/stop-acknowledgement.test.mjs",
-      "sha256": "4cb469b5f0a9f79d79111b90dc34a11381a8c60e0eca96c7ca0feb1c00d489fb"
+      "sha256": "f5638fa973d0ac71d7a410d4cd6fb2755352f8146e85768143e4bb24217f9d11"
     },
     {
       "path": "server/task-ownership.mjs",
@@ -896,15 +896,15 @@
     },
     {
       "path": "tests/stop-context.test.mjs",
-      "sha256": "b5910c4fc70b2d50e2a7d0629cba0c76617e86e74c3219ed415a786537b3ea60"
+      "sha256": "b348a25783f1bf27666a83f7f263335e90859b9f2c8c03f3d3a536fdf51b5537"
     },
     {
       "path": "server/task-coordinator.mjs",
-      "sha256": "917301f8f04d22e6b42fc3c2e15c8b5017b31d2a96dd7ec998e4041ad368ab08"
+      "sha256": "a35379f99870155903f9730ec1037e46a1b75895c87d17396d428b73798bd21f"
     },
     {
       "path": "tests/task-coordinator.test.mjs",
-      "sha256": "41c741eb2ad325c33e66fee8be8f876b302f869a94b713c0467453826937fa68"
+      "sha256": "cfc2778134e7dbc67923bb650e6873d87641c6e14c51a095f6e7e6d898ce8b3b"
     },
     {
       "path": "docs/TASK-OWNERSHIP.md",
