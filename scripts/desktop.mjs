@@ -79,6 +79,21 @@ export async function recordedFailureReply(error){
  return result;
 }
 
+export async function callerGateNonce(session,timeout,expectedPermissionMode,connect=net.createConnection){
+  try{
+    const opened=await request(session,'caller_gate',{},Math.min(timeout,10000),expectedPermissionMode);
+    if(!opened?.ok||typeof opened.gate!=='string'||!/^\\\\\.\\pipe\\AGCU\.Gate\.[a-f0-9]{32}$/.test(opened.gate))return undefined;
+    return await new Promise(resolve=>{
+      let buffer='',settled=false;const socket=connect(opened.gate);
+      const done=value=>{if(settled)return;settled=true;clearTimeout(deadline);socket.destroy();resolve(value);};
+      const deadline=setTimeout(()=>done(undefined),5000);
+      socket.setEncoding('utf8');
+      socket.on('data',chunk=>{buffer+=chunk;const newline=buffer.indexOf('\n');if(newline<0){if(buffer.length>200)done(undefined);return;}const nonce=buffer.slice(0,newline).trim();done(/^[a-f0-9]{64}$/.test(nonce)?nonce:undefined);});
+      socket.on('error',()=>done(undefined));socket.on('close',()=>done(undefined));
+    });
+  }catch{return undefined;}
+}
+
 export async function request(session,command,args={},timeout=100000,expectedPermissionMode){
   if(session.task_protocol===1&&command==='ready'&&!session.task_token){
     const claim=await request(session,'claim',{},timeout,expectedPermissionMode);
@@ -86,6 +101,9 @@ export async function request(session,command,args={},timeout=100000,expectedPer
     if(typeof claim.task_token!=='string'||claim.task_token.length!==64||!/^[a-f0-9]{64}$/.test(claim.task_token))throw Object.assign(Error('Task reservation did not return valid context; no desktop action was requested.'),{code:'task_claim_unconfirmed'});
     session.task_token=claim.task_token;
   }
+  // #60: prove which app runs this CLI. Any failure sends no nonce, and the
+  // service keeps every AI app blocked.
+  const callerNonce=command==='ready'&&session.caller_gate_protocol===1?await callerGateNonce(session,timeout,expectedPermissionMode):undefined;
   return new Promise((resolve,reject)=>{
     let buffer='',settled=false,connected=false;
     const socket=net.createConnection(session.pipe);
@@ -95,7 +113,7 @@ export async function request(session,command,args={},timeout=100000,expectedPer
     // Absolute deadline: partial bytes cannot keep a hung action alive forever.
     // Closing the connection requests server cancellation, not proof of cleanup.
     const deadline=setTimeout(()=>done(transportFailure('request_timeout','Desktop request timed out. Cancellation was requested; completion is unconfirmed. Inspect status and the actual app before continuing; do not replay the action.')),timeout);
-    socket.on('connect',()=>{connected=true;socket.write(JSON.stringify({secret:session.secret,task_token:session.task_token,command,args,expected_build_id:BUILD_ID,expected_permission_mode:expectedPermissionMode})+'\n');});
+    socket.on('connect',()=>{connected=true;socket.write(JSON.stringify({secret:session.secret,task_token:session.task_token,command,args,expected_build_id:BUILD_ID,expected_permission_mode:expectedPermissionMode,...(callerNonce?{caller_nonce:callerNonce}:{})})+'\n');});
     socket.on('data',chunk=>{
       buffer+=chunk;
       if(Buffer.byteLength(buffer)>4*1024*1024)return done(transportFailure('service_response_too_large','Desktop response exceeded its limit. Completion is unconfirmed; inspect the app without replaying the action.'));

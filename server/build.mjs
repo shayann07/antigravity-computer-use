@@ -32,6 +32,7 @@ const WIN_SOURCES = [
   path.join(HERE, 'native', 'KeyboardTargetPolicy.cs'),
   path.join(HERE, 'native', 'DesktopContext.cs'),
   path.join(HERE, 'native', 'WindowGeometry.cs'),
+  path.join(HERE, 'native', 'CallerGate.cs'),
 ];
 const MAC_SOURCES = [path.join(HERE, 'native', 'AxonHost.swift'), ...['PrivateStorage.swift','MacControl.swift','MacGuardian.swift','MacVisuals.swift','MacPhosphorIcons.swift','MacOperations.swift'].map(name=>path.join(HERE,'native','macos',name))];
 

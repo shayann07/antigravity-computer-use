@@ -134,6 +134,14 @@ export async function serveDesktop({directory=dataDir(),runtime,idlePolicy='shut
           finished=true;socket.end(JSON.stringify({ok:allowed,prepared:allowed,next_action:allowed?'shutdown_for_update':'wait_for_task_end'})+'\n');return;
         }
         if(maintenanceUntil>Date.now()&&!['computer_status','computer_stop','computer_shutdown'].includes(name))throw Object.assign(Error('An installation update is preparing. No new input was accepted.'),{code:'update_in_progress'});
+        // #60 caller gate: a one-shot native pipe whose kernel-verified client
+        // chain names the calling host. Only the pipe name goes back; the host
+        // is resolved natively and redeemed with ready's nonce, never taken
+        // from the request.
+        if(name==='computer_caller_gate'){
+          if(busy)throw Object.assign(Error('A desktop operation is pending.'),{code:'operation_pending'});
+          const gate=await runtime.openCallerGate?.()??{gate:null};finished=true;socket.end(JSON.stringify({ok:true,gate:gate.gate??null})+'\n');return;
+        }
         if(taskOwnership){
           const state=runtime.status();
           if(name==='computer_claim'){
@@ -158,6 +166,7 @@ export async function serveDesktop({directory=dataDir(),runtime,idlePolicy='shut
         try{
           if(coordinator&&!['computer_status','computer_apps','computer_stop','computer_pause','computer_controls','computer_end'].includes(name))await coordinator.ensure();
           if(!['computer_status','computer_apps','computer_controls','computer_stop','computer_pause'].includes(name))runtime.markActivity?.();
+          if(name==='computer_ready')await runtime.redeemCaller?.(request.caller_nonce);
           const raw=await call(runtime,name,request.args||{});
           if(coordinator&&name==='computer_end'&&raw.ended===true)await coordinator.release();
           const ownerHint=taskOwnership&&['computer_status','computer_ready'].includes(name)?{owner:taskOwnership.relation(request.task_token,runtime.status())}:{};
@@ -177,7 +186,7 @@ export async function serveDesktop({directory=dataDir(),runtime,idlePolicy='shut
   try{
     await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(pipe,resolve);});
     if(process.platform==='darwin')pipe={host:'127.0.0.1',port:server.address().port};
-    ownership.assertHeld();fs.writeFileSync(temporary,JSON.stringify({pid:process.pid,pipe,secret,...(taskOwnership?{task_protocol:1}:{}),...(coordinator?{global_task_protocol:1}:{})}),{mode:0o600});fs.renameSync(temporary,file);
+    ownership.assertHeld();fs.writeFileSync(temporary,JSON.stringify({pid:process.pid,pipe,secret,...(taskOwnership?{task_protocol:1}:{}),...(coordinator?{global_task_protocol:1}:{}),...(process.platform==='win32'?{caller_gate_protocol:1}:{})}),{mode:0o600});fs.renameSync(temporary,file);
   }catch(error){try{if(fs.existsSync(temporary))fs.unlinkSync(temporary);}catch{}await shutdown();throw error;}
   expiry=setInterval(()=>{
     if(busy||closing||humanEnding||Date.now()-lastCall<=idleTimeoutMs)return;

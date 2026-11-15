@@ -8,7 +8,7 @@ import {Driver,HostError} from './driver.mjs';
 import {Guardian} from './guardian.mjs';
 import {Sessions} from './sessions.mjs';
 import {dataDir} from './build.mjs';
-import {classify,TIER,accessTier,accessRefusal} from './policy.mjs';
+import {classify,TIER,accessTier,accessRefusal,resolveCallerHost} from './policy.mjs';
 import {renderSnapshot,subtreeNodes} from './render.mjs';
 import {targetImageSize} from './upstream-utils.mjs';
 import {VERSION,BUILD_ID} from './version.mjs';
@@ -272,6 +272,21 @@ export class Runtime {
     if(typeof handle==='string'&&sessions.has(handle)){this.sessionHandle=handle;return;}
     this.sessionHandle=randomUUID();sessions.set(this.sessionHandle,new Map());
   }
+  // #60: the verified caller host for this task, from the native gate. Null
+  // (the default, and after end or stop) keeps every AI app blocked.
+  callerPolicy(){return {release:this.callerHost?.release??[]};}
+  callerReport(){const h=this.callerHost;return h?{self_excluded_app:h.host.name,self_excluded_path:h.host.path,released_ai_groups:h.release}:{self_excluded_app:null,released_ai_groups:[]};}
+  async openCallerGate(){
+    if(process.platform!=='win32'||this.recoveredTask||!this.driver?.call)return {gate:null};
+    const reply=await this.driver.call('caller_gate_open',{});const pipe=reply?.result?.pipe??reply?.pipe;
+    return {gate:typeof pipe==='string'?pipe:null};
+  }
+  async redeemCaller(nonce){
+    this.callerHost=null;
+    if(process.platform!=='win32'||typeof nonce!=='string'||!/^[a-f0-9]{64}$/.test(nonce)||!this.driver?.call)return null;
+    try{const reply=await this.driver.call('caller_gate_redeem',{nonce});const r=reply?.result??reply;this.callerHost=r?.resolved===true?resolveCallerHost(r.chain):null;}catch{this.callerHost=null;}
+    return this.callerHost;
+  }
   async ready({session_handle}={}){
     Runtime.prototype.bindSession.call(this,session_handle);
     // Another copy held the input lock last time. That ends when the other
@@ -415,7 +430,7 @@ export class Runtime {
     }
     known.set(handle,{pid:w.pid,started:w.started,path:w.path,key});
     this.guardian.send({op:'attach',pid:this.driver.info?.pid});
-    if([process.pid,process.ppid,this.driver.info?.pid,this.guardian.pid].includes(w.pid)||classify(w).tier===TIER.BLOCKED)
+    if([process.pid,process.ppid,this.driver.info?.pid,this.guardian.pid].includes(w.pid)||classify(w,Runtime.prototype.callerPolicy.call(this)).tier===TIER.BLOCKED)
       fail('protected_app','This is a protected app or the control/host UI.');
     return w;
   }
@@ -428,7 +443,7 @@ export class Runtime {
     if(this.state==='paused')this.check();
     const w=await this.app(hwnd);const key=appKey(w);
     if(this.grants.has(key)&&this.state==='active'){this.check();return w;}
-    const tier=accessTier(w);
+    const tier=accessTier(w,Runtime.prototype.callerPolicy.call(this));
     const tierText=tier==='read'?'Access: read only. Visible to the agent, but no clicks or typing.':tier==='click'?'Access: click only (terminal or IDE). Left clicks and scrolling; no typing, keys, right click or drag.':'Access: full.';
     // Already approved in this conversation: native controls that support it
     // (see CLAUDE-STYLE-CONTROL.md) restore the grant without a new dialog.
@@ -452,7 +467,7 @@ export class Runtime {
     if(!Array.isArray(hwnds)||!hwnds.length||hwnds.length>8||hwnds.some(h=>!Number.isSafeInteger(h)||h<=0))fail('bad_arguments','Pass 1 to 8 window handles from apps.');
     const apps=[];
     for(const hwnd of [...new Set(hwnds)]){
-      try{const w=await this.grant(hwnd,reason,{observationOnly:true});apps.push({hwnd,app:w.path,title:w.title,approved:true,tier:accessTier(w)});}
+      try{const w=await this.grant(hwnd,reason,{observationOnly:true});apps.push({hwnd,app:w.path,title:w.title,approved:true,tier:accessTier(w,Runtime.prototype.callerPolicy.call(this))});}
       catch(error){
         apps.push({hwnd,approved:false,error:{code:error.code||'access_failed',message:error.message}});
         // A Stop during approval ends the task; ask nothing further.
@@ -554,7 +569,7 @@ export class Runtime {
     const w=args.hwnd!=null?await this.grant(Number(args.hwnd),args.reason):null;
     this.check();if(Date.now()>=this.deadline||this.remaining<=0)fail('session_limit','Session expired or action budget exhausted. Renew the task (end, then ready) and continue from a fresh observation.');
     // Per-app access tier, enforced against the target before any input.
-    if(w){const refusal=accessRefusal(accessTier(w),op,args);if(refusal)throw Object.assign(Error(refusal.message),{code:refusal.code,tier:accessTier(w)});}
+    if(w){const refusal=accessRefusal(accessTier(w,Runtime.prototype.callerPolicy.call(this)),op,args);if(refusal)throw Object.assign(Error(refusal.message),{code:refusal.code,tier:accessTier(w,Runtime.prototype.callerPolicy.call(this))});}
     if(op==='resize_window'&&process.platform==='darwin')fail('unsupported_action','resize_window is not available on macOS yet. No window was changed.');
     if(op==='focus'||op==='fit_window'||op==='resize_window'){
       if(w?.fullscreen)throw Object.assign(Error('Bring the approved window out of macOS full-screen mode yourself before focusing or fitting it. No Space switch was performed.'),{code:'window_fullscreen',recovery_attempts_remaining:0});
@@ -823,7 +838,7 @@ export class Runtime {
       const stopped=this.latchFile?readStopLatch(this.latchFile):null;
       if(stopped?.unconfirmed||this.lastControlReason==='guardian_stop_unconfirmed')fail('guardian_stop_unconfirmed','Stop remains unconfirmed. Keep the task recovery record; inspect prior actors and input cleanup without replay.');
       if(stopped?.invalid||persistenceFailure(this.lastControlReason))fail('stop_persistence_failed','Stop storage is unverified. Keep the task recovery record and inspect private storage.');
-      try{if(this.taskFile)writeAtomicJSON(this.taskFile,{schema:1,open:false});this.taskOpen=false;this.recoveredTask=false;this.dispatchChildren=[];this.dispatchStarted=false;this.watchdogsComplete=true;this.taskDurable=true;}catch{this.taskOpen=true;this.taskDurable=false;throw Object.assign(Error('Input cleanup finished, but task state could not be saved. Updates remain deferred.'),{code:'task_state_write_failed'});}
+      try{if(this.taskFile)writeAtomicJSON(this.taskFile,{schema:1,open:false});this.taskOpen=false;this.callerHost=null;this.recoveredTask=false;this.dispatchChildren=[];this.dispatchStarted=false;this.watchdogsComplete=true;this.taskDurable=true;}catch{this.taskOpen=true;this.taskDurable=false;throw Object.assign(Error('Input cleanup finished, but task state could not be saved. Updates remain deferred.'),{code:'task_state_write_failed'});}
     }return {ended:true,state:this.state,restart_required:false,session_handle:this.sessionHandle??null};}
   async feedback(args){
     // Revalidate at the persistence boundary too; never store model text,
@@ -844,7 +859,7 @@ export class Runtime {
     if(this.state==='paused')this.check();
     const {app,executable}=launchTarget(args.app);
     if(/^(?:AxonHost|StorageGuard)(?:-[0-9a-f]+)?(?:\.exe|\.app)?$/i.test(path.basename(app)))fail('protected_app','Cannot launch internal runtime helpers as target applications.');
-    if(classify({process:path.basename(app),path:app}).tier===TIER.BLOCKED)fail('protected_app','Cannot launch a protected application.');
+    if(classify({process:path.basename(app),path:app},Runtime.prototype.callerPolicy.call(this)).tier===TIER.BLOCKED)fail('protected_app','Cannot launch a protected application.');
     // Validate the execution desktop before showing controls or launching apps.
     await this.driver.start();
     await this.guardian.start();
@@ -924,6 +939,7 @@ export class Runtime {
     return {resumed:true,fresh_observation_required:true,replayed_actions:0};
   }
   async stop(){
+    this.callerHost=null;
     if(this.stopping)return this.stopping;
     const priorUnconfirmed=this.lastControlReason==='guardian_stop_unconfirmed';
     this.generation++;this.frames.clear();this.grants.clear();this.state='stopped';this.lastControlReason='requested_stop';
@@ -994,6 +1010,6 @@ export class Runtime {
     }
     return {task_age_ms:open&&this.taskOpenedAt?Math.max(0,Math.round(now-this.taskOpenedAt)):null,last_activity_ms_ago:open?idle:null,actions_used:this.token&&Number.isFinite(this.remaining)?Math.max(0,contract.action_budget-this.remaining):0,actions_limit:contract.action_budget,held_resources:held,task_origin:!open?'none':recovered?'previous_controller':'this_controller',controller_uptime_ms:Math.round(process.uptime()*1000),task_liveness:liveness,task_liveness_rule:rule};
   }
-  status(){return {...Runtime.prototype.taskInfo.call(this),state:this.state,task_open:this.taskOpen===true,recovered_task:this.recoveredTask===true,remaining_actions:this.remaining,approved_apps:[...this.grants.values()].map(w=>({pid:w.pid,path:w.path,tier:w.tier??accessTier(w)})),runtime:nativePlatform().runtime,build_version:VERSION,build_id:BUILD_ID,private_data_storage:this.privateDataStorage,real_cursor:true,custom_cursor:this.guardian.customCursor??null,permission_mode:this.permissionMode,takeover_mode:this.guardian.takeoverMode||savedTakeoverMode(path.join(dataDir(),'control-preferences.json'),this.takeoverMode),control_reason:this.lastControlReason};}
+  status(){return {...Runtime.prototype.taskInfo.call(this),state:this.state,task_open:this.taskOpen===true,recovered_task:this.recoveredTask===true,remaining_actions:this.remaining,approved_apps:[...this.grants.values()].map(w=>({pid:w.pid,path:w.path,tier:w.tier??accessTier(w,Runtime.prototype.callerPolicy.call(this))})),runtime:nativePlatform().runtime,build_version:VERSION,build_id:BUILD_ID,private_data_storage:this.privateDataStorage,real_cursor:true,custom_cursor:this.guardian.customCursor??null,permission_mode:this.permissionMode,takeover_mode:this.guardian.takeoverMode||savedTakeoverMode(path.join(dataDir(),'control-preferences.json'),this.takeoverMode),control_reason:this.lastControlReason,...Runtime.prototype.callerReport.call(this)};}
   async close(){const normal=this.state==='idle';if(!normal)await this.stop();else await this.driver.abort?.();await this.guardian.close({normal});this.sessions.close();}
 }

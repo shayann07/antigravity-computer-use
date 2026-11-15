@@ -640,6 +640,8 @@ namespace Axon
                 case "identity": return ControlFence.Identity(Convert.ToInt64(a["hwnd"]));
                 case "authorize": { var aa = a["action_args"] as Dictionary<string, object>; string label=PreviewLabel(aa); return new Dictionary<string, object>{{"sensitive",ControlFence.Sensitive(Convert.ToString(a["action_op"]),aa,label)},{"label",label}}; }
                 case "ping": return OpPing();
+                case "caller_gate_open": return CallerGate.Open();
+                case "caller_gate_redeem": return CallerGate.Redeem(a);
                 case "presence": return OpPresence(a);
                 case "session": return OpSession(a);
                 case "list_apps": return OpListApps(a);

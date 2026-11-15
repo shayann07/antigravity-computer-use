@@ -26,9 +26,11 @@ const BLOCKED = [
   // The lock screen. A locked desktop is the user's, full stop; Codex stops
   // and asks them to unlock, and so does this.
   'lockapp',
-  // AI assistants' own desktop apps. Codex refuses to drive the ChatGPT app
-  // and its own UI; reading a Claude window is the loop-back the session
-  // exclusion exists to prevent, so the desktop apps are out too.
+  // AI assistants' own desktop apps. Reading or driving the caller's own host
+  // is the loop-back the session exclusion exists to prevent. They are all
+  // blocked unless a kernel-verified caller chain names the host (see
+  // AI_APP_GROUPS and resolveCallerHost below); then only the other groups are
+  // released, and only for that task.
   'claude', 'chatgpt', 'codex', 'antigravity',
   // Authenticators and wallets: one-time codes and seed phrases, in plain text.
   'authenticator', 'authy', 'winauth', 'ledger', 'exodus', 'electrum', 'trezor',
@@ -166,10 +168,50 @@ export function isAlwaysAllowed(win) {
   return tier !== TIER.BLOCKED && tier !== TIER.SHELL;
 }
 
-export function classify(win) {
+// AI-app groups for the self-host gate (#60). Codex runs inside the ChatGPT
+// app, so the two are one group.
+export const AI_APP_GROUPS = Object.freeze({
+  claude: Object.freeze(['claude']),
+  openai: Object.freeze(['chatgpt', 'codex']),
+  antigravity: Object.freeze(['antigravity']),
+});
+const AI_ENTRY_GROUP = new Map(Object.entries(AI_APP_GROUPS).flatMap(([g, names]) => names.map((n) => [n, g])));
+
+export function aiGroupOf(name) {
+  const n = normalise(name ? path.win32.basename(path.posix.basename(String(name))) : '');
+  if (!n) return null;
+  for (const [entry, group] of AI_ENTRY_GROUP) if (n === entry || n.startsWith(entry)) return group;
+  return null;
+}
+
+// Turns the gate's verified chain (client first, each hop older than its
+// child) into the groups to release for this task. Every AI group found
+// anywhere on the chain stays blocked, not only the nearest: an agent inside
+// app A cannot put a renamed chatgpt.exe between itself and the CLI and get A
+// released. No AI app on the chain, or no chain, releases nothing.
+export function resolveCallerHost(chain) {
+  if (!Array.isArray(chain) || chain.length === 0) return null;
+  const blocked = new Set();
+  let host = null;
+  for (const hop of chain) {
+    if (!hop || typeof hop.path !== 'string' || !hop.path) return null;
+    const group = aiGroupOf(hop.path);
+    if (!group) continue;
+    blocked.add(group);
+    if (!host) host = { name: path.win32.basename(hop.path), path: hop.path, pid: hop.pid, group };
+  }
+  if (!host) return null;
+  const release = Object.keys(AI_APP_GROUPS).filter((g) => !blocked.has(g));
+  return { host, blocked_groups: [...blocked], release };
+}
+
+// The second argument defaults to the full block: a call site that does not
+// pass a resolved caller keeps every AI app blocked.
+export function classify(win, { release = [] } = {}) {
   const proc = normalise(win && win.process);
   const exe = normalise(win && win.path ? path.basename(win.path) : '');
   const candidates = [proc, exe].filter(Boolean);
+  const released = (b) => AI_ENTRY_GROUP.has(b) && Array.isArray(release) && release.includes(AI_ENTRY_GROUP.get(b));
 
   for (const c of candidates) {
     if (USER_BLOCKED.includes(c)) {
@@ -177,7 +219,7 @@ export function classify(win) {
     }
   }
   for (const c of candidates) {
-    if (BLOCKED.some((b) => c === b || c.startsWith(b))) {
+    if (BLOCKED.some((b) => (c === b || c.startsWith(b)) && !released(b))) {
       return { tier: TIER.BLOCKED, reason: 'This is a credential, elevation, or security surface. Computer Use never reads or drives these.' };
     }
   }
@@ -739,8 +781,8 @@ export class Policy {
 // else, browsers included (owner decision), is full. READ is kept for a
 // future category; no app maps to it today.
 export const ACCESS = Object.freeze({ READ: 'read', CLICK: 'click', FULL: 'full' });
-export function accessTier(win) {
-  const { tier } = classify(win);
+export function accessTier(win, options) {
+  const { tier } = classify(win, options);
   if (tier === TIER.BLOCKED) return null;
   if (tier === TIER.SHELL) return ACCESS.CLICK;
   return ACCESS.FULL;

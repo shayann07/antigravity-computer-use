@@ -5,7 +5,7 @@
     {
       "path": "server/build.mjs",
       "upstream_sha256": "81260b378fffb46573cfe475a3a336930113c8abc465d3d278bbb0851d8a4377",
-      "local_sha256": "b648eac68a1f09aa3f65fee4bcadb48e8bfddc77a38b4963d0ab3d1b29ceb5c5",
+      "local_sha256": "8dc6625db62e64b4452cc12b9a81b7b55695d031812bf3b4a44cac0a6fee3721",
       "modified": true
     },
     {
@@ -30,7 +30,7 @@
     {
       "path": "server/policy.mjs",
       "upstream_sha256": "673a749426c458b254d991d7f6fc75e7e5415f32b64e05011476a90803d7001b",
-      "local_sha256": "2924cecca163ddcf7d10b3ce7a262640ac83487c2e12aefe1612db77d83b71c7",
+      "local_sha256": "859881d75b4042d8d6298db20ff660a9efe10952c0c5de0614070fa19babc9a7",
       "modified": true
     },
     {
@@ -60,7 +60,7 @@
     {
       "path": "server/native/AxonHost.cs",
       "upstream_sha256": "bef101afecbdf8f75df2a1f8b45d224eade39f09e3c8e25cf7b450e3fa49a8ef",
-      "local_sha256": "2ca25cd4d1e4bf0960bb8cfa7c3c8cf748d9f6bdc23e3d42282d79244924f853",
+      "local_sha256": "d6ce7ba72a32dc2fd3096e79d2203ec914e2497d43565d1bc31173657e58471c",
       "modified": true
     },
     {
@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "f837573958cea680c5f079976c2b491cd01d3bcb2f3cb6d27b9a5876fe2b31da"
+      "sha256": "36d7acc8af61cb99764f7da947f46943c73f3962adcf16e0e2621aec4fffa404"
     },
     {
       "path": "server/mcp.mjs",
@@ -292,7 +292,7 @@
     },
     {
       "path": "server/desktop-service.mjs",
-      "sha256": "e42463195237d2bf91cc948c3fdb2fe0bfe4847680f1524a5a76eb517c789451"
+      "sha256": "2e2f69de6d71c65dd2e665b58a47838885a1f45542fa6c805ca997f11b524492"
     },
     {
       "path": "server/desktop-tools.mjs",
@@ -300,7 +300,7 @@
     },
     {
       "path": "scripts/desktop.mjs",
-      "sha256": "58be3dc72a4fc10a1835ac2bf05f31fcf4140eb86ee1d99d59ef8d0e36791e37"
+      "sha256": "b196d3368f7dbc489b9a59acf05ed450c6d492afb8f36d7832b3ff438946ef9c"
     },
     {
       "path": "server/version.mjs",
