@@ -300,7 +300,7 @@
     },
     {
       "path": "scripts/desktop.mjs",
-      "sha256": "b7896318530b61add36589b35a2b9b8fe86f230f427da8bcba653d17b1e86f09"
+      "sha256": "9bb47bd993aec5eebdfd8652f8cac306c018eebb35b95e8cb45db335824f782f"
     },
     {
       "path": "server/version.mjs",
@@ -608,7 +608,7 @@
     },
     {
       "path": "server/update-core.mjs",
-      "sha256": "46a8a320cf53fc8eba4449593001736d982f000be3bf890a960142f079fee973"
+      "sha256": "52a29e0f1d2f708b27f61279f4fd7a1b33512e3b174649441b8265924d7c9f97"
     },
     {
       "path": "server/auto-update.mjs",
