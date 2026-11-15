@@ -72,6 +72,7 @@ namespace Axon
         [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int w, int height, uint flags);
         [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr h, int attribute, out NRECT value, int size);
         [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr h, int attribute, out int value, int size);
+        [DllImport("dwmapi.dll")] static extern int DwmFlush();
 
         const uint WDA_EXCLUDEFROMCAPTURE = 0x00000011;
         const int ULW_ALPHA = 0x02;
@@ -190,6 +191,12 @@ namespace Axon
             try {_marker.BeginInvoke((MethodInvoker)delegate {try {_glow.Target(new IntPtr(hwnd),x,y,hasPoint,pulse,sampleNow);}catch {}});}catch {}
         }
         // glow.stop: 67 ms from whatever it was doing. Safe from any thread.
+        internal static void GlowBrightness(float level) {
+            GlowLevel=level;
+            if(_marker==null||_glow==null)return;
+            try {_marker.BeginInvoke((MethodInvoker)delegate {try {_glow.Bright(level);}catch {}});}catch {}
+        }
+        static volatile float GlowLevel=.55f;
         internal static void GlowStop() {
             if(_marker==null||_glow==null)return;
             try {_marker.BeginInvoke((MethodInvoker)delegate {try {_glow.Exit(DesktopVisuals.FastLeave);}catch {}});}catch {}
@@ -348,7 +355,7 @@ namespace Axon
             try
             {
                 _marker = new MarkerForm(); _marker.CreateControl(); _markerHwnd = _marker.Handle; Exclude(_markerHwnd); Mark(_markerHwnd);
-                _glow = new Glow(); _glowHwnds = _glow.Handles(); foreach (IntPtr strip in _glowHwnds) { Exclude(strip); Mark(strip); }
+                _glow = new Glow(); _glow.Bright(GlowLevel); _glowHwnds = _glow.Handles(); foreach (IntPtr strip in _glowHwnds) { Exclude(strip); Mark(strip); }
                 _banner = new BannerForm(); _banner.CreateControl(); _bannerHwnd = _banner.Handle; Exclude(_bannerHwnd); Mark(_bannerHwnd);
                 _cursor = new CursorForm(); _cursor.CreateControl(); _cursorHwnd = _cursor.Handle; Exclude(_cursorHwnd); Mark(_cursorHwnd);
 
@@ -357,7 +364,7 @@ namespace Axon
                 _idleTimer.Tick += delegate
                 {
                     _idleTimer.Stop();
-                    try { _glow.Exit(DesktopVisuals.Normal); } catch { }
+                    try { _glow.Exit(DesktopVisuals.NormalLeave); } catch { }
                     try { _banner.Vanish(); } catch { }
                     try { _cursor.Vanish(); } catch { }
                 };
@@ -501,7 +508,7 @@ namespace Axon
         }
         internal static void HideAll() {
             if (_marker == null) return;
-            try { _marker.BeginInvoke((MethodInvoker)delegate { _glow.Exit(DesktopVisuals.Normal); _banner.Vanish(); _cursor.Vanish(); _marker.Hide(); }); } catch { }
+            try { _marker.BeginInvoke((MethodInvoker)delegate { _glow.Exit(DesktopVisuals.NormalLeave); _banner.Vanish(); _cursor.Vanish(); _marker.Hide(); }); } catch { }
         }
         internal static void MarkActive()
         {
@@ -708,6 +715,28 @@ namespace Axon
                 Push();
             }
 
+            // Redraws through one kept canvas, for surfaces that animate: no
+            // bitmap is made or thrown away per frame.
+            Bitmap _canvas; int[] _canvasPixels;
+            protected void RedrawKept()
+            {
+                if (!IsHandleCreated || Width <= 0 || Height <= 0) return;
+                if (_canvas == null || _canvas.Width != Width || _canvas.Height != Height)
+                {
+                    if (_canvas != null) _canvas.Dispose();
+                    _canvas = new Bitmap(Width, Height, PixelFormat.Format32bppPArgb); _canvasPixels = new int[Width * Height];
+                }
+                using (Graphics g = Graphics.FromImage(_canvas))
+                {
+                    g.Clear(Color.Transparent);
+                    g.SmoothingMode = SmoothingMode.AntiAlias;
+                    Render(g);
+                }
+                BitmapData data = _canvas.LockBits(new Rectangle(0, 0, Width, Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppPArgb);
+                try { Marshal.Copy(data.Scan0, _canvasPixels, 0, _canvasPixels.Length); } finally { _canvas.UnlockBits(data); }
+                SetSurface(_canvasPixels, Width, Height);
+            }
+
             protected float Alpha
             {
                 get { return _alpha / 255f; }
@@ -756,7 +785,7 @@ namespace Axon
 
             protected override void Dispose(bool disposing)
             {
-                if (disposing) { StopAnimation(); ReleaseBitmap(); }
+                if (disposing) { StopAnimation(); ReleaseBitmap(); if (_canvas != null) _canvas.Dispose(); }
                 base.Dispose(disposing);
             }
         }
@@ -779,63 +808,86 @@ namespace Axon
         {
             const uint GW_HWNDPREV = 3;
             const uint SWP_QUIET = 0x0001 | 0x0002 | 0x0010 | 0x0200 | 0x0400;   // no size, move, activate, owner z-order or change notice
-            const int VeilEvery = 280;   // ms between repaints of the deep wash; it changes slowly
             // Strips 0..3 carry the edge band, 4..7 the deep wash behind it.
             readonly GlowStrip[] strips = new GlowStrip[8];
             // Follows the window. Runs while a target is set.
             readonly System.Windows.Forms.Timer watch = new System.Windows.Forms.Timer();
-            // Draws the moving light. Stopped whenever the glow is hidden or motion is reduced.
-            readonly System.Windows.Forms.Timer frame = new System.Windows.Forms.Timer();
             readonly System.Diagnostics.Stopwatch clock = System.Diagnostics.Stopwatch.StartNew();
+            // The frame clock: a thread of its own, in step with the display.
+            // It works out each frame's light; this (the UI) thread only puts
+            // the finished frame on screen. One frame is in flight at a time.
+            readonly Thread pacer; readonly AutoResetEvent wake = new AutoResetEvent(false);
+            int inFlight;
+
+            // Owned by the UI thread.
             IntPtr target = IntPtr.Zero;
-            GlowField edge, veil;
             readonly bool[] inside = new bool[4];
             Rectangle seen = Rectangle.Empty;       // the last bounds read
-            double seenAt, lastFrame, veilAt;
+            double seenAt, lastShown = -1;
             Point shift = Point.Empty;              // where the window has moved since the bake
-            bool shown, leaving, suspended, moved;
-            float master, lift, deep = 1;           // overall opacity, the lift on action, the wash's own fade
-            double enterAt = -1, masterAt = -1, masterFrom, masterTo, masterMs;
-            double lastAction = -1e9, lastPulse = -1e9, sampleAt = -1, pointAt = -1;
-            float pointFromX, pointFromY, pointToX, pointToY;
+            bool shown, leaving, passing, suspended, moved, waiting;
+            float master;                           // overall opacity
             bool hasPoint; int pointX, pointY;
-            readonly System.Collections.Generic.List<double> pulses = new System.Collections.Generic.List<double>();
+            readonly double[] gaps = new double[64]; int gapCount;
+
+            // Shared with the frame clock, under gate. Nothing waits while holding it.
+            readonly object gate = new object();
+            sealed class Job
+            {
+                internal GlowField Edge, Veil; internal int Generation; internal bool Band, Wash, Done;
+                internal double Time; internal float X, Y, Grow, Bright, Master;
+            }
+            GlowField edge, veil;
+            int generation; volatile bool live; bool bandDue, washDue;
+            double bandAt, washAt, still;
+            double enterAt = -1, pointAt = -1, brightAt = -1, masterAt = -1, masterFrom, masterTo, masterMs;
+            float aimX, aimY, pointFromX, pointFromY, pointToX, pointToY;
+            float bright = .55f, brightFrom, brightTo = .55f;
 
             internal Glow()
             {
                 for (int i = 0; i < 8; i++) { strips[i] = new GlowStrip(); strips[i].CreateControl(); IntPtr handle = strips[i].Handle; }
                 watch.Interval = 40; watch.Tick += delegate { try { Watch(); } catch { } };
-                frame.Interval = 50; frame.Tick += delegate { try { Frame(); } catch { } };
+                pacer = new Thread(Pace); pacer.IsBackground = true; pacer.Name = "glow frames"; pacer.Start();
             }
             internal IntPtr[] Handles() { IntPtr[] all = new IntPtr[8]; for (int i = 0; i < 8; i++) all[i] = strips[i].Handle; return all; }
-            internal float OpacityValue { get { return shown && !suspended ? master : 0; } }
+            bool Lit { get { return shown && !suspended && !leaving && !passing; } }
+            // What a caller is told: there or not, never a value part-way.
+            internal float OpacityValue { get { return Lit ? 1 : 0; } }
             double Now { get { return clock.Elapsed.TotalMilliseconds; } }
             GlowField Field(int strip) { return strip < 4 ? edge : veil; }
 
             internal object Report()
             {
-                Rectangle f = edge == null ? Rectangle.Empty : edge.Frame;
-                return new { shown = shown && !suspended, target = target.ToInt64(), frame = new int[] { f.X + shift.X, f.Y + shift.Y, f.Width, f.Height }, inside = (bool[])inside.Clone(), opacity = master, lift = lift, animating = frame.Enabled, frame_ms = frame.Interval };
+                Rectangle f = edge == null || !Lit ? Rectangle.Empty : edge.Frame;
+                double typical = 0, worst = 0;
+                if (gapCount > 0)
+                {
+                    int count = Math.Min(gapCount, gaps.Length); double[] sorted = new double[count];
+                    Array.Copy(gaps, sorted, count); Array.Sort(sorted); typical = sorted[count / 2]; worst = sorted[count - 1];
+                }
+                return new { shown = Lit, target = target.ToInt64(), frame = new int[] { f.X + shift.X, f.Y + shift.Y, f.Width, f.Height }, inside = (bool[])inside.Clone(), opacity = master, animating = live, frame_ms = Math.Round(typical, 1), frame_worst_ms = Math.Round(worst, 1) };
             }
 
-            internal void Target(IntPtr hwnd, int x, int y, bool point, bool pulse, bool sampleNow)
+            void Wake() { lock (gate) live = shown && !suspended && edge != null; wake.Set(); }
+
+            internal void Target(IntPtr hwnd, int x, int y, bool point, bool acted, bool sampleNow)
             {
                 if (hwnd == IntPtr.Zero) return;
                 if (hwnd != target)
                 {
-                    // The agent moved to another window: this one's glow goes,
-                    // and the new one enters on its own bounds.
-                    HideNow(); target = hwnd; edge = veil = null; seen = Rectangle.Empty; hasPoint = false;
-                    for (int i = 0; i < 4; i++) inside[i] = false;
+                    // The agent moved to another window: this one's glow
+                    // leaves, and the new one enters on its own bounds.
+                    Pass(); target = hwnd; seen = Rectangle.Empty; hasPoint = false;
                 }
                 if (leaving) { leaving = false; if (shown) FadeTo(1, DesktopVisuals.Normal); }
                 suspended = false;
                 if (point) SetPoint(x, y);
                 else if (sampleNow) SamplePointer();
-                else if (pulse) sampleAt = Now + 180;
-                if (pulse) Action();
+                else if (acted) sampleAt = Now + 180;
                 if (!watch.Enabled) { watch.Start(); Watch(); }
             }
+            double sampleAt = -1;
 
             // The pointer is where a click, drag or scroll just landed. It is
             // read once, just after the action, never followed.
@@ -846,29 +898,35 @@ namespace Axon
                 if (f.Contains(p.X, p.Y)) SetPoint(p.X, p.Y);
             }
 
+            // glow.action: the one answer to the agent's work. The bright
+            // zone travels to the new point; it does not jump, and nothing
+            // else moves.
             void SetPoint(int x, int y)
             {
                 hasPoint = true; pointX = x; pointY = y;
-                if (edge == null || !shown) return;
-                float fx = x - shift.X, fy = y - shift.Y;
-                if (!DesktopVisuals.MotionEnabled) { edge.SetAction(fx, fy); veil.SetAction(fx, fy); Paint(1); PaintVeil(); return; }
-                // The bright zone travels to the new point; it does not jump.
-                pointFromX = edge.ActionX; pointFromY = edge.ActionY; pointToX = fx; pointToY = fy; pointAt = Now; Quicken();
+                if (!shown || passing) return;
+                lock (gate)
+                {
+                    if (edge == null) return;
+                    float fx = x - shift.X, fy = y - shift.Y;
+                    if (!DesktopVisuals.MotionEnabled) { aimX = fx; aimY = fy; pointAt = -1; }
+                    else { pointFromX = aimX; pointFromY = aimY; pointToX = fx; pointToY = fy; pointAt = Now; }
+                    bandDue = true;
+                }
+                Wake();
             }
 
-            // glow.action. Actions closer than 250 ms merge into one held
-            // lift, and pulses are never closer than 350 ms, so a run of
-            // typing reads as one steady swell and never as a flicker.
-            void Action()
+            // glow.brightness: the person's setting, eased so it never snaps.
+            internal void Bright(float level)
             {
-                double now = Now;
-                if (!DesktopVisuals.MotionEnabled || !shown || leaving || enterAt >= 0) { lastAction = now; return; }
-                if (now - lastAction >= 250 && now - lastPulse >= 350) { pulses.Add(now); lastPulse = now; }
-                lastAction = now; Quicken();
+                lock (gate)
+                {
+                    if (!shown || !DesktopVisuals.MotionEnabled) { bright = brightTo = level; brightAt = -1; }
+                    else { brightFrom = bright; brightTo = level; brightAt = Now; }
+                    bandDue = washDue = true;
+                }
+                Wake();
             }
-
-            // The slow drift needs few frames; a transition needs many.
-            void Quicken() { if (frame.Interval != 16) frame.Interval = 16; if (!frame.Enabled) { lastFrame = Now; frame.Start(); } }
 
             bool Read(out Rectangle bounds, out Rectangle monitor, out Rectangle work, out float scale)
             {
@@ -907,11 +965,13 @@ namespace Axon
                 return (int)Math.Round((preference == 3 ? 4 : 8) * scale);
             }
 
-            void Bake(Rectangle bounds, Rectangle monitor, float scale)
+            // New geometry. Frames already on their way belong to the old
+            // one and are dropped when they arrive.
+            void Bake(Rectangle bounds, Rectangle monitor, float scale, float x, float y)
             {
                 int radius = CornerRadius(scale);
-                edge = new GlowField(GlowField.Edge, bounds, inside, scale, radius, monitor);
-                veil = new GlowField(GlowField.Veil, bounds, inside, scale, radius, monitor);
+                GlowField band = new GlowField(GlowField.Edge, bounds, inside, scale, radius, monitor), wash = new GlowField(GlowField.Veil, bounds, inside, scale, radius, monitor);
+                lock (gate) { edge = band; veil = wash; generation++; aimX = x; aimY = y; pointAt = -1; bandDue = washDue = true; }
                 shift = Point.Empty;
             }
 
@@ -924,181 +984,222 @@ namespace Axon
                 if (!Read(out bounds, out monitor, out work, out scale))
                 {
                     // Minimised, hidden, closed or on another desktop: no glow.
-                    if (shown) HideNow();
+                    Pass();
                     seen = Rectangle.Empty;
-                    if (!IsWindow(target)) { target = IntPtr.Zero; edge = veil = null; watch.Stop(); }
+                    if (!IsWindow(target) && !shown) { target = IntPtr.Zero; lock (gate) edge = veil = null; watch.Stop(); }
                     return;
                 }
                 if (sampleAt >= 0 && now >= sampleAt) { sampleAt = -1; SamplePointer(); }
                 if (bounds != seen)
                 {
                     bool first = seen.IsEmpty;
-                    if (shown && bounds.Size == seen.Size)
+                    if (shown && !passing && bounds.Size == seen.Size)
                     {
                         // glow.follow: locked to the frame, 1:1, no easing.
                         shift = new Point(bounds.X - edge.Frame.X, bounds.Y - edge.Frame.Y);
                         for (int i = 0; i < 8; i++) { Rectangle strip = Field(i).Strips[i % 4]; if (!strip.IsEmpty) strips[i].Shift(strip.X + shift.X, strip.Y + shift.Y); }
                         moved = true;
                     }
-                    else if (shown) HideNow();   // a jump: the old geometry is wrong at once
+                    else Pass();   // a jump: the old geometry is wrong
                     seen = bounds; seenAt = first ? now - 1000 : now;
                     if (!first) return;
                 }
                 // Sides are decided on settled bounds only.
-                if (now - seenAt < 120) return;
+                if (now - seenAt < 120 || passing) return;
                 if (!shown) Enter(bounds, work, monitor, scale);
                 else if (moved)
                 {
                     moved = false;
                     bool[] sides = Sides(bounds, work, scale, inside);
                     bool same = sides[0] == inside[0] && sides[1] == inside[1] && sides[2] == inside[2] && sides[3] == inside[3];
-                    if (!same) { HideNow(); Enter(bounds, work, monitor, scale); }
+                    if (!same) Pass();
                     else
                     {
                         // Same sides: bake again where the window now rests.
-                        float ax = edge.ActionX + shift.X, ay = edge.ActionY + shift.Y;
-                        Bake(bounds, monitor, scale);
-                        edge.SetAction(ax, ay); veil.SetAction(ax, ay); Paint(1); PaintVeil();
+                        // The strips keep the old picture until the new one lands.
+                        float ax, ay; lock (gate) { ax = (pointAt >= 0 ? pointToX : aimX) + shift.X; ay = (pointAt >= 0 ? pointToY : aimY) + shift.Y; }
+                        Bake(bounds, monitor, scale, ax, ay); Wake();
                     }
                 }
+                else if (!live && DesktopVisuals.MotionEnabled) Wake();
                 Order();
             }
 
-            // glow.enter: the band draws on from the action point around both
-            // sides; the deep wash follows.
+            // glow.enter: one moment. The light fades up while the band
+            // widens from the window's edge, over Slow, easing out. With
+            // motion reduced it is a short fade and nothing grows.
             void Enter(Rectangle bounds, Rectangle work, Rectangle monitor, float scale)
             {
                 bool[] sides = Sides(bounds, work, scale, inside);
                 for (int i = 0; i < 4; i++) inside[i] = sides[i];
-                Bake(bounds, monitor, scale); moved = false;
                 Rectangle near = bounds; near.Inflate(24, 24);
-                if (hasPoint && near.Contains(pointX, pointY)) { edge.SetAction(pointX, pointY); veil.SetAction(pointX, pointY); }
+                bool aimed = hasPoint && near.Contains(pointX, pointY);
+                Bake(bounds, monitor, scale, aimed ? pointX : bounds.Left + bounds.Width / 2f, aimed ? pointY : bounds.Bottom);
                 bool motion = DesktopVisuals.MotionEnabled;
-                pulses.Clear(); lift = 0; pointAt = -1; masterAt = -1; leaving = false;
-                enterAt = motion ? Now : -1;
-                master = 1; deep = motion ? 0 : 1;
-                Paint(motion ? 0 : 1); PaintVeil();
-                for (int i = 0; i < 8; i++)
+                moved = false; leaving = passing = false; master = 0; gapCount = 0; lastShown = -1;
+                lock (gate)
                 {
-                    if (Field(i).Strips[i % 4].IsEmpty) { strips[i].Hide(); continue; }
-                    strips[i].Level = i < 4 ? master : master * deep;
-                    if (!strips[i].Visible) strips[i].Show();
+                    bright = brightTo; brightAt = -1; enterAt = motion ? Now : -1;
+                    masterFrom = 0; masterTo = 1; masterAt = Now; masterMs = motion ? DesktopVisuals.Slow : DesktopVisuals.Fast;
                 }
-                shown = true; Order();
-                if (motion) Quicken();
+                // The strips are shown by the first frame, so they never show an old picture.
+                shown = true; waiting = true; Wake();
             }
 
-            float[] Running()
+            // ---- The frame clock's side.
+            void Pace()
             {
-                if (pulses.Count == 0) return null;
-                double now = Now; float[] running = new float[pulses.Count];
-                for (int i = 0; i < running.Length; i++) running[i] = (float)((now - pulses[i]) / DesktopVisuals.Slow);
-                return running;
-            }
-
-            void Paint(float reveal)
-            {
-                if (edge == null) return;
-                edge.Compose(Now / 1000.0, lift, reveal, Running());
-                for (int i = 0; i < 4; i++)
+                double last = 0;
+                while (true)
                 {
-                    Rectangle strip = edge.Strips[i]; if (strip.IsEmpty) continue;
-                    strip.Offset(shift); strips[i].Surface(edge.Pixels[i], strip);
-                }
-            }
-
-            void PaintVeil()
-            {
-                if (veil == null) return;
-                veilAt = Now;
-                veil.Compose(Now / 1000.0, lift, 1, null);
-                for (int i = 0; i < 4; i++)
-                {
-                    Rectangle strip = veil.Strips[i]; if (strip.IsEmpty) continue;
-                    strip.Offset(shift); strips[4 + i].Surface(veil.Pixels[i], strip);
-                }
-            }
-
-            void Frame()
-            {
-                double now = Now, elapsed = Math.Max(0, Math.Min(100, now - lastFrame)); lastFrame = now;
-                bool motion = DesktopVisuals.MotionEnabled, busy = false, quick = false; float reveal = 1;
-                if (edge != null && shown)
-                {
-                    if (pointAt >= 0)
+                    try
                     {
-                        float t = (float)((now - pointAt) / DesktopVisuals.Normal), e = DesktopVisuals.EaseInOut(t);
-                        float x = pointFromX + (pointToX - pointFromX) * e, y = pointFromY + (pointToY - pointFromY) * e;
-                        edge.SetAction(x, y); veil.SetAction(x, y);
-                        if (t >= 1) pointAt = -1; else quick = true;
+                        if (!live) { wake.WaitOne(); continue; }
+                        double before = Now; int failed = DwmFlush(); double waited = Now - before;
+                        // No compositor to wait for (a remote session, a display that is off): keep our own time.
+                        if (failed != 0) Thread.Sleep(DesktopVisuals.GlowFrame); else if (waited < 4) Thread.Sleep(8);
+                        if (Now - last < DesktopVisuals.GlowFrame - 4) continue;   // never faster than one frame time, whatever the display
+                        if (Interlocked.CompareExchange(ref inFlight, 1, 0) != 0) continue;
+                        Job job; lock (gate) job = Next();
+                        if (job == null) { Interlocked.Exchange(ref inFlight, 0); continue; }
+                        last = Now;
+                        if (job.Band) job.Edge.Compose(job.Time, job.X, job.Y, job.Grow, job.Bright);
+                        if (job.Wash) job.Veil.Compose(job.Time, job.X, job.Y, 1, job.Bright);
+                        strips[0].BeginInvoke((MethodInvoker)delegate { try { Apply(job); } catch { } finally { Interlocked.Exchange(ref inFlight, 0); } });
                     }
-                    if (enterAt >= 0)
-                    {
-                        double t = now - enterAt;
-                        reveal = DesktopVisuals.EaseOut((float)(t / DesktopVisuals.Slow));
-                        float wash = t < 120 ? 0 : DesktopVisuals.EaseOut((float)((t - 120) / DesktopVisuals.Normal));
-                        if (t >= 120 + DesktopVisuals.Normal) { enterAt = -1; reveal = wash = 1; } else quick = true;
-                        if (wash != deep) { deep = wash; for (int i = 4; i < 8; i++) strips[i].Level = master * deep; }
-                    }
-                    pulses.RemoveAll(delegate(double started) { return now - started >= DesktopVisuals.Slow; });
-                    if (pulses.Count > 0) quick = true;
-                    // The lift rises fast, holds while actions keep arriving, then falls once.
-                    float wanted = now - lastAction < 250 && motion ? 1 : 0;
-                    if (lift != wanted) { lift = wanted > lift ? Math.Min(1, lift + (float)(elapsed / DesktopVisuals.Fast)) : Math.Max(0, lift - (float)(elapsed / DesktopVisuals.Slow)); quick = true; }
-                    if (now - lastAction < 250) quick = true;
-                    // The light is never still: its colours keep travelling the
-                    // edge. With motion reduced it is drawn once and holds.
-                    if (motion || quick) Paint(reveal);
-                    if (now - veilAt >= VeilEvery && (motion || quick)) PaintVeil();
-                    busy = motion || quick;
+                    catch { Interlocked.Exchange(ref inFlight, 0); Thread.Sleep(50); }
+                }
+            }
+
+            // Decides what this frame needs. Called under gate.
+            Job Next()
+            {
+                if (edge == null || !live) { live = false; return null; }
+                double now = Now; bool motion = DesktopVisuals.MotionEnabled, quick = false;
+                Job job = new Job(); job.Edge = edge; job.Veil = veil; job.Generation = generation; job.Grow = 1; job.Master = (float)masterTo;
+                if (pointAt >= 0)
+                {
+                    float t = (float)((now - pointAt) / DesktopVisuals.Normal), e = DesktopVisuals.EaseInOut(t);
+                    aimX = pointFromX + (pointToX - pointFromX) * e; aimY = pointFromY + (pointToY - pointFromY) * e;
+                    if (t >= 1) { pointAt = -1; aimX = pointToX; aimY = pointToY; }
+                    quick = true;
+                }
+                if (enterAt >= 0)
+                {
+                    float t = (float)((now - enterAt) / DesktopVisuals.Slow);
+                    job.Grow = DesktopVisuals.EaseOut(t);
+                    if (t >= 1) enterAt = -1;
+                    quick = true;
+                }
+                bool dimming = brightAt >= 0;
+                if (dimming)
+                {
+                    float t = (float)((now - brightAt) / DesktopVisuals.Normal);
+                    bright = brightFrom + (brightTo - brightFrom) * DesktopVisuals.EaseOut(t);
+                    if (t >= 1) { brightAt = -1; bright = brightTo; }
+                    quick = true;
                 }
                 if (masterAt >= 0)
                 {
+                    // Opacity only: no new picture is needed for it. The UI
+                    // thread clears masterAt when it has seen the fade end.
                     double t = masterMs <= 0 ? 1 : (now - masterAt) / masterMs;
-                    float e = leaving ? DesktopVisuals.EaseIn((float)t) : DesktopVisuals.EaseOut((float)t);
-                    master = (float)(masterFrom + (masterTo - masterFrom) * e);
-                    for (int i = 0; i < 8; i++) strips[i].Level = i < 4 ? master : master * deep;
-                    if (t >= 1)
-                    {
-                        masterAt = -1;
-                        if (leaving) { HideNow(); target = IntPtr.Zero; edge = veil = null; leaving = false; watch.Stop(); }
-                    }
-                    else busy = quick = true;
+                    job.Master = (float)(masterFrom + (masterTo - masterFrom) * DesktopVisuals.EaseOut((float)t));
+                    job.Done = t >= 1;
                 }
-                if (!busy) { frame.Stop(); return; }
-                int interval = quick ? 16 : 50;
-                if (frame.Interval != interval) frame.Interval = interval;
+                // The light is never quite still: at rest it is composed at
+                // half the transition rate. With motion reduced it is
+                // composed when something changes, and then holds.
+                if (motion) still = now / 1000.0;
+                job.Time = still; job.X = aimX; job.Y = aimY; job.Bright = bright;
+                job.Band = bandDue || quick || (motion && now - bandAt >= DesktopVisuals.GlowRestFrame - 4);
+                job.Wash = washDue || dimming || (motion && now - washAt >= DesktopVisuals.GlowVeilFrame);
+                if (job.Band) { bandDue = false; bandAt = now; }
+                if (job.Wash) { washDue = false; washAt = now; }
+                if (!job.Band && !job.Wash && masterAt < 0)
+                {
+                    if (!motion) live = false;   // nothing will change until something asks
+                    return null;
+                }
+                return job;
+            }
+
+            // Back on the UI thread: put the finished frame on screen, unless
+            // the glow has changed or gone since it was asked for.
+            void Apply(Job job)
+            {
+                bool stale; lock (gate) stale = job.Generation != generation || job.Edge != edge;
+                if (stale || !shown || suspended) return;
+                if (waiting && !(job.Band && job.Wash)) { lock (gate) bandDue = washDue = true; return; }
+                for (int i = 0; i < 4; i++)
+                {
+                    if (job.Band) { Rectangle strip = job.Edge.Strips[i]; if (!strip.IsEmpty) { strip.Offset(shift); strips[i].Surface(job.Edge.Pixels[i], strip); } }
+                    if (job.Wash) { Rectangle strip = job.Veil.Strips[i]; if (!strip.IsEmpty) { strip.Offset(shift); strips[4 + i].Surface(job.Veil.Pixels[i], strip); } }
+                }
+                master = job.Master;
+                for (int i = 0; i < 8; i++) strips[i].Level = master;
+                if (waiting)
+                {
+                    waiting = false;
+                    for (int i = 0; i < 8; i++) { if (Field(i).Strips[i % 4].IsEmpty) strips[i].Hide(); else if (!strips[i].Visible) strips[i].Show(); }
+                    Order();
+                }
+                if (job.Band)
+                {
+                    double now = Now;
+                    if (lastShown >= 0 && now - lastShown < 250) gaps[gapCount++ % gaps.Length] = now - lastShown;
+                    lastShown = now;
+                }
+                if (job.Done)
+                {
+                    lock (gate) masterAt = -1;
+                    if (leaving) { HideNow(); target = IntPtr.Zero; lock (gate) edge = veil = null; leaving = false; watch.Stop(); }
+                    else if (passing) HideNow();   // the watch enters again on the new bounds
+                }
             }
 
             void FadeTo(float level, int milliseconds)
             {
-                masterFrom = master; masterTo = level; masterAt = Now; masterMs = DesktopVisuals.MotionEnabled ? milliseconds : 0;
-                Quicken();
+                lock (gate) { masterFrom = master; masterTo = level; masterAt = Now; masterMs = DesktopVisuals.MotionEnabled ? milliseconds : 0; }
+                Wake();
             }
 
-            // glow.exit (Normal) and glow.stop (67 ms): opacity only, from
-            // whatever it has now. A stop is never slowed by a running exit.
+            // glow.pass: the window jumped (maximised, restored, minimised)
+            // or the agent moved to another one. The light leaves over
+            // NormalLeave and enters again where it now belongs.
+            void Pass()
+            {
+                if (!shown || passing) return;
+                if (waiting || suspended || !DesktopVisuals.MotionEnabled) { HideNow(); return; }
+                passing = true; FadeTo(0, DesktopVisuals.NormalLeave);
+            }
+
+            // glow.exit (NormalLeave) and glow.stop (FastLeave): opacity only,
+            // from whatever it has now. A stop is never slowed by a running exit.
             internal void Exit(int milliseconds)
             {
                 sampleAt = -1;
-                if (!shown) { target = IntPtr.Zero; edge = veil = null; leaving = false; watch.Stop(); return; }
-                if (leaving && masterMs <= milliseconds) return;
-                leaving = true; FadeTo(0, milliseconds);
+                if (!shown || waiting || suspended) { HideNow(); target = IntPtr.Zero; lock (gate) edge = veil = null; leaving = false; watch.Stop(); return; }
+                bool fading; lock (gate) fading = masterAt >= 0 && masterTo == 0 && masterMs <= milliseconds;
+                if ((leaving || passing) && fading) { leaving = true; passing = false; return; }
+                leaving = true; passing = false; FadeTo(0, milliseconds);
             }
 
             void HideNow()
             {
                 for (int i = 0; i < 8; i++) if (strips[i].Visible) strips[i].Hide();
-                shown = false; master = 0; deep = 1; enterAt = -1; masterAt = -1; pointAt = -1; lift = 0; pulses.Clear(); shift = Point.Empty; moved = false;
-                frame.Stop();
+                shown = false; passing = false; waiting = false; master = 0; shift = Point.Empty; moved = false;
+                lock (gate) { generation++; live = false; enterAt = -1; masterAt = -1; pointAt = -1; }
             }
 
             // A screenshot is being taken: out of the picture at once, and
-            // back without ceremony when the agent carries on.
+            // back without ceremony when the agent carries on. A frame that
+            // was on its way is dropped, so it cannot land in the picture.
             internal void Suspend()
             {
                 if (!shown || suspended) return;
                 suspended = true;
+                lock (gate) { generation++; live = false; }
                 for (int i = 0; i < 8; i++) if (strips[i].Visible) strips[i].Hide();
             }
             internal void Resume()
@@ -1106,8 +1207,8 @@ namespace Axon
                 if (!suspended) return;
                 suspended = false;
                 if (!shown || edge == null) return;
-                for (int i = 0; i < 8; i++) if (!Field(i).Strips[i % 4].IsEmpty) strips[i].Show();
-                Order(); lastFrame = Now; if (!frame.Enabled) frame.Start();
+                if (!waiting) for (int i = 0; i < 8; i++) if (!Field(i).Strips[i % 4].IsEmpty) strips[i].Show();
+                Order(); lock (gate) bandDue = washDue = true; lastShown = -1; Wake();
             }
 
             bool IsStrip(IntPtr h) { for (int i = 0; i < 8; i++) if (strips[i].IsHandleCreated && strips[i].Handle == h) return true; return false; }
@@ -1116,7 +1217,7 @@ namespace Axon
             // target itself is. The edge band ends up above the wash.
             void Order()
             {
-                if (!shown || target == IntPtr.Zero) return;
+                if (!shown || target == IntPtr.Zero || passing) return;
                 IntPtr above = GetWindow(target, GW_HWNDPREV);
                 if (above != IntPtr.Zero && IsStrip(above)) return;
                 bool targetTop = (GetWindowLongW(target, GWL_EXSTYLE) & 0x8) != 0;
@@ -1351,10 +1452,15 @@ namespace Axon
             readonly System.Windows.Forms.Timer _hover;
             bool _showLabel;
             const int ArrowW = 22, ArrowH = 32, LabelGap = 6;
-            readonly System.Windows.Forms.Timer _follow;
-            float _scale=1;int _tones=-1;
+            readonly System.Windows.Forms.Timer _follow,_rippling;
+            float _scale=1;
             bool _ripple;DateTime _clicked;
-            internal void Ping() {_clicked=DateTime.UtcNow;_ripple=true;Redraw();}
+            // pointer.follow: the glow is moved by the pointer's own events,
+            // so it never trails. The hook only notes the point and posts one
+            // message; the window work happens here on the UI thread.
+            volatile int _atX,_atY;volatile bool _following;int _posted;
+            // pointer.click: one ring, over Press, drawn on a kept surface.
+            internal void Ping() {_clicked=DateTime.UtcNow;_ripple=true;RedrawKept();_rippling.Start();}
 
             internal CursorForm() : base(true)
             {
@@ -1364,13 +1470,28 @@ namespace Axon
                 _hover = new System.Windows.Forms.Timer();
                 _hover.Interval = 120;
                 _hover.Tick += delegate { UpdateHover(); };
-                _follow=new System.Windows.Forms.Timer();_follow.Interval=16;
+                // The slow check: a change of monitor scale, and a place to
+                // stand if the pointer's events are not available.
+                _follow=new System.Windows.Forms.Timer();_follow.Interval=100;
                 _follow.Tick += delegate {
                     NPOINT p;if(!GetCursorPos(out p))return;
+                    int wanted=Presence.HooksOk?100:16;if(_follow.Interval!=wanted)_follow.Interval=wanted;
                     float scale=ScreenScale(Screen.FromPoint(new Point(p.X,p.Y)));
-                    if(scale!=_scale||_tones!=GlowTones.Version) {_scale=scale;_tones=GlowTones.Version;Size=new Size((int)(96*scale),(int)(96*scale));Redraw();}
+                    if(scale!=_scale) {_scale=scale;Size=new Size((int)(96*scale),(int)(96*scale));RedrawKept();}
                     PlaceAt(p.X-(int)(48*scale),p.Y-(int)(48*scale));
-                    if(_ripple) {if((DateTime.UtcNow-_clicked).TotalMilliseconds>DesktopVisuals.Slow)_ripple=false;Redraw();}
+                };
+                _rippling=new System.Windows.Forms.Timer();_rippling.Interval=16;
+                _rippling.Tick += delegate {
+                    if((DateTime.UtcNow-_clicked).TotalMilliseconds>=DesktopVisuals.Press){_ripple=false;_rippling.Stop();}
+                    if(Visible)RedrawKept();
+                };
+                if(Environment.GetEnvironmentVariable("AGCU_GUARDIAN")=="1")Presence.PointerMoved=delegate(int x,int y) {
+                    _atX=x;_atY=y;
+                    if(!_following||Interlocked.Exchange(ref _posted,1)!=0)return;
+                    try {BeginInvoke((MethodInvoker)delegate {
+                        Interlocked.Exchange(ref _posted,0);
+                        if(_following&&Visible)PlaceAt(_atX-(int)(48*_scale),_atY-(int)(48*_scale));
+                    });}catch {Interlocked.Exchange(ref _posted,0);}
                 };
             }
 
@@ -1381,7 +1502,7 @@ namespace Axon
                 _scale=ScreenScale(Screen.FromPoint(new Point(p.X,p.Y)));
                 Size=new Size((int)(96*_scale),(int)(96*_scale));
                 Location=new Point(p.X-(int)(48*_scale),p.Y-(int)(48*_scale));
-                StopAnimation();Alpha=1;Redraw();Show();_follow.Start();
+                StopAnimation();Alpha=1;RedrawKept();Show();_follow.Start();_following=true;
             }
 
             internal void MoveTo(int x, int y)
@@ -1413,7 +1534,7 @@ namespace Axon
 
             internal void Vanish()
             {
-                _follow.Stop();
+                _follow.Stop();_following=false;_rippling.Stop();_ripple=false;
                 _hover.Stop();
                 _showLabel = false;
                 if (!Visible) return;
@@ -1447,7 +1568,7 @@ namespace Axon
                 if(Environment.GetEnvironmentVariable("AGCU_GUARDIAN")=="1") {
                     g.ScaleTransform(_scale,_scale);DesktopVisuals.Pointer(g,0);
                     if(_ripple) {
-                        DesktopVisuals.Ripple(g,(float)Math.Min(1,(DateTime.UtcNow-_clicked).TotalMilliseconds/DesktopVisuals.Slow));
+                        DesktopVisuals.Ripple(g,(float)Math.Min(1,(DateTime.UtcNow-_clicked).TotalMilliseconds/DesktopVisuals.Press));
                     }
                     return;
                 }
@@ -1479,7 +1600,7 @@ namespace Axon
                 }
             }
             protected override void Dispose(bool disposing) {
-                if(disposing){_follow.Dispose();_hover.Dispose();}base.Dispose(disposing);
+                if(disposing){_follow.Dispose();_hover.Dispose();_rippling.Dispose();}base.Dispose(disposing);
             }
         }
 

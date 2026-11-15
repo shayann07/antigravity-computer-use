@@ -10,9 +10,9 @@
 //   bloom   coloured light spilling a short way from the band
 //   wash    a faint, deep veil well into the window, so the light has depth
 //           without fogging what the app shows
-// The colours travel slowly around the window, and every part is brighter the
-// nearer it is to the agent's last action, so the glow also says where in the
-// app it is working.
+// The colours drift slowly around the window and the band slowly thickens
+// and thins, so the light is alive without ever drawing the eye. It answers
+// the agent in one way only: it is brightest nearest the last action.
 using System;
 using System.Drawing;
 
@@ -63,11 +63,9 @@ namespace Axon {
         // window from an edge that is lit outside.
         internal static int Reach(int kind,int zone) {return kind==Edge?(zone==2?Lip:84):(zone==0?120:zone==1?160:80);}
         static readonly double MinBright=ControlContract.UiNumber("glow_min",.5,0,1),Spread=ControlContract.UiNumber("glow_reach",.42,.05,4);
-        static readonly double Strength=ControlContract.UiNumber("glow_strength",.6,0,1),Lift=ControlContract.UiNumber("glow_lift",.3,0,2);
+        static readonly double Strength=ControlContract.UiNumber("glow_strength",.6,0,1);
         // One lap of colour around the window, in seconds.
-        static readonly double Lap=ControlContract.UiNumber("glow_lap_seconds",18,2,120);
-        // The person's own setting, a share of full strength. Set from the Settings menu.
-        internal static volatile float Brightness=.55f;
+        static readonly double Lap=ControlContract.UiNumber("glow_lap_seconds",DesktopVisuals.GlowLap,2,600);
         const double RibbonWeight=.62,SwellWeight=.9,BloomWeight=.55,WashWeight=.24;
         internal readonly int Kind;
         internal readonly Rectangle Frame,Clip;internal readonly bool[] Inside;internal readonly float Scale;internal readonly int Radius;
@@ -82,12 +80,31 @@ namespace Axon {
         readonly byte[][] grain=new byte[4][];
         readonly int perimeter;readonly float[] rest;
         readonly int[] gainA,gainB,gainC,tone,hot;
-        float actionX,actionY;int actionIndex;
-        internal float ActionX {get {return actionX;}} internal float ActionY {get {return actionY;}}
+        float aimX=Single.NaN,aimY=Single.NaN;
+        // The slow movement is sampled every Stride pixels of edge and
+        // joined by straight lines; it is far smoother than that.
+        const int Stride=16;
+        readonly double[] thickness,spill,wander;
 
         static readonly float[] Wave=MakeWave();
         static float[] MakeWave() {float[] w=new float[1024];for(int i=0;i<1024;i++)w[i]=(float)Math.Sin(i/1024.0*2*Math.PI);return w;}
-        static float Sine(double turns) {turns-=Math.Floor(turns);return Wave[(int)(turns*1024)&1023];}
+        // Smooth noise that never repeats in time and closes on itself
+        // after `cells` along the edge, so the loop has no seam. About -1..1.
+        static double Lean(int cell,int row,int seed,double dx,double dy) {
+            uint h=(uint)(cell*374761393)^(uint)(row*668265263)^(uint)(seed*974711);h=(h^(h>>13))*1274126177;h^=h>>16;
+            int angle=(int)(h&1023);return Wave[(angle+256)&1023]*dx+Wave[angle]*dy;
+        }
+        static double Drift(double along,double when,int cells,int seed) {
+            double fx=Math.Floor(along),fy=Math.Floor(when),x=along-fx,y=when-fy;
+            int left=(((int)fx%cells)+cells)%cells,right=(left+1)%cells,row=(int)fy;
+            double u=x*x*x*(x*(x*6-15)+10),v=y*y*y*(y*(y*6-15)+10);
+            double top=Lean(left,row,seed,x,y),top2=Lean(right,row,seed,x-1,y),low=Lean(left,row+1,seed,x,y-1),low2=Lean(right,row+1,seed,x-1,y-1);
+            top+=(top2-top)*u;low+=(low2-low)*u;
+            return Math.Max(-1,Math.Min(1,(top+(low-top)*v)*1.6));
+        }
+        void Sample(double[] into,int cells,double seconds,int seed,double time) {
+            for(int n=0;n<into.Length;n++)into[n]=Drift(Math.Min(perimeter,n*Stride)/(double)perimeter*cells,time/seconds,cells,seed);
+        }
 
         internal GlowField(int kind,Rectangle frame,bool[] inside,float scale,int radius,Rectangle clip) {
             Kind=kind;Frame=frame;Inside=(bool[])inside.Clone();Scale=scale<=0?1:scale;Clip=clip;
@@ -108,7 +125,8 @@ namespace Axon {
             for(int k=0;k<4;k++) {Strips[k]=Rectangle.Intersect(Strips[k],clip);if(Strips[k].Width<=0||Strips[k].Height<=0)Strips[k]=Rectangle.Empty;}
             perimeter=Math.Max(1,2*(frame.Width+frame.Height));
             rest=new float[perimeter];gainA=new int[perimeter];gainB=new int[perimeter];gainC=new int[perimeter];tone=new int[perimeter];hot=new int[perimeter];
-            Bake();SetAction(frame.Left+frame.Width/2f,frame.Top+frame.Height/2f);
+            int samples=perimeter/Stride+2;thickness=new double[samples];spill=new double[samples];wander=new double[samples];
+            Bake();
         }
         static double Fade(double u,double reach) {double x=Math.Max(0,Math.Min(1,(reach-u)/(reach*.4)));return x*x*(3-2*x);}
         // How strong each part is, u DIPs from the edge.
@@ -207,48 +225,40 @@ namespace Axon {
         }
         // Where the agent last acted, in screen pixels. The edge is brightest
         // nearest this point and cools away from it.
-        internal void SetAction(float x,float y) {
-            actionX=x;actionY=y;
+        void Aim(float x,float y) {
+            if(x==aimX&&y==aimY)return;
+            aimX=x;aimY=y;
             double reach=Spread*Math.Sqrt((double)Frame.Width*Frame.Width+(double)Frame.Height*Frame.Height);
-            double best=Double.MaxValue;
             for(int i=0;i<perimeter;i++) {
                 float ex,ey;EdgePoint(i,out ex,out ey);
-                double d=Math.Sqrt((ex-x)*(ex-x)+(ey-y)*(ey-y));
-                if(d<best){best=d;actionIndex=i;}
-                rest[i]=(float)(MinBright+(1-MinBright)*Math.Exp(-(d/reach)*(d/reach)));
+                double d=((double)(ex-x)*(ex-x)+(double)(ey-y)*(ey-y))/(reach*reach);
+                rest[i]=(float)(MinBright+(1-MinBright)*Math.Exp(-d));
             }
         }
-        // time (seconds) carries the colours around the edge and lets the
-        // band thicken and thin, so the light is never still. lift 0..1
-        // raises it when input lands; reveal 0..1 draws it on from the action
-        // point; each pulse 0..1 is one swell travelling away from that
-        // point, both ways.
-        internal void Compose(double time,float lift,float reveal,float[] pulses) {
-            double travel=.48*perimeter/2.0,width=110*Scale,raise=1+Lift*Math.Max(0,Math.Min(1,lift)),turn=time/Lap,power=Strength*Math.Max(.1f,Math.Min(1f,Brightness));
+        // One frame. time (seconds) carries the colours round the edge and
+        // lets the band thicken and thin; (x,y) is where the agent last
+        // acted; grow 0..1 widens the band from the edge as it enters;
+        // bright is the person's own setting, a share of full strength.
+        internal void Compose(double time,float x,float y,float grow,float bright) {
+            Aim(x,y);
+            double turn=time/Lap,power=Strength*Math.Max(.1f,Math.Min(1f,bright)),wide=Math.Max(0,Math.Min(1,grow));
+            if(Kind==Edge){Sample(thickness,3,DesktopVisuals.GlowBreath,11,time);Sample(spill,2,DesktopVisuals.GlowBreath*1.3,23,time);}
+            Sample(wander,3,DesktopVisuals.GlowWander,37,time);
             for(int i=0;i<perimeter;i++) {
-                double d=Math.Abs(i-actionIndex);d=Math.Min(d,perimeter-d);
-                double place=i/(double)perimeter,near=rest[i],shown=1,surge=0;
-                if(pulses!=null)foreach(float q in pulses) {
-                    if(q<0||q>=1)continue;
-                    double k=(d-travel*DesktopVisuals.EaseOut(q))/width;surge+=Math.Exp(-k*k)*(1-DesktopVisuals.EaseIn(q));
-                }
-                if(reveal<1) {
-                    double front=reveal*perimeter/2.0,k=(d-front)/(60*Scale);
-                    shown=Math.Max(0,Math.Min(1,(front-d)/(40*Scale)+1));surge+=.7*Math.Exp(-k*k)*shown;
-                }
-                // The colours travel one way; the thickness wanders the other.
-                int colour=GlowTones.At(place*2-turn+.09*Sine(place*3+turn*.6)+.04*Sine(place*7-turn*1.3));
-                double thick=Math.Max(0,Math.Min(1,.5+.3*Sine(place*5+time/6.1)+.24*Sine(place*8-time/4.3+.37)+.16*Sine(place*13+time/3.1+.71)));
-                double breath=Math.Max(0,Math.Min(1,.55+.28*Sine(place*2-time/9.1)+.17*Sine(place*4+time/6.3+.21)));
+                int cell=i/Stride;double part=(i-cell*Stride)/(double)Stride;
+                double place=i/(double)perimeter,near=rest[i];
+                int colour=GlowTones.At(place*2-turn+.06*(wander[cell]+(wander[cell+1]-wander[cell])*part));
                 int cr=(colour>>16)&255,cg=(colour>>8)&255,cb=colour&255;
                 tone[i]=((cr+(255-cr)*10/100)<<16)|((cg+(255-cg)*10/100)<<8)|(cb+(255-cb)*10/100);
-                // The band's centre is the same colour, a little lighter. Never white.
-                hot[i]=((cr+(255-cr)*30/100)<<16)|((cg+(255-cg)*30/100)<<8)|(cb+(255-cb)*30/100);
                 if(Kind==Edge) {
-                    gainA[i]=(int)(256*power*RibbonWeight*(.84+.16*near)*shown);
-                    gainB[i]=(int)(256*power*SwellWeight*Math.Min(1,(.22+.78*thick)*(.7+.3*near)+.8*surge)*raise*shown);
-                    gainC[i]=(int)(256*power*BloomWeight*Math.Min(1.25,(.6+.4*breath)*(.6+.4*near)+.6*surge)*raise*shown);
-                } else gainA[i]=(int)(256*power*WashWeight*(.55+.45*near)*(.8+.2*breath)*raise*shown);
+                    double thick=Math.Max(0,Math.Min(1,.5+.55*(thickness[cell]+(thickness[cell+1]-thickness[cell])*part)));
+                    double breath=Math.Max(0,Math.Min(1,.55+.4*(spill[cell]+(spill[cell+1]-spill[cell])*part)));
+                    // The band's centre is the same colour, a little lighter. Never white.
+                    hot[i]=((cr+(255-cr)*30/100)<<16)|((cg+(255-cg)*30/100)<<8)|(cb+(255-cb)*30/100);
+                    gainA[i]=(int)(256*power*RibbonWeight*(.84+.16*near));
+                    gainB[i]=(int)(256*power*SwellWeight*(.22+.78*thick)*(.7+.3*near)*wide);
+                    gainC[i]=(int)(256*power*BloomWeight*(.6+.4*breath)*(.6+.4*near)*wide);
+                } else gainA[i]=(int)(256*power*WashWeight*.8*wide);
             }
             for(int k=0;k<4;k++) {
                 int[] output=Pixels[k],ix=index[k];byte[] pa=first[k],pb=second[k],pc=third[k],noise=grain[k];

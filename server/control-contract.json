@@ -23,8 +23,7 @@
     "glow_min": 0.5,
     "glow_reach": 0.42,
     "glow_strength": 0.6,
-    "glow_lap_seconds": 18,
-    "glow_lift": 0.3
+    "glow_lap_seconds": 60
   },
   "sensitive_operations": ["launch", "clipboard", "close_window", "paste", "paste_files", "open", "file_dialog"],
   "ambiguous_target_operations": ["click", "drag"],

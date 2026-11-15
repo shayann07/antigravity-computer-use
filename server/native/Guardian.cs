@@ -406,7 +406,7 @@ namespace Axon {
         string dock="top-centre";double dockX,dockY;
         // How bright the person wants the glow: soft, medium or bright.
         string glowLevel="soft";
-        void ApplyGlowLevel() {GlowField.Brightness=glowLevel=="bright"?1f:glowLevel=="medium"?.75f:.55f;}
+        void ApplyGlowLevel() {Overlay.GlowBrightness(glowLevel=="bright"?1f:glowLevel=="medium"?.75f:.55f);}
         bool dragging,dragArmed,displaced,sliding,entering;Point dragGrab,dragStart,slideFrom,slideTo;DateTime displacedAt,slideAt,enterAt;int slideMs;
         string activity="";DateTime activityAt;
         // Where the current action lands and who is acting. Carried by the

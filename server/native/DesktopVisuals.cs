@@ -16,9 +16,37 @@ namespace Axon {
         // One table of motion tokens. Components use these names; a raw
         // duration elsewhere is a mistake.
         internal const int Fast=100,Normal=200,Slow=300,FastLeave=67,NormalLeave=133;
-        internal static float EaseOut(float t) {t=Math.Max(0,Math.Min(1,t));return 1-(1-t)*(1-t)*(1-t);}
-        internal static float EaseIn(float t) {t=Math.Max(0,Math.Min(1,t));return t*t*t;}
-        internal static float EaseInOut(float t) {t=Math.Max(0,Math.Min(1,t));return t<.5f?4*t*t*t:1-(float)Math.Pow(-2*t+2,3)/2;}
+        // button.press: how long a press takes to land, and how far it goes.
+        internal const int Press=160;internal const float PressScale=.97f;
+        // menu.open: the panel grows from this share of its size.
+        internal const float MenuFrom=.96f;
+        // bar.settle: one gentle spring. Seconds to settle, and how much it overshoots.
+        internal const double SpringSeconds=.45,SpringBounce=.15;
+        // The glow's slow life, in seconds: one lap of colour, one swell of
+        // the band, one wander of the colours. And its frame times, in
+        // milliseconds: in a transition, at rest, and for the deep wash.
+        internal const double GlowLap=60,GlowBreath=7,GlowWander=13;
+        internal const int GlowFrame=16,GlowRestFrame=33,GlowVeilFrame=1000;
+        // Entering and leaving ease out: quick to answer, gentle to settle.
+        // Moving on screen eases in and out. Both are strong curves.
+        static readonly float[] OutCurve=Curve(.23,1,.32,1),InOutCurve=Curve(.77,0,.175,1);
+        static float[] Curve(double x1,double y1,double x2,double y2) {
+            float[] table=new float[257];
+            for(int i=0;i<=256;i++) {
+                // Solve the curve's x for its parameter, then read y.
+                double x=i/256.0,p=x;
+                for(int n=0;n<8;n++) {
+                    double at=3*(1-p)*(1-p)*p*x1+3*(1-p)*p*p*x2+p*p*p-x,slope=3*(1-p)*(1-p)*x1+6*(1-p)*p*(x2-x1)+3*p*p*(1-x2);
+                    if(Math.Abs(slope)<1e-6)break;
+                    p=Math.Max(0,Math.Min(1,p-at/slope));
+                }
+                table[i]=(float)(3*(1-p)*(1-p)*p*y1+3*(1-p)*p*p*y2+p*p*p);
+            }
+            table[0]=0;table[256]=1;return table;
+        }
+        static float Read(float[] table,float t) {t=Math.Max(0,Math.Min(1,t))*256;int i=Math.Min(255,(int)t);return table[i]+(table[i+1]-table[i])*(t-i);}
+        internal static float EaseOut(float t) {return Read(OutCurve,t);}
+        internal static float EaseInOut(float t) {return Read(InOutCurve,t);}
         // Colour tokens. The bar is always dark: it floats over unknown content.
         internal static readonly Color InkSurface=Color.FromArgb(18,22,29),InkRaised=Color.FromArgb(28,34,44);
         internal static readonly Color PaperText=Color.FromArgb(242,245,248),Mist=Color.FromArgb(169,180,192),Rest=Color.FromArgb(213,220,228);
@@ -306,10 +334,10 @@ namespace Axon {
                 Marshal.Copy(pixels,0,data.Scan0,pixels.Length);
             } finally {image.UnlockBits(data);}
         }
-        static GlowField[] Glow(Rectangle app,bool inside,Rectangle clip,float x,float y,double time,float lift,float[] pulses) {
+        static GlowField[] Glow(Rectangle app,bool inside,Rectangle clip,float x,float y,double time,float grow=1,float bright=.55f) {
             bool[] sides={inside,inside,inside,inside};
             GlowField veil=new GlowField(GlowField.Veil,app,sides,1,inside?0:8,clip),edge=new GlowField(GlowField.Edge,app,sides,1,inside?0:8,clip);
-            veil.SetAction(x,y);edge.SetAction(x,y);veil.Compose(time,lift,1,pulses);edge.Compose(time,lift,1,pulses);
+            veil.Compose(time,x,y,1,bright);edge.Compose(time,x,y,grow,bright);
             return new GlowField[]{veil,edge};
         }
         static void Crop(Bitmap source,Rectangle part,Bitmap sheet,int x,int y) {using(Graphics g=Graphics.FromImage(sheet))g.DrawImage(source,new Rectangle(x,y,part.Width,part.Height),part,GraphicsUnit.Pixel);}
@@ -322,26 +350,28 @@ namespace Axon {
                 foreach(bool dark in new bool[]{true,false}) {
                     // Maximised: lit inside. At full size: a corner, the edge by the action, the far edge.
                     using(Bitmap image=Backdrop(w,h,dark,screen))using(Bitmap sheet=new Bitmap(1200,400,PixelFormat.Format32bppArgb)) {
-                        Lay(image,Glow(screen,true,screen,300,h-60,4.0,0,null));
+                        Lay(image,Glow(screen,true,screen,300,h-60,4.0));
                         image.Save(Path.Combine(directory,"glow-"+tag+"-inside-"+(dark?"dark":"light")+".png"),ImageFormat.Png);
                         Crop(image,new Rectangle(0,h-400,400,400),sheet,0,0);Crop(image,new Rectangle(0,0,400,400),sheet,400,0);Crop(image,new Rectangle(w-400,200,400,400),sheet,800,0);
                         sheet.Save(Path.Combine(directory,"close-"+tag+"-inside-"+(dark?"dark":"light")+".png"),ImageFormat.Png);
                     }
                     // Windowed: lit outside.
                     using(Bitmap image=Backdrop(w,h,dark,window))using(Bitmap sheet=new Bitmap(1200,400,PixelFormat.Format32bppArgb)) {
-                        Lay(image,Glow(window,false,screen,window.X+240,window.Bottom-60,4.0,0,null));
+                        Lay(image,Glow(window,false,screen,window.X+240,window.Bottom-60,4.0));
                         image.Save(Path.Combine(directory,"glow-"+tag+"-outside-"+(dark?"dark":"light")+".png"),ImageFormat.Png);
                         Crop(image,new Rectangle(window.X-110,window.Bottom-290,400,400),sheet,0,0);Crop(image,new Rectangle(window.X-110,window.Y-110,400,400),sheet,400,0);Crop(image,new Rectangle(window.Right-290,window.Y+60,400,400),sheet,800,0);
                         sheet.Save(Path.Combine(directory,"close-"+tag+"-outside-"+(dark?"dark":"light")+".png"),ImageFormat.Png);
                     }
                 }
-                // Motion: the same stretch of the bottom edge, half a second apart, then a click landing.
+                // Motion: the same stretch of the bottom edge. Top row: the
+                // entrance, 50 ms apart (the opacity fade is the window's and
+                // is not drawn here). Bottom row: the drift, two seconds apart.
                 using(Bitmap sheet=new Bitmap(1200,480,PixelFormat.Format32bppArgb)) {
                     for(int i=0;i<6;i++)using(Bitmap image=Backdrop(w,h,true,screen)) {
-                        Lay(image,Glow(screen,true,screen,300,h-60,4.0+i*.5,0,null));Crop(image,new Rectangle(200,h-240,200,240),sheet,i*200,0);
+                        Lay(image,Glow(screen,true,screen,300,h-60,4.0+i*.05,EaseOut(i*50f/Slow)));Crop(image,new Rectangle(200,h-240,200,240),sheet,i*200,0);
                     }
                     for(int i=0;i<6;i++)using(Bitmap image=Backdrop(w,h,true,screen)) {
-                        float q=i/6f;Lay(image,Glow(screen,true,screen,300,h-60,7.0+q*.3,q<.4f?q/.4f:1,new float[]{q}));Crop(image,new Rectangle(200,h-240,200,240),sheet,i*200,240);
+                        Lay(image,Glow(screen,true,screen,300,h-60,4.0+i*2));Crop(image,new Rectangle(200,h-240,200,240),sheet,i*200,240);
                     }
                     sheet.Save(Path.Combine(directory,"motion-"+tag+".png"),ImageFormat.Png);
                 }
@@ -394,17 +424,16 @@ namespace Axon {
                 if(image.GetPixel(2,2).A!=0)throw new Exception("The pointer glow must end inside its surface");
             }
             // What the glow may never do, checked at its strongest: full
-            // brightness, and a click landing right at the point tested.
-            GlowField.Brightness=1;
+            // brightness, with the last action right at the point tested.
             int[] clear=new int[800*700];
-            foreach(GlowField field in Glow(new Rectangle(0,0,800,700),true,new Rectangle(0,0,800,700),400,0,4,1,new float[]{.2f}))field.Over(clear,800,700);
+            foreach(GlowField field in Glow(new Rectangle(0,0,800,700),true,new Rectangle(0,0,800,700),400,0,4,1,1))field.Over(clear,800,700);
             if(AlphaAt(clear,800,400,350)!=0)throw new Exception("The glow covers the middle of the app");
             if(AlphaAt(clear,800,400,GlowField.Reach(GlowField.Veil,1)+2)!=0)throw new Exception("The inside glow must end within its reach");
             if(AlphaAt(clear,800,400,1)<120)throw new Exception("The glow is too faint to see at the edge");
             if(AlphaAt(clear,800,400,4)<=AlphaAt(clear,800,400,14)||AlphaAt(clear,800,400,14)<=AlphaAt(clear,800,400,40))throw new Exception("The glow must fade inward");
             if(AlphaAt(clear,800,400,72)>=96)throw new Exception("The glow fogs the app beyond its band");
             clear=new int[800*700];
-            foreach(GlowField field in Glow(new Rectangle(100,150,600,400),false,new Rectangle(0,0,800,700),400,150,4,1,new float[]{.2f}))field.Over(clear,800,700);
+            foreach(GlowField field in Glow(new Rectangle(100,150,600,400),false,new Rectangle(0,0,800,700),400,150,4,1,1))field.Over(clear,800,700);
             if(AlphaAt(clear,800,400,350)!=0)throw new Exception("The glow covers the middle of the app");
             if(AlphaAt(clear,800,400,156)>=40||AlphaAt(clear,800,106,350)>=40)throw new Exception("The outside glow tints the app");
             if(AlphaAt(clear,800,400,148)<120)throw new Exception("The glow is too faint to see at the edge");
