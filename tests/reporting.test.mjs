@@ -183,3 +183,14 @@ test('interrupted acknowledgement publication leaves the incident pending',async
   assert.equal(f.i.read()[0].pending,true);
  }finally{if(child.exitCode===null)child.kill();await closed;f.clean();}
 });
+test('task ownership and Guardian identifiers survive incident sanitization while unknown ones still collapse',()=>{
+ const target=fs.mkdtempSync(path.join(testDirectory('tmp'),'incident-ownership-')),i=new Incidents(path.join(target,'data'));fs.mkdirSync(i.directory);
+ try{
+  const pairs=[['computer_claim','task_owned'],['computer_shutdown','task_owned'],['computer_shutdown','task_requires_end'],['computer_claim','task_required'],['computer_guardian','guardian_exited']];
+  for(const [operation,code] of pairs)i.record(operation,{error:{code,message:'private password'}});
+  const read=i.read();assert.equal(read.length,pairs.length);
+  for(const [operation,code] of pairs)assert(read.some(e=>e.operation===operation&&e.code===code),operation+' '+code);
+  assert.notEqual(i.identify('computer_claim',{error:{code:'task_owned'}}),i.identify('computer_shutdown',{error:{code:'task_owned'}}));
+  const odd=i.read().length;i.record('computer_made_up',{error:{code:'task_made_up'}});const last=i.read().at(-1);assert.equal(last.operation,'unknown');assert.equal(last.code,'unknown');assert.equal(i.read().length,odd+1);
+ }finally{fs.rmSync(target,{recursive:true,force:true});}
+});
