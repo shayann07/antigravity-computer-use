@@ -140,14 +140,14 @@ export async function serveDesktop({directory=dataDir(),runtime,idlePolicy='shut
             if(busy)throw Object.assign(Error('A desktop operation is pending.'),{code:'task_owned'});
             // A recovered task is never adopted. Return the runtime's read-only
             // advice (end once, or inspect cleanup) without issuing a token.
-            if(state.recovered_task===true&&!taskOwnership.owner){const advice=await runtime.ready();finished=true;socket.end(JSON.stringify({...advice,ok:false})+'\n');return;}
+            if(state.recovered_task===true&&!taskOwnership.owner){const advice=await runtime.ready();finished=true;socket.end(JSON.stringify({...advice,ok:false,owner:taskOwnership.relation(request.task_token,state)})+'\n');return;}
             const task_token=taskOwnership.claim(state);finished=true;socket.end(JSON.stringify({ok:true,task_token})+'\n');return;
           }
           taskOwnership.authorize(name,request.task_token,state);
           if(name==='computer_shutdown'&&(busy||state.task_open!==false))throw Object.assign(Error('End the owned task and await cleanup before shutdown.'),{code:'task_requires_end'});
         }
         const control=['computer_status','computer_stop','computer_pause','computer_shutdown'].includes(name);
-        if(busy&&!control)throw Error('Desktop operation pending; send one action at a time.');
+        if(busy&&!control)throw Object.assign(Error('Desktop operation pending; send one action at a time.'),{code:'operation_pending'});
         if(name==='computer_shutdown'){
           // Do not acknowledge a closed service before native cleanup succeeds.
           // Keep this reply socket alive while retiring all other clients.
@@ -157,9 +157,11 @@ export async function serveDesktop({directory=dataDir(),runtime,idlePolicy='shut
         if(!control){busy=true;executing=true;}
         try{
           if(coordinator&&!['computer_status','computer_apps','computer_stop','computer_pause','computer_controls','computer_end'].includes(name))await coordinator.ensure();
+          if(!['computer_status','computer_apps','computer_controls','computer_stop','computer_pause'].includes(name))runtime.markActivity?.();
           const raw=await call(runtime,name,request.args||{});
           if(coordinator&&name==='computer_end'&&raw.ended===true)await coordinator.release();
-          const result=compact(name==='computer_status'?{...raw,listener_idle_policy:idlePolicy,controller_ownership_lost:ownershipLost,cleanup_in_progress:!!humanEnding,...(humanEndError?{human_end_error:humanEndError}:{}),...(request.expected_build_id!==BUILD_ID?{client_build_mismatch:true,next_action:'resolve_version_mismatch'}:{}),...(pendingIncidents.size?{diagnostic_pending:pendingIncidents.size}:{}),...(runtime.diagnosticError?{diagnostic_error:runtime.diagnosticError}:{})}:raw,directory);
+          const ownerHint=taskOwnership&&['computer_status','computer_ready'].includes(name)?{owner:taskOwnership.relation(request.task_token,runtime.status())}:{};
+          const result=compact(name==='computer_status'?{...raw,...ownerHint,listener_idle_policy:idlePolicy,controller_ownership_lost:ownershipLost,cleanup_in_progress:!!humanEnding,...(humanEndError?{human_end_error:humanEndError}:{}),...(request.expected_build_id!==BUILD_ID?{client_build_mismatch:true,next_action:'resolve_version_mismatch'}:{}),...(pendingIncidents.size?{diagnostic_pending:pendingIncidents.size}:{}),...(runtime.diagnosticError?{diagnostic_error:runtime.diagnosticError}:{})}:{...raw,...ownerHint},directory);
           if(result.observation_valid===false)runtime.frames?.delete(result.metadata?.observation_id);
           if(taskOwnership&&name==='computer_end'&&result.ended===true&&runtime.status().task_open===false)taskOwnership.ended();
           const reply={ok:true,...result};reply.receipt=receipts.finish(ticket,reply);
