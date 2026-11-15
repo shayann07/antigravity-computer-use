@@ -42,3 +42,11 @@ test('every operator entry has a command or a stated reason, and every entry say
   assert(entry.safe_when.length > 10, name);
  }
 });
+
+test('a fixable refusal after earlier batch steps landed is not replayable', async () => {
+ const {recoveryAdvice} = await import('../server/recovery.mjs');
+ const partial = recoveryAdvice({ok:false, completed:[{ok:true}], failed_index:1, error:{code:'bad_point'}}, 'computer_run');
+ assert.equal(partial.replay_allowed, false); assert.equal(partial.next_action, 'fix_arguments_and_resume_after_completed');
+ const clean = recoveryAdvice({ok:false, completed:[], failed_index:0, error:{code:'bad_point'}}, 'computer_run');
+ assert.equal(clean.replay_allowed, true);
+});

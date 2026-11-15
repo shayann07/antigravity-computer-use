@@ -240,7 +240,8 @@ export function recoveryAdvice(result,operation){
  if(code==='clipboard_unsafe')return {...extra,next_action:operation==='computer_file_dialog'?'retry_file_dialog_with_keyboard':'enter_without_clipboard',replay_allowed:false};
  // Refused before anything was sent: a flag, selector or path the agent can fix.
  // replay_allowed stays true only here, because nothing reached the desktop.
- if(FIXABLE_CODES.has(code))return {...extra,next_action:'fix_arguments_and_retry',replay_allowed:true};
+ // A batch that already sent earlier steps must not be replayed whole; resume after failed_index.
+ if(FIXABLE_CODES.has(code))return Array.isArray(result.completed)&&result.completed.length?{...extra,next_action:'fix_arguments_and_resume_after_completed',replay_allowed:false}:{...extra,next_action:'fix_arguments_and_retry',replay_allowed:true};
  if(POLICY_BLOCK_CODES.has(code))return {...extra,next_action:'choose_permitted_target',replay_allowed:false};
  if(code==='human_resume_required')return {...extra,next_action:'awaiting_human_resume',replay_allowed:false};
  if(['needs_confirmation','hand_off_required','model_approval_forbidden'].includes(code))return {...extra,next_action:'await_user_decision',replay_allowed:false};
