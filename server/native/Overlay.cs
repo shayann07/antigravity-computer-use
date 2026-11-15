@@ -1346,7 +1346,8 @@ namespace Axon
             }
 
             internal void FollowRealCursor() {
-                if(_follow.Enabled)return;
+                // A screenshot may have hidden the pointer's glow while it kept following.
+                if(_follow.Enabled&&Visible)return;
                 NPOINT p;if(!GetCursorPos(out p))return;
                 _scale=ScreenScale(Screen.FromPoint(new Point(p.X,p.Y)));
                 Size=new Size((int)(96*_scale),(int)(96*_scale));

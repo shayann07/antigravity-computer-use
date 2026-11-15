@@ -301,11 +301,11 @@ namespace Axon {
     // Each edge is drawn outside the window when there is room and inside it
     // when there is not (a maximised or full-screen app).
     internal sealed class GlowField {
-        internal const int OutsideDepth=46,InsideDepth=22;   // DIPs the band reaches from the edge
+        internal const int OutsideDepth=64,InsideDepth=72;   // DIPs the band reaches from the edge
         const int Lip=3;                                      // DIPs an outside strip overlaps the frame, for rounded corners
-        static readonly double MinBright=ControlContract.UiNumber("glow_min",.36,0,1),Reach=ControlContract.UiNumber("glow_reach",.42,.05,4);
-        static readonly double HazeOut=ControlContract.UiNumber("glow_haze_out",.66,0,1),HazeIn=ControlContract.UiNumber("glow_haze_in",.62,0,1);
-        static readonly double HazeSigmaOut=ControlContract.UiNumber("glow_haze_sigma_out",17,2,40),HazeSigmaIn=ControlContract.UiNumber("glow_haze_sigma_in",7.5,1,20);
+        static readonly double MinBright=ControlContract.UiNumber("glow_min",.26,0,1),Reach=ControlContract.UiNumber("glow_reach",.42,.05,4);
+        static readonly double HazeOut=ControlContract.UiNumber("glow_haze_out",.82,0,1),HazeIn=ControlContract.UiNumber("glow_haze_in",.74,0,1);
+        static readonly double HazeSigmaOut=ControlContract.UiNumber("glow_haze_sigma_out",15,2,40),HazeSigmaIn=ControlContract.UiNumber("glow_haze_sigma_in",18,1,40);
         static readonly double Lift=ControlContract.UiNumber("glow_lift",.55,0,2);
         internal readonly Rectangle Frame,Clip;internal readonly bool[] Inside;internal readonly float Scale;internal readonly int Radius;
         // Top, right, bottom, left, in screen pixels. An empty strip draws nothing.
@@ -376,31 +376,34 @@ namespace Axon {
                         double[] depth={py-t,r-px,b-py,px-l};
                         for(int e=0;e<4;e++)if(Inside[e]&&depth[e]<distance){distance=depth[e];edge=e;}
                         if(edge<0)continue;
+                        // Where two inside edges meet, their light adds smoothly; no mitred seam.
+                        double blend=10*s,sum=0;for(int e=0;e<4;e++)if(Inside[e])sum+=Math.Exp(-depth[e]/blend);
+                        distance=Math.Max(0,Math.Min(distance,-blend*Math.Log(sum)));
                         inner=true;
                     }
                     double u=distance/s;   // DIPs from the edge
-                    double shade,haze,glowBloom,glowFlare,coreLine,hairLine;
-                    if(inner) {
-                        if(u>InsideDepth)continue;
-                        double fade=Math.Min(1,(InsideDepth-u)/4);   // reaches zero at the band's end
-                        shade=.34*Gauss(u,3);haze=HazeIn*Gauss(u,HazeSigmaIn)*fade;
-                        glowBloom=.95*Gauss(u-1,3.4)*fade;glowFlare=Gauss(u-1,4.6)*fade;
-                        coreLine=Line(distance,1*s,1*s);hairLine=.6*Line(distance,2.8*s,.5);
-                    } else {
-                        if(u>OutsideDepth)continue;
-                        double fade=Math.Min(1,(OutsideDepth-u)/6);
-                        shade=.46*Gauss(u,5.5);haze=HazeOut*Gauss(u-2,HazeSigmaOut)*fade;
-                        glowBloom=Gauss(u-2,4.4)*fade;glowFlare=Gauss(u-2,7)*fade;
-                        coreLine=Line(distance,2*s,1*s);hairLine=Math.Max(.9*Line(distance,.4*s,.5),.55*Line(distance,3.8*s,.5));
-                    }
+                    // Light, not an outline: a fine line, a tight bloom and a
+                    // long haze, each falling away exponentially the way a real
+                    // glow does. No hairlines. The haze deepens in colour as it
+                    // thins, so it still reads on a white desktop.
+                    double band=inner?InsideDepth:OutsideDepth;
+                    if(u>band)continue;
+                    double centre=inner?.75:1.5,off=Math.Abs(u-centre);
+                    double fade=Math.Min(1,(band-u)/(band*.35));fade=fade*fade*(3-2*fade);
+                    double shade=0,hairLine=0;
+                    double coreLine=Math.Exp(-(off/.85)*(off/.85));
+                    double glowBloom=.92*Math.Exp(-off/(inner?4.4:5))*fade;
+                    double glowFlare=Math.Exp(-off/(inner?7:9))*fade;
+                    double haze=(inner?HazeIn:HazeOut)*Math.Exp(-off/(inner?HazeSigmaIn:HazeSigmaOut))*fade;
+                    double deep=Math.Min(1,off/(inner?34:30));
                     // Dither the haze, so its falloff does not band on 8-bit displays.
                     uint hash=(uint)(x*73856093)^(uint)(y*19349663);hash^=hash>>13;hash*=0x5bd1e995;hash^=hash>>15;
                     haze=Math.Max(0,haze+((hash&1023)/1023.0-.5)*.012*(haze>.004?1:0));
                     // The field: haze over shade, premultiplied.
                     double alpha=haze+shade*(1-haze);
-                    field[k][at*4]=(byte)Math.Round(255*(DesktopVisuals.GlowHaze.B/255.0*haze+DesktopVisuals.GlowShade.B/255.0*shade*(1-haze)));
-                    field[k][at*4+1]=(byte)Math.Round(255*(DesktopVisuals.GlowHaze.G/255.0*haze+DesktopVisuals.GlowShade.G/255.0*shade*(1-haze)));
-                    field[k][at*4+2]=(byte)Math.Round(255*(DesktopVisuals.GlowHaze.R/255.0*haze+DesktopVisuals.GlowShade.R/255.0*shade*(1-haze)));
+                    field[k][at*4]=(byte)Math.Round(haze*(DesktopVisuals.GlowHaze.B+(DesktopVisuals.GlowShade.B-DesktopVisuals.GlowHaze.B)*deep));
+                    field[k][at*4+1]=(byte)Math.Round(haze*(DesktopVisuals.GlowHaze.G+(DesktopVisuals.GlowShade.G-DesktopVisuals.GlowHaze.G)*deep));
+                    field[k][at*4+2]=(byte)Math.Round(haze*(DesktopVisuals.GlowHaze.R+(DesktopVisuals.GlowShade.R-DesktopVisuals.GlowHaze.R)*deep));
                     field[k][at*4+3]=(byte)Math.Round(255*alpha);
                     bloom[k][at]=(byte)Math.Round(255*Math.Min(1,glowBloom));flare[k][at]=(byte)Math.Round(255*Math.Min(1,glowFlare));
                     core[k][at]=(byte)Math.Round(255*coreLine);hair[k][at]=(byte)Math.Round(255*hairLine);
@@ -437,8 +440,8 @@ namespace Axon {
                     double front=reveal*perimeter/2.0,k=(d-front)/(16*Scale);
                     shown=Math.Max(0,Math.Min(1,(front-d)/(8*Scale)+1));bright+=.9*Math.Exp(-k*k)*shown;
                 }
-                gainField[i]=(float)((.42+.58*rest[i])*raise*haze);
-                gainLine[i]=(float)(shown*(.42+.58*bright)*raise);
+                gainField[i]=(float)((.2+.8*rest[i])*raise*haze);
+                gainLine[i]=(float)(shown*(.34+.66*bright)*raise);
                 gainFlare[i]=(float)(shown*Math.Min(1,(bright-rest[i])*.85));
                 heat[i]=(float)(shown*Math.Min(1,.7*Math.Pow(Math.Min(1,rest[i]),1.5)+(bright-rest[i])));
                 visible[i]=(float)shown;
