@@ -389,17 +389,18 @@ namespace Axon {
         readonly ToolTip tips = new ToolTip();
         HudButton stopButton, modeButton;
         BarMenu menu;
-        bool MenuOpen {get {return menu!=null&&!menu.IsDisposed&&menu.Visible;}}
-        void CloseMenu() {if(MenuOpen)menu.Close();}
+        // A menu that is closing is already closed to everything that asks.
+        bool MenuOpen {get {return menu!=null&&!menu.IsDisposed&&menu.Visible&&!menu.Dismissing;}}
+        void CloseMenu(bool atOnce=false) {if(menu!=null&&!menu.IsDisposed&&menu.Visible)menu.Dismiss(atOnce);}
         // Human mouse and keyboard input never pauses the agent. The policy
         // object stays in manual mode; only Esc, the hotkey and Stop halt it.
         readonly TakeoverPolicy takeover=new TakeoverPolicy("manual");
         float visualScale=1;
         // Bar presentation only. None of these grants or changes control.
         string lastReason="";bool ended,releasing,lowTime;DateTime stoppedAt=DateTime.MinValue,releaseChecked;
-        internal float hoverStop,hoverMode;internal int pressedButton;
+        internal float hoverStop,hoverMode,pressStop,pressMode;internal int pressedButton;
         Image hostIcon;string hostIconPath="";
-        float textIn=1;DateTime textAt;string shownLine2="";int shownSlot=-1;
+        int shownSlot=-1;
         readonly System.Windows.Forms.Timer motion=new System.Windows.Forms.Timer();
         static readonly string[] Docks={"top-left","top-centre","top-right","bottom-left","bottom-centre","bottom-right"};
         // Where the person keeps the bar: a dock, or a fraction of the work area.
@@ -407,7 +408,13 @@ namespace Axon {
         // How bright the person wants the glow: soft, medium or bright.
         string glowLevel="soft";
         void ApplyGlowLevel() {Overlay.GlowBrightness(glowLevel=="bright"?1f:glowLevel=="medium"?.75f:.55f);}
-        bool dragging,dragArmed,displaced,sliding,entering;Point dragGrab,dragStart,slideFrom,slideTo;DateTime displacedAt,slideAt,enterAt;int slideMs;
+        bool dragging,dragArmed,displaced,sliding,entering,leaving,quitting;Point dragGrab,dragStart,slideFrom,slideTo;DateTime displacedAt,slideAt,enterAt,leaveAt;int slideMs;float enterFrom,leaveFrom;
+        // bar.settle: the spring's place and speed on each axis (pixels, pixels a second), its rest point and the work area it stays in.
+        bool springing,springHeld;double springX,springY,springVX,springVY;Point springTo;Rectangle springWork;long springTick;
+        // The last moments of a drag, for the speed the bar is let go at.
+        readonly Queue<KeyValuePair<long,Point>> dragTrail=new Queue<KeyValuePair<long,Point>>();
+        // A bar that is fading out is already gone to everything that asks.
+        internal bool BarShown {get {return Visible&&!leaving;}}
         string activity="";DateTime activityAt;
         // Where the current action lands and who is acting. Carried by the
         // activity message for the control bar and a per-window glow; nothing
@@ -472,7 +479,7 @@ namespace Axon {
             LoadTakeoverMode();
             ApplyScale(Overlay.ScreenScale(Screen.FromPoint(Cursor.Position)),Screen.FromPoint(Cursor.Position));
             motion.Interval=16;motion.Tick+=delegate {Motion();};
-            FormClosing += delegate(object sender, FormClosingEventArgs e) { if(!normalClose&&state!="idle")SetState("stopped",null,false);DismissControls(); };
+            FormClosing += delegate(object sender, FormClosingEventArgs e) { quitting=true;if(!normalClose&&state!="idle")SetState("stopped",null,false);DismissControls(); };
             timer.Interval = 70; timer.Tick += Tick; timer.Start();
         }
         // Initialize the message handle/hooks without ever showing a window.
@@ -509,11 +516,20 @@ namespace Axon {
         void SyncVisibility() {
             if(controlsRequested&&!captureHidden) {
                 // bar.enter: a fresh appearance fades in; a return from a screenshot does not.
-                if(!Visible){if(!captureReturn){entering=true;enterAt=DateTime.UtcNow;barAlpha=0;motion.Start();}else barAlpha=1;captureReturn=false;Show();}
+                // A dismissal still fading turns round from where it is.
+                if(leaving){leaving=false;entering=true;enterFrom=barAlpha;enterAt=DateTime.UtcNow;motion.Start();}
+                else if(!Visible){if(!captureReturn){entering=true;enterFrom=0;enterAt=DateTime.UtcNow;barAlpha=0;motion.Start();}else barAlpha=1;captureReturn=false;Show();}
             }
-            // The menu belongs to the bar: it never outlives it.
-            else if(Visible){entering=false;barAlpha=1;CloseMenu();Hide();}
+            // The menu belongs to the bar: it never outlives it. bar.exit:
+            // a dismissal fades out; a screenshot hides the bar at once.
+            else if(Visible&&!leaving) {
+                CloseMenu(true);
+                if(captureHidden||quitting||!DesktopVisuals.MotionEnabled)HideNow();
+                else {entering=false;leaving=true;leaveFrom=barAlpha;leaveAt=DateTime.UtcNow;motion.Start();}
+            }
+            else if(leaving&&captureHidden)HideNow();
         }
+        void HideNow() {entering=leaving=false;barAlpha=1;Hide();}
         bool captureReturn;
         void ShowControls(int milliseconds) {Interlocked.Increment(ref visibilityEpoch);controlsRequested=true;controlsUntil=milliseconds>0?DateTime.UtcNow.AddMilliseconds(milliseconds):DateTime.MaxValue;SyncVisibility();}
         void DismissControls() {Interlocked.Increment(ref visibilityEpoch);controlsRequested=false;SyncVisibility();}
@@ -560,7 +576,7 @@ namespace Axon {
         internal DesktopVisuals.HudModel Model() {
             DesktopVisuals.HudModel m=new DesktopVisuals.HudModel();
             string host=hostName.Length>0?hostName:"Computer Use";
-            m.State=prompting?"asking":state;m.Icon=hostIcon;m.StopHover=hoverStop;m.ModeHover=hoverMode;m.Pressed=pressedButton;m.TextIn=textIn;m.HighContrast=SystemInformation.HighContrast;
+            m.State=prompting?"asking":state;m.Icon=hostIcon;m.StopHover=hoverStop;m.ModeHover=hoverMode;m.Pressed=pressedButton;m.StopPress=pressStop;m.ModePress=pressMode;m.HighContrast=SystemInformation.HighContrast;
             if(prompting) {m.Line1="Waiting for your answer";m.Line2="Allow or deny below";m.Hint=true;m.Slot=1;}
             else if(state=="active") {
                 m.Line1=host+" is working";m.Line2=activity.Length>0?activity:"Waiting for the next step";
@@ -584,7 +600,8 @@ namespace Axon {
             }
         }
         sealed class HudButton : Button {
-            readonly Guardian owner;readonly int index;readonly Rectangle logical;bool over;
+            readonly Guardian owner;readonly int index;readonly Rectangle logical;bool over,down;
+            float hoverFrom,pressFrom;DateTime hoverAt,pressAt;
             readonly System.Windows.Forms.Timer fade=new System.Windows.Forms.Timer();
             internal HudButton(Guardian o,int i,Rectangle r) {
                 owner=o;index=i;logical=r;FlatStyle=FlatStyle.Flat;FlatAppearance.BorderSize=0;TabStop=false;Cursor=Cursors.Hand;
@@ -592,22 +609,30 @@ namespace Axon {
                 fade.Interval=16;fade.Tick+=delegate {Step();};
             }
             internal void Place() {float s=owner.visualScale;SetBounds((int)Math.Round(logical.X*s),(int)Math.Round(logical.Y*s),(int)Math.Round(logical.Width*s),(int)Math.Round(logical.Height*s));}
-            float Level {get {return index==2?owner.hoverStop:owner.hoverMode;} set {if(index==2)owner.hoverStop=value;else owner.hoverMode=value;}}
-            // button.hover: the plate arrives over Fast and leaves a third quicker.
+            float Hover {get {return index==2?owner.hoverStop:owner.hoverMode;} set {if(index==2)owner.hoverStop=value;else owner.hoverMode=value;}}
+            float Pressing {get {return index==2?owner.pressStop:owner.pressMode;} set {if(index==2)owner.pressStop=value;else owner.pressMode=value;}}
+            // button.hover: the plate arrives over Fast and leaves over FastLeave.
+            // button.press: the icon eases to PressScale over Press, and back on release.
+            // Both ease out from wherever they are; with motion reduced they are instant.
             void Step() {
-                float target=over?1:0,level=Level;
-                if(!DesktopVisuals.MotionEnabled)level=target;
-                else level=over?Math.Min(1,level+16f/DesktopVisuals.Fast):Math.Max(0,level-16f/DesktopVisuals.FastLeave);
-                Level=level;if(level==target)fade.Stop();owner.Present();
+                DateTime now=DateTime.UtcNow;bool motion=DesktopVisuals.MotionEnabled;
+                float hoverTo=over?1:0,pressTo=down?1:0;
+                double h=(now-hoverAt).TotalMilliseconds/(over?DesktopVisuals.Fast:DesktopVisuals.FastLeave),p=(now-pressAt).TotalMilliseconds/DesktopVisuals.Press;
+                Hover=!motion||h>=1?hoverTo:hoverFrom+(hoverTo-hoverFrom)*DesktopVisuals.EaseOut((float)h);
+                Pressing=!motion||p>=1?pressTo:pressFrom+(pressTo-pressFrom)*DesktopVisuals.EaseOut((float)p);
+                if(Hover==hoverTo&&Pressing==pressTo)fade.Stop();
+                owner.Present();
             }
+            void Hovered(bool value) {if(over==value)return;over=value;hoverFrom=Hover;hoverAt=DateTime.UtcNow;fade.Start();Step();}
+            void Held(bool value) {if(down==value)return;down=value;pressFrom=Pressing;pressAt=DateTime.UtcNow;fade.Start();Step();}
             // Drawn by the bar's own surface; a layered window never shows a child's paint.
             protected override void OnPaint(PaintEventArgs e) {}
             protected override void OnPaintBackground(PaintEventArgs e) {}
-            protected override void OnMouseEnter(EventArgs e) {over=true;fade.Start();base.OnMouseEnter(e);}
-            protected override void OnMouseLeave(EventArgs e) {over=false;if(owner.pressedButton==index)owner.pressedButton=0;fade.Start();base.OnMouseLeave(e);}
+            protected override void OnMouseEnter(EventArgs e) {Hovered(true);base.OnMouseEnter(e);}
+            protected override void OnMouseLeave(EventArgs e) {if(owner.pressedButton==index)owner.pressedButton=0;Held(false);Hovered(false);base.OnMouseLeave(e);}
             // button.press: confirmed on pointer-down.
-            protected override void OnMouseDown(MouseEventArgs e) {owner.pressedButton=index;owner.Present();base.OnMouseDown(e);}
-            protected override void OnMouseUp(MouseEventArgs e) {owner.pressedButton=0;owner.Present();base.OnMouseUp(e);}
+            protected override void OnMouseDown(MouseEventArgs e) {owner.pressedButton=index;Held(true);base.OnMouseDown(e);}
+            protected override void OnMouseUp(MouseEventArgs e) {owner.pressedButton=0;Held(false);base.OnMouseUp(e);}
             protected override void Dispose(bool disposing) {if(disposing)fade.Dispose();base.Dispose(disposing);}
         }
         void RefreshHud() {
@@ -619,8 +644,7 @@ namespace Axon {
                 stopButton.Cursor=m.Slot==0?Cursors.Default:Cursors.Hand;
                 modeButton.AccessibleName="Settings";tips.SetToolTip(modeButton,"Settings");
             }
-            // bar.textChange: line 2 only; the new text arrives over Fast.
-            if(m.Line2!=shownLine2) {shownLine2=m.Line2;if(Visible&&DesktopVisuals.MotionEnabled){textIn=0;textAt=DateTime.UtcNow;motion.Start();}else textIn=1;}
+            // bar.textChange: line 2 is swapped in place, with no motion.
             AccessibleRole=AccessibleRole.ToolBar;
             AccessibleName=(hostName.Length>0?hostName:"Computer Use")+" computer use: "+m.Line1+", "+m.Line2;
             Present();
@@ -628,14 +652,20 @@ namespace Axon {
         // One frame timer for the bar's own motion. It runs only while
         // something is moving.
         void Motion() {
+            if(IsDisposed){motion.Stop();return;}
             bool busy=false;DateTime now=DateTime.UtcNow;
-            if(textIn<1) {textIn=DesktopVisuals.EaseOut((float)((now-textAt).TotalMilliseconds/DesktopVisuals.Fast));if((now-textAt).TotalMilliseconds>=DesktopVisuals.Fast)textIn=1;else busy=true;Present();}
             if(entering) {
                 // bar.enter: opacity over Normal; a short fade when motion is reduced.
                 double t=(now-enterAt).TotalMilliseconds/(DesktopVisuals.MotionEnabled?DesktopVisuals.Normal:DesktopVisuals.Fast);
-                if(t>=1){entering=false;barAlpha=1;}else {barAlpha=DesktopVisuals.EaseOut((float)t);busy=true;}
+                if(t>=1){entering=false;barAlpha=1;}else {barAlpha=enterFrom+(1-enterFrom)*DesktopVisuals.EaseOut((float)t);busy=true;}
                 Present();
             }
+            if(leaving) {
+                // bar.exit: opacity to nothing over NormalLeave, easing out.
+                double t=(now-leaveAt).TotalMilliseconds/DesktopVisuals.NormalLeave;
+                if(t>=1)HideNow();else {barAlpha=leaveFrom*(1-DesktopVisuals.EaseOut((float)t));busy=true;Present();}
+            }
+            if(springing&&Spring())busy=true;
             if(sliding) {
                 double t=(now-slideAt).TotalMilliseconds/slideMs;
                 if(t>=1||!DesktopVisuals.MotionEnabled){sliding=false;Location=slideTo;}
@@ -644,6 +674,7 @@ namespace Axon {
             if(!busy)motion.Stop();
         }
         void SlideTo(Point target,int milliseconds) {
+            springing=springHeld=false;
             if(target==Location){sliding=false;return;}
             slideFrom=Location;slideTo=target;slideAt=DateTime.UtcNow;slideMs=milliseconds;sliding=true;motion.Start();
         }
@@ -652,18 +683,24 @@ namespace Axon {
         protected override void OnMouseDown(MouseEventArgs e) {
             // Only the person's own press may move the bar, never injected input.
             bool physical=(DateTime.UtcNow.Ticks-Presence.LastUserClickTicks)<TimeSpan.TicksPerSecond;
-            if(e.Button==MouseButtons.Left&&physical){dragArmed=true;dragStart=Cursor.Position;dragGrab=new Point(Cursor.Position.X-Left,Cursor.Position.Y-Top);}
+            if(e.Button==MouseButtons.Left&&physical&&!leaving) {
+                dragArmed=true;dragStart=Cursor.Position;dragGrab=new Point(Cursor.Position.X-Left,Cursor.Position.Y-Top);
+                // A new grab holds a settling bar where it is.
+                if(springing){springing=false;springHeld=true;}
+            }
             base.OnMouseDown(e);
         }
         protected override void OnMouseMove(MouseEventArgs e) {
             if(dragArmed) {
                 Point p=Cursor.Position;
-                if(!dragging&&(Math.Abs(p.X-dragStart.X)>=4||Math.Abs(p.Y-dragStart.Y)>=4)){dragging=true;sliding=false;}
+                if(!dragging&&(Math.Abs(p.X-dragStart.X)>=4||Math.Abs(p.Y-dragStart.Y)>=4)){dragging=true;sliding=springHeld=false;dragTrail.Clear();}
                 if(dragging) {
-                    // bar.drag: 1:1 from the grab point, always fully on a monitor.
+                    // bar.drag: 1:1 from the grab point. Past the inset the bar
+                    // resists, and it never leaves the work area.
                     Rectangle work=Screen.FromPoint(p).WorkingArea;int margin=(int)Math.Ceiling(12*visualScale);
-                    if(work.Width>Width+2*margin&&work.Height>Height+2*margin)work.Inflate(-margin,-margin);
-                    try {Location=WindowGeometry.Fit(new Rectangle(p.X-dragGrab.X,p.Y-dragGrab.Y,Width,Height),work).Location;}catch {}
+                    Location=new Point(Band(p.X-dragGrab.X,work.Left,work.Right-Width,margin),Band(p.Y-dragGrab.Y,work.Top,work.Bottom-Height,margin));
+                    long now=Stopwatch.GetTimestamp();dragTrail.Enqueue(new KeyValuePair<long,Point>(now,Location));
+                    while(dragTrail.Count>2&&now-dragTrail.Peek().Key>Stopwatch.Frequency*DesktopVisuals.SpringTrail/1000)dragTrail.Dequeue();
                 }
             }
             base.OnMouseMove(e);
@@ -671,21 +708,75 @@ namespace Axon {
         protected override void OnMouseUp(MouseEventArgs e) {
             bool settle=dragging;dragArmed=dragging=false;
             if(settle)Settle();
+            // A grab that never became a drag lets the spring carry on.
+            else if(springHeld){springHeld=false;springing=true;springTick=Stopwatch.GetTimestamp();motion.Start();}
             base.OnMouseUp(e);
         }
+        // bar.drag: the rubber band. Inside the inset the bar follows exactly;
+        // past it each pixel moves it less, and it can never go a whole inset further.
+        static int Band(double value,int lowEdge,int highEdge,int margin) {
+            double low=lowEdge+margin,high=highEdge-margin;
+            if(high<low){low=lowEdge;high=Math.Max(lowEdge,highEdge);margin=0;}
+            if(value<low)value=low-Resist(low-value,margin);
+            else if(value>high)value=high+Resist(value-high,margin);
+            return (int)Math.Round(value);
+        }
+        static double Resist(double over,double dim) {return dim<=0?0:(1-1/(over*.55/dim+1))*dim;}
+        // The speed the bar was let go at, from the last moments of the drag.
+        PointF ReleaseSpeed() {
+            KeyValuePair<long,Point>[] trail=dragTrail.ToArray();dragTrail.Clear();
+            long now=Stopwatch.GetTimestamp(),window=Stopwatch.Frequency*DesktopVisuals.SpringTrail/1000;
+            int first=-1;
+            for(int i=0;i<trail.Length;i++)if(now-trail[i].Key<=window){first=i;break;}
+            if(first<0||first==trail.Length-1)return PointF.Empty;
+            KeyValuePair<long,Point> a=trail[first],b=trail[trail.Length-1];
+            double seconds=(b.Key-a.Key)/(double)Stopwatch.Frequency;
+            if(seconds<=0)return PointF.Empty;
+            return new PointF((float)((b.Value.X-a.Value.X)/seconds),(float)((b.Value.Y-a.Value.Y)/seconds));
+        }
         // bar.settle: land on a dock when dropped within 12 px of one, and
-        // remember the place.
+        // remember the place. The bar springs there from the speed it was let go at.
         void Settle() {
+            PointF speed=ReleaseSpeed();
             Screen screen=Screen.FromRectangle(Bounds);float scale=Overlay.ScreenScale(screen);Rectangle work=screen.WorkingArea;
             if(scale!=visualScale) {
                 Point dropped=Location;ApplyScale(scale,screen);
                 try {Location=WindowGeometry.Fit(new Rectangle(dropped,Size),work).Location;}catch {}
             }
+            // A bar let go in the rubber band comes back to the inset.
+            int margin=(int)Math.Ceiling(12*visualScale);
+            Point rest=new Point(Band(Math.Max(work.Left+margin,Math.Min(Left,work.Right-Width-margin)),work.Left,work.Right-Width,margin),Band(Math.Max(work.Top+margin,Math.Min(Top,work.Bottom-Height-margin)),work.Top,work.Bottom-Height,margin));
             int snap=(int)Math.Ceiling(12*visualScale);string near="free";
-            foreach(string name in Docks){Point home=HomeFor(name,work);if(Math.Abs(home.X-Left)<=snap&&Math.Abs(home.Y-Top)<=snap){near=name;break;}}
+            foreach(string name in Docks){Point home=HomeFor(name,work);if(Math.Abs(home.X-rest.X)<=snap&&Math.Abs(home.Y-rest.Y)<=snap){near=name;break;}}
             dock=near;
-            if(near=="free"){dockX=work.Width>Width?(Left-work.Left)/(double)(work.Width-Width):0;dockY=work.Height>Height?(Top-work.Top)/(double)(work.Height-Height):0;}
-            displaced=false;SlideTo(Home(work),DesktopVisuals.Normal);SavePreferences();
+            if(near=="free"){dockX=work.Width>Width?(rest.X-work.Left)/(double)(work.Width-Width):0;dockY=work.Height>Height?(rest.Y-work.Top)/(double)(work.Height-Height):0;}
+            displaced=false;SpringTo(Home(work),work,speed);SavePreferences();
+        }
+        void SpringTo(Point target,Rectangle work,PointF speed) {
+            sliding=springHeld=false;
+            // Reduced motion: the bar is simply there.
+            if(!DesktopVisuals.MotionEnabled){springing=false;Location=target;return;}
+            springX=Left;springY=Top;springVX=speed.X;springVY=speed.Y;springTo=target;springWork=work;
+            springTick=Stopwatch.GetTimestamp();springing=true;motion.Start();
+        }
+        // bar.settle: an Apple-style spring with mass 1, its stiffness and
+        // damping from SpringSeconds and SpringBounce, solved in fixed steps.
+        // x and y move on their own; the rubber band holds it in the work area.
+        bool Spring() {
+            long now=Stopwatch.GetTimestamp();
+            double elapsed=Math.Min(DesktopVisuals.SpringLongest,(now-springTick)/(double)Stopwatch.Frequency);springTick=now;
+            double turn=2*Math.PI/DesktopVisuals.SpringSeconds,stiffness=turn*turn,damping=4*Math.PI*(1-DesktopVisuals.SpringBounce)/DesktopVisuals.SpringSeconds;
+            int steps=Math.Max(1,(int)Math.Ceiling(elapsed/DesktopVisuals.SpringStep));double dt=elapsed/steps;
+            for(int i=0;i<steps;i++) {
+                springVX+=(-stiffness*(springX-springTo.X)-damping*springVX)*dt;springX+=springVX*dt;
+                springVY+=(-stiffness*(springY-springTo.Y)-damping*springVY)*dt;springY+=springVY*dt;
+            }
+            if(Math.Abs(springX-springTo.X)<DesktopVisuals.SpringNear&&Math.Abs(springY-springTo.Y)<DesktopVisuals.SpringNear&&Math.Abs(springVX)<DesktopVisuals.SpringSlow&&Math.Abs(springVY)<DesktopVisuals.SpringSlow) {
+                springing=false;Location=springTo;return false;
+            }
+            int margin=(int)Math.Ceiling(12*visualScale);
+            Location=new Point(Band(springX,springWork.Left,springWork.Right-Width,margin),Band(springY,springWork.Top,springWork.Bottom-Height,margin));
+            return true;
         }
         void MoveToDock(string name) {
             dock=name;displaced=false;SlideTo(Home(Screen.FromRectangle(Bounds).WorkingArea),DesktopVisuals.Slow);SavePreferences();
@@ -732,8 +823,11 @@ namespace Axon {
         // The Settings menu. It opens from the Settings button, belongs to
         // the bar and never outlives it.
         void OpenModeMenu() {
-            if(MenuOpen){menu.Close();return;}
-            menu=new BarMenu(this);menu.Open(MainMenu());
+            if(!BarShown)return;
+            if(MenuOpen){menu.Dismiss(false);return;}
+            // A menu still closing turns round and opens again.
+            if(menu==null||menu.IsDisposed)menu=new BarMenu(this);
+            menu.Open(MainMenu());
         }
         static string DockLabel(string name) {
             switch(name) {case "top-left":return "Top left";case "top-right":return "Top right";case "bottom-left":return "Bottom left";case "bottom-centre":return "Bottom centre";case "bottom-right":return "Bottom right";case "free":return "Where you put it";default:return "Top centre";}
@@ -759,15 +853,21 @@ namespace Axon {
             return items;
         }
         void MenuChosen(int id) {
-            if(id==1){ChangeRecordingPreference();if(MenuOpen)menu.Open(MainMenu());}
-            else if(id==2){if(MenuOpen)menu.Open(DockMenu());}
-            else if(id==3){glowLevel=glowLevel=="soft"?"medium":glowLevel=="medium"?"bright":"soft";ApplyGlowLevel();SavePreferences();if(MenuOpen)menu.Open(MainMenu());}
+            if(id==1){ChangeRecordingPreference();if(MenuOpen)menu.Refresh(MainMenu());}
+            else if(id==2){if(MenuOpen)menu.Swap(DockMenu());}
+            else if(id==3){glowLevel=glowLevel=="soft"?"medium":glowLevel=="medium"?"bright":"soft";ApplyGlowLevel();SavePreferences();if(MenuOpen)menu.Refresh(MainMenu());}
             else if(id>=10&&id<10+Docks.Length){CloseMenu();MoveToDock(Docks[id-10]);}
             else if(id==20){CloseMenu();MoveToDock("top-centre");}
         }
         sealed class BarMenu : Form {
             readonly Guardian owner;List<DesktopVisuals.MenuItem> items=new List<DesktopVisuals.MenuItem>();
-            float tall,level;int hover,pressed;DateTime openedAt;
+            float tall;int hover,pressed;bool low;
+            // menu.open and menu.close: how far open the panel is, and where the current run began.
+            float level,levelFrom;DateTime levelAt;bool closing;
+            // menu.page: the page leaving and its height, with both pages' rows as pictures.
+            float beforeTall;Bitmap beforeRows,afterRows;DateTime swapAt;bool swapping;
+            // The whole menu at rest, drawn once; re-drawn only when a row's state or the page changes.
+            Bitmap cache;
             readonly System.Windows.Forms.Timer tick=new System.Windows.Forms.Timer();
             internal BarMenu(Guardian o) {
                 owner=o;FormBorderStyle=FormBorderStyle.None;ShowInTaskbar=false;TopMost=true;StartPosition=FormStartPosition.Manual;
@@ -775,65 +875,148 @@ namespace Axon {
                 AccessibleName="Computer Use settings";AccessibleRole=AccessibleRole.MenuPopup;
                 tick.Interval=16;tick.Tick+=delegate {Step();};
             }
+            internal bool Dismissing {get {return closing;}}
             protected override bool ShowWithoutActivation {get {return true;}}
             protected override CreateParams CreateParams {get {CreateParams p=base.CreateParams;p.ExStyle|=0x08000080|0x00080000;return p;}}
             protected override void OnPaint(PaintEventArgs e) {}
             protected override void OnPaintBackground(PaintEventArgs e) {}
             float Zoom {get {return owner.visualScale;}}
+            int Inset {get {return (int)Math.Round(DesktopVisuals.MenuMargin*Zoom);}}
+            // Opens the menu, or turns a closing one round from where it is.
             internal void Open(List<DesktopVisuals.MenuItem> list) {
-                items=list;tall=DesktopVisuals.MenuLayout(items);hover=pressed=0;
-                float s=Zoom;int margin=(int)Math.Round(DesktopVisuals.MenuMargin*s);
-                Size size=new Size((int)Math.Round((DesktopVisuals.MenuWidth+2*DesktopVisuals.MenuMargin)*s),(int)Math.Round((tall+2*DesktopVisuals.MenuMargin)*s));
-                Rectangle work=Screen.FromRectangle(owner.Bounds).WorkingArea;
-                // 8 px under the bar, right edges aligned; above it when the bar is docked low.
-                bool low=owner.Top+owner.Height/2>work.Top+work.Height/2;
-                int gap=(int)Math.Round(8*s),x=owner.Right-size.Width+margin,y=low?owner.Top-gap-size.Height+margin:owner.Bottom+gap-margin;
-                x=Math.Max(work.Left-margin,Math.Min(x,work.Right-size.Width+margin));
-                Bounds=new Rectangle(new Point(x,y),size);
+                EndSwap();items=list;tall=DesktopVisuals.MenuLayout(items);hover=pressed=0;
+                Place(tall);Render();
                 if(!Visible) {
-                    // menu.open: opacity over Normal; a short fade when motion is reduced.
-                    level=0;openedAt=DateTime.UtcNow;Show();
+                    level=levelFrom=0;levelAt=DateTime.UtcNow;closing=false;Show();
                     SetPropW(Handle,"ComputerUseOverlayWindow",new IntPtr(1));SetWindowDisplayAffinity(Handle,owner.recordVisuals?0u:0x11u);
                     tick.Start();
                 }
+                else if(closing){closing=false;levelFrom=level;levelAt=DateTime.UtcNow;}
                 Present();
             }
+            // A change on the same page is drawn at once.
+            internal void Refresh(List<DesktopVisuals.MenuItem> list) {
+                if(closing)return;
+                EndSwap();items=list;tall=DesktopVisuals.MenuLayout(items);Place(tall);Render();Present();
+            }
+            // menu.page: a new page. The panel's height moves while the old rows
+            // leave and the new ones arrive (timing in DesktopVisuals.MenuPageAt).
+            internal void Swap(List<DesktopVisuals.MenuItem> list) {
+                if(closing)return;
+                if(!DesktopVisuals.MotionEnabled){hover=pressed=0;Refresh(list);return;}
+                EndSwap();
+                beforeTall=tall;beforeRows=DesktopVisuals.MenuPage(items,tall,Zoom,hover,0);
+                items=list;tall=DesktopVisuals.MenuLayout(items);hover=pressed=0;
+                afterRows=DesktopVisuals.MenuPage(items,tall,Zoom,0,0);
+                swapping=true;swapAt=DateTime.UtcNow;Place(Math.Max(beforeTall,tall));Present();
+            }
+            void EndSwap() {
+                if(!swapping)return;
+                swapping=false;
+                if(beforeRows!=null){beforeRows.Dispose();beforeRows=null;}
+                if(afterRows!=null){afterRows.Dispose();afterRows=null;}
+                Place(tall);Render();
+            }
+            // menu.close: reversed over NormalLeave. While closing it takes no
+            // input; at once when the bar hides or a screenshot needs the screen.
+            internal void Dismiss(bool atOnce) {
+                if(IsDisposed)return;
+                if(atOnce||!Visible||!IsHandleCreated){Close();return;}
+                if(closing)return;
+                EndSwap();
+                closing=true;levelFrom=level;levelAt=DateTime.UtcNow;
+                if(hover!=0||pressed!=0){hover=pressed=0;Render();}
+            }
+            // 8 px under the bar, right edges aligned; above it when the bar is
+            // docked low, where the bottom edge stays put as the height changes.
+            void Place(float height) {
+                float s=Zoom;int margin=Inset;
+                Size size=new Size((int)Math.Round((DesktopVisuals.MenuWidth+2*DesktopVisuals.MenuMargin)*s),(int)Math.Round((height+2*DesktopVisuals.MenuMargin)*s));
+                Rectangle work=Screen.FromRectangle(owner.Bounds).WorkingArea;
+                low=owner.Top+owner.Height/2>work.Top+work.Height/2;
+                int gap=(int)Math.Round(8*s),x=owner.Right-size.Width+margin,y=low?owner.Top-gap-size.Height+margin:owner.Bottom+gap-margin;
+                x=Math.Max(work.Left-margin,Math.Min(x,work.Right-size.Width+margin));
+                Bounds=new Rectangle(new Point(x,y),size);
+            }
+            void Render() {
+                if(Width<=0||Height<=0)return;
+                Bitmap next=new Bitmap(Width,Height,System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+                using(Graphics g=Graphics.FromImage(next)) {g.Clear(Color.Transparent);g.ScaleTransform(Zoom,Zoom);DesktopVisuals.Menu(g,items,tall,hover,pressed);}
+                Bitmap old=cache;cache=next;if(old!=null)old.Dispose();
+            }
+            // One frame of a page change, at the form's size.
+            Bitmap Between() {
+                float move,gone,come;DesktopVisuals.MenuPageAt((DateTime.UtcNow-swapAt).TotalMilliseconds,out move,out gone,out come);
+                float s=Zoom,height=beforeTall+(tall-beforeTall)*move,top=low?Height/s-DesktopVisuals.MenuMargin-height:DesktopVisuals.MenuMargin;
+                Bitmap frame=new Bitmap(Width,Height,System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+                using(Graphics g=Graphics.FromImage(frame)) {
+                    g.Clear(Color.Transparent);g.ScaleTransform(s,s);
+                    DesktopVisuals.MenuBetween(g,new RectangleF(DesktopVisuals.MenuMargin,top,DesktopVisuals.MenuWidth,height),s,beforeRows,gone,afterRows,come);
+                }
+                return frame;
+            }
             void Present() {
-                if(!IsHandleCreated||Width<=0||Height<=0)return;
+                if(!IsHandleCreated||Width<=0||Height<=0||cache==null)return;
                 try {
-                    using(Bitmap surface=new Bitmap(Width,Height,System.Drawing.Imaging.PixelFormat.Format32bppPArgb)) {
-                        using(Graphics g=Graphics.FromImage(surface)) {g.Clear(Color.Transparent);g.ScaleTransform(Zoom,Zoom);DesktopVisuals.Menu(g,items,tall,hover,pressed);}
-                        Overlay.Present(Handle,surface,Left,Top,(byte)Math.Max(0,Math.Min(255,(int)Math.Round(255*level))));
-                    }
+                    Bitmap frame=swapping?Between():null;
+                    try {
+                        Bitmap content=frame!=null?frame:cache;
+                        if(level>=1){Overlay.Present(Handle,content,Left,Top,255);return;}
+                        // menu.open: opacity and scale from MenuFrom, growing from the
+                        // corner nearest the Settings button. Reduced motion: opacity only.
+                        float grow=DesktopVisuals.MotionEnabled?DesktopVisuals.MenuFrom+(1-DesktopVisuals.MenuFrom)*level:1;
+                        using(Bitmap surface=new Bitmap(Width,Height,System.Drawing.Imaging.PixelFormat.Format32bppPArgb)) {
+                            using(Graphics g=Graphics.FromImage(surface)) {
+                                g.Clear(Color.Transparent);g.InterpolationMode=InterpolationMode.HighQualityBilinear;g.PixelOffsetMode=PixelOffsetMode.HighQuality;
+                                float ox=Width-Inset,oy=low?Height-Inset:Inset;
+                                g.TranslateTransform(ox,oy);g.ScaleTransform(grow,grow);g.TranslateTransform(-ox,-oy);
+                                g.DrawImage(content,new Rectangle(0,0,content.Width,content.Height));
+                            }
+                            Overlay.Present(Handle,surface,Left,Top,(byte)Math.Max(0,Math.Min(255,(int)Math.Round(255*level))));
+                        }
+                    } finally {if(frame!=null)frame.Dispose();}
                 } catch {}
             }
             void Step() {
-                if(level<1) {
-                    double t=(DateTime.UtcNow-openedAt).TotalMilliseconds/(DesktopVisuals.MotionEnabled?DesktopVisuals.Normal:DesktopVisuals.Fast);
-                    level=t>=1?1:DesktopVisuals.EaseOut((float)t);Present();
+                if(IsDisposed)return;
+                // The bar leaving closes the menu at once.
+                if(!owner.BarShown){Close();return;}
+                DateTime now=DateTime.UtcNow;bool motion=DesktopVisuals.MotionEnabled,redraw=false;
+                if(closing||level<1) {
+                    double t=(now-levelAt).TotalMilliseconds/(closing?(motion?DesktopVisuals.NormalLeave:DesktopVisuals.FastLeave):(motion?DesktopVisuals.Normal:DesktopVisuals.Fast));
+                    if(closing&&t>=1){Close();return;}
+                    float e=DesktopVisuals.EaseOut((float)Math.Min(1,t));
+                    level=t>=1?1:closing?levelFrom*(1-e):levelFrom+(1-levelFrom)*e;redraw=true;
                 }
-                // A press anywhere else, or the bar leaving, closes the menu.
-                Rectangle panel=PanelBounds();
-                if(!owner.Visible){Close();return;}
-                if(Control.MouseButtons!=MouseButtons.None&&!panel.Contains(Cursor.Position)&&!owner.Bounds.Contains(Cursor.Position))Close();
+                if(swapping){if((now-swapAt).TotalMilliseconds>=DesktopVisuals.Normal)EndSwap();redraw=true;}
+                if(redraw)Present();
+                if(closing)return;
+                // A press anywhere else closes the menu.
+                if(Control.MouseButtons!=MouseButtons.None&&!PanelBounds().Contains(Cursor.Position)&&!owner.Bounds.Contains(Cursor.Position))Dismiss(false);
             }
             Rectangle PanelBounds() {
-                float s=Zoom;int margin=(int)Math.Round(DesktopVisuals.MenuMargin*s);
+                int margin=Inset;
                 return new Rectangle(Left+margin,Top+margin,Width-2*margin,Height-2*margin);
             }
+            bool Still {get {return !closing&&!swapping;}}
             int Hit(Point client) {
                 float s=Zoom;PointF p=new PointF(client.X/s-DesktopVisuals.MenuMargin,client.Y/s-DesktopVisuals.MenuMargin);
                 foreach(DesktopVisuals.MenuItem item in items)if(item.Kind=="row"&&item.Bounds.Contains(p))return item.Id;
                 return 0;
             }
-            protected override void OnMouseMove(MouseEventArgs e) {int id=Hit(e.Location);if(id!=hover){hover=id;Cursor=id!=0?Cursors.Hand:Cursors.Default;Present();}base.OnMouseMove(e);}
-            protected override void OnMouseLeave(EventArgs e) {if(hover!=0||pressed!=0){hover=pressed=0;Present();}base.OnMouseLeave(e);}
-            protected override void OnMouseDown(MouseEventArgs e) {pressed=Hit(e.Location);Present();base.OnMouseDown(e);}
+            protected override void OnMouseMove(MouseEventArgs e) {int id=Still?Hit(e.Location):0;if(Still&&id!=hover){hover=id;Cursor=id!=0?Cursors.Hand:Cursors.Default;Render();Present();}base.OnMouseMove(e);}
+            protected override void OnMouseLeave(EventArgs e) {if(Still&&(hover!=0||pressed!=0)){hover=pressed=0;Render();Present();}base.OnMouseLeave(e);}
+            protected override void OnMouseDown(MouseEventArgs e) {if(Still){pressed=Hit(e.Location);Render();Present();}base.OnMouseDown(e);}
             protected override void OnMouseUp(MouseEventArgs e) {
-                int id=Hit(e.Location),was=pressed;pressed=0;Present();base.OnMouseUp(e);
+                if(!Still){base.OnMouseUp(e);return;}
+                int id=Hit(e.Location),was=pressed;pressed=0;Render();Present();base.OnMouseUp(e);
                 if(id!=0&&id==was)owner.MenuChosen(id);
             }
-            protected override void OnFormClosed(FormClosedEventArgs e) {tick.Stop();tick.Dispose();base.OnFormClosed(e);}
+            protected override void OnFormClosed(FormClosedEventArgs e) {
+                tick.Stop();tick.Dispose();
+                foreach(Bitmap image in new Bitmap[]{cache,beforeRows,afterRows})if(image!=null)image.Dispose();
+                cache=beforeRows=afterRows=null;base.OnFormClosed(e);
+            }
         }
         internal static void Mark(Form f) {
             SetPropW(f.Handle, "ComputerUseOverlayWindow", new IntPtr(1));
@@ -891,7 +1074,7 @@ namespace Axon {
                 if(state=="active"||state=="paused")ShowControls(0);
                 else if(state=="stopped")ShowControls(releasing?0:4000);
                 // Session ended is a confirmation too: 4 s, then the bar leaves.
-                else if(ended&&Visible)ShowControls(4000);
+                else if(ended&&BarShown)ShowControls(4000);
                 else DismissControls();
             }
             Emit(new { ev="state", state=state, reason=reason, custom_cursor=CursorSafety.Applied });
@@ -967,7 +1150,7 @@ namespace Axon {
         }
         void Receive(Dictionary<string, object> m) {
             string op = Convert.ToString(m["op"]); object id=m.ContainsKey("id")?m["id"]:null;
-            if(op=="visual_status") {Emit(new {id=id,state=state,controls_visible=Visible,bounds=new int[]{Left,Top,Width,Height},cursor=CursorSafety.Applied,watchdog_pid=CursorSafety.WatchdogPid,glow_opacity=Overlay.GlowOpacity,takeover_mode=takeover.Mode,record_visuals=recordVisuals,activity_hwnd=activityHwnd,activity_point=activityX==Int32.MinValue?null:new int[]{activityX,activityY},host_name=hostName,line1=Model().Line1,line2=Model().Line2,dock=dock,glow=Overlay.GlowReport()});return;}
+            if(op=="visual_status") {Emit(new {id=id,state=state,controls_visible=BarShown,bounds=new int[]{Left,Top,Width,Height},cursor=CursorSafety.Applied,watchdog_pid=CursorSafety.WatchdogPid,glow_opacity=Overlay.GlowOpacity,takeover_mode=takeover.Mode,record_visuals=recordVisuals,activity_hwnd=activityHwnd,activity_point=activityX==Int32.MinValue?null:new int[]{activityX,activityY},host_name=hostName,line1=Model().Line1,line2=Model().Line2,dock=dock,glow=Overlay.GlowReport()});return;}
             if(op=="avoid_input") {
                 bool canAvoid=state=="active"&&m.ContainsKey("token")&&Convert.ToString(m["token"])==token;
                 bool moved=false;
@@ -977,11 +1160,11 @@ namespace Axon {
                     if(values==null||values.Length!=4)canAvoid=false;
                     else for(int i=0;i<4;i++)if(!Int32.TryParse(Convert.ToString(values[i]),out rect[i])||Math.Abs((long)rect[i])>10000000)canAvoid=false;
                     if(rect[2]<=0||rect[3]<=0)canAvoid=false;
-                    if(canAvoid&&Visible) {
+                    if(canAvoid&&BarShown) {
                         Rectangle placement;
                         canAvoid=WindowGeometry.AvoidHud(Bounds,new Rectangle(rect[0],rect[1],rect[2],rect[3]),Screen.FromRectangle(Bounds).WorkingArea,(int)Math.Ceiling(12*visualScale),out placement);
                         // bar.stepAside is a jump, so the reply always reports the final place.
-                        if(canAvoid&&placement!=Bounds){sliding=false;Location=placement.Location;moved=true;displaced=true;displacedAt=DateTime.UtcNow;}
+                        if(canAvoid&&placement!=Bounds){sliding=springing=springHeld=false;Location=placement.Location;moved=true;displaced=true;displacedAt=DateTime.UtcNow;}
                     }
                 }catch{canAvoid=false;}
                 // This operation never changes Stop, state, grants or visibility.
@@ -991,9 +1174,9 @@ namespace Axon {
                 rearmLocked=m.ContainsKey("rearm_locked")&&Convert.ToBoolean(m["rearm_locked"]);
                 var context=DesktopContext.Inspect();
                 if(!(bool)context["interactive"]) {DismissControls();Emit(new {id=id,state=state,controls_visible=false,desktop_context=context,error=new {code="desktop_context_unavailable",message="Controls cannot be shown on the visible input desktop. Use the installed local launcher; no desktop was switched."}});return;}
-                ended=false;ShowControls(0);RefreshHud();Emit(new {id=id,state=state,controls_visible=Visible,desktop_context=context,human_rearm_required=false,rearm_locked=rearmLocked});return;
+                ended=false;ShowControls(0);RefreshHud();Emit(new {id=id,state=state,controls_visible=BarShown,desktop_context=context,human_rearm_required=false,rearm_locked=rearmLocked});return;
             }
-            if(op=="dismiss_controls") {if(state=="active"||state=="paused")Emergency("dismiss");DismissControls();Emit(new {id=id,state=state,controls_visible=Visible});return;}
+            if(op=="dismiss_controls") {if(state=="active"||state=="paused")Emergency("dismiss");DismissControls();Emit(new {id=id,state=state,controls_visible=BarShown});return;}
             if(op=="activity" && state=="active") {
                 string action=Convert.ToString(m["action"]);bool feedback=m.ContainsKey("click_feedback")&&Convert.ToBoolean(m["click_feedback"]);
                 switch(action) {case "move":activity="Moving";break;case "click":activity="Clicking";break;case "drag":activity="Dragging";break;case "scroll":activity="Scrolling";break;case "type":case "set_value":case "key":activity="Typing";break;case "observe":activity="Reading the screen";break;default:activity="Working";break;}
@@ -1082,15 +1265,15 @@ namespace Axon {
                 string nonce=m.ContainsKey("end_nonce")?Convert.ToString(m["end_nonce"]):null;
                 if(NativeStopReceipt.ValidNonce(nonce)){
                     bool exited=WorkersExited(2000),clean=false;
-                    try{clean=exited&&!InputLedger.HasHeld()&&File.ReadAllText(ControlFence.FileName).StartsWith(state+"|",StringComparison.Ordinal)&&state!="active"&&!Visible;}catch{}
+                    try{clean=exited&&!InputLedger.HasHeld()&&File.ReadAllText(ControlFence.FileName).StartsWith(state+"|",StringComparison.Ordinal)&&state!="active"&&!BarShown;}catch{}
                     if(!clean){Emergency();DismissControls();}
-                    Emit(new {id=id,state=state,end_nonce=nonce,guardian_pid=Process.GetCurrentProcess().Id,guard_file=Path.GetFileName(ControlFence.FileName),workers_stopped=exited,input_cleanup_confirmed=clean,controls_visible=Visible});
-                }else Emit(new {id=id,state=state,controls_visible=Visible});
+                    Emit(new {id=id,state=state,end_nonce=nonce,guardian_pid=Process.GetCurrentProcess().Id,guard_file=Path.GetFileName(ControlFence.FileName),workers_stopped=exited,input_cleanup_confirmed=clean,controls_visible=BarShown});
+                }else Emit(new {id=id,state=state,controls_visible=BarShown});
                 return;
             }
             if (op == "capture") {
                 captureHidden=true;
-                if(!captureExcluded || !Overlay.CaptureExcluded) { Overlay.HideImmediate(); Hide(); }
+                if(!captureExcluded || !Overlay.CaptureExcluded) { Overlay.HideImmediate(); CloseMenu(true); HideNow(); }
                 Emit(new {id=id,allowed=true}); return;
             }
             if (op == "capture_end") { captureHidden=false;captureReturn=true;SyncVisibility();captureReturn=false;return; }

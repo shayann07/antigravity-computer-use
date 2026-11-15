@@ -22,6 +22,10 @@ namespace Axon {
         internal const float MenuFrom=.96f;
         // bar.settle: one gentle spring. Seconds to settle, and how much it overshoots.
         internal const double SpringSeconds=.45,SpringBounce=.15;
+        // How it is solved: a fixed step and the longest stretch taken at once
+        // (seconds); at rest within SpringNear px moving under SpringSlow px a
+        // second; let go at the speed of the drag's last SpringTrail ms.
+        internal const double SpringStep=.001,SpringLongest=.064,SpringNear=.5,SpringSlow=20;internal const int SpringTrail=80;
         // The glow's slow life, in seconds: one lap of colour, one swell of
         // the band, one wander of the colours. And its frame times, in
         // milliseconds: in a transition, at rest, and for the deep wash.
@@ -126,7 +130,8 @@ namespace Axon {
             internal bool Hint;            // "Press Esc to stop"
             internal int Slot;             // 0 nothing, 1 Stop, 2 Hide
             internal Image Icon;           // the host's own icon, or null
-            internal float StopHover,ModeHover,TextIn=1;  // 0..1
+            internal float StopHover,ModeHover;  // 0..1
+            internal float StopPress,ModePress;  // 0..1, how far a press has landed
             internal int Pressed;          // 0 none, 2 stop slot, 3 settings
             internal bool HighContrast;
         }
@@ -185,6 +190,8 @@ namespace Axon {
             float alpha=(tint==Rose?.16f:.10f)*(pressed?1.5f:1)*Math.Max(level,pressed?1:0);
             using(SolidBrush plate=new SolidBrush(Color.FromArgb((int)(255*alpha),tint)))g.FillEllipse(plate,target.X+4,target.Y+4,36,36);
         }
+        // button.press: the icon's size for a press that has landed this far.
+        static float Pressing(float level) {return 1-(1-PressScale)*Math.Max(0,Math.Min(1,level));}
         internal static void Hud(Graphics g,HudModel m) {
             g.SmoothingMode=SmoothingMode.AntiAlias;g.PixelOffsetMode=PixelOffsetMode.HighQuality;g.TextRenderingHint=System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
             Color surface=m.HighContrast?SystemColors.Window:InkSurface,strong=m.HighContrast?SystemColors.WindowText:PaperText,soft=m.HighContrast?SystemColors.WindowText:Mist,rest=m.HighContrast?SystemColors.WindowText:Rest;
@@ -218,17 +225,17 @@ namespace Axon {
             // There is no status dot.
             Color tone=m.HighContrast?SystemColors.WindowText:StateColor(m.State);
             using(Font first=Face(13,true))Text(g,m.Line1,first,tone,new RectangleF(left,7,textRight-left,18));
-            using(Font second=Face(12,false))Text(g,m.Line2,second,Color.FromArgb((int)(255*Math.Max(0,Math.Min(1,m.TextIn))),soft),new RectangleF(left,25,textRight-left,16));
+            using(Font second=Face(12,false))Text(g,m.Line2,second,soft,new RectangleF(left,25,textRight-left,16));
             if(m.Slot==1) {
                 Plate(g,StopRect,Rose,m.StopHover,m.Pressed==2);
-                Icon(g,"stop",StopRect.X+12,StopRect.Y+12,m.HighContrast?rest:Mix(rest,Rose,Math.Max(m.StopHover,m.Pressed==2?1:0)),m.Pressed==2&&MotionEnabled?.92f:1);
+                Icon(g,"stop",StopRect.X+12,StopRect.Y+12,m.HighContrast?rest:Mix(rest,Rose,Math.Max(m.StopHover,m.Pressed==2?1:0)),Pressing(m.StopPress));
             } else if(m.Slot==2) {
                 Plate(g,StopRect,Color.White,m.StopHover,m.Pressed==2);
-                Icon(g,"close",StopRect.X+12,StopRect.Y+12,Mix(rest,strong,m.StopHover),m.Pressed==2&&MotionEnabled?.92f:1);
+                Icon(g,"close",StopRect.X+12,StopRect.Y+12,Mix(rest,strong,m.StopHover),Pressing(m.StopPress));
             }
             using(Pen divider=new Pen(Color.FromArgb(41,255,255,255),1))g.DrawLine(divider,391.5f,14,391.5f,34);
             Plate(g,ModeRect,Color.White,m.ModeHover,m.Pressed==3);
-            Icon(g,"settings",ModeRect.X+12,ModeRect.Y+12,Mix(rest,strong,m.ModeHover),m.Pressed==3&&MotionEnabled?.92f:1);
+            Icon(g,"settings",ModeRect.X+12,ModeRect.Y+12,Mix(rest,strong,m.ModeHover),Pressing(m.ModePress));
         }
         // ---- The Settings menu: a raised panel under the bar. A header that
         // says whose menu it is, 44-high rows, a hairline, and a footer that
@@ -256,20 +263,66 @@ namespace Axon {
         }
         // Drawn with its own margin, so the panel's shadow is part of the surface.
         internal static void Menu(Graphics g,System.Collections.Generic.List<MenuItem> items,float height,int hover,int pressed) {
-            g.SmoothingMode=SmoothingMode.AntiAlias;g.PixelOffsetMode=PixelOffsetMode.HighQuality;g.TextRenderingHint=System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
             RectangleF panel=new RectangleF(MenuMargin,MenuMargin,MenuWidth,height);
+            MenuBody(g,panel);MenuRows(g,items,panel.Location,hover,pressed);MenuEdge(g,panel);
+        }
+        // The panel's chrome at any height: one neutral drop shadow, the body, and its hairline edge.
+        internal static void MenuBody(Graphics g,RectangleF panel) {
+            g.SmoothingMode=SmoothingMode.AntiAlias;g.PixelOffsetMode=PixelOffsetMode.HighQuality;
             // One neutral drop shadow: 0 12 28, black 34%.
             for(int i=14;i>=1;i--) {
                 RectangleF soft=panel;soft.Offset(0,12);soft.Inflate(i*2-6,i*2-6);
                 using(GraphicsPath shape=Overlay.RoundRect(soft,12+i*2))using(SolidBrush shade=new SolidBrush(Color.FromArgb(7,0,0,0)))g.FillPath(shade,shape);
             }
-            using(GraphicsPath shape=Overlay.RoundRect(panel,12)) {
-                using(SolidBrush fill=new SolidBrush(InkRaised))g.FillPath(fill,shape);
-                using(Pen edge=new Pen(Color.FromArgb(41,255,255,255),1))g.DrawPath(edge,shape);
+            using(GraphicsPath shape=Overlay.RoundRect(panel,12))using(SolidBrush fill=new SolidBrush(InkRaised))g.FillPath(fill,shape);
+        }
+        // menu.page: the panel at a height between two pages, the old page's
+        // rows leaving and the new page's arriving. Each page is a picture of
+        // its rows at device scale; they are placed pixel for pixel.
+        internal static void MenuBetween(Graphics g,RectangleF panel,float zoom,Bitmap from,float fromAlpha,Bitmap to,float toAlpha) {
+            MenuBody(g,panel);
+            var saved=g.Save();g.ResetTransform();g.InterpolationMode=InterpolationMode.NearestNeighbor;
+            RectangleF device=new RectangleF(panel.X*zoom,panel.Y*zoom,panel.Width*zoom,panel.Height*zoom);
+            using(GraphicsPath inside=Overlay.RoundRect(device,12*zoom)) {
+                g.SetClip(inside);
+                Point at=new Point((int)Math.Round(device.X),(int)Math.Round(device.Y));
+                Fade(g,from,at,fromAlpha);Fade(g,to,at,toAlpha);
             }
+            g.Restore(saved);
+            MenuEdge(g,panel);
+        }
+        // menu.page timing, ms into the change: the height moves over Normal
+        // (in and out); the old rows leave over FastLeave and the new ones
+        // arrive from halfway through that, so no frame is empty.
+        internal static void MenuPageAt(double ms,out float move,out float gone,out float come) {
+            move=EaseInOut((float)(ms/Normal));gone=1-EaseOut((float)(ms/FastLeave));
+            come=EaseOut((float)((ms-FastLeave/2.0)/(Normal-FastLeave/2.0)));
+        }
+        static void Fade(Graphics g,Bitmap image,Point at,float alpha) {
+            if(image==null||alpha<=0)return;
+            ColorMatrix matrix=new ColorMatrix();matrix.Matrix33=Math.Min(1,alpha);
+            using(ImageAttributes attributes=new ImageAttributes()) {
+                attributes.SetColorMatrix(matrix);
+                g.DrawImage(image,new Rectangle(at,image.Size),0,0,image.Width,image.Height,GraphicsUnit.Pixel,attributes);
+            }
+        }
+        // One page's rows on the panel's own colour, at device scale.
+        internal static Bitmap MenuPage(System.Collections.Generic.List<MenuItem> items,float height,float zoom,int hover,int pressed) {
+            Bitmap page=new Bitmap(Math.Max(1,(int)Math.Ceiling(MenuWidth*zoom)),Math.Max(1,(int)Math.Ceiling(height*zoom)),PixelFormat.Format32bppPArgb);
+            using(Graphics g=Graphics.FromImage(page)){g.Clear(InkRaised);g.ScaleTransform(zoom,zoom);MenuRows(g,items,PointF.Empty,hover,pressed);}
+            return page;
+        }
+        internal static void MenuEdge(Graphics g,RectangleF panel) {
+            g.SmoothingMode=SmoothingMode.AntiAlias;g.PixelOffsetMode=PixelOffsetMode.HighQuality;
+            using(GraphicsPath shape=Overlay.RoundRect(panel,12))using(Pen edge=new Pen(Color.FromArgb(41,255,255,255),1))g.DrawPath(edge,shape);
+        }
+        // One page's rows, with the panel's top-left corner at origin. They
+        // are drawn on the panel's own colour, so a page can fade over another.
+        internal static void MenuRows(Graphics g,System.Collections.Generic.List<MenuItem> items,PointF origin,int hover,int pressed) {
+            g.SmoothingMode=SmoothingMode.AntiAlias;g.PixelOffsetMode=PixelOffsetMode.HighQuality;g.TextRenderingHint=System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
             using(Font body=Face(13,false))using(Font small=Face(12,false))using(Font cap=Face(11,true))
             foreach(MenuItem item in items) {
-                RectangleF box=item.Bounds;box.Offset(MenuMargin,MenuMargin);
+                RectangleF box=item.Bounds;box.Offset(origin.X,origin.Y);
                 if(item.Kind=="head")Text(g,item.Text,small,Mist,new RectangleF(box.X+12,box.Y+6,box.Width-24,20));
                 else if(item.Kind=="rule")using(Pen rule=new Pen(Color.FromArgb(26,255,255,255),1))g.DrawLine(rule,box.X+8,box.Y+6.5f,box.Right-8,box.Y+6.5f);
                 else if(item.Kind=="foot") {
@@ -394,7 +447,7 @@ namespace Axon {
                     g.Clear(Color.FromArgb(60,64,72));g.ScaleTransform(2,2);
                     for(int hover=0;hover<2;hover++)for(int i=0;i<states.Length;i++) {
                         HudModel model=new HudModel();model.State=states[i][0];model.Line1=states[i][1];model.Line2=states[i][2];model.Hint=states[i][3]=="1";model.Slot=Int32.Parse(states[i][4]);
-                        if(hover==1){model.StopHover=1;model.ModeHover=i%2;model.Pressed=i%3==0?2:0;}
+                        if(hover==1){model.StopHover=1;model.ModeHover=i%2;model.Pressed=i%3==0?2:0;model.StopPress=model.Pressed==2?1:0;}
                         var saved=g.Save();g.TranslateTransform(20,12+(HudHeight+24)*(i+hover*states.Length));Hud(g,model);g.Restore(saved);
                     }
                 }
@@ -405,12 +458,41 @@ namespace Axon {
                 MenuItem head=new MenuItem();head.Kind="head";head.Text="Computer Use";items.Add(head);
                 MenuItem record=new MenuItem();record.Id=1;record.Text="Show bar and glow in recordings";record.Ticks=true;record.Checked=true;items.Add(record);
                 MenuItem move=new MenuItem();move.Id=2;move.Text="Move bar";move.Note="Top centre";move.Chevron=true;items.Add(move);
+                MenuItem bright=new MenuItem();bright.Id=3;bright.Text="Glow brightness";bright.Note="Soft";items.Add(bright);
                 MenuItem rule=new MenuItem();rule.Kind="rule";items.Add(rule);
                 MenuItem foot=new MenuItem();foot.Kind="foot";items.Add(foot);
                 float tall=MenuLayout(items);
+                var docks=new System.Collections.Generic.List<MenuItem>();
+                MenuItem dockHead=new MenuItem();dockHead.Kind="head";dockHead.Text="Move bar";docks.Add(dockHead);
+                string[] names={"Top left","Top centre","Top right","Bottom left","Bottom centre","Bottom right"};
+                for(int i=0;i<names.Length;i++){MenuItem item=new MenuItem();item.Id=10+i;item.Text=names[i];item.Ticks=true;item.Checked=i==1;docks.Add(item);}
+                MenuItem dockRule=new MenuItem();dockRule.Kind="rule";docks.Add(dockRule);
+                MenuItem reset=new MenuItem();reset.Id=20;reset.Text="Reset";reset.Ticks=true;docks.Add(reset);
+                float dockTall=MenuLayout(docks);
                 using(Bitmap image=new Bitmap((MenuWidth+2*MenuMargin)*2,(int)((tall+2*MenuMargin)*2),PixelFormat.Format32bppArgb)) {
                     using(Graphics g=Graphics.FromImage(image)){g.Clear(Color.FromArgb(31,33,40));g.ScaleTransform(2,2);Menu(g,items,tall,2,0);}
                     image.Save(Path.Combine(directory,"menu.png"),ImageFormat.Png);
+                }
+                using(Bitmap image=new Bitmap((MenuWidth+2*MenuMargin)*2,(int)((dockTall+2*MenuMargin)*2),PixelFormat.Format32bppArgb)) {
+                    using(Graphics g=Graphics.FromImage(image)){g.Clear(Color.FromArgb(31,33,40));g.ScaleTransform(2,2);Menu(g,docks,dockTall,12,0);}
+                    image.Save(Path.Combine(directory,"menu-dock.png"),ImageFormat.Png);
+                }
+                // menu.page, as the product draws it: five frames 50 ms apart
+                // from the main page to the Move bar page, hanging below the bar.
+                float zoom=2,most=Math.Max(tall,dockTall);int frameWidth=(MenuWidth+2*MenuMargin)*2,frameHeight=(int)((most+2*MenuMargin)*2);
+                using(Bitmap from=MenuPage(items,tall,zoom,2,0))using(Bitmap to=MenuPage(docks,dockTall,zoom,0,0))
+                using(Bitmap sheet=new Bitmap(frameWidth*5,frameHeight,PixelFormat.Format32bppArgb)) {
+                    using(Graphics g=Graphics.FromImage(sheet)) {
+                        g.Clear(Color.FromArgb(31,33,40));
+                        for(int i=0;i<5;i++) {
+                            float grow,gone,come;MenuPageAt(i*Normal/4.0,out grow,out gone,out come);float height=tall+(dockTall-tall)*grow;
+                            using(Bitmap frame=new Bitmap(frameWidth,frameHeight,PixelFormat.Format32bppPArgb)) {
+                                using(Graphics f=Graphics.FromImage(frame)){f.Clear(Color.Transparent);f.ScaleTransform(zoom,zoom);MenuBetween(f,new RectangleF(MenuMargin,MenuMargin,MenuWidth,height),zoom,from,gone,to,come);}
+                                g.DrawImage(frame,new Rectangle(i*frameWidth,0,frameWidth,frameHeight));
+                            }
+                        }
+                    }
+                    sheet.Save(Path.Combine(directory,"menu-page.png"),ImageFormat.Png);
                 }
             }
             foreach(uint role in new uint[]{32512,32513,32649,32650})

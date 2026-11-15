@@ -72,13 +72,13 @@
     {
       "path": "server/native/Overlay.cs",
       "upstream_sha256": "eaadd8bc72befd9f42aa214dbb1a3ba45f2e28d0c40ed3491ece4414280a4551",
-      "local_sha256": "ce5cd1121a87f8a5afbf62a48d03c3d3b9c42e7646474ae92041e3e6f5ffb92d",
+      "local_sha256": "0a2ea47a78fb62955dc24b187087a0e826847e39a8efbcc1502dc1fe86c5622a",
       "modified": true
     },
     {
       "path": "server/native/Presence.cs",
       "upstream_sha256": "b8af4f75a36a1045c8eef0f8af52dd4142c4efb87797c094b913a3da8715fece",
-      "local_sha256": "2eeaeb7768663c4fffb277bbb66de5236ad7fc0554f60837b139b64ba43c3f9a",
+      "local_sha256": "39db4d2d0174a7edd5895e62a76ac737a50551dda5f81fe0590d3894a331ed7e",
       "modified": true
     },
     {
@@ -268,7 +268,7 @@
     },
     {
       "path": "server/native/Guardian.cs",
-      "sha256": "7c09704bb6fd717e36eb8c6bf63d0c9cec3d770afe80fbbab4d7839b7ab96822"
+      "sha256": "9facbf465f9f6f07995f1b3b29f8c0d8dd1d5bdfce19afe7000ad4775babfb27"
     },
     {
       "path": "server/native/CursorSafety.cs",
@@ -276,11 +276,11 @@
     },
     {
       "path": "server/native/DesktopVisuals.cs",
-      "sha256": "978a1bd36c353efa81655566c90b20e9a0ad9d1d877378fc1700bb2185b5ebe6"
+      "sha256": "626aa571664d7ef12e8cc4543d0f973127453c48ae5c248e26e1ba9e3e8edf36"
     },
     {
       "path": "server/native/Glow.cs",
-      "sha256": "78accdad9ff6982842ea89ed44107127b9a6305480dcd5c650ae2f84b35bc5ba"
+      "sha256": "4fafc286da19b91dd3777bfcf464da5aa155cecc6d44ce0e38df19b34449e70b"
     },
     {
       "path": "server/native/InputLedger.cs",
@@ -552,7 +552,7 @@
     },
     {
       "path": "server/control-contract.json",
-      "sha256": "b579364d7f71c87b93f9d0dc0f1b14049f44b70c5e4ee374290e91cf140e9cd9"
+      "sha256": "ce4cf250263913abf4702a70723bf5b624b7df150bc6f5e4e5f6a64ad6d85091"
     },
     {
       "path": "server/macos-build.mjs",
