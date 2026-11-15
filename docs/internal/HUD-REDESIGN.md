@@ -15,12 +15,14 @@ Product context was taken from the code and the existing docs. There is no
 The owner has decided to remove arm and re-arm. The design follows that model:
 
 - **Per-app access.** The human approves each app before the agent can use it.
-- **Tiers.** Browsers are view only. Terminals are click only. Everything else
-  is full control.
-- **Stop ends the task.** Stop or Esc halts input at once and ends the agent's
-  current task. There is no latch. The next agent request starts fresh and
-  asks for access again where needed.
-- **Human input pauses.** Resuming never needs a re-arm.
+- **Tiers.** Terminals and IDEs are click only. Everything else, browsers
+  included, is full control.
+- **Approval lasts for the conversation.** It ends when the person presses Esc
+  or Stop, or starts a new conversation.
+- **Stop ends the task and revokes access.** Stop or Esc halts input at once.
+  There is no latch. The next agent request asks for access again.
+- **Human input never pauses the agent.** Only Esc or Stop halts it. Pause
+  exists only as an explicit button on the bar.
 
 Decided alongside it: no breathing glow, per-window glow as phase 2, a flat
 dark bar, six docks plus free placement, "Stop" and "Resume" as the only
@@ -102,9 +104,9 @@ painted by `DesktopVisuals.Edge`; the Mac equivalents are in `MacVisuals.swift`.
 | Working | Antigravity is working | Clicking / Typing / Moving / Dragging / Scrolling / Reading the screen | Stop | Pause, Settings | line + field |
 | Working, between actions | Antigravity is working | Waiting for the next step | Stop | Pause, Settings | line + field |
 | Working, nearly out of time | Antigravity is working | *verb* · 1 min left | Stop | Pause, Settings | line + field |
-| Paused | Paused · you have control | reason, see below | Resume | Stop, Settings | amber line |
+| Paused | Paused · access kept | You pressed Pause | Resume | Stop, Settings | amber line |
 | Paused, can't resume yet | Paused · can't resume yet | A key or button may still be held | Resume (tries again) | Stop, Settings | amber line |
-| Stopped | Stopped · Antigravity ended its task | reason, see below | Hide (×) | Settings | none |
+| Stopped | Stopped · Antigravity ended its task and lost access | reason, see below | Hide (×) | Settings | none |
 | Session ended | Session ended | The time limit ran out | Hide (×) | Settings | none |
 
 Rules:
@@ -113,12 +115,14 @@ Rules:
   held for at least 1.2 s so the text does not flicker.
 - **Stop is the filled button whenever the agent can act.** In Paused and in
   Asking for access it drops to an outlined button in the same slot.
-- **Stopped is a confirmation, not a place to act.** It shows for 4 s, then
-  the bar hides. If a new request arrives first, the bar goes to Asking for
-  access or Working. There is nothing to undo and no button to restore
+- **Stopped is a confirmation, not a place to act.** Access is revoked. It
+  shows for 4 s, then the bar hides. If a new request arrives first, the bar
+  goes to Asking for access. There is nothing to undo and no button to restore
   control. The bar ignores clicks for 600 ms after a stop, so a second panic
   click lands on nothing.
 - **Session ended** shows for 4 s, then the bar hides.
+- **Pause** is only the bar's Pause button. The person's own mouse and
+  keyboard never pause the agent. A pause keeps the approved access.
 - **Resume** is pressed by the person. If input cleanup is not finished
   (`InputLedger.HasHeld`, live workers), the bar says so on line 2, shakes
   once, and stays paused. Pressing Resume again runs the same checks. Stop is
@@ -131,7 +135,6 @@ Rules:
 
 | Source in `Guardian.cs` | State | Line 2 |
 |---|---|---|
-| `human_takeover` | Paused | You moved the mouse *or* You pressed a key |
 | toggle click | Paused | You pressed Pause |
 | `requested_pause` | Paused | Antigravity paused itself |
 | held input, live workers on resume | Paused, can't resume yet | A key or button may still be held |
@@ -150,19 +153,18 @@ unavailable" and "Could not save control preference".
 ### Access prompt
 
 Title: **Allow Antigravity to use these apps?**
-Sub-line: For this task only. You can stop at any time.
+Sub-line: Until you press Esc or start a new conversation
 
 One row per app: the app's name, one sentence, and a tier tag.
 
 | Tier | Applies to | Tag | Sentence |
 |---|---|---|---|
-| read | browsers | View only | Can see the window. Cannot click or type |
-| click | terminals | Click only | Can see and click. Cannot type |
-| full | everything else | Full control | Can see, click and type |
+| click | terminals and IDEs | Click only | Can see and click. Cannot type |
+| full | everything else, browsers included | Full control | Can see, click and type |
 
 - **Buttons:** Allow (filled) and Deny (outlined), both 104 × 44. Footer text:
   "No answer in 90 s counts as Deny".
-- **Tier tag:** a word plus a three-step mark (one, two or three bars lit), so
+- **Tier tag:** a word plus a two-step mark (one or two bars lit), so
   the tier does not rely on colour.
 - **Placement:** the prompt hangs 8 px under the bar, same width, same surface,
   so the question and Stop are in one place. If the bar is docked at the
@@ -171,6 +173,9 @@ One row per app: the app's name, one sentence, and a tier tag.
   Esc stops the task, as everywhere.
 - **Stop stays live.** The prompt is not a modal child of the bar.
 - **Deny or timeout** ends the request. The bar shows Stopped with the reason.
+- **Scope:** an approval lasts for the agent's conversation. Esc or Stop
+  revokes it. A later request for an app not yet approved shows a prompt with
+  only the new apps.
 - **Long lists:** up to five rows are shown; beyond that the list scrolls
   inside the prompt and the title gains the count ("these 7 apps").
 - **Capture:** the prompt is always excluded from capture, as permission
@@ -185,10 +190,10 @@ shows (see "Open questions").
 
 | Today | Proposed |
 |---|---|
-| Keep working — Pause or Esc to interrupt | group "When you use the mouse or keyboard": **Let it keep working** |
-| Yield on input — deliberate input pauses | same group: **Pause Antigravity** |
+| Keep working — Pause or Esc to interrupt | removed; this is now the only behaviour |
+| Yield on input — deliberate input pauses | removed |
 | Show glow and controls in screen recordings | **Show bar and glow in recordings** |
-| Esc always stops immediately (disabled item) | footer: Esc or Ctrl Alt F12 stops at once |
+| Esc always stops immediately (disabled item) | footer: Esc or Ctrl Alt F12 stops at once. Your own mouse and keyboard don't pause it. |
 | End session and hide | **End task and hide** |
 | — | **Move bar** ▸ six dock positions, Reset (section 8) |
 
@@ -203,9 +208,9 @@ All sizes are DIPs and scale with the monitor.
   handle), Settings 44 × 44, hand-over slot (Pause 44 × 44, or a labelled
   Resume at 92 minimum × 44), Stop slot 92 × 44.
 - 16 left padding, 6 right, 6 above and below the controls, 4 between controls.
-- The Stop slot is 92 wide in every state. Where there is nothing to stop
-  (Ready, Stopped, Session ended) it holds a 44 × 44 close mark at its right
-  edge; the left 48 is inert.
+- The Stop slot is 92 wide wherever there is something to stop. In Ready,
+  Stopped and Session ended a 44 × 44 close mark sits where Stop's right edge
+  was, and the freed width goes to the text.
 - Prompt: 496 wide, radius 18, 16 padding, rows 56 minimum, buttons 104 × 44.
 - Every target is at least 44 × 44. Rendered sizes were measured in the
   mockup: 44 × 44, 92 × 44, 102 × 44.
@@ -250,7 +255,7 @@ fixed dark surface gives known contrast in every case.
 | `mist` | `#A9B4C0` | line 2 | 8.6:1 on ink, 7.6:1 on ink-raised |
 | icon rest | `#D5DCE4` | Settings and Pause icons | 13.1:1 on ink |
 | `ice` | `#9BCDEB` | agent can act | 10.6:1 on ink |
-| `amber` | `#F0B866` | you have control | 10.1:1 on ink |
+| `amber` | `#F0B866` | paused, waiting on you | 10.1:1 on ink |
 | `rose` | `#FF8FA0` | stopped | 8.4:1 on ink |
 | `slate` | `#1B2735` | hairline beside glow lines | 15.1:1 on white |
 | edge | white at 16% | bar, prompt and menu border | — |
@@ -288,12 +293,11 @@ control. The glow says where.
 |---|---|---|---|
 | Working | 2 px ice, slate hairline each side | soft, 22 px, 50% at the line falling to 0 | steady, no breathing |
 | Action lands | lighter ice | 26 px, 72% | lifts over 100 ms, settles over 300 ms |
-| Paused | 2 px amber, slate hairlines | none | shows where the task is attached, hands off |
+| Paused | 2 px amber, slate hairlines | none | access is kept, hands off |
 | Asking for access | none, or the amber line of a task already under way | none | no app approved, no glow |
 | Stopped, Ready, Ended | none | none | gone within 67 ms of Stop |
 
-View-only apps never receive input, so they never get a glow. Click-only apps
-get the same glow as full-control apps when a click lands in them.
+Click-only apps get the same glow as full-control apps.
 
 ### How it never obscures content
 
@@ -450,11 +454,7 @@ macOS Reduce Motion is on:
     operation that moves or hides it; `avoid_input` stays the only programmatic
     move and keeps its token and state checks.
   - Dragging does not change state, access or visibility.
-  - Dragging the bar must not count as takeover input. Smart takeover pauses
-    on deliberate movement and on any click; a press or drag that starts on
-    the bar is exempt, as the Mac bar's `.hud` bounds already are. No such
-    exemption was found in `Presence.cs` or `TakeoverPolicy.cs` on Windows
-    (only the open-menu check in `Tick`); this was read, not tested live.
+  - Human input no longer pauses the agent, so a drag cannot cause a pause.
   - While the agent's own injected click is in flight, a drag cannot start.
   - Stop and Resume stay live while the bar is being dragged or is settling.
 - **DPI:** `visualScale` and the form `Region` are set once in the `Guardian`
@@ -473,10 +473,10 @@ where it touches what is drawn.
 |---|---|
 | `server/control-contract.json` | One bar size (496 × 56) replacing three. Glow numbers, per-state glow rule, motion tokens, colour tokens. `breath_*` removed. Tier names and sentences. Windows reads the glow numbers only after the `Edge` change below. |
 | `server/native/DesktopVisuals.cs` | `Hud` redrawn: two lines, state mark, slot layout, filled/outlined/icon buttons, new `HudWidth`/`HudHeight` and rects, a rect for the close mark. Takes line 2 and the presentation as input. Flat surface; icons drawn from the Phosphor path data, no text glyphs. A new `Prompt` painter for the access card. `Edge` reads `edge_*` from the contract instead of its hardcoded values, takes state, and draws line + hairlines + short field. `BreathLevel` removed. `Export` renders all nine presentations and the prompt over a dark and a light backdrop. |
-| `server/native/Guardian.cs` | Keep the last reason and map it to line 2. Presentations "asking", "can't resume yet", "stopped" (4 s, then hide) and "session ended" (4 s). The toggle becomes Pause/Resume only; a refused resume sets the bar text as well as emitting `visual_warning`. 600 ms click guard after a stop. Hold verbs 1.2 s; map `observe` to "Reading the screen". Keep the ring visible in Paused. Replace the stock prompt form with the access card: app rows with tiers, Allow/Deny, 90 s timeout, not owned by the bar so the bar's Stop works by mouse. Drag handling, home position, return after avoidance, per-monitor preference, DPI change. Menu text and "Move bar". Accessible names and live region. |
+| `server/native/Guardian.cs` | Keep the last reason and map it to line 2. Presentations "asking", "can't resume yet", "stopped" (4 s, then hide) and "session ended" (4 s). The toggle becomes Pause/Resume only and is the only way to pause; a refused resume sets the bar text as well as emitting `visual_warning`. 600 ms click guard after a stop. Hold verbs 1.2 s; map `observe` to "Reading the screen". Keep the ring visible in Paused. Replace the stock prompt form with the access card: app rows with tiers, Allow/Deny, 90 s timeout, not owned by the bar so the bar's Stop works by mouse. Drag handling, home position, return after avoidance, per-monitor preference, DPI change. Menu text and "Move bar". Accessible names and live region. |
 | `server/native/Overlay.cs` | `RingForm`: per-state alpha and colour, `glow.action` lift, `glow.stop` at 67 ms, no breath timer. Phase 2: bounds from the target window, z-order above the target, not topmost. One shared motion-token table for `Animate`. `BannerForm` is unused in guardian mode and is not touched. |
 | `server/native/WindowGeometry.cs` | `AvoidHud` candidates include the six docks; return the home position for the way back. Clamp helper for drag. |
-| `server/native/TakeoverPolicy.cs`, `Presence.cs` | Ignore input that starts on the bar or the prompt. |
+| `server/native/TakeoverPolicy.cs`, `Presence.cs` | The takeover pause is removed. `Presence` keeps the Esc hook. The `takeover_mode` preference and its menu items go. On macOS the `.hud` takeover exemption is no longer needed. |
 | `server/liquidglass-host/`, `LiquidGlassPackageClient.cs` | No longer used by the bar. Removing the helper from the bundle is a packaging change to schedule with a release. |
 | `server/runtime.mjs` | Send one access request with the list of apps and their tiers. Phase 2: send the target `hwnd` with `activity`. `observe` is already sent. |
 | `server/native/macos/MacVisuals.swift` | `statePresentation` gains line 2, the primary button and the new presentations. Bar 496 × 56, flat surface. Access card. `MacGlowView` per-state and without breathing. Drag, home, docks. |
@@ -502,11 +502,11 @@ card and live Stop during it; (4) drag and home; (5) per-window glow;
   that today rides on the latch. What replaces it is not a design question,
   but the bar needs one honest line for it ("Still releasing a key or button")
   and must not hide while it is true.
-- **Prompt fatigue.** A prompt per request is safe but can become routine
-  clicking. Keep it to one prompt listing all apps, never one per app.
-- **Tier wording.** "View only" for a browser will surprise people who expect
-  the agent to browse. The sentence on the row is the only explanation; it
-  must be accurate to what the runtime enforces.
+- **Prompt fatigue.** Every Stop revokes access, so the next request prompts
+  again. Keep it to one prompt listing all apps, never one per app.
+- **Tier wording.** "Click only" for a terminal or IDE will surprise people
+  who expect the agent to type commands. The sentence on the row is the only
+  explanation; it must be accurate to what the runtime enforces.
 - **Prompt and bar as separate windows.** Making the bar live during a prompt
   changes window ownership and focus behaviour. It needs its own review
   against #43 and the consent rules. The prompt must stay excluded from
@@ -519,9 +519,12 @@ card and live Stop during it; (4) drag and home; (5) per-window glow;
 - **Avoidance timing.** If `bar.stepAside` is animated, the acknowledgement
   must still describe where the bar ends up before the click is classified.
   The prompt, being larger, must also step aside or the click must wait.
-- **Drag and takeover.** If the exemption is wrong in either direction, a drag
-  pauses the agent, or real takeover input near the bar is ignored. Keep the
-  exemption to presses that start on the bar.
+- **Shared input.** The person and the agent can now use the mouse and
+  keyboard at the same time. The bar must make Stop and Esc obvious, because
+  they are the only ways to halt it. The menu footer says so in words.
+- **Esc is also an app key.** Esc both stops the agent and revokes access. A
+  person pressing Esc for their own app during a task ends the task. Today's
+  code already limits this to when the agent is active.
 - **Wider bar.** 496 × 56 against 470 × 52 covers slightly more and steps
   aside slightly more often.
 - **Reference departure.** `docs/visual-design.md` records a full-monitor
@@ -541,18 +544,19 @@ Decided by the owner:
 1. No breathing.
 2. Per-window glow as phase 2; slim monitor-edge glow first.
 3. Flat dark bar.
-4. Stopped is a brief confirmation; the bar then hides.
+4. Stopped is a brief confirmation; the bar then hides. Stop revokes access.
 5. No re-arm. Control words are "Stop" and "Resume".
 6. Native change so the bar's Stop works by mouse during a prompt.
 7. Six docks plus free placement.
+8. Human mouse and keyboard never pause the agent. Pause is a bar button only.
+9. Two tiers: click only for terminals and IDEs, full control for the rest.
+10. Approval lasts for the conversation; Esc revokes it.
 
 Open questions:
 
-1. **Resume by the agent.** Can the agent's next request resume a pause once
-   the person is idle, or is Resume always a click on the bar? The bar text
-   assumes a click.
-2. **Scope of an approval.** "For this task only" is assumed. If approvals
-   last longer, the sub-line changes.
-3. **Action-time prompts.** Today sensitive actions get their own prompt. If
+1. **Keep the Pause button?** The design keeps it, as the one way to hold the
+   agent without losing access. Dropping it removes the Paused states and the
+   amber glow line.
+2. **Action-time prompts.** Today sensitive actions get their own prompt. If
    they stay, they use the same card with one row and the action in the title.
-4. **Confirmation length.** 4 s for Stopped and Session ended.
+3. **Confirmation length.** 4 s for Stopped and Session ended.
