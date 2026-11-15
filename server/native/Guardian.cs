@@ -181,7 +181,7 @@ namespace Axon {
         internal static void Check() {
             if (String.IsNullOrEmpty(FileName)) throw new AxonError("no_native_guard", "Native approval runtime required.", null);
             string latch=Environment.GetEnvironmentVariable("AGCU_STOP_LATCH");
-            if(LatchBlocks(latch))throw new AxonError("control_stopped","Emergency Stop remains latched. Local human re-arm is required.",null);
+            if(LatchBlocks(latch))throw new AxonError("control_stopped","The human stopped this task. No input was sent. Report and wait; the next ready starts a fresh task.",null);
             string[] state;string original;
             try { original=File.ReadAllText(FileName);state = original.Split('|'); }
             catch { throw new AxonError("control_stopped", "Permission process is unavailable.", null); }
@@ -395,6 +395,10 @@ namespace Axon {
         float visualScale=1, phase;
         int visualTick;
         string activity="";DateTime activityAt;
+        // Where the current action lands and who is acting. Carried by the
+        // activity message for the control bar and a per-window glow; nothing
+        // is drawn from them yet, and none of them grants or changes control.
+        long activityHwnd;int activityX=Int32.MinValue,activityY=Int32.MinValue;string hostName="";
         readonly System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer();
         volatile string state = "idle"; string token = "";
         // Set while a previous task's input cleanup is unverified: the bar is
@@ -697,7 +701,7 @@ namespace Axon {
         }
         void Receive(Dictionary<string, object> m) {
             string op = Convert.ToString(m["op"]); object id=m.ContainsKey("id")?m["id"]:null;
-            if(op=="visual_status") {Emit(new {id=id,state=state,controls_visible=Visible,bounds=new int[]{Left,Top,Width,Height},cursor=CursorSafety.Applied,watchdog_pid=CursorSafety.WatchdogPid,glow_opacity=Overlay.GlowOpacity,takeover_mode=takeover.Mode,record_visuals=recordVisuals});return;}
+            if(op=="visual_status") {Emit(new {id=id,state=state,controls_visible=Visible,bounds=new int[]{Left,Top,Width,Height},cursor=CursorSafety.Applied,watchdog_pid=CursorSafety.WatchdogPid,glow_opacity=Overlay.GlowOpacity,takeover_mode=takeover.Mode,record_visuals=recordVisuals,activity_hwnd=activityHwnd,activity_point=activityX==Int32.MinValue?null:new int[]{activityX,activityY},host_name=hostName});return;}
             if(op=="avoid_input") {
                 bool canAvoid=state=="active"&&m.ContainsKey("token")&&Convert.ToString(m["token"])==token;
                 bool moved=false;
@@ -726,7 +730,20 @@ namespace Axon {
             if(op=="activity" && state=="active") {
                 string action=Convert.ToString(m["action"]);
                 switch(action) {case "move":activity="Moving";break;case "click":activity="Clicking";break;case "drag":activity="Dragging";break;case "scroll":activity="Scrolling";break;case "type":case "set_value":case "key":activity="Typing";break;default:activity="Checking";break;}
-                activityAt=DateTime.UtcNow;RefreshHud();
+                activityAt=DateTime.UtcNow;
+                activityHwnd=0;activityX=Int32.MinValue;activityY=Int32.MinValue;
+                try {
+                    long target;
+                    if(m.ContainsKey("hwnd")&&Int64.TryParse(Convert.ToString(m["hwnd"]),out target)&&target>0) {
+                        // Only a window of an app approved for this task is accepted.
+                        string key=Convert.ToString(ControlFence.Identity(target)["key"]);
+                        if(grants.Contains(key))activityHwnd=target;
+                    }
+                    object[] point=m.ContainsKey("point")?m["point"] as object[]:null;int px,py;
+                    if(activityHwnd!=0&&point!=null&&point.Length==2&&Int32.TryParse(Convert.ToString(point[0]),out px)&&Int32.TryParse(Convert.ToString(point[1]),out py)&&Math.Abs((long)px)<10000000&&Math.Abs((long)py)<10000000) {activityX=px;activityY=py;}
+                    if(m.ContainsKey("host_name")) {string name=Convert.ToString(m["host_name"]);if(name!=null&&name.Length<=40)hostName=name;}
+                } catch {activityHwnd=0;}
+                RefreshHud();
                 if(m.ContainsKey("click_feedback")&&Convert.ToBoolean(m["click_feedback"]))Overlay.ClickFeedback();
                 return;
             }

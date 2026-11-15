@@ -274,6 +274,9 @@ export class Runtime {
   }
   async ready({session_handle}={}){
     Runtime.prototype.bindSession.call(this,session_handle);
+    // Another copy held the input lock last time. That ends when the other
+    // copy closes, so ask again instead of repeating the old refusal.
+    if(this.recoveryFailure?.code==='input_lease_held')this.recoveryFailure=null;
     // ready is the explicit task start; status is the read-only check. Report
     // whether this call opened the task so a ready after end is not misread.
     // A confirmed Stop ended the previous task. Clear it here, after proof
@@ -311,7 +314,11 @@ export class Runtime {
       return {...this.status(),session_handle:this.sessionHandle,task_started:taskStarted,update_notice:updateNotice(dataDir()),ready:visible&&this.state!=='stopped'&&this.state!=='paused'&&!this.recoveredTask,controls_visible:visible,desktop_context:controls.desktop_context,...(['native_liquid_glass','visual_effect_fallback'].includes(controls.material_backend)?{visual_material:controls.material_backend}:{}),guardian_running:!!this.guardian.proc,guardian_exit:this.guardian.lastExit??null,
         ...(this.state==='stopped'&&!(this.lastControlReason==='input_cleanup_failed'||this.driver?.inputMayBeHeld===true)?{replay_allowed:false,error:{code:'native_latch_still_enforced',message:'These native controls still hold Stop after a restart. Update the installation; this build needs the native change described in CLAUDE-STYLE-CONTROL.md. No input was sent.'}}:{}),
         next_action:this.state==='stopped'?(this.lastControlReason==='input_cleanup_failed'||this.driver?.inputMayBeHeld===true?'inspect_input_cleanup':'native_update_required'):this.state==='paused'?'ask_human_before_resume':this.recoveredTask?'inspect_recovered_task':'discover_or_launch'};
-    }catch(error){this.recoveryVisibility=controls?.controls_visible===false?false:null;this.recoveryFailure={code:error.code||'guardian_unavailable',message:error.code==='input_lease_held'?'Another copy of Computer Use is controlling this PC; multiple copies are not supported yet. Close the other copy (or end its task), then run ready again. No input was sent.':error.code==='desktop_context_unavailable'?'Start the installed local launcher on the visible desktop. No desktop was switched and Stop remains latched.':'Local controls failed to start. Run diagnostics; do not repeat launch commands.'};return unavailable();}
+    }catch(error){
+      // A refused second copy never had controls and sent nothing, so the
+      // task this call opened is closed again; a later end has nothing to do.
+      if(error.code==='input_lease_held'&&taskStarted&&!this.dispatchStarted){try{if(this.taskFile)writeAtomicJSON(this.taskFile,{schema:1,open:false});this.taskOpen=false;}catch{}}
+      this.recoveryVisibility=controls?.controls_visible===false?false:null;this.recoveryFailure={code:error.code||'guardian_unavailable',message:error.code==='input_lease_held'?'Another copy of Computer Use is controlling this PC; multiple copies are not supported yet. Close the other copy (or end its task), then run ready again. No input was sent.':error.code==='desktop_context_unavailable'?'Start the installed local launcher on the visible desktop. No desktop was switched and Stop remains latched.':'Local controls failed to start. Run diagnostics; do not repeat launch commands.'};return unavailable();}
   }
   // Returns null once a confirmed Stop is cleared, or a ready refusal.
   async clearStop(){
@@ -642,7 +649,9 @@ export class Runtime {
       // Count an attempted dispatch, including uncertain delivery, but not a
       // rejected lease or a cancellation that never reached the native worker.
       this.remaining--;
-      this.guardian.send({op:'activity',action:op});
+      // The target window rides along for the control bar and a per-window
+      // glow; native accepts it only for an approved app.
+      this.guardian.send({op:'activity',action:op,...(w?{hwnd:Number(w.hwnd)}:{})});
       const result=(await this.driver.call(op,payload)).result;
       if(op==='click'&&payload.physical)this.guardian.send({op:'activity',action:op,click_feedback:true});
       return result;

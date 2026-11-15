@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "6504132bda06ce51f82bfd5542197b638d136794927140d2e4ed702d1e660db9"
+      "sha256": "f837573958cea680c5f079976c2b491cd01d3bcb2f3cb6d27b9a5876fe2b31da"
     },
     {
       "path": "server/mcp.mjs",
@@ -268,7 +268,7 @@
     },
     {
       "path": "server/native/Guardian.cs",
-      "sha256": "b48912b5094b1568e8cbc79918e81bb4686434ccabc31a1167c4d7d6b51d517f"
+      "sha256": "df91171deaf62d0570cc3db6e314c52d42154cdef8d4d9ee8dcb38586d6cfad1"
     },
     {
       "path": "server/native/CursorSafety.cs",

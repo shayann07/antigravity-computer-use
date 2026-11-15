@@ -152,3 +152,13 @@ test('native controls always start in manual takeover: human input never pauses 
  const r=new Runtime({guardian:Object.assign(new EventEmitter(),{send(){}}),driver:{async abort(){}},sessions:{register(){},close(){}},takeoverMode:'smart'});
  try{assert.equal(r.takeoverMode,'manual');}finally{fs.unlinkSync(r.guardFile);}
 });
+
+test('a refused second copy opens no task and is asked again on the next ready',async()=>{
+ let held=true;
+ const r=runtime({request:async m=>{if(m.op==='show_controls'&&held)throw Object.assign(Error('held'),{code:'input_lease_held'});return m.op==='activate'?{allowed:true}:{state:'idle',controls_visible:true};}});
+ try{
+  const refused=await r.ready();assert.equal(refused.ready,false);assert.equal(refused.error.code,'input_lease_held');assert.match(refused.error.message,/Another copy of Computer Use is controlling this PC; multiple copies are not supported yet\./);
+  assert.equal(refused.next_action,'human_close_other_copy');assert.equal(r.taskOpen,false,'nothing was started, so no task stays open');
+  held=false;const ready=await r.ready();assert.equal(ready.ready,true);assert.equal(ready.task_started,true);
+ }finally{fs.unlinkSync(r.guardFile);}
+});
