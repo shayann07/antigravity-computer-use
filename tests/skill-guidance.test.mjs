@@ -76,3 +76,12 @@ test('computer-use skill teaches multi-point drags, chained pixel steps and step
  const steps = JSON.parse(file[1]);
  assert.equal(steps[1].kind, 'drag'); assert.equal(steps[1].points.length, 3);
 });
+
+test('lifecycle commands accept and ignore --reason so an end is never lost to a habit flag', async () => {
+ const {parseArguments} = await import('../scripts/arguments.mjs');
+ for (const command of ['end', 'status', 'ready', 'shutdown']) {
+  assert.deepEqual(parseArguments(describeCommand(command).inputSchema, ['--reason', 'done painting']), {}, command);
+  assert.deepEqual(parseArguments(describeCommand(command).inputSchema, ['--reason=done']), {}, command);
+ }
+ assert.throws(() => parseArguments(describeCommand('end').inputSchema, ['--bogus', 'x']), /Unknown flag/);
+});

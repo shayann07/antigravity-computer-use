@@ -27,6 +27,8 @@ export function parseArguments(schema,words,{read=readText,defaultImage=false}={
    const file=inline??words[++i];if(!file||file.startsWith('--'))bad('--'+flag+' needs a file path.');
    result[target]=target==='text'?read(file):JSON.parse(read(file));continue;
   }
+  // Agents pass --reason out of habit; commands without a reason field accept and ignore it.
+  if(key==='reason'&&!properties.reason){if(inline===undefined&&words[i+1]!==undefined&&!words[i+1].startsWith('--'))i++;continue;}
   let type=properties[key];
   if(!type&&properties.observe?.properties?.[key]){nested=true;type=properties.observe.properties[key];}
   if(!type)bad('Unknown flag --'+flag+'. Run describe for this command.');
