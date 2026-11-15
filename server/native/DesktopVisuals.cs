@@ -26,8 +26,6 @@ namespace Axon {
         internal static readonly Color Violet = ControlContract.ColorValue("accent_rgb",Color.FromArgb(155, 205, 235));
         internal static readonly Color Blue = ControlContract.ColorValue("blue_rgb",Color.FromArgb(128, 171, 207));
         internal static readonly Color Mint = Color.FromArgb(186, 222, 232);
-        // One hue at four lightnesses: brightness changes, colour never does.
-        internal static readonly Color GlowShade=Color.FromArgb(30,92,152),GlowHaze=Color.FromArgb(72,152,218),GlowBloom=Color.FromArgb(150,206,243),GlowFlare=Color.FromArgb(196,230,250),GlowCool=Color.FromArgb(132,194,234),GlowHot=Color.FromArgb(246,252,255);
         internal static Color StateColor(string state) {
             return state=="paused"||state=="asking" ? Amber : state=="stopped" ? Rose : state=="active" ? Violet : Rest;
         }
@@ -37,10 +35,9 @@ namespace Axon {
         // arrow Windows draws. The hotspot is (48,48) on a 96 x 96 surface.
         internal static void Pointer(Graphics g,float phase) {
             PointF centre=new PointF(54,56);
-            Halo(g,centre,40,GlowShade,70);
-            Halo(g,centre,38,GlowHaze,150);
-            Halo(g,centre,20,GlowBloom,205);
-            Halo(g,centre,9,GlowHot,150);
+            Color tone=GlowTones.ColorAt(0);
+            Halo(g,centre,38,tone,96);
+            Halo(g,centre,18,Mix(tone,Color.White,.5f),128);
         }
         static void Halo(Graphics g,PointF c,float radius,Color colour,int peak) {
             using(GraphicsPath circle=new GraphicsPath()) {
@@ -58,8 +55,8 @@ namespace Axon {
         // The click ripple: one ring leaving the pointer, in the glow's hue.
         internal static void Ripple(Graphics g,float t) {
             float radius=MotionEnabled?12+22*EaseOut(t):16;
-            using(Pen bloom=new Pen(Color.FromArgb((int)(120*(1-t)),GlowBloom),5f))g.DrawEllipse(bloom,48-radius,48-radius,2*radius,2*radius);
-            using(Pen core=new Pen(Color.FromArgb((int)(235*(1-t)),GlowHot),1.6f))g.DrawEllipse(core,48-radius,48-radius,2*radius,2*radius);
+            using(Pen bloom=new Pen(Color.FromArgb((int)(120*(1-t)),GlowTones.ColorAt(0)),5f))g.DrawEllipse(bloom,48-radius,48-radius,2*radius,2*radius);
+            using(Pen core=new Pen(Color.FromArgb((int)(235*(1-t)),Mix(GlowTones.ColorAt(0),Color.White,.6f)),1.6f))g.DrawEllipse(core,48-radius,48-radius,2*radius,2*radius);
         }
         internal static void Arrow(Graphics g) {
             // An original swept dart: a different silhouette from the Windows
@@ -205,30 +202,155 @@ namespace Axon {
             Plate(g,ModeRect,Color.White,m.ModeHover,m.Pressed==3);
             Icon(g,"settings",ModeRect.X+12,ModeRect.Y+12,Mix(rest,strong,m.ModeHover),m.Pressed==3&&MotionEnabled?.92f:1);
         }
-        internal static void Export(string directory) {
-            Directory.CreateDirectory(directory);
-            Color[] desks={Color.FromArgb(24,26,34),Color.FromArgb(244,246,249)};string[] deskNames={"dark","light"};
-            for(int desk=0;desk<2;desk++)foreach(bool inside in new bool[]{false,true}) {
-                int w=1200,h=760;
-                using(Bitmap image=new Bitmap(w,h,PixelFormat.Format32bppArgb)) {
-                    using(Graphics g=Graphics.FromImage(image)) {
-                        g.SmoothingMode=SmoothingMode.AntiAlias;g.Clear(desks[desk]);
-                        // A fictional desktop, never a capture of the user's data.
-                        Rectangle app=inside?new Rectangle(0,0,w,h):new Rectangle(150,150,900,500);
-                        using(SolidBrush panel=new SolidBrush(desk==0?Color.FromArgb(33,36,47):Color.White))g.FillRectangle(panel,app);
-                        using(Font f=new Font(Overlay.UiFont,20))
-                        using(SolidBrush ink=new SolidBrush(desk==0?Color.FromArgb(190,194,211):Color.FromArgb(60,66,80)))g.DrawString("Desktop control · visual preview",f,ink,app.X+40,app.Y+110);
-                        GlowField field=new GlowField(app,new bool[]{inside,inside,inside,inside},1,inside?0:8,new Rectangle(0,0,w,h));
-                        field.SetAction(app.X+app.Width*.25f,app.Bottom-40);field.Compose(0,1,1,null,3);field.Draw(g);
-                        HudModel model=new HudModel();model.State="active";model.Line1="Antigravity is working";model.Line2="Clicking";model.Hint=true;model.Slot=1;
-                        var state=g.Save();g.TranslateTransform((w-HudWidth)/2,18);
-                        using(GraphicsPath pill=Overlay.RoundRect(new RectangleF(0,0,HudWidth,HudHeight),HudHeight/2f)){g.SetClip(pill);Hud(g,model);}
-                        g.Restore(state);
-                        state=g.Save();g.TranslateTransform(app.X+app.Width*.25f-48,app.Bottom-40-48);Pointer(g,0);g.TranslateTransform(44,46);Arrow(g);g.Restore(state);
-                    }
-                    image.Save(Path.Combine(directory,"desktop-"+deskNames[desk]+(inside?"-inside":"-outside")+".png"),ImageFormat.Png);
+        // ---- The Settings menu: a raised panel under the bar. A header that
+        // says whose menu it is, 44-high rows, a hairline, and a footer that
+        // repeats how to stop.
+        internal const int MenuWidth=312,MenuMargin=36;   // the margin holds the panel's shadow
+        internal sealed class MenuItem {
+            internal int Id;internal string Kind="row";   // head, row, rule, foot
+            internal string Text="",Note="";internal bool Ticks,Checked,Chevron;
+            internal RectangleF Bounds;
+        }
+        // Places the items; returns the panel's height.
+        internal static float MenuLayout(System.Collections.Generic.List<MenuItem> items) {
+            float y=6;
+            foreach(MenuItem item in items) {
+                float height=item.Kind=="head"?30:item.Kind=="rule"?13:item.Kind=="foot"?58:44;
+                item.Bounds=new RectangleF(6,y,MenuWidth-12,height);y+=height;
+            }
+            return y+6;
+        }
+        static float KeyCap(Graphics g,string key,float x,float y,Font cap,Color strong) {
+            float width=TextWidth(g,key,cap)+12;
+            using(GraphicsPath shape=Overlay.RoundRect(new RectangleF(x,y,width,20),5))using(Pen outline=new Pen(Color.FromArgb(102,strong),1))g.DrawPath(outline,shape);
+            Text(g,key,cap,strong,new RectangleF(x+6,y,width-6,20));
+            return x+width;
+        }
+        // Drawn with its own margin, so the panel's shadow is part of the surface.
+        internal static void Menu(Graphics g,System.Collections.Generic.List<MenuItem> items,float height,int hover,int pressed) {
+            g.SmoothingMode=SmoothingMode.AntiAlias;g.PixelOffsetMode=PixelOffsetMode.HighQuality;g.TextRenderingHint=System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+            RectangleF panel=new RectangleF(MenuMargin,MenuMargin,MenuWidth,height);
+            // One neutral drop shadow: 0 12 28, black 34%.
+            for(int i=14;i>=1;i--) {
+                RectangleF soft=panel;soft.Offset(0,12);soft.Inflate(i*2-6,i*2-6);
+                using(GraphicsPath shape=Overlay.RoundRect(soft,12+i*2))using(SolidBrush shade=new SolidBrush(Color.FromArgb(7,0,0,0)))g.FillPath(shade,shape);
+            }
+            using(GraphicsPath shape=Overlay.RoundRect(panel,12)) {
+                using(SolidBrush fill=new SolidBrush(InkRaised))g.FillPath(fill,shape);
+                using(Pen edge=new Pen(Color.FromArgb(41,255,255,255),1))g.DrawPath(edge,shape);
+            }
+            using(Font body=Face(13,false))using(Font small=Face(12,false))using(Font cap=Face(11,true))
+            foreach(MenuItem item in items) {
+                RectangleF box=item.Bounds;box.Offset(MenuMargin,MenuMargin);
+                if(item.Kind=="head")Text(g,item.Text,small,Mist,new RectangleF(box.X+12,box.Y+6,box.Width-24,20));
+                else if(item.Kind=="rule")using(Pen rule=new Pen(Color.FromArgb(26,255,255,255),1))g.DrawLine(rule,box.X+8,box.Y+6.5f,box.Right-8,box.Y+6.5f);
+                else if(item.Kind=="foot") {
+                    // "Esc or Ctrl Alt F12 stops at once", with the keys as keys.
+                    float x=box.X+12,y=box.Y+8;
+                    x=KeyCap(g,"Esc",x,y,cap,PaperText)+5;
+                    float or=TextWidth(g,"or",small);Text(g,"or",small,Mist,new RectangleF(x,y,or+2,20));x+=or+5;
+                    foreach(string key in new string[]{"Ctrl","Alt","F12"})x=KeyCap(g,key,x,y,cap,PaperText)+4;
+                    Text(g,"stops at once.",small,Mist,new RectangleF(x+1,y,box.Right-x-8,20));
+                    Text(g,"Your own mouse and keyboard don't pause it.",small,Mist,new RectangleF(box.X+12,y+22,box.Width-24,20));
+                } else {
+                    if(item.Id==pressed||item.Id==hover)
+                        using(GraphicsPath plate=Overlay.RoundRect(box,8))using(SolidBrush fill=new SolidBrush(Color.FromArgb(item.Id==pressed?36:22,255,255,255)))g.FillPath(fill,plate);
+                    float left=box.X+12;
+                    if(item.Ticks){if(item.Checked)Icon(g,"check",left,box.Y+12,Violet);left+=30;}
+                    float right=box.Right-12;
+                    if(item.Chevron){Icon(g,"chevron",right-18,box.Y+12,Rest);right-=22;}
+                    if(item.Note.Length>0){float note=TextWidth(g,item.Note,small);Text(g,item.Note,small,Mist,new RectangleF(right-note-2,box.Y,note+4,box.Height));right-=note+10;}
+                    Text(g,item.Text,body,PaperText,new RectangleF(left,box.Y,right-left,box.Height));
                 }
             }
+        }
+        // ---- The bench. Everything below renders previews for review and
+        // checks them; none of it runs in the product.
+        // A fictional app, never a capture of the user's data: a title bar,
+        // a sidebar, rows of text and a scrollbar, so the glow is judged
+        // against the things it must not spoil.
+        static Bitmap Backdrop(int w,int h,bool dark,Rectangle app) {
+            Bitmap image=new Bitmap(w,h,PixelFormat.Format32bppArgb);
+            using(Graphics g=Graphics.FromImage(image)) {
+                g.SmoothingMode=SmoothingMode.AntiAlias;g.TextRenderingHint=System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+                g.Clear(dark?Color.FromArgb(16,18,24):Color.FromArgb(226,231,238));
+                Color panel=dark?Color.FromArgb(31,33,40):Color.White,bar=dark?Color.FromArgb(24,26,32):Color.FromArgb(243,245,248),ink=dark?Color.FromArgb(214,218,228):Color.FromArgb(40,46,58),faint=dark?Color.FromArgb(120,126,140):Color.FromArgb(120,128,142),line=dark?Color.FromArgb(44,47,56):Color.FromArgb(226,230,236);
+                using(SolidBrush fill=new SolidBrush(panel))g.FillRectangle(fill,app);
+                using(SolidBrush fill=new SolidBrush(bar)){g.FillRectangle(fill,app.X,app.Y,app.Width,38);g.FillRectangle(fill,app.X,app.Y+38,190,app.Height-38);}
+                using(Pen rule=new Pen(line)){g.DrawLine(rule,app.X,app.Y+38,app.Right,app.Y+38);g.DrawLine(rule,app.X+190,app.Y+38,app.X+190,app.Bottom);}
+                using(Font small=new Font("Segoe UI",12,FontStyle.Regular,GraphicsUnit.Pixel))using(Font body=new Font("Segoe UI",14,FontStyle.Regular,GraphicsUnit.Pixel))using(Font head=new Font("Segoe UI Semibold",20,FontStyle.Regular,GraphicsUnit.Pixel))
+                using(SolidBrush strong=new SolidBrush(ink))using(SolidBrush soft=new SolidBrush(faint)) {
+                    g.DrawString("Ledger — Invoices, November",small,strong,app.X+14,app.Y+11);
+                    g.DrawString("—    ▢    ✕",small,soft,app.Right-92,app.Y+11);
+                    string[] side={"Overview","Invoices","Customers","Reports","Settings"};
+                    for(int i=0;i<side.Length;i++)g.DrawString(side[i],body,i==1?strong:soft,app.X+18,app.Y+60+i*34);
+                    g.DrawString("Invoices",head,strong,app.X+214,app.Y+58);
+                    string[] rows={"4471   Brightwell Cycles        14 Nov        Paid          1,284.00","4472   Harbour & Finch          14 Nov        Due           640.50","4473   Northgate Print          15 Nov        Due           2,019.75","4474   Calder Works             15 Nov        Draft         318.00","4475   Lindqvist Studio         16 Nov        Paid          975.20","4476   Okafor Supply            16 Nov        Due           1,450.00"};
+                    for(int i=0;i<12;i++) {
+                        int y=app.Y+104+i*36;if(y>app.Bottom-30)break;
+                        using(Pen rule=new Pen(line))g.DrawLine(rule,app.X+214,y+28,app.Right-30,y+28);
+                        g.DrawString(rows[i%rows.Length],body,i%3==0?strong:soft,app.X+214,y+4);
+                    }
+                }
+                using(SolidBrush thumb=new SolidBrush(dark?Color.FromArgb(78,82,94):Color.FromArgb(190,196,206)))g.FillRectangle(thumb,app.Right-10,app.Y+60,6,120);
+            }
+            return image;
+        }
+        // Lays glow strips over a picture the way the desktop would.
+        static void Lay(Bitmap image,params GlowField[] fields) {
+            Rectangle all=new Rectangle(0,0,image.Width,image.Height);int[] pixels=new int[image.Width*image.Height];
+            BitmapData data=image.LockBits(all,ImageLockMode.ReadWrite,PixelFormat.Format32bppArgb);
+            try {
+                Marshal.Copy(data.Scan0,pixels,0,pixels.Length);
+                foreach(GlowField field in fields)field.Over(pixels,image.Width,image.Height);
+                Marshal.Copy(pixels,0,data.Scan0,pixels.Length);
+            } finally {image.UnlockBits(data);}
+        }
+        static GlowField[] Glow(Rectangle app,bool inside,Rectangle clip,float x,float y,double time,float lift,float[] pulses) {
+            bool[] sides={inside,inside,inside,inside};
+            GlowField veil=new GlowField(GlowField.Veil,app,sides,1,inside?0:8,clip),edge=new GlowField(GlowField.Edge,app,sides,1,inside?0:8,clip);
+            veil.SetAction(x,y);edge.SetAction(x,y);veil.Compose(time,lift,1,pulses);edge.Compose(time,lift,1,pulses);
+            return new GlowField[]{veil,edge};
+        }
+        static void Crop(Bitmap source,Rectangle part,Bitmap sheet,int x,int y) {using(Graphics g=Graphics.FromImage(sheet))g.DrawImage(source,new Rectangle(x,y,part.Width,part.Height),part,GraphicsUnit.Pixel);}
+        static int AlphaAt(int[] pixels,int width,int x,int y) {return (pixels[y*width+x]>>24)&255;}
+        internal static void Export(string directory) {
+            Directory.CreateDirectory(directory);
+            int w=1280,h=800;Rectangle screen=new Rectangle(0,0,w,h),window=new Rectangle(190,140,900,520);
+            foreach(string host in new string[]{"Antigravity","Claude","Computer Use"}) {
+                GlowTones.Use(host);string tag=host.Replace(" ","").ToLowerInvariant();
+                foreach(bool dark in new bool[]{true,false}) {
+                    // Maximised: lit inside. At full size: a corner, the edge by the action, the far edge.
+                    using(Bitmap image=Backdrop(w,h,dark,screen))using(Bitmap sheet=new Bitmap(1200,400,PixelFormat.Format32bppArgb)) {
+                        Lay(image,Glow(screen,true,screen,300,h-60,4.0,0,null));
+                        image.Save(Path.Combine(directory,"glow-"+tag+"-inside-"+(dark?"dark":"light")+".png"),ImageFormat.Png);
+                        Crop(image,new Rectangle(0,h-400,400,400),sheet,0,0);Crop(image,new Rectangle(0,0,400,400),sheet,400,0);Crop(image,new Rectangle(w-400,200,400,400),sheet,800,0);
+                        sheet.Save(Path.Combine(directory,"close-"+tag+"-inside-"+(dark?"dark":"light")+".png"),ImageFormat.Png);
+                    }
+                    // Windowed: lit outside.
+                    using(Bitmap image=Backdrop(w,h,dark,window))using(Bitmap sheet=new Bitmap(1200,400,PixelFormat.Format32bppArgb)) {
+                        Lay(image,Glow(window,false,screen,window.X+240,window.Bottom-60,4.0,0,null));
+                        image.Save(Path.Combine(directory,"glow-"+tag+"-outside-"+(dark?"dark":"light")+".png"),ImageFormat.Png);
+                        Crop(image,new Rectangle(window.X-110,window.Bottom-290,400,400),sheet,0,0);Crop(image,new Rectangle(window.X-110,window.Y-110,400,400),sheet,400,0);Crop(image,new Rectangle(window.Right-290,window.Y+60,400,400),sheet,800,0);
+                        sheet.Save(Path.Combine(directory,"close-"+tag+"-outside-"+(dark?"dark":"light")+".png"),ImageFormat.Png);
+                    }
+                }
+                // Motion: the same stretch of the bottom edge, half a second apart, then a click landing.
+                using(Bitmap sheet=new Bitmap(1200,480,PixelFormat.Format32bppArgb)) {
+                    for(int i=0;i<6;i++)using(Bitmap image=Backdrop(w,h,true,screen)) {
+                        Lay(image,Glow(screen,true,screen,300,h-60,4.0+i*.5,0,null));Crop(image,new Rectangle(200,h-240,200,240),sheet,i*200,0);
+                    }
+                    for(int i=0;i<6;i++)using(Bitmap image=Backdrop(w,h,true,screen)) {
+                        float q=i/6f;Lay(image,Glow(screen,true,screen,300,h-60,7.0+q*.3,q<.4f?q/.4f:1,new float[]{q}));Crop(image,new Rectangle(200,h-240,200,240),sheet,i*200,240);
+                    }
+                    sheet.Save(Path.Combine(directory,"motion-"+tag+".png"),ImageFormat.Png);
+                }
+                using(Bitmap image=new Bitmap(288,288,PixelFormat.Format32bppArgb)) {
+                    using(Graphics g=Graphics.FromImage(image)){g.Clear(Color.FromArgb(31,33,40));g.SmoothingMode=SmoothingMode.AntiAlias;g.ScaleTransform(3,3);Pointer(g,0);g.TranslateTransform(44,46);Arrow(g);}
+                    image.Save(Path.Combine(directory,"pointer-"+tag+".png"),ImageFormat.Png);
+                }
+            }
+            GlowTones.Use("Antigravity");
             string[][] states={
                 new string[]{"active","Antigravity is working","Reading the screen · 1 min left","1","1"},
                 new string[]{"active","Computer Use is working","Waiting for the next step","1","1"},
@@ -244,12 +366,23 @@ namespace Axon {
                     for(int hover=0;hover<2;hover++)for(int i=0;i<states.Length;i++) {
                         HudModel model=new HudModel();model.State=states[i][0];model.Line1=states[i][1];model.Line2=states[i][2];model.Hint=states[i][3]=="1";model.Slot=Int32.Parse(states[i][4]);
                         if(hover==1){model.StopHover=1;model.ModeHover=i%2;model.Pressed=i%3==0?2:0;}
-                        var saved=g.Save();g.TranslateTransform(20,12+(HudHeight+24)*(i+hover*states.Length));
-                        using(GraphicsPath pill=Overlay.RoundRect(new RectangleF(0,0,HudWidth,HudHeight),HudHeight/2f)){g.SetClip(pill);Hud(g,model);}
-                        g.Restore(saved);
+                        var saved=g.Save();g.TranslateTransform(20,12+(HudHeight+24)*(i+hover*states.Length));Hud(g,model);g.Restore(saved);
                     }
                 }
                 sheet.Save(Path.Combine(directory,"hud-states.png"),ImageFormat.Png);
+            }
+            {
+                var items=new System.Collections.Generic.List<MenuItem>();
+                MenuItem head=new MenuItem();head.Kind="head";head.Text="Computer Use";items.Add(head);
+                MenuItem record=new MenuItem();record.Id=1;record.Text="Show bar and glow in recordings";record.Ticks=true;record.Checked=true;items.Add(record);
+                MenuItem move=new MenuItem();move.Id=2;move.Text="Move bar";move.Note="Top centre";move.Chevron=true;items.Add(move);
+                MenuItem rule=new MenuItem();rule.Kind="rule";items.Add(rule);
+                MenuItem foot=new MenuItem();foot.Kind="foot";items.Add(foot);
+                float tall=MenuLayout(items);
+                using(Bitmap image=new Bitmap((MenuWidth+2*MenuMargin)*2,(int)((tall+2*MenuMargin)*2),PixelFormat.Format32bppArgb)) {
+                    using(Graphics g=Graphics.FromImage(image)){g.Clear(Color.FromArgb(31,33,40));g.ScaleTransform(2,2);Menu(g,items,tall,2,0);}
+                    image.Save(Path.Combine(directory,"menu.png"),ImageFormat.Png);
+                }
             }
             foreach(uint role in new uint[]{32512,32513,32649,32650})
             using(Bitmap image=new Bitmap(96,96,PixelFormat.Format32bppArgb)) {
@@ -258,217 +391,26 @@ namespace Axon {
             }
             using(Bitmap image=new Bitmap(96,96,PixelFormat.Format32bppArgb)) {
                 using(Graphics g=Graphics.FromImage(image)){g.SmoothingMode=SmoothingMode.AntiAlias;Pointer(g,0);}
-                if(image.GetPixel(54,56).A<150)throw new Exception("The pointer glow is too faint to see");
+                if(image.GetPixel(54,56).A<130)throw new Exception("The pointer glow is too faint to see");
                 if(image.GetPixel(2,2).A!=0)throw new Exception("The pointer glow must end inside its surface");
-                image.Save(Path.Combine(directory,"pointer-glow.png"),ImageFormat.Png);
             }
-            // The glow may never cover the app. Inside: on the edge, fading
-            // inward, gone within the band, never an opaque frame. Outside:
-            // nothing at all drawn inside the window.
-            using(Bitmap image=new Bitmap(800,600,PixelFormat.Format32bppArgb)) {
-                using(Graphics g=Graphics.FromImage(image)) {
-                    GlowField field=new GlowField(new Rectangle(0,0,800,600),new bool[]{true,true,true,true},1,0,new Rectangle(0,0,800,600));
-                    field.SetAction(400,0);field.Compose(1,1,1,null);field.Draw(g);
-                }
-                if(image.GetPixel(400,300).A!=0)throw new Exception("Edge glow obscures desktop center");
-                if(image.GetPixel(400,GlowField.InsideDepth+1).A!=0)throw new Exception("Inside glow must end within its band");
-                if(image.GetPixel(400,5).A<=image.GetPixel(400,12).A)throw new Exception("Glow must fade inward");
-                if(image.GetPixel(400,8).A>=210)throw new Exception("Glow became an opaque frame");
-                if(image.GetPixel(400,1).A<110)throw new Exception("The glow is too faint to see at the edge");
-                image.Save(Path.Combine(directory,"edge-alpha-inside.png"),ImageFormat.Png);
-            }
-            using(Bitmap image=new Bitmap(800,700,PixelFormat.Format32bppArgb)) {
-                using(Graphics g=Graphics.FromImage(image)) {
-                    GlowField field=new GlowField(new Rectangle(100,150,600,400),new bool[]{false,false,false,false},1,8,new Rectangle(0,0,800,700));
-                    field.SetAction(400,150);field.Compose(1,1,1,null);field.Draw(g);
-                }
-                if(image.GetPixel(400,350).A!=0||image.GetPixel(400,154).A!=0||image.GetPixel(104,350).A!=0)throw new Exception("Outside glow tints the app");
-                if(image.GetPixel(400,140).A<=image.GetPixel(400,120).A)throw new Exception("Outside glow must fade away from the window");
-                if(image.GetPixel(400,148).A<110)throw new Exception("The glow is too faint to see at the edge");
-                if(image.GetPixel(400,150-GlowField.OutsideDepth-1).A!=0)throw new Exception("Outside glow must end within its band");
-                image.Save(Path.Combine(directory,"edge-alpha-outside.png"),ImageFormat.Png);
-            }
-            Console.WriteLine("Visual renders and alpha falloff checks passed.");
-        }
-    }
-    // The glow around the app the agent is working in: an aurora. A soft rim
-    // of light on the window's edge and a deep wash behind it, in cool tones
-    // that travel slowly around the window, so it is never still. It is
-    // brighter the nearer it is to the agent's last action, so the glow also
-    // says where in the app it is working. There is no hard line.
-    //
-    // The falloff is baked once per geometry into four strips, one per edge;
-    // a frame only multiplies it by one colour and gain per point of the edge.
-    // Each edge is drawn outside the window when there is room and inside it
-    // when there is not (a maximised or full-screen app).
-    internal sealed class GlowField {
-        internal const int OutsideDepth=100,InsideDepth=150;   // DIPs the band reaches from the edge
-        const int Lip=3;                                      // DIPs an outside strip overlaps the frame, for rounded corners
-        static readonly double MinBright=ControlContract.UiNumber("glow_min",.26,0,1),Reach=ControlContract.UiNumber("glow_reach",.42,.05,4);
-        // How strong the light is at the edge (0..1) and how far it reaches.
-        static readonly double Strength=ControlContract.UiNumber("glow_strength",.86,0,1),Lift=ControlContract.UiNumber("glow_lift",.45,0,2);
-        // One slow lap of colour around the window, in seconds.
-        static readonly double Lap=ControlContract.UiNumber("glow_lap_seconds",16,2,120);
-        // The aurora: cool tones that follow one another around the edge.
-        static readonly float[][] Tones={new float[]{96,214,238},new float[]{70,150,255},new float[]{146,118,255},new float[]{118,196,255}};
-        internal readonly Rectangle Frame,Clip;internal readonly bool[] Inside;internal readonly float Scale;internal readonly int Radius;
-        // Top, right, bottom, left, in screen pixels. An empty strip draws nothing.
-        internal readonly Rectangle[] Strips=new Rectangle[4];
-        internal readonly byte[][] Pixels=new byte[4][];
-        readonly byte[][] wide=new byte[4][],rim=new byte[4][];
-        readonly int[][] index=new int[4][];
-        readonly int perimeter;readonly float[] rest;readonly int[] wideGain,rimGain;
-        float actionX,actionY;int actionIndex;
-        internal float ActionX {get {return actionX;}} internal float ActionY {get {return actionY;}}
-        internal GlowField(Rectangle frame,bool[] inside,float scale,int radius,Rectangle clip) {
-            Frame=frame;Inside=(bool[])inside.Clone();Scale=scale<=0?1:scale;Clip=clip;
-            bool allOut=!inside[0]&&!inside[1]&&!inside[2]&&!inside[3];
-            Radius=allOut?Math.Max(0,Math.Min(radius,Math.Min(frame.Width,frame.Height)/2)):0;
-            int o=(int)Math.Ceiling(OutsideDepth*Scale),n=(int)Math.Ceiling(InsideDepth*Scale),lip=(int)Math.Ceiling(Lip*Scale);
-            int l=frame.Left,t=frame.Top,r=frame.Right,b=frame.Bottom;
-            n=Math.Min(n,Math.Min(frame.Width,frame.Height)/2);lip=Math.Min(lip,n);
-            // Top and bottom own the corners; left and right fill between them.
-            Strips[0]=inside[0]?Rectangle.FromLTRB(l,t,r,t+n):Rectangle.FromLTRB(l-o,t-o,r+o,t+lip);
-            Strips[2]=inside[2]?Rectangle.FromLTRB(l,b-n,r,b):Rectangle.FromLTRB(l-o,b-lip,r+o,b+o);
-            int top=inside[0]?t+n:t+lip,bottom=inside[2]?b-n:b-lip;
-            Strips[3]=inside[3]?Rectangle.FromLTRB(l,top,l+n,bottom):Rectangle.FromLTRB(l-o,top,l+lip,bottom);
-            Strips[1]=inside[1]?Rectangle.FromLTRB(r-n,top,r,bottom):Rectangle.FromLTRB(r-lip,top,r+o,bottom);
-            for(int k=0;k<4;k++) {Strips[k]=Rectangle.Intersect(Strips[k],clip);if(Strips[k].Width<=0||Strips[k].Height<=0)Strips[k]=Rectangle.Empty;}
-            perimeter=Math.Max(1,2*(frame.Width+frame.Height));
-            rest=new float[perimeter];wideGain=new int[perimeter*4];rimGain=new int[perimeter*4];
-            Bake();SetAction(frame.Left+frame.Width/2f,frame.Top+frame.Height/2f);
-        }
-        static double Gauss(double distance,double sigma) {return Math.Exp(-(distance/sigma)*(distance/sigma));}
-        static double Line(double distance,double centre,double half) {return Math.Max(0,Math.Min(1,half+.5-Math.Abs(distance-centre)));}
-        // Position along the edge, clockwise from the top-left corner.
-        int EdgeIndex(int edge,int x,int y) {
-            int w=Frame.Width,h=Frame.Height;
-            x=Math.Max(Frame.Left,Math.Min(Frame.Right-1,x));y=Math.Max(Frame.Top,Math.Min(Frame.Bottom-1,y));
-            return edge==0?x-Frame.Left:edge==1?w+(y-Frame.Top):edge==2?w+h+(Frame.Right-1-x):2*w+h+(Frame.Bottom-1-y);
-        }
-        void EdgePoint(int i,out float x,out float y) {
-            int w=Frame.Width,h=Frame.Height;
-            if(i<w){x=Frame.Left+i;y=Frame.Top;}
-            else if(i<w+h){x=Frame.Right;y=Frame.Top+(i-w);}
-            else if(i<2*w+h){x=Frame.Right-(i-w-h);y=Frame.Bottom;}
-            else {x=Frame.Left;y=Frame.Bottom-(i-2*w-h);}
-        }
-        void Bake() {
-            double s=Scale;int l=Frame.Left,t=Frame.Top,r=Frame.Right,b=Frame.Bottom;
-            double cx=(l+r)/2.0,cy=(t+b)/2.0,hw=Frame.Width/2.0,hh=Frame.Height/2.0;
-            for(int k=0;k<4;k++) {
-                Rectangle strip=Strips[k];int count=strip.Width*strip.Height;
-                Pixels[k]=new byte[count*4];wide[k]=new byte[count];rim[k]=new byte[count];index[k]=new int[count];
-                for(int yy=0;yy<strip.Height;yy++)for(int xx=0;xx<strip.Width;xx++) {
-                    int at=yy*strip.Width+xx,x=strip.Left+xx,y=strip.Top+yy;index[k][at]=-1;
-                    double px=x+.5,py=y+.5,distance;bool inner;int edge;
-                    double dx=Math.Max(Math.Max(l-px,px-r),0),dy=Math.Max(Math.Max(t-py,py-b),0);
-                    if(Radius>0) {
-                        // Signed distance to the rounded frame.
-                        double qx=Math.Abs(px-cx)-(hw-Radius),qy=Math.Abs(py-cy)-(hh-Radius);
-                        distance=Math.Sqrt(Math.Max(qx,0)*Math.Max(qx,0)+Math.Max(qy,0)*Math.Max(qy,0))+Math.Min(Math.Max(qx,qy),0)-Radius;
-                        if(distance<0)continue;
-                        inner=false;edge=py<t?0:py>=b?2:px<l?3:px>=r?1:(Math.Min(py-t,b-py)<Math.Min(px-l,r-px)?(py-t<b-py?0:2):(px-l<r-px?3:1));
-                    } else if(dx>0||dy>0) {
-                        int horizontal=px<l?3:1,vertical=py<t?0:2;
-                        if(dx>0&&dy>0) {if(Inside[horizontal]||Inside[vertical])continue;distance=Math.Sqrt(dx*dx+dy*dy);edge=dy>=dx?vertical:horizontal;}
-                        else if(dx>0) {if(Inside[horizontal])continue;distance=dx;edge=horizontal;}
-                        else {if(Inside[vertical])continue;distance=dy;edge=vertical;}
-                        inner=false;
-                    } else {
-                        distance=Double.MaxValue;edge=-1;
-                        double[] depth={py-t,r-px,b-py,px-l};
-                        for(int e=0;e<4;e++)if(Inside[e]&&depth[e]<distance){distance=depth[e];edge=e;}
-                        if(edge<0)continue;
-                        // Where two inside edges meet, their light adds smoothly; no mitred seam.
-                        double blend=10*s,sum=0;for(int e=0;e<4;e++)if(Inside[e])sum+=Math.Exp(-depth[e]/blend);
-                        distance=Math.Max(0,Math.Min(distance,-blend*Math.Log(sum)));
-                        inner=true;
-                    }
-                    double u=distance/s;   // DIPs from the edge
-                    // Light, not an outline: no line at all. A soft rim hugs
-                    // the edge and a deep wash reaches well into the window
-                    // (or out from it), both falling away exponentially.
-                    double band=inner?InsideDepth:OutsideDepth;
-                    if(u>band)continue;
-                    double fade=Math.Min(1,(band-u)/(band*.45));fade=fade*fade*(3-2*fade);
-                    double wash=Strength*.6*Math.Exp(-u/(inner?52:34))*fade,edgeLight=Strength*.4*Math.Exp(-u/(inner?13:10))*fade;
-                    // Dither the wash, so its long falloff does not band on 8-bit displays.
-                    uint hash=(uint)(x*73856093)^(uint)(y*19349663);hash^=hash>>13;hash*=0x5bd1e995;hash^=hash>>15;
-                    wash=Math.Max(0,wash+((hash&1023)/1023.0-.5)*.012*(wash>.004?1:0));
-                    wide[k][at]=(byte)Math.Round(255*Math.Min(1,wash));rim[k][at]=(byte)Math.Round(255*Math.Min(1,edgeLight));
-                    index[k][at]=EdgeIndex(edge,x,y);
-                }
-            }
-        }
-        // Where the agent last acted, in screen pixels. The edge is brightest
-        // nearest this point and cools away from it.
-        internal void SetAction(float x,float y) {
-            actionX=x;actionY=y;
-            double reach=Reach*Math.Sqrt((double)Frame.Width*Frame.Width+(double)Frame.Height*Frame.Height);
-            double best=Double.MaxValue;
-            for(int i=0;i<perimeter;i++) {
-                float ex,ey;EdgePoint(i,out ex,out ey);
-                double d=Math.Sqrt((ex-x)*(ex-x)+(ey-y)*(ey-y));
-                if(d<best){best=d;actionIndex=i;}
-                rest[i]=(float)(MinBright+(1-MinBright)*Gauss(d,reach));
-            }
-        }
-        static void Tone(double phase,out float r,out float g,out float b) {
-            phase-=Math.Floor(phase);double at=phase*Tones.Length;int i=(int)at%Tones.Length,j=(i+1)%Tones.Length;
-            double t=at-Math.Floor(at);t=t*t*(3-2*t);
-            r=(float)(Tones[i][0]+(Tones[j][0]-Tones[i][0])*t);g=(float)(Tones[i][1]+(Tones[j][1]-Tones[i][1])*t);b=(float)(Tones[i][2]+(Tones[j][2]-Tones[i][2])*t);
-        }
-        // time (seconds) carries the colours slowly around the edge and lets
-        // the light swell and ebb, so it is never still. lift 0..1 raises it
-        // as a whole when input lands; haze 0..1 fades the deep wash; reveal
-        // 0..1 draws the light on from the action point; each pulse 0..1 is
-        // one swell travelling away from it, both ways.
-        internal void Compose(float lift,float haze,float reveal,float[] pulses,double time=0) {
-            double travel=.48*perimeter/2.0,width=90*Scale,raise=1+Lift*Math.Max(0,Math.Min(1,lift)),turn=time/Lap;
-            for(int i=0;i<perimeter;i++) {
-                double d=Math.Abs(i-actionIndex);d=Math.Min(d,perimeter-d);
-                double place=i/(double)perimeter,bright=.66+.34*rest[i],shown=1;
-                // Two colour laps around the window, bent by a slower wave so the bands are never even.
-                float r,g,b;Tone(place*2-turn+.11*Math.Sin(2*Math.PI*(place*3+turn*.7)),out r,out g,out b);
-                // A soft swell that travels the other way.
-                bright*=.86+.14*Math.Sin(2*Math.PI*(place*2+turn*1.9));
-                if(pulses!=null)foreach(float q in pulses) {
-                    if(q<0||q>=1)continue;
-                    double k=(d-travel*DesktopVisuals.EaseOut(q))/width;bright+=.5*Math.Exp(-k*k)*(1-DesktopVisuals.EaseIn(q));
-                }
-                if(reveal<1) {
-                    double front=reveal*perimeter/2.0,k=(d-front)/(40*Scale);
-                    shown=Math.Max(0,Math.Min(1,(front-d)/(30*Scale)+1));bright+=.35*Math.Exp(-k*k)*shown;
-                }
-                double level=Math.Min(1.15,bright*raise)*shown,deep=level*haze;
-                int o=i*4;
-                wideGain[o]=(int)(b*deep);wideGain[o+1]=(int)(g*deep);wideGain[o+2]=(int)(r*deep);wideGain[o+3]=(int)(255*deep);
-                // The rim is the same tone, lifted halfway to white.
-                rimGain[o]=(int)((b+255)/2*level);rimGain[o+1]=(int)((g+255)/2*level);rimGain[o+2]=(int)((r+255)/2*level);rimGain[o+3]=(int)(255*level);
-            }
-            for(int k=0;k<4;k++) {
-                byte[] output=Pixels[k],w=wide[k],e=rim[k];int[] ix=index[k];
-                for(int at=0;at<ix.Length;at++) {
-                    int i=ix[at];if(i<0)continue;
-                    int o=at*4,p=i*4,a=w[at],c=e[at];
-                    // Premultiplied; never brighter than fully opaque.
-                    int alpha=(a*wideGain[p+3]+c*rimGain[p+3])>>8;if(alpha>255)alpha=255;
-                    int blue=(a*wideGain[p]+c*rimGain[p])>>8,green=(a*wideGain[p+1]+c*rimGain[p+1])>>8,red=(a*wideGain[p+2]+c*rimGain[p+2])>>8;
-                    output[o]=(byte)(blue>alpha?alpha:blue);output[o+1]=(byte)(green>alpha?alpha:green);output[o+2]=(byte)(red>alpha?alpha:red);output[o+3]=(byte)alpha;
-                }
-            }
-        }
-        // Renders the composed strips onto a surface whose origin is screen (0,0).
-        internal void Draw(Graphics g) {
-            for(int k=0;k<4;k++) {
-                Rectangle strip=Strips[k];if(strip.IsEmpty)continue;
-                using(Bitmap image=new Bitmap(strip.Width,strip.Height,PixelFormat.Format32bppPArgb)) {
-                    BitmapData data=image.LockBits(new Rectangle(0,0,strip.Width,strip.Height),ImageLockMode.WriteOnly,PixelFormat.Format32bppPArgb);
-                    try {Marshal.Copy(Pixels[k],0,data.Scan0,Pixels[k].Length);}finally {image.UnlockBits(data);}
-                    g.DrawImageUnscaled(image,strip.X,strip.Y);
-                }
-            }
+            // What the glow may never do, checked at its strongest (a click
+            // landing right at the point tested).
+            int[] clear=new int[800*700];
+            foreach(GlowField field in Glow(new Rectangle(0,0,800,700),true,new Rectangle(0,0,800,700),400,0,4,1,new float[]{.2f}))field.Over(clear,800,700);
+            if(AlphaAt(clear,800,400,350)!=0)throw new Exception("The glow covers the middle of the app");
+            if(AlphaAt(clear,800,400,GlowField.Reach(GlowField.Veil,1)+2)!=0)throw new Exception("The inside glow must end within its reach");
+            if(AlphaAt(clear,800,400,1)<170)throw new Exception("The glow is too faint to see at the edge");
+            if(AlphaAt(clear,800,400,4)<=AlphaAt(clear,800,400,14)||AlphaAt(clear,800,400,14)<=AlphaAt(clear,800,400,40))throw new Exception("The glow must fade inward");
+            if(AlphaAt(clear,800,400,72)>=96)throw new Exception("The glow fogs the app beyond its band");
+            clear=new int[800*700];
+            foreach(GlowField field in Glow(new Rectangle(100,150,600,400),false,new Rectangle(0,0,800,700),400,150,4,1,new float[]{.2f}))field.Over(clear,800,700);
+            if(AlphaAt(clear,800,400,350)!=0)throw new Exception("The glow covers the middle of the app");
+            if(AlphaAt(clear,800,400,156)>=40||AlphaAt(clear,800,106,350)>=40)throw new Exception("The outside glow tints the app");
+            if(AlphaAt(clear,800,400,148)<170)throw new Exception("The glow is too faint to see at the edge");
+            if(AlphaAt(clear,800,400,146)<=AlphaAt(clear,800,400,130))throw new Exception("The outside glow must fade away from the window");
+            if(AlphaAt(clear,800,400,150-GlowField.Reach(GlowField.Veil,0)-2)!=0)throw new Exception("The outside glow must end within its reach");
+            Console.WriteLine("Visual renders and glow checks passed.");
         }
     }
 }

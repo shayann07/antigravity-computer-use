@@ -388,7 +388,9 @@ namespace Axon {
         readonly JavaScriptSerializer js = new JavaScriptSerializer();
         readonly ToolTip tips = new ToolTip();
         HudButton stopButton, modeButton;
-        readonly ContextMenuStrip modeMenu=new ContextMenuStrip();
+        BarMenu menu;
+        bool MenuOpen {get {return menu!=null&&!menu.IsDisposed&&menu.Visible;}}
+        void CloseMenu() {if(MenuOpen)menu.Close();}
         // Human mouse and keyboard input never pauses the agent. The policy
         // object stays in manual mode; only Esc, the hotkey and Stop halt it.
         readonly TakeoverPolicy takeover=new TakeoverPolicy("manual");
@@ -506,7 +508,8 @@ namespace Axon {
                 // bar.enter: a fresh appearance fades in; a return from a screenshot does not.
                 if(!Visible){if(!captureReturn){entering=true;enterAt=DateTime.UtcNow;barAlpha=0;motion.Start();}else barAlpha=1;captureReturn=false;Show();}
             }
-            else if(Visible){entering=false;barAlpha=1;Hide();}
+            // The menu belongs to the bar: it never outlives it.
+            else if(Visible){entering=false;barAlpha=1;CloseMenu();Hide();}
         }
         bool captureReturn;
         void ShowControls(int milliseconds) {Interlocked.Increment(ref visibilityEpoch);controlsRequested=true;controlsUntil=milliseconds>0?DateTime.UtcNow.AddMilliseconds(milliseconds):DateTime.MaxValue;SyncVisibility();}
@@ -685,7 +688,8 @@ namespace Axon {
             dock=name;displaced=false;SlideTo(Home(Screen.FromRectangle(Bounds).WorkingArea),DesktopVisuals.Slow);SavePreferences();
         }
         void SetHost(string name,string file) {
-            if(name!=null&&name.Length>0&&name.Length<=40)hostName=name;
+            // The glow and the pointer take the host's colours, like the icon.
+            if(name!=null&&name.Length>0&&name.Length<=40){if(name!=hostName)GlowTones.Use(name);hostName=name;}
             if(file==null||file==hostIconPath||file.Length>520)return;
             hostIconPath=file;
             // The host's own icon, read from its executable. Decorative only.
@@ -720,64 +724,108 @@ namespace Axon {
             recordVisuals=!recordVisuals;ApplyRecordingPreference();Overlay.RecordVisuals(recordVisuals);SavePreferences();
             Emit(new {ev="settings",takeover_mode=takeover.Mode,record_visuals=recordVisuals});
         }
+        // The Settings menu. It opens from the Settings button, belongs to
+        // the bar and never outlives it.
         void OpenModeMenu() {
-            modeMenu.Items.Clear();modeMenu.BackColor=DesktopVisuals.InkRaised;modeMenu.ForeColor=DesktopVisuals.PaperText;
-            modeMenu.ShowImageMargin=false;modeMenu.ShowCheckMargin=true;modeMenu.Font=new Font(Overlay.UiFont,13*visualScale,FontStyle.Regular,GraphicsUnit.Pixel);modeMenu.Padding=new Padding(6);
-            modeMenu.Renderer=new ControlMenuRenderer();
-            ToolStripMenuItem title=new ToolStripMenuItem("Computer Use");title.Enabled=false;modeMenu.Items.Add(title);
-            modeMenu.Items.Add(new ToolStripSeparator());
-            ToolStripMenuItem recording=new ToolStripMenuItem("Show bar and glow in recordings");recording.Checked=recordVisuals;recording.Click+=delegate {ChangeRecordingPreference();};modeMenu.Items.Add(recording);
-            // Moving the bar without a mouse: the six docks, and Reset.
-            ToolStripMenuItem move=new ToolStripMenuItem("Move bar");
-            string[] labels={"Top left","Top centre","Top right","Bottom left","Bottom centre","Bottom right"};
-            for(int i=0;i<Docks.Length;i++) {
-                string name=Docks[i];ToolStripMenuItem item=new ToolStripMenuItem(labels[i]);item.Checked=dock==name;item.ForeColor=DesktopVisuals.PaperText;
-                item.Click+=delegate {MoveToDock(name);};move.DropDownItems.Add(item);
-            }
-            move.DropDownItems.Add(new ToolStripSeparator());
-            ToolStripMenuItem reset=new ToolStripMenuItem("Reset");reset.ForeColor=DesktopVisuals.PaperText;reset.Click+=delegate {MoveToDock("top-centre");};move.DropDownItems.Add(reset);
-            move.DropDown.BackColor=DesktopVisuals.InkRaised;move.DropDown.Renderer=modeMenu.Renderer;move.DropDown.Font=modeMenu.Font;
-            ToolStripDropDownMenu places=move.DropDown as ToolStripDropDownMenu;if(places!=null){places.ShowImageMargin=false;places.ShowCheckMargin=true;}
-            move.DropDown.Opened+=delegate {try {SetPropW(move.DropDown.Handle,"ComputerUseOverlayWindow",new IntPtr(1));SetWindowDisplayAffinity(move.DropDown.Handle,0x11);}catch {}};
-            modeMenu.Items.Add(move);modeMenu.Items.Add(new ToolStripSeparator());
-            foreach(string line in new string[]{"Esc or Ctrl Alt F12 stops at once.","Your own mouse and keyboard don't pause it."}) {
-                ToolStripMenuItem note=new ToolStripMenuItem(line);note.Enabled=false;modeMenu.Items.Add(note);
-            }
-            // menu.open: from the Settings button; above it when the bar is docked low.
-            Size size=modeMenu.GetPreferredSize(Size.Empty);bool low=Top+Height/2>Screen.FromRectangle(Bounds).WorkingArea.Top+Screen.FromRectangle(Bounds).WorkingArea.Height/2;
-            modeMenu.Show(modeButton,new Point(modeButton.Width-size.Width,low?-size.Height-4:modeButton.Height+4));
-            SetPropW(modeMenu.Handle,"ComputerUseOverlayWindow",new IntPtr(1));SetWindowDisplayAffinity(modeMenu.Handle,0x11);
+            if(MenuOpen){menu.Close();return;}
+            menu=new BarMenu(this);menu.Open(MainMenu());
         }
-        sealed class ControlMenuRenderer:ToolStripProfessionalRenderer {
-            internal ControlMenuRenderer():base(new ControlMenuColors()) {RoundedEdges=false;}
-            protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e) {
-                e.TextColor=e.Item.Enabled?DesktopVisuals.PaperText:DesktopVisuals.Mist;base.OnRenderItemText(e);
-            }
-            // The tick and the chevron come from the bar's own icon set.
-            protected override void OnRenderItemCheck(ToolStripItemImageRenderEventArgs e) {
-                e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;Rectangle r=e.ImageRectangle;float scale=Math.Min(r.Width,r.Height)/20f;
-                var saved=e.Graphics.Save();e.Graphics.TranslateTransform(r.X+(r.Width-20*scale)/2,r.Y+(r.Height-20*scale)/2);e.Graphics.ScaleTransform(scale,scale);
-                DesktopVisuals.Icon(e.Graphics,"check",0,0,DesktopVisuals.PaperText);e.Graphics.Restore(saved);
-            }
-            protected override void OnRenderArrow(ToolStripArrowRenderEventArgs e) {
-                e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;Rectangle r=e.ArrowRectangle;float scale=Math.Min(r.Width,r.Height)/20f;
-                var saved=e.Graphics.Save();e.Graphics.TranslateTransform(r.X+(r.Width-20*scale)/2,r.Y+(r.Height-20*scale)/2);e.Graphics.ScaleTransform(scale,scale);
-                DesktopVisuals.Icon(e.Graphics,"chevron",0,0,DesktopVisuals.Rest);e.Graphics.Restore(saved);
-            }
+        static string DockLabel(string name) {
+            switch(name) {case "top-left":return "Top left";case "top-right":return "Top right";case "bottom-left":return "Bottom left";case "bottom-centre":return "Bottom centre";case "bottom-right":return "Bottom right";case "free":return "Where you put it";default:return "Top centre";}
         }
-        sealed class ControlMenuColors:ProfessionalColorTable {
-            public override Color ToolStripDropDownBackground {get{return DesktopVisuals.InkRaised;}}
-            public override Color ImageMarginGradientBegin {get{return ToolStripDropDownBackground;}}
-            public override Color ImageMarginGradientMiddle {get{return ToolStripDropDownBackground;}}
-            public override Color ImageMarginGradientEnd {get{return ToolStripDropDownBackground;}}
-            public override Color MenuItemSelected {get{return Color.FromArgb(48,57,71);}}
-            public override Color MenuItemBorder {get{return Color.FromArgb(48,57,71);}}
-            public override Color MenuBorder {get{return Color.FromArgb(63,70,82);}}
-            public override Color SeparatorDark {get{return Color.FromArgb(55,62,74);}}
-            public override Color SeparatorLight {get{return Color.FromArgb(55,62,74);}}
-            public override Color CheckBackground {get{return ToolStripDropDownBackground;}}
-            public override Color CheckSelectedBackground {get{return MenuItemSelected;}}
-            public override Color CheckPressedBackground {get{return MenuItemSelected;}}
+        List<DesktopVisuals.MenuItem> MainMenu() {
+            var items=new List<DesktopVisuals.MenuItem>();
+            DesktopVisuals.MenuItem head=new DesktopVisuals.MenuItem();head.Kind="head";head.Text="Computer Use";items.Add(head);
+            DesktopVisuals.MenuItem record=new DesktopVisuals.MenuItem();record.Id=1;record.Text="Show bar and glow in recordings";record.Ticks=true;record.Checked=recordVisuals;items.Add(record);
+            DesktopVisuals.MenuItem move=new DesktopVisuals.MenuItem();move.Id=2;move.Text="Move bar";move.Note=DockLabel(dock);move.Chevron=true;items.Add(move);
+            DesktopVisuals.MenuItem rule=new DesktopVisuals.MenuItem();rule.Kind="rule";items.Add(rule);
+            DesktopVisuals.MenuItem foot=new DesktopVisuals.MenuItem();foot.Kind="foot";items.Add(foot);
+            return items;
+        }
+        // Moving the bar without dragging it: the six docks, and Reset.
+        List<DesktopVisuals.MenuItem> DockMenu() {
+            var items=new List<DesktopVisuals.MenuItem>();
+            DesktopVisuals.MenuItem head=new DesktopVisuals.MenuItem();head.Kind="head";head.Text="Move bar";items.Add(head);
+            for(int i=0;i<Docks.Length;i++) {DesktopVisuals.MenuItem item=new DesktopVisuals.MenuItem();item.Id=10+i;item.Text=DockLabel(Docks[i]);item.Ticks=true;item.Checked=dock==Docks[i];items.Add(item);}
+            DesktopVisuals.MenuItem rule=new DesktopVisuals.MenuItem();rule.Kind="rule";items.Add(rule);
+            DesktopVisuals.MenuItem reset=new DesktopVisuals.MenuItem();reset.Id=20;reset.Text="Reset";reset.Ticks=true;items.Add(reset);
+            return items;
+        }
+        void MenuChosen(int id) {
+            if(id==1){ChangeRecordingPreference();if(MenuOpen)menu.Open(MainMenu());}
+            else if(id==2){if(MenuOpen)menu.Open(DockMenu());}
+            else if(id>=10&&id<10+Docks.Length){CloseMenu();MoveToDock(Docks[id-10]);}
+            else if(id==20){CloseMenu();MoveToDock("top-centre");}
+        }
+        sealed class BarMenu : Form {
+            readonly Guardian owner;List<DesktopVisuals.MenuItem> items=new List<DesktopVisuals.MenuItem>();
+            float tall,level;int hover,pressed;DateTime openedAt;
+            readonly System.Windows.Forms.Timer tick=new System.Windows.Forms.Timer();
+            internal BarMenu(Guardian o) {
+                owner=o;FormBorderStyle=FormBorderStyle.None;ShowInTaskbar=false;TopMost=true;StartPosition=FormStartPosition.Manual;
+                SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.Opaque,true);
+                AccessibleName="Computer Use settings";AccessibleRole=AccessibleRole.MenuPopup;
+                tick.Interval=16;tick.Tick+=delegate {Step();};
+            }
+            protected override bool ShowWithoutActivation {get {return true;}}
+            protected override CreateParams CreateParams {get {CreateParams p=base.CreateParams;p.ExStyle|=0x08000080|0x00080000;return p;}}
+            protected override void OnPaint(PaintEventArgs e) {}
+            protected override void OnPaintBackground(PaintEventArgs e) {}
+            float Zoom {get {return owner.visualScale;}}
+            internal void Open(List<DesktopVisuals.MenuItem> list) {
+                items=list;tall=DesktopVisuals.MenuLayout(items);hover=pressed=0;
+                float s=Zoom;int margin=(int)Math.Round(DesktopVisuals.MenuMargin*s);
+                Size size=new Size((int)Math.Round((DesktopVisuals.MenuWidth+2*DesktopVisuals.MenuMargin)*s),(int)Math.Round((tall+2*DesktopVisuals.MenuMargin)*s));
+                Rectangle work=Screen.FromRectangle(owner.Bounds).WorkingArea;
+                // 8 px under the bar, right edges aligned; above it when the bar is docked low.
+                bool low=owner.Top+owner.Height/2>work.Top+work.Height/2;
+                int gap=(int)Math.Round(8*s),x=owner.Right-size.Width+margin,y=low?owner.Top-gap-size.Height+margin:owner.Bottom+gap-margin;
+                x=Math.Max(work.Left-margin,Math.Min(x,work.Right-size.Width+margin));
+                Bounds=new Rectangle(new Point(x,y),size);
+                if(!Visible) {
+                    // menu.open: opacity over Normal; a short fade when motion is reduced.
+                    level=0;openedAt=DateTime.UtcNow;Show();
+                    SetPropW(Handle,"ComputerUseOverlayWindow",new IntPtr(1));SetWindowDisplayAffinity(Handle,owner.recordVisuals?0u:0x11u);
+                    tick.Start();
+                }
+                Present();
+            }
+            void Present() {
+                if(!IsHandleCreated||Width<=0||Height<=0)return;
+                try {
+                    using(Bitmap surface=new Bitmap(Width,Height,System.Drawing.Imaging.PixelFormat.Format32bppPArgb)) {
+                        using(Graphics g=Graphics.FromImage(surface)) {g.Clear(Color.Transparent);g.ScaleTransform(Zoom,Zoom);DesktopVisuals.Menu(g,items,tall,hover,pressed);}
+                        Overlay.Present(Handle,surface,Left,Top,(byte)Math.Max(0,Math.Min(255,(int)Math.Round(255*level))));
+                    }
+                } catch {}
+            }
+            void Step() {
+                if(level<1) {
+                    double t=(DateTime.UtcNow-openedAt).TotalMilliseconds/(DesktopVisuals.MotionEnabled?DesktopVisuals.Normal:DesktopVisuals.Fast);
+                    level=t>=1?1:DesktopVisuals.EaseOut((float)t);Present();
+                }
+                // A press anywhere else, or the bar leaving, closes the menu.
+                Rectangle panel=PanelBounds();
+                if(!owner.Visible){Close();return;}
+                if(Control.MouseButtons!=MouseButtons.None&&!panel.Contains(Cursor.Position)&&!owner.Bounds.Contains(Cursor.Position))Close();
+            }
+            Rectangle PanelBounds() {
+                float s=Zoom;int margin=(int)Math.Round(DesktopVisuals.MenuMargin*s);
+                return new Rectangle(Left+margin,Top+margin,Width-2*margin,Height-2*margin);
+            }
+            int Hit(Point client) {
+                float s=Zoom;PointF p=new PointF(client.X/s-DesktopVisuals.MenuMargin,client.Y/s-DesktopVisuals.MenuMargin);
+                foreach(DesktopVisuals.MenuItem item in items)if(item.Kind=="row"&&item.Bounds.Contains(p))return item.Id;
+                return 0;
+            }
+            protected override void OnMouseMove(MouseEventArgs e) {int id=Hit(e.Location);if(id!=hover){hover=id;Cursor=id!=0?Cursors.Hand:Cursors.Default;Present();}base.OnMouseMove(e);}
+            protected override void OnMouseLeave(EventArgs e) {if(hover!=0||pressed!=0){hover=pressed=0;Present();}base.OnMouseLeave(e);}
+            protected override void OnMouseDown(MouseEventArgs e) {pressed=Hit(e.Location);Present();base.OnMouseDown(e);}
+            protected override void OnMouseUp(MouseEventArgs e) {
+                int id=Hit(e.Location),was=pressed;pressed=0;Present();base.OnMouseUp(e);
+                if(id!=0&&id==was)owner.MenuChosen(id);
+            }
+            protected override void OnFormClosed(FormClosedEventArgs e) {tick.Stop();tick.Dispose();base.OnFormClosed(e);}
         }
         internal static void Mark(Form f) {
             SetPropW(f.Handle, "ComputerUseOverlayWindow", new IntPtr(1));
@@ -874,7 +922,7 @@ namespace Axon {
         void Tick(object sender, EventArgs e) {
             if(controlsRequested && DateTime.UtcNow>=controlsUntil) {
                 // The pointer over the bar, or its open menu, holds the timer.
-                if(Bounds.Contains(Cursor.Position)||modeMenu.Visible)controlsUntil=DateTime.UtcNow.AddMilliseconds(600);
+                if(Bounds.Contains(Cursor.Position)||MenuOpen)controlsUntil=DateTime.UtcNow.AddMilliseconds(600);
                 else DismissControls();
             }
             if((state=="active"||state=="paused"||prompting)&&ControlFence.LatchBlocks(StopLatch)) {Emergency(ControlFence.LatchEntryBlocks(StopLatch+".unconfirmed")?"guardian_stop_unconfirmed":"persisted_emergency_stop");return;}

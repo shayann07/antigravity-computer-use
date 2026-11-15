@@ -23,6 +23,7 @@ const WIN_SOURCES = [
   path.join(HERE, 'native', 'GuardCleanup.cs'),
   path.join(HERE, 'native', 'ControlContract.cs'),
   path.join(HERE, 'native', 'DesktopVisuals.cs'),
+  path.join(HERE, 'native', 'Glow.cs'),
   path.join(HERE, 'native', 'LiquidGlassPackageClient.cs'),
   path.join(HERE, 'native', 'CursorSafety.cs'),
   path.join(HERE, 'native', 'TakeoverPolicy.cs'),

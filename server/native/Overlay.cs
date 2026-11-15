@@ -687,11 +687,11 @@ namespace Axon
                 _bits = IntPtr.Zero;
             }
 
-            // A surface written as raw premultiplied BGRA rows, for content
+            // A surface written as raw premultiplied ARGB pixels, for content
             // that is computed per pixel. The section is kept between frames,
             // so an animation only copies bytes and blits.
             IntPtr _bits = IntPtr.Zero;
-            protected void SetSurface(byte[] pixels, int width, int height)
+            protected void SetSurface(int[] pixels, int width, int height)
             {
                 if (!IsHandleCreated || width <= 0 || height <= 0 || pixels == null) return;
                 if (_bits == IntPtr.Zero || _cached.Width != width || _cached.Height != height)
@@ -704,7 +704,7 @@ namespace Axon
                     if (_hBitmap == IntPtr.Zero) return;
                     _bits = bits; _cached = new Size(width, height);
                 }
-                Marshal.Copy(pixels, 0, _bits, Math.Min(pixels.Length, width * height * 4));
+                Marshal.Copy(pixels, 0, _bits, Math.Min(pixels.Length, width * height));
                 Push();
             }
 
@@ -770,7 +770,7 @@ namespace Axon
         {
             internal GlowStrip() : base(true) { TopMost = false; Bounds = new Rectangle(-10000, -10000, 10, 10); }
             protected override void Render(Graphics g) { }
-            internal void Surface(byte[] pixels, Rectangle where) { SetBounds(where.X, where.Y, where.Width, where.Height); SetSurface(pixels, where.Width, where.Height); }
+            internal void Surface(int[] pixels, Rectangle where) { SetBounds(where.X, where.Y, where.Width, where.Height); SetSurface(pixels, where.Width, where.Height); }
             internal void Shift(int x, int y) { PlaceAt(x, y); }
             internal float Level { get { return Alpha; } set { Alpha = value; } }
         }
@@ -779,20 +779,22 @@ namespace Axon
         {
             const uint GW_HWNDPREV = 3;
             const uint SWP_QUIET = 0x0001 | 0x0002 | 0x0010 | 0x0200 | 0x0400;   // no size, move, activate, owner z-order or change notice
-            readonly GlowStrip[] strips = new GlowStrip[4];
+            const int VeilEvery = 280;   // ms between repaints of the deep wash; it changes slowly
+            // Strips 0..3 carry the edge band, 4..7 the deep wash behind it.
+            readonly GlowStrip[] strips = new GlowStrip[8];
             // Follows the window. Runs while a target is set.
             readonly System.Windows.Forms.Timer watch = new System.Windows.Forms.Timer();
             // Draws the moving light. Stopped whenever the glow is hidden or motion is reduced.
             readonly System.Windows.Forms.Timer frame = new System.Windows.Forms.Timer();
             readonly System.Diagnostics.Stopwatch clock = System.Diagnostics.Stopwatch.StartNew();
             IntPtr target = IntPtr.Zero;
-            GlowField field;
+            GlowField edge, veil;
             readonly bool[] inside = new bool[4];
             Rectangle seen = Rectangle.Empty;       // the last bounds read
-            double seenAt, lastFrame;
+            double seenAt, lastFrame, veilAt;
             Point shift = Point.Empty;              // where the window has moved since the bake
             bool shown, leaving, suspended, moved;
-            float master, lift;
+            float master, lift, deep = 1;           // overall opacity, the lift on action, the wash's own fade
             double enterAt = -1, masterAt = -1, masterFrom, masterTo, masterMs;
             double lastAction = -1e9, lastPulse = -1e9, sampleAt = -1, pointAt = -1;
             float pointFromX, pointFromY, pointToX, pointToY;
@@ -801,18 +803,19 @@ namespace Axon
 
             internal Glow()
             {
-                for (int i = 0; i < 4; i++) { strips[i] = new GlowStrip(); strips[i].CreateControl(); IntPtr handle = strips[i].Handle; }
+                for (int i = 0; i < 8; i++) { strips[i] = new GlowStrip(); strips[i].CreateControl(); IntPtr handle = strips[i].Handle; }
                 watch.Interval = 40; watch.Tick += delegate { try { Watch(); } catch { } };
                 frame.Interval = 50; frame.Tick += delegate { try { Frame(); } catch { } };
             }
-            internal IntPtr[] Handles() { IntPtr[] all = new IntPtr[4]; for (int i = 0; i < 4; i++) all[i] = strips[i].Handle; return all; }
+            internal IntPtr[] Handles() { IntPtr[] all = new IntPtr[8]; for (int i = 0; i < 8; i++) all[i] = strips[i].Handle; return all; }
             internal float OpacityValue { get { return shown && !suspended ? master : 0; } }
             double Now { get { return clock.Elapsed.TotalMilliseconds; } }
+            GlowField Field(int strip) { return strip < 4 ? edge : veil; }
 
             internal object Report()
             {
-                Rectangle f = field == null ? Rectangle.Empty : field.Frame;
-                return new { shown = shown && !suspended, target = target.ToInt64(), frame = new int[] { f.X + shift.X, f.Y + shift.Y, f.Width, f.Height }, inside = (bool[])inside.Clone(), opacity = master, lift = lift, animating = frame.Enabled };
+                Rectangle f = edge == null ? Rectangle.Empty : edge.Frame;
+                return new { shown = shown && !suspended, target = target.ToInt64(), frame = new int[] { f.X + shift.X, f.Y + shift.Y, f.Width, f.Height }, inside = (bool[])inside.Clone(), opacity = master, lift = lift, animating = frame.Enabled, frame_ms = frame.Interval };
             }
 
             internal void Target(IntPtr hwnd, int x, int y, bool point, bool pulse, bool sampleNow)
@@ -822,7 +825,7 @@ namespace Axon
                 {
                     // The agent moved to another window: this one's glow goes,
                     // and the new one enters on its own bounds.
-                    HideNow(); target = hwnd; field = null; seen = Rectangle.Empty; hasPoint = false;
+                    HideNow(); target = hwnd; edge = veil = null; seen = Rectangle.Empty; hasPoint = false;
                     for (int i = 0; i < 4; i++) inside[i] = false;
                 }
                 if (leaving) { leaving = false; if (shown) FadeTo(1, DesktopVisuals.Normal); }
@@ -846,11 +849,11 @@ namespace Axon
             void SetPoint(int x, int y)
             {
                 hasPoint = true; pointX = x; pointY = y;
-                if (field == null || !shown) return;
+                if (edge == null || !shown) return;
                 float fx = x - shift.X, fy = y - shift.Y;
-                if (!DesktopVisuals.MotionEnabled) { field.SetAction(fx, fy); Paint(1, 1); return; }
+                if (!DesktopVisuals.MotionEnabled) { edge.SetAction(fx, fy); veil.SetAction(fx, fy); Paint(1); PaintVeil(); return; }
                 // The bright zone travels to the new point; it does not jump.
-                pointFromX = field.ActionX; pointFromY = field.ActionY; pointToX = fx; pointToY = fy; pointAt = Now; frame.Start();
+                pointFromX = edge.ActionX; pointFromY = edge.ActionY; pointToX = fx; pointToY = fy; pointAt = Now; Quicken();
             }
 
             // glow.action. Actions closer than 250 ms merge into one held
@@ -861,8 +864,11 @@ namespace Axon
                 double now = Now;
                 if (!DesktopVisuals.MotionEnabled || !shown || leaving || enterAt >= 0) { lastAction = now; return; }
                 if (now - lastAction >= 250 && now - lastPulse >= 350) { pulses.Add(now); lastPulse = now; }
-                lastAction = now; frame.Start();
+                lastAction = now; Quicken();
             }
+
+            // The slow drift needs few frames; a transition needs many.
+            void Quicken() { if (frame.Interval != 16) frame.Interval = 16; if (!frame.Enabled) { lastFrame = Now; frame.Start(); } }
 
             bool Read(out Rectangle bounds, out Rectangle monitor, out Rectangle work, out float scale)
             {
@@ -901,6 +907,14 @@ namespace Axon
                 return (int)Math.Round((preference == 3 ? 4 : 8) * scale);
             }
 
+            void Bake(Rectangle bounds, Rectangle monitor, float scale)
+            {
+                int radius = CornerRadius(scale);
+                edge = new GlowField(GlowField.Edge, bounds, inside, scale, radius, monitor);
+                veil = new GlowField(GlowField.Veil, bounds, inside, scale, radius, monitor);
+                shift = Point.Empty;
+            }
+
             void Watch()
             {
                 if (target == IntPtr.Zero) { watch.Stop(); return; }
@@ -912,7 +926,7 @@ namespace Axon
                     // Minimised, hidden, closed or on another desktop: no glow.
                     if (shown) HideNow();
                     seen = Rectangle.Empty;
-                    if (!IsWindow(target)) { target = IntPtr.Zero; field = null; watch.Stop(); }
+                    if (!IsWindow(target)) { target = IntPtr.Zero; edge = veil = null; watch.Stop(); }
                     return;
                 }
                 if (sampleAt >= 0 && now >= sampleAt) { sampleAt = -1; SamplePointer(); }
@@ -922,8 +936,8 @@ namespace Axon
                     if (shown && bounds.Size == seen.Size)
                     {
                         // glow.follow: locked to the frame, 1:1, no easing.
-                        shift = new Point(bounds.X - field.Frame.X, bounds.Y - field.Frame.Y);
-                        for (int i = 0; i < 4; i++) if (!field.Strips[i].IsEmpty) strips[i].Shift(field.Strips[i].X + shift.X, field.Strips[i].Y + shift.Y);
+                        shift = new Point(bounds.X - edge.Frame.X, bounds.Y - edge.Frame.Y);
+                        for (int i = 0; i < 8; i++) { Rectangle strip = Field(i).Strips[i % 4]; if (!strip.IsEmpty) strips[i].Shift(strip.X + shift.X, strip.Y + shift.Y); }
                         moved = true;
                     }
                     else if (shown) HideNow();   // a jump: the old geometry is wrong at once
@@ -942,112 +956,124 @@ namespace Axon
                     else
                     {
                         // Same sides: bake again where the window now rests.
-                        float ax = field.ActionX + shift.X, ay = field.ActionY + shift.Y;
-                        field = new GlowField(bounds, inside, scale, CornerRadius(scale), monitor); shift = Point.Empty;
-                        field.SetAction(ax, ay); Paint(1, 1);
+                        float ax = edge.ActionX + shift.X, ay = edge.ActionY + shift.Y;
+                        Bake(bounds, monitor, scale);
+                        edge.SetAction(ax, ay); veil.SetAction(ax, ay); Paint(1); PaintVeil();
                     }
                 }
                 Order();
             }
 
-            // glow.enter: the line draws on from the action point around both
-            // sides; the haze follows.
+            // glow.enter: the band draws on from the action point around both
+            // sides; the deep wash follows.
             void Enter(Rectangle bounds, Rectangle work, Rectangle monitor, float scale)
             {
                 bool[] sides = Sides(bounds, work, scale, inside);
                 for (int i = 0; i < 4; i++) inside[i] = sides[i];
-                field = new GlowField(bounds, inside, scale, CornerRadius(scale), monitor); shift = Point.Empty; moved = false;
+                Bake(bounds, monitor, scale); moved = false;
                 Rectangle near = bounds; near.Inflate(24, 24);
-                if (hasPoint && near.Contains(pointX, pointY)) field.SetAction(pointX, pointY);
+                if (hasPoint && near.Contains(pointX, pointY)) { edge.SetAction(pointX, pointY); veil.SetAction(pointX, pointY); }
                 bool motion = DesktopVisuals.MotionEnabled;
                 pulses.Clear(); lift = 0; pointAt = -1; masterAt = -1; leaving = false;
                 enterAt = motion ? Now : -1;
-                master = 1;
-                Paint(motion ? 0 : 1, motion ? 0 : 1);
-                for (int i = 0; i < 4; i++)
+                master = 1; deep = motion ? 0 : 1;
+                Paint(motion ? 0 : 1); PaintVeil();
+                for (int i = 0; i < 8; i++)
                 {
-                    if (field.Strips[i].IsEmpty) { strips[i].Hide(); continue; }
-                    strips[i].Level = 1;
+                    if (Field(i).Strips[i % 4].IsEmpty) { strips[i].Hide(); continue; }
+                    strips[i].Level = i < 4 ? master : master * deep;
                     if (!strips[i].Visible) strips[i].Show();
                 }
                 shown = true; Order();
-                if (motion) { lastFrame = Now; frame.Start(); }
+                if (motion) Quicken();
             }
 
-            void Paint(float haze, float reveal)
+            float[] Running()
             {
-                if (field == null) return;
-                float[] running = null;
-                if (pulses.Count > 0)
-                {
-                    double now = Now; running = new float[pulses.Count];
-                    for (int i = 0; i < running.Length; i++) running[i] = (float)((now - pulses[i]) / DesktopVisuals.Slow);
-                }
-                field.Compose(lift, haze, reveal, running, Now / 1000.0);
+                if (pulses.Count == 0) return null;
+                double now = Now; float[] running = new float[pulses.Count];
+                for (int i = 0; i < running.Length; i++) running[i] = (float)((now - pulses[i]) / DesktopVisuals.Slow);
+                return running;
+            }
+
+            void Paint(float reveal)
+            {
+                if (edge == null) return;
+                edge.Compose(Now / 1000.0, lift, reveal, Running());
                 for (int i = 0; i < 4; i++)
                 {
-                    Rectangle strip = field.Strips[i]; if (strip.IsEmpty) continue;
-                    strip.Offset(shift); strips[i].Surface(field.Pixels[i], strip);
+                    Rectangle strip = edge.Strips[i]; if (strip.IsEmpty) continue;
+                    strip.Offset(shift); strips[i].Surface(edge.Pixels[i], strip);
+                }
+            }
+
+            void PaintVeil()
+            {
+                if (veil == null) return;
+                veilAt = Now;
+                veil.Compose(Now / 1000.0, lift, 1, null);
+                for (int i = 0; i < 4; i++)
+                {
+                    Rectangle strip = veil.Strips[i]; if (strip.IsEmpty) continue;
+                    strip.Offset(shift); strips[4 + i].Surface(veil.Pixels[i], strip);
                 }
             }
 
             void Frame()
             {
                 double now = Now, elapsed = Math.Max(0, Math.Min(100, now - lastFrame)); lastFrame = now;
-                bool paint = false, busy = false; float reveal = 1, haze = 1;
-                if (field != null && shown)
+                bool motion = DesktopVisuals.MotionEnabled, busy = false, quick = false; float reveal = 1;
+                if (edge != null && shown)
                 {
                     if (pointAt >= 0)
                     {
                         float t = (float)((now - pointAt) / DesktopVisuals.Normal), e = DesktopVisuals.EaseInOut(t);
-                        field.SetAction(pointFromX + (pointToX - pointFromX) * e, pointFromY + (pointToY - pointFromY) * e);
-                        if (t >= 1) pointAt = -1; else busy = true;
-                        paint = true;
+                        float x = pointFromX + (pointToX - pointFromX) * e, y = pointFromY + (pointToY - pointFromY) * e;
+                        edge.SetAction(x, y); veil.SetAction(x, y);
+                        if (t >= 1) pointAt = -1; else quick = true;
                     }
                     if (enterAt >= 0)
                     {
                         double t = now - enterAt;
                         reveal = DesktopVisuals.EaseOut((float)(t / DesktopVisuals.Slow));
-                        haze = t < 120 ? 0 : DesktopVisuals.EaseOut((float)((t - 120) / DesktopVisuals.Normal));
-                        if (t >= 120 + DesktopVisuals.Normal) { enterAt = -1; reveal = haze = 1; } else busy = true;
-                        paint = true;
+                        float wash = t < 120 ? 0 : DesktopVisuals.EaseOut((float)((t - 120) / DesktopVisuals.Normal));
+                        if (t >= 120 + DesktopVisuals.Normal) { enterAt = -1; reveal = wash = 1; } else quick = true;
+                        if (wash != deep) { deep = wash; for (int i = 4; i < 8; i++) strips[i].Level = master * deep; }
                     }
-                    int before = pulses.Count;
                     pulses.RemoveAll(delegate(double started) { return now - started >= DesktopVisuals.Slow; });
-                    if (before > 0) paint = true;
-                    if (pulses.Count > 0) busy = true;
+                    if (pulses.Count > 0) quick = true;
                     // The lift rises fast, holds while actions keep arriving, then falls once.
-                    float wanted = now - lastAction < 250 && DesktopVisuals.MotionEnabled ? 1 : 0;
-                    if (lift != wanted)
-                    {
-                        lift = wanted > lift ? Math.Min(1, lift + (float)(elapsed / DesktopVisuals.Fast)) : Math.Max(0, lift - (float)(elapsed / DesktopVisuals.Slow));
-                        paint = true;
-                    }
-                    if (lift > 0 || now - lastAction < 250) busy = true;
-                    // The aurora is never still: its colours keep travelling the edge.
-                    if (DesktopVisuals.MotionEnabled) { paint = true; busy = true; }
-                    if (paint) Paint(haze, reveal);
+                    float wanted = now - lastAction < 250 && motion ? 1 : 0;
+                    if (lift != wanted) { lift = wanted > lift ? Math.Min(1, lift + (float)(elapsed / DesktopVisuals.Fast)) : Math.Max(0, lift - (float)(elapsed / DesktopVisuals.Slow)); quick = true; }
+                    if (now - lastAction < 250) quick = true;
+                    // The light is never still: its colours keep travelling the
+                    // edge. With motion reduced it is drawn once and holds.
+                    if (motion || quick) Paint(reveal);
+                    if (now - veilAt >= VeilEvery && (motion || quick)) PaintVeil();
+                    busy = motion || quick;
                 }
                 if (masterAt >= 0)
                 {
                     double t = masterMs <= 0 ? 1 : (now - masterAt) / masterMs;
                     float e = leaving ? DesktopVisuals.EaseIn((float)t) : DesktopVisuals.EaseOut((float)t);
                     master = (float)(masterFrom + (masterTo - masterFrom) * e);
-                    for (int i = 0; i < 4; i++) strips[i].Level = master;
+                    for (int i = 0; i < 8; i++) strips[i].Level = i < 4 ? master : master * deep;
                     if (t >= 1)
                     {
                         masterAt = -1;
-                        if (leaving) { HideNow(); target = IntPtr.Zero; field = null; leaving = false; watch.Stop(); }
+                        if (leaving) { HideNow(); target = IntPtr.Zero; edge = veil = null; leaving = false; watch.Stop(); }
                     }
-                    else busy = true;
+                    else busy = quick = true;
                 }
-                if (!busy) frame.Stop();
+                if (!busy) { frame.Stop(); return; }
+                int interval = quick ? 16 : 50;
+                if (frame.Interval != interval) frame.Interval = interval;
             }
 
             void FadeTo(float level, int milliseconds)
             {
                 masterFrom = master; masterTo = level; masterAt = Now; masterMs = DesktopVisuals.MotionEnabled ? milliseconds : 0;
-                lastFrame = Now; frame.Start();
+                Quicken();
             }
 
             // glow.exit (Normal) and glow.stop (67 ms): opacity only, from
@@ -1055,15 +1081,16 @@ namespace Axon
             internal void Exit(int milliseconds)
             {
                 sampleAt = -1;
-                if (!shown) { target = IntPtr.Zero; field = null; leaving = false; watch.Stop(); return; }
+                if (!shown) { target = IntPtr.Zero; edge = veil = null; leaving = false; watch.Stop(); return; }
                 if (leaving && masterMs <= milliseconds) return;
                 leaving = true; FadeTo(0, milliseconds);
             }
 
             void HideNow()
             {
-                for (int i = 0; i < 4; i++) if (strips[i].Visible) strips[i].Hide();
-                shown = false; master = 0; enterAt = -1; masterAt = -1; pointAt = -1; lift = 0; pulses.Clear(); shift = Point.Empty; moved = false;
+                for (int i = 0; i < 8; i++) if (strips[i].Visible) strips[i].Hide();
+                shown = false; master = 0; deep = 1; enterAt = -1; masterAt = -1; pointAt = -1; lift = 0; pulses.Clear(); shift = Point.Empty; moved = false;
+                frame.Stop();
             }
 
             // A screenshot is being taken: out of the picture at once, and
@@ -1072,21 +1099,21 @@ namespace Axon
             {
                 if (!shown || suspended) return;
                 suspended = true;
-                for (int i = 0; i < 4; i++) if (strips[i].Visible) strips[i].Hide();
+                for (int i = 0; i < 8; i++) if (strips[i].Visible) strips[i].Hide();
             }
             internal void Resume()
             {
                 if (!suspended) return;
                 suspended = false;
-                if (!shown || field == null) return;
-                for (int i = 0; i < 4; i++) if (!field.Strips[i].IsEmpty) strips[i].Show();
-                Order(); lastFrame = Now; frame.Start();
+                if (!shown || edge == null) return;
+                for (int i = 0; i < 8; i++) if (!Field(i).Strips[i % 4].IsEmpty) strips[i].Show();
+                Order(); lastFrame = Now; if (!frame.Enabled) frame.Start();
             }
 
-            bool IsStrip(IntPtr h) { for (int i = 0; i < 4; i++) if (strips[i].IsHandleCreated && strips[i].Handle == h) return true; return false; }
+            bool IsStrip(IntPtr h) { for (int i = 0; i < 8; i++) if (strips[i].IsHandleCreated && strips[i].Handle == h) return true; return false; }
 
             // Directly above the target in z-order, never topmost unless the
-            // target itself is.
+            // target itself is. The edge band ends up above the wash.
             void Order()
             {
                 if (!shown || target == IntPtr.Zero) return;
@@ -1096,7 +1123,7 @@ namespace Axon
                 IntPtr after = above;
                 if (above == IntPtr.Zero) after = targetTop ? new IntPtr(-1) : IntPtr.Zero;
                 else if (!targetTop && (GetWindowLongW(above, GWL_EXSTYLE) & 0x8) != 0) after = IntPtr.Zero;
-                for (int i = 0; i < 4; i++)
+                for (int i = 0; i < 8; i++)
                     if (strips[i].Visible) SetWindowPos(strips[i].Handle, after, 0, 0, 0, 0, SWP_QUIET);
             }
         }
@@ -1325,7 +1352,7 @@ namespace Axon
             bool _showLabel;
             const int ArrowW = 22, ArrowH = 32, LabelGap = 6;
             readonly System.Windows.Forms.Timer _follow;
-            float _scale=1;
+            float _scale=1;int _tones=-1;
             bool _ripple;DateTime _clicked;
             internal void Ping() {_clicked=DateTime.UtcNow;_ripple=true;Redraw();}
 
@@ -1341,7 +1368,7 @@ namespace Axon
                 _follow.Tick += delegate {
                     NPOINT p;if(!GetCursorPos(out p))return;
                     float scale=ScreenScale(Screen.FromPoint(new Point(p.X,p.Y)));
-                    if(scale!=_scale) {_scale=scale;Size=new Size((int)(96*scale),(int)(96*scale));Redraw();}
+                    if(scale!=_scale||_tones!=GlowTones.Version) {_scale=scale;_tones=GlowTones.Version;Size=new Size((int)(96*scale),(int)(96*scale));Redraw();}
                     PlaceAt(p.X-(int)(48*scale),p.Y-(int)(48*scale));
                     if(_ripple) {if((DateTime.UtcNow-_clicked).TotalMilliseconds>DesktopVisuals.Slow)_ripple=false;Redraw();}
                 };
