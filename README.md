@@ -34,7 +34,7 @@ The film above is a real recording, edited for length: the agent operates
 Upscaly and upscales a 736×1308 photo to 2944×5232. The countdown is shown at
 8× speed and labelled. [How it was made](docs/media/LAUNCH-FILM.md).
 
-> **Windows beta.** [v0.3.0-beta.6](https://github.com/shayann07/antigravity-computer-use/releases/tag/v0.3.0-beta.6)
+> **Windows beta.** [v0.3.0-beta.7](https://github.com/shayann07/antigravity-computer-use/releases/tag/v0.3.0-beta.7)
 > is a published Windows x64 prerelease. Read [what is verified](#status-and-limits)
 > before installing. Not affiliated with or endorsed by Google.
 
@@ -49,7 +49,7 @@ irm https://raw.githubusercontent.com/shayann07/antigravity-computer-use/main/in
 Then open Antigravity, type **/computer-use**, and describe what you want done.
 
 The installer:
-- downloads the beta.6 Windows bundle and checks its SHA-256;
+- downloads the beta.7 Windows bundle and checks its SHA-256;
 - installs the global skill;
 - enables a small background service, which Antigravity starts as a sidecar.
 
@@ -106,7 +106,7 @@ keyboard. [Security model](SECURITY.md).
 
 ## Status and limits
 
-| Area | Where it stands (beta.6, build `01eb959c`) |
+| Area | Where it stands (beta.7, build `37ca238c`) |
 | --- | --- |
 | **Automated checks** | Windows and four macOS CI runners pass on every code change. The local suite has 607 tests: 594 passed, 0 failed, 13 skipped for platform or folder permissions. |
 | **Releases** | Update metadata is signed through a protected release environment. Each release's signature, payload hashes and inventory are verified independently against the public key. A real beta.4 install updated itself to beta.5 from GitHub and can roll back. |
