@@ -12,7 +12,7 @@ body:
     attributes:
       label: Computer Use version
       description: The `build_version` and the first 8 characters of `build_id` from `status`.
-      placeholder: 0.3.0-beta.6, 01eb959c
+      placeholder: 0.3.0-beta.7, 37ca238c
     validations:
       required: true
   - type: input
