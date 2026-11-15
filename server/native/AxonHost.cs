@@ -60,6 +60,18 @@ namespace Axon
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] internal static extern int GetClassName(IntPtr h, System.Text.StringBuilder cls, int max);
         [DllImport("oleacc.dll")] internal static extern int AccessibleObjectFromWindow(IntPtr h, int objectId, ref Guid iid, [MarshalAs(UnmanagedType.IUnknown)] out object acc);
         [DllImport("user32.dll")] internal static extern IntPtr SendMessageTimeout(IntPtr h, uint msg, IntPtr w, IntPtr l, uint flags, uint timeout, out IntPtr result);
+        [DllImport("user32.dll")] internal static extern bool IsHungAppWindow(IntPtr h);
+        // A window whose thread is not pumping messages. Every UI Automation
+        // call into it would block until it recovers, so callers skip it.
+        internal static bool WindowHung(IntPtr h)
+        {
+            if (h == IntPtr.Zero || !IsWindow(h)) return false;
+            if (IsHungAppWindow(h)) return true;
+            IntPtr res;
+            // WM_NULL with SMTO_ABORTIFHUNG: answers at once from a live window.
+            if (SendMessageTimeout(h, 0, IntPtr.Zero, IntPtr.Zero, 0x0002, 250, out res) != IntPtr.Zero) return false;
+            return IsWindow(h);
+        }
         internal delegate bool EnumChildProc(IntPtr h, IntPtr lparam);
         [DllImport("user32.dll")] internal static extern IntPtr GetForegroundWindow();
         [DllImport("user32.dll")] internal static extern bool SetForegroundWindow(IntPtr h);
@@ -884,6 +896,63 @@ namespace Axon
 
         // ---- window discovery -------------------------------------------------
 
+        // Runs one live accessibility call with a deadline. False when it did
+        // not come back in time; a failure inside the call counts as answered.
+        static bool Quick(Action act, int ms)
+        {
+            try { return RunPattern(act, ms); } catch { return true; }
+        }
+
+        // Windows whose last bounded tree read is still blocked inside the
+        // app. No further accessibility call goes into such a window until
+        // that call returns: stacking calls on a wedged provider is what
+        // turned one slow read into a six-minute hang.
+        static readonly Dictionary<long, System.Threading.ManualResetEventSlim> _uiaStuck = new Dictionary<long, System.Threading.ManualResetEventSlim>();
+        static bool UiaStuck(long hwnd)
+        {
+            lock (_uiaStuck)
+            {
+                System.Threading.ManualResetEventSlim pending;
+                if (!_uiaStuck.TryGetValue(hwnd, out pending)) return false;
+                if (!pending.IsSet && Native.IsWindow(new IntPtr(hwnd))) return true;
+                _uiaStuck.Remove(hwnd);
+                return false;
+            }
+        }
+
+        // A hung window described from the window manager alone.
+        static object HungWindowEntry(IntPtr h, IntPtr fg)
+        {
+            if (Native.IsCloaked(h)) return null;
+            Native.RECT rr;
+            if (!Native.GetWindowRect(h, out rr)) return null;
+            int rw = rr.Right - rr.Left, rh = rr.Bottom - rr.Top;
+            if (rw < 40 || rh < 40 || rr.Left < -30000 || rr.Top < -30000) return null;
+            uint wpid;
+            Native.GetWindowThreadProcessId(h, out wpid);
+            if ((int)wpid == _selfPid) return null;
+            System.Text.StringBuilder cb = new System.Text.StringBuilder(128);
+            Native.GetClassName(h, cb, cb.Capacity);
+            foreach (string sh in ShellClasses) if (sh == cb.ToString()) return null;
+            System.Text.StringBuilder sb = new System.Text.StringBuilder(512);
+            Native.GetWindowTextW(h, sb, sb.Capacity);
+            string pname, ppath;
+            ProcessInfo((int)wpid, out pname, out ppath);
+            Dictionary<string, object> e = new Dictionary<string, object>();
+            e["hwnd"] = Hwnd(h);
+            e["title"] = sb.ToString();
+            e["class"] = cb.ToString();
+            e["pid"] = (int)wpid;
+            e["process"] = pname;
+            e["path"] = ppath;
+            try { e["started"] = System.Diagnostics.Process.GetProcessById((int)wpid).StartTime.ToUniversalTime().Ticks.ToString(); } catch { e["started"] = ""; }
+            e["rect"] = new int[] { rr.Left, rr.Top, rw, rh };
+            e["minimized"] = Native.IsIconic(h);
+            e["foreground"] = (h == fg);
+            e["not_responding"] = true;
+            return e;
+        }
+
         static bool IsSelfWindow(AutomationElement el)
         {
             try
@@ -923,14 +992,28 @@ namespace Axon
         static object OpListApps(Dictionary<string, object> a)
         {
             bool includeHidden = Bool(Get(a, "include_hidden"), false);
-            AutomationElement root = AutomationElement.RootElement;
-            AutomationElementCollection wins = root.FindAll(TreeScope.Children, Condition.TrueCondition);
             List<object> list = new List<object>();
             Dictionary<long, bool> seen = new Dictionary<long, bool>();
             IntPtr fg = Native.GetForegroundWindow();
+            // Top-level windows from the window manager, not from a UI
+            // Automation desktop walk: the walk asks every window for its
+            // properties, and one app that has stopped answering held the
+            // whole listing for 25 seconds.
+            List<IntPtr> tops = new List<IntPtr>();
+            try { Native.EnumWindows(delegate(IntPtr h, IntPtr lp) { if (Native.IsWindowVisible(h)) tops.Add(h); return true; }, IntPtr.Zero); } catch { }
 
-            foreach (AutomationElement w in wins)
+            foreach (IntPtr top in tops)
             {
+                if (Overlay.IsAnyOverlayWindow(top)) continue;
+                if (Native.WindowHung(top) || UiaStuck(Hwnd(top)))
+                {
+                    object hung = HungWindowEntry(top, fg);
+                    if (hung != null) { seen[Hwnd(top)] = true; list.Add(hung); }
+                    continue;
+                }
+                AutomationElement w = null;
+                IntPtr topHandle = top;
+                if (!Quick(delegate { w = AutomationElement.FromHandle(topHandle); }, 1500) || w == null) continue;
                 // Computer Use's own windows are never user windows, so they are excluded
                 // unconditionally - include_hidden reveals the user's minimized
                 // windows, not Computer Use's marker.
@@ -1176,27 +1259,21 @@ namespace Axon
             if (hwndArg != null)
             {
                 long want = Long(hwndArg, 0);
-                AutomationElementCollection wins = root.FindAll(TreeScope.Children, Condition.TrueCondition);
-                foreach (AutomationElement w in wins)
+                // A handle names one window. Walking every top-level window to
+                // find it asks each of them a question, and one hung app then
+                // blocks every operation on every other app.
+                if (want == 0 || !Native.IsWindow(new IntPtr(want))) return null;
+                if (Native.WindowHung(new IntPtr(want)) || UiaStuck(want))
+                    throw new AxonError("window_not_responding", "The window is not responding, so it was not read or driven.",
+                        "Wait for the app to recover, then observe again. No input was sent.");
+                AutomationElement direct = null;
+                bool answered = Quick(delegate { direct = AutomationElement.FromHandle(new IntPtr(want)); }, 3000);
+                if (!answered)
                 {
-                    try { if ((long)w.Current.NativeWindowHandle == want) return w; }
-                    catch { }
+                    throw new AxonError("window_not_responding", "The window did not answer an accessibility request in time.",
+                        "Wait for the app to recover, then observe again. No input was sent.");
                 }
-                // The desktop walk does not include windows on other virtual
-                // desktops - switch desktops and a window Claude was working on
-                // simply stops existing as far as that scan is concerned. A
-                // handle is an explicit request for one particular window, and
-                // it resolves whether or not the user is looking at it.
-                if (want != 0)
-                {
-                    try
-                    {
-                        AutomationElement direct = AutomationElement.FromHandle(new IntPtr(want));
-                        if (direct != null) return direct;
-                    }
-                    catch { }
-                }
-                return null;
+                return direct;
             }
             string title = Str(Get(a, "title"));
             if (!string.IsNullOrEmpty(title))
@@ -1235,7 +1312,9 @@ namespace Axon
         {
             public AutomationElement El;
             public int Depth;
+            public TNode Node;
             public Frame(AutomationElement el, int depth) { El = el; Depth = depth; }
+            public Frame(TNode n) { El = n.El; Depth = n.Depth; Node = n; }
         }
 
         static readonly string[] InteractivePatterns = new string[]
@@ -1504,21 +1583,170 @@ namespace Axon
             catch { return "Unknown"; }
         }
 
+        // ---- bounded tree read ------------------------------------------------
+        //
+        // A native window is read one level at a time: each request asks one
+        // element for itself and its children, with a light property set. No
+        // single request can make the app walk an unbounded subtree or compute
+        // a value for every element in it, which is what froze Paint when its
+        // Edit colours dialog was read in one Subtree request. The whole read
+        // runs on one worker under a deadline enforced from outside; when it
+        // expires the partial tree is returned as incomplete and nothing else
+        // is asked of that window until the blocked call comes back.
+        static CacheRequest _levelReq, _stateReq;
+        static CacheRequest LevelRequest()
+        {
+            if (_levelReq != null) return _levelReq;
+            CacheRequest cr = new CacheRequest();
+            cr.TreeScope = TreeScope.Element | TreeScope.Children;
+            cr.AutomationElementMode = AutomationElementMode.Full;
+            cr.TreeFilter = Automation.ControlViewCondition;
+            cr.Add(AutomationElement.ControlTypeProperty);
+            cr.Add(AutomationElement.NameProperty);
+            cr.Add(AutomationElement.AutomationIdProperty);
+            cr.Add(AutomationElement.BoundingRectangleProperty);
+            cr.Add(AutomationElement.IsEnabledProperty);
+            cr.Add(AutomationElement.IsOffscreenProperty);
+            cr.Add(AutomationElement.HasKeyboardFocusProperty);
+            cr.Add(AutomationElement.IsKeyboardFocusableProperty);
+            cr.Add(AutomationElement.NativeWindowHandleProperty);
+            cr.Add(AutomationElement.RuntimeIdProperty);
+            foreach (AutomationProperty avail in PatternAvail) cr.Add(avail);
+            cr.Add(SelectionItemPattern.IsSelectedProperty);
+            cr.Add(ExpandCollapsePattern.ExpandCollapseStateProperty);
+            cr.Add(AutomationElement.LocalizedControlTypeProperty);
+            cr.Add(AutomationElement.ClassNameProperty);
+            _levelReq = cr;
+            return cr;
+        }
+        // Values are read one element at a time, and only for elements that
+        // have one, never in bulk across a subtree.
+        static CacheRequest StateRequest()
+        {
+            if (_stateReq != null) return _stateReq;
+            CacheRequest cr = new CacheRequest();
+            cr.TreeScope = TreeScope.Element;
+            cr.AutomationElementMode = AutomationElementMode.Full;
+            cr.Add(TogglePattern.ToggleStateProperty);
+            cr.Add(ValuePattern.ValueProperty);
+            cr.Add(RangeValuePattern.ValueProperty);
+            cr.Add(RangeValuePattern.MinimumProperty);
+            cr.Add(RangeValuePattern.MaximumProperty);
+            _stateReq = cr;
+            return cr;
+        }
+
+        class TNode
+        {
+            public AutomationElement El;      // light properties cached
+            public AutomationElement StateEl; // value properties cached, or null
+            public bool StateUnread;
+            public bool Cut;                  // children dropped by the depth limit
+            public int Depth;
+            public List<TNode> Kids;
+        }
+
+        static readonly string[] LeafRoles = new string[] { "Text", "Image", "Separator", "Thumb" };
+        const int MaxStateReads = 200;
+
+        class LevelFetch
+        {
+            public TNode Root;
+            public bool TimedOut, Capped, Failed;
+            public int Calls;
+        }
+
+        class CancelFlag { public volatile bool Set; }
+
+        static LevelFetch FetchLevels(AutomationElement win, long hwnd, int maxDepth, int maxFetch, int budgetMs)
+        {
+            LevelFetch outcome = new LevelFetch();
+            object gate = new object();
+            CancelFlag cancel = new CancelFlag();
+            System.Threading.ManualResetEventSlim done = new System.Threading.ManualResetEventSlim(false);
+            System.Threading.ThreadPool.QueueUserWorkItem(delegate
+            {
+                try
+                {
+                    int calls = 0, stateReads = 0, count = 1;
+                    AutomationElement r = win.GetUpdatedCache(LevelRequest()); calls++;
+                    TNode root = new TNode(); root.El = r; root.Depth = 0;
+                    lock (gate) { if (cancel.Set) return; outcome.Root = root; outcome.Calls = calls; }
+                    Queue<TNode> queue = new Queue<TNode>();
+                    queue.Enqueue(root);
+                    bool capped = false;
+                    while (queue.Count > 0 && !capped)
+                    {
+                        TNode n = queue.Dequeue();
+                        AutomationElementCollection kids = null;
+                        try { kids = n.El.CachedChildren; } catch { }
+                        if (kids == null) continue;
+                        List<TNode> list = new List<TNode>(kids.Count);
+                        foreach (AutomationElement k in kids)
+                        {
+                            if (cancel.Set) return;
+                            if (count >= maxFetch) { capped = true; break; }
+                            count++;
+                            TNode kn = new TNode(); kn.El = k; kn.Depth = n.Depth + 1;
+                            string role = CachedRole(k);
+                            bool leaf = Array.IndexOf(LeafRoles, role) >= 0;
+                            bool expanded = false;
+                            if (!leaf)
+                            {
+                                if (kn.Depth < maxDepth)
+                                {
+                                    try { kn.El = k.GetUpdatedCache(LevelRequest()); expanded = true; } catch { }
+                                    calls++;
+                                }
+                                else kn.Cut = true;
+                            }
+                            if (CachedBool(k, AutomationElement.IsTogglePatternAvailableProperty)
+                                || CachedBool(k, AutomationElement.IsValuePatternAvailableProperty)
+                                || CachedBool(k, AutomationElement.IsRangeValuePatternAvailableProperty))
+                            {
+                                if (stateReads < MaxStateReads)
+                                {
+                                    stateReads++; calls++;
+                                    try { kn.StateEl = k.GetUpdatedCache(StateRequest()); } catch { kn.StateUnread = true; }
+                                }
+                                else kn.StateUnread = true;
+                            }
+                            list.Add(kn);
+                            if (expanded) queue.Enqueue(kn);
+                        }
+                        lock (gate) { if (cancel.Set) return; n.Kids = list; outcome.Calls = calls; if (capped) outcome.Capped = true; }
+                    }
+                }
+                catch { lock (gate) { if (!cancel.Set) outcome.Failed = true; } }
+                finally { try { done.Set(); } catch { } }
+            });
+            bool finished = done.Wait(budgetMs);
+            lock (gate) { cancel.Set = true; }
+            if (!finished)
+            {
+                outcome.TimedOut = true;
+                lock (_uiaStuck) { _uiaStuck[hwnd] = done; }
+            }
+            return outcome;
+        }
+
         // The whole subtree in one call, on a worker so a provider that never
         // answers cannot wedge the host. Null when it did not arrive in time.
-        static AutomationElement FetchSubtree(AutomationElement win, int budgetMs)
+        static AutomationElement FetchSubtree(AutomationElement win, long hwnd, int budgetMs)
         {
             AutomationElement got = null;
             Exception failure = null;
-            using (System.Threading.ManualResetEventSlim done = new System.Threading.ManualResetEventSlim(false))
+            System.Threading.ManualResetEventSlim done = new System.Threading.ManualResetEventSlim(false);
+            System.Threading.ThreadPool.QueueUserWorkItem(delegate
             {
-                System.Threading.ThreadPool.QueueUserWorkItem(delegate
-                {
-                    try { got = win.GetUpdatedCache(SnapRequest()); }
-                    catch (Exception ex) { failure = ex; }
-                    finally { try { done.Set(); } catch { } }
-                });
-                if (!done.Wait(budgetMs)) return null;
+                try { got = win.GetUpdatedCache(SnapRequest()); }
+                catch (Exception ex) { failure = ex; }
+                finally { try { done.Set(); } catch { } }
+            });
+            if (!done.Wait(budgetMs))
+            {
+                lock (_uiaStuck) { _uiaStuck[hwnd] = done; }
+                return null;
             }
             if (failure != null) return null;
             return got;
@@ -1563,8 +1791,8 @@ namespace Axon
             // it, so it neither bumps the snapshot sequence nor evicts a
             // snapshot Claude is still acting on.
             bool register = Bool(Get(a, "register"), true);
-            long hkey = 0;
-            try { hkey = (long)win.Current.NativeWindowHandle; } catch { }
+            long hkey = Hwnd(HwndArg(a));
+            if (hkey == 0) try { hkey = (long)win.Current.NativeWindowHandle; } catch { }
             StableTable table = StableFor(hkey);
             WalkIds usedIdx = new WalkIds();
 
@@ -1604,7 +1832,17 @@ namespace Axon
             // page is as complete as the second.
             AutomationElement cached = null;
             int webWaitMs = 0;
-            for (int attempt = 0; attempt < 12; attempt++)
+            LevelFetch levels = null;
+            bool fetchTimedOut = false;
+            if (!web)
+            {
+                // Rect-less scaffolding is fetched but not reported, so the
+                // fetch allowance is wider than the reported node limit.
+                int fetchBudget = Math.Max(250, walkBudgetMs - (int)walkClock.ElapsedMilliseconds - 150);
+                levels = FetchLevels(win, hkey, maxDepth, maxNodes * 3 + 200, fetchBudget);
+                fetchTimedOut = levels.TimedOut;
+            }
+            else for (int attempt = 0; attempt < 12; attempt++)
             {
                 int remaining = walkBudgetMs - (int)walkClock.ElapsedMilliseconds;
                 // A batched fetch of an ordinary window takes well under a
@@ -1612,9 +1850,8 @@ namespace Axon
                 // given that much: a whole tree in 120ms beats a partial one
                 // walked slowly.
                 if (attempt > 0 && remaining < 200) break;
-                cached = FetchSubtree(win, Math.Max(remaining, 250));
-                if (cached == null) break;
-                if (!web) break;
+                cached = FetchSubtree(win, hkey, Math.Max(remaining, 250));
+                if (cached == null) { fetchTimedOut = true; break; }
                 if (HasDocument(cached, 4000)) break;
                 if (walkClock.ElapsedMilliseconds > 1500) break;
                 System.Threading.Thread.Sleep(120);
@@ -1625,15 +1862,21 @@ namespace Axon
             List<object> nodes = new List<object>();
             bool truncated = false;
             bool ranOutOfTime = false;
-            bool cachedPath = cached != null;
+            bool cachedPath = cached != null || (levels != null && levels.Root != null);
             int liveTextReads = 0;
+            // A read that timed out or failed is reported as incomplete. It is
+            // never retried through a live per-property walk: that put more
+            // calls into a provider that had already stopped answering.
+            if (fetchTimedOut || (levels != null && (levels.Capped || levels.Failed))) truncated = true;
+            if (fetchTimedOut) ranOutOfTime = true;
 
             if (cachedPath)
             {
                 // Everything below is in-memory: no cross-process calls except
                 // the bounded TextPattern reads for documents and editors.
                 Stack<Frame> stack = new Stack<Frame>();
-                stack.Push(new Frame(cached, 0));
+                if (levels != null) stack.Push(new Frame(levels.Root));
+                else stack.Push(new Frame(cached, 0));
                 while (stack.Count > 0)
                 {
                     if (nodes.Count >= maxNodes) { truncated = true; break; }
@@ -1648,6 +1891,10 @@ namespace Axon
                     }
                     Frame f = stack.Pop();
                     AutomationElement el = f.El;
+                    // Value properties: cached with everything else in the
+                    // browser's single fetch, read per element otherwise.
+                    AutomationElement stateEl = f.Node == null ? el : f.Node.StateEl;
+                    if (f.Node != null && f.Node.Cut) truncated = true;
 
                     int[] rect = CachedRect(el);
                     List<string> patterns = CachedPatterns(el);
@@ -1685,7 +1932,7 @@ namespace Axon
                         // can say something the name does not - a document or
                         // an editor - and only a bounded number of times.
                         string txt = null;
-                        if (patterns.Contains("Value")) txt = CleanText(CachedProp(el, ValuePattern.ValueProperty) as string);
+                        if (patterns.Contains("Value") && stateEl != null) txt = CleanText(CachedProp(stateEl, ValuePattern.ValueProperty) as string);
                         // Text that was not read is not the same as no text. A
                         // read that skips it (out of budget) or gives up on it
                         // (the app was slow) says so, and the server does not
@@ -1770,9 +2017,10 @@ namespace Axon
                         if (CachedBool(el, AutomationElement.IsOffscreenProperty)) st["offscreen"] = true;
                         if (CachedBool(el, AutomationElement.IsKeyboardFocusableProperty)) st["focusable"] = true;
                         if (CachedBool(el, AutomationElement.HasKeyboardFocusProperty)) st["focused"] = true;
-                        if (patterns.Contains("Toggle"))
+                        if (f.Node != null && f.Node.StateUnread) node["state_unread"] = true;
+                        if (patterns.Contains("Toggle") && stateEl != null)
                         {
-                            object o = CachedProp(el, TogglePattern.ToggleStateProperty);
+                            object o = CachedProp(stateEl, TogglePattern.ToggleStateProperty);
                             if (o != null) st["toggle"] = o.ToString();
                         }
                         if (patterns.Contains("SelectionItem"))
@@ -1785,11 +2033,11 @@ namespace Axon
                             object o = CachedProp(el, ExpandCollapsePattern.ExpandCollapseStateProperty);
                             if (o != null) st["expand"] = o.ToString();
                         }
-                        if (patterns.Contains("RangeValue"))
+                        if (patterns.Contains("RangeValue") && stateEl != null)
                         {
-                            object v = CachedProp(el, RangeValuePattern.ValueProperty);
-                            object mn = CachedProp(el, RangeValuePattern.MinimumProperty);
-                            object mx = CachedProp(el, RangeValuePattern.MaximumProperty);
+                            object v = CachedProp(stateEl, RangeValuePattern.ValueProperty);
+                            object mn = CachedProp(stateEl, RangeValuePattern.MinimumProperty);
+                            object mx = CachedProp(stateEl, RangeValuePattern.MaximumProperty);
                             if (v != null) st["value"] = v;
                             if (mn != null) st["min"] = mn;
                             if (mx != null) st["max"] = mx;
@@ -1799,7 +2047,12 @@ namespace Axon
                         elements[idx] = el;
                     }
 
-                    if (f.Depth < maxDepth)
+                    if (f.Node != null)
+                    {
+                        List<TNode> tk = f.Node.Kids;
+                        if (tk != null) for (int j = tk.Count - 1; j >= 0; j--) stack.Push(new Frame(tk[j]));
+                    }
+                    else if (f.Depth < maxDepth)
                     {
                         AutomationElementCollection kids = null;
                         try { kids = el.CachedChildren; } catch { }
@@ -1818,93 +2071,18 @@ namespace Axon
                     }
                 }
             }
-            else
-            {
-                // The provider would not answer a batched request in time (or at
-                // all). Fall back to the one-call-per-property walk, which can
-                // at least stop partway and hand back what it has.
-                TreeWalker walker = TreeWalker.ControlViewWalker;
-                Stack<Frame> stack = new Stack<Frame>();
-                stack.Push(new Frame(win, 0));
-
-                while (stack.Count > 0)
-                {
-                    if (nodes.Count >= maxNodes) { truncated = true; break; }
-                    // The root always goes in, so a tight budget still hands
-                    // back a tree rather than nothing.
-                    if (nodes.Count > 0 && walkClock.ElapsedMilliseconds > walkBudgetMs)
-                    {
-                        truncated = true;
-                        ranOutOfTime = true;
-                        break;
-                    }
-                    Frame f = stack.Pop();
-                    AutomationElement el = f.El;
-
-                    int[] rect = RectOf(el);
-                    List<string> patterns = PatternsOf(el);
-                    bool interactive = false;
-                    foreach (string ip in InteractivePatterns) { if (patterns.Contains(ip)) { interactive = true; break; } }
-
-                    bool include = true;
-                    if (interactiveOnly && f.Depth > 0 && !interactive) include = false;
-                    if (rect == null && f.Depth > 0 && !offDesktop) include = false;
-
-                    if (include)
-                    {
-                        Dictionary<string, object> node = new Dictionary<string, object>();
-                        int idx = StableIndex(table, RidOf(el, false), el, usedIdx);
-                        node["i"] = idx;
-                        node["role"] = RoleOf(el);
-                        node["depth"] = f.Depth;
-                        string nm = CleanText(NameOf(el));
-                        if (nm != null) node["name"] = nm;
-                        string aid = AidOf(el);
-                        if (!string.IsNullOrEmpty(aid)) node["aid"] = aid;
-                        if (rect != null) node["rect"] = rect;
-                        if (patterns.Count > 0) node["patterns"] = patterns;
-                        string txt = CleanText(TextOf(el, patterns));
-                        if (txt != null) node["text"] = txt;
-                        Dictionary<string, object> st = StateOf(el, patterns);
-                        if (st != null) node["state"] = st;
-                        nodes.Add(node);
-                        elements[idx] = el;
-                    }
-
-                    if (f.Depth < maxDepth)
-                    {
-                        List<AutomationElement> kids = new List<AutomationElement>();
-                        try
-                        {
-                            AutomationElement k = walker.GetFirstChild(el);
-                            int guard = 0;
-                            while (k != null && guard < 500)
-                            {
-                                kids.Add(k);
-                                k = walker.GetNextSibling(k);
-                                guard++;
-                            }
-                        }
-                        catch { }
-                        for (int j = kids.Count - 1; j >= 0; j--) stack.Push(new Frame(kids[j], f.Depth + 1));
-                    }
-                    else
-                    {
-                        // As above: children past the depth cut make the tree partial.
-                        try { if (walker.GetFirstChild(el) != null) truncated = true; } catch { }
-                    }
-                }
-            }
 
             Snapshot snap = new Snapshot();
             snap.Elements = elements;
             snap.Taken = DateTime.UtcNow;
-            try
+            snap.Hwnd = new IntPtr(hkey);
+            if (!fetchTimedOut) Quick(delegate { snap.Title = win.Current.Name; }, 1000);
+            if (snap.Title == null)
             {
-                snap.Hwnd = new IntPtr(win.Current.NativeWindowHandle);
-                snap.Title = win.Current.Name;
+                System.Text.StringBuilder tb = new System.Text.StringBuilder(512);
+                Native.GetWindowTextW(snap.Hwnd, tb, tb.Capacity);
+                snap.Title = tb.ToString();
             }
-            catch { }
             string sid = null;
             if (register)
             {
@@ -1930,9 +2108,12 @@ namespace Axon
             res["snapshot_id"] = sid;
             res["hwnd"] = (long)snap.Hwnd;
             res["title"] = snap.Title;
-            res["rect"] = RectOf(win);
+            Native.RECT wr;
+            res["rect"] = Native.GetWindowRect(snap.Hwnd, out wr) ? new int[] { wr.Left, wr.Top, wr.Right - wr.Left, wr.Bottom - wr.Top } : null;
             res["node_count"] = nodes.Count;
             res["truncated"] = truncated;
+            if (fetchTimedOut) res["fetch_timeout"] = true;
+            if (levels != null) res["fetch_calls"] = levels.Calls;
             res["walk_ms"] = walkClock.ElapsedMilliseconds;
             res["batched"] = cachedPath;
             if (ranOutOfTime) res["time_budget_ms"] = walkBudgetMs;
@@ -3041,7 +3222,9 @@ namespace Axon
             // exactly that way. A physical selector click must refuse too; a
             // pixel click still has no semantic enabled state to inspect.
             bool enabled = true;
-            try { enabled = el.Current.IsEnabled; } catch { }
+            if (!Quick(delegate { enabled = el.Current.IsEnabled; }, ClickProbeMs))
+                throw new AxonError("window_not_responding", "The app did not answer in time, so nothing was clicked.",
+                    "Wait for the app to recover, then observe again. No input was sent.");
             if (!enabled)
                 throw new AxonError("element_disabled",
                     DescribeEl(el) + " is disabled, so clicking it would do nothing.",
@@ -3185,7 +3368,7 @@ namespace Axon
             // Focusing an element in a window that is not in front raises that
             // window, which the user feels, so the gate runs before it does.
             NoteWait(res, GuardDisturb(a));
-            try { el.SetFocus(); } catch { }
+            Quick(delegate { el.SetFocus(); }, ClickProbeMs);
             Trace(el, "click", HwndArg(a));
 
             // Get our own banner out of the way before working out where to
@@ -3226,9 +3409,28 @@ namespace Axon
             public string Toggle;
             public bool? Selected;
             public string Expand;
+            public bool Unanswered;
         }
 
+        // Live calls on the click path are short questions. A provider that
+        // does not answer one of them in this long is treated as not answering.
+        const int ClickProbeMs = 1500;
+
         static ClickState ReadClickState(AutomationElement el, List<string> patterns)
+        {
+            ClickState got = null;
+            // After a click the app may be busy opening a dialog; an unanswered
+            // state read reports no state instead of holding the reply.
+            if (!Quick(delegate { got = ReadClickStateLive(el, patterns); }, ClickProbeMs) || got == null)
+            {
+                ClickState none = new ClickState();
+                none.Unanswered = true;
+                return none;
+            }
+            return got;
+        }
+
+        static ClickState ReadClickStateLive(AutomationElement el, List<string> patterns)
         {
             ClickState s = new ClickState();
             if (Has(patterns, "Toggle"))
@@ -3290,6 +3492,7 @@ namespace Axon
             while (true)
             {
                 ClickState now = ReadClickState(el, patterns);
+                if (now.Unanswered) return false;
                 if (MovedFrom(before, now)) return true;
                 if (sw.ElapsedMilliseconds >= maxMs) return false;
                 System.Threading.Thread.Sleep(40);
@@ -3458,7 +3661,7 @@ namespace Axon
                 // as any other foreground change.
                 RequireForeground(want,a,res);
                 if(!HasTypingFocus(t.El)) {
-                    try { t.El.SetFocus(); } catch { }
+                    Quick(delegate { t.El.SetFocus(); }, ClickProbeMs);
                     System.Threading.Thread.Sleep(120);
                 }
                 RequireTypingFocus(t.El, want);
@@ -4316,7 +4519,7 @@ namespace Axon
                 // No control took a value write: focus the box, prove the focus
                 // moved, select what is there and type the path as a person would.
                 ControlFence.CheckOwnedDialog();
-                try { (edit ?? box).SetFocus(); } catch { }
+                Quick(delegate { (edit ?? box).SetFocus(); }, ClickProbeMs);
                 System.Threading.Thread.Sleep(40);
                 bool focused = false;
                 // The focused element is the box itself, or a child of it, so
@@ -4383,7 +4586,7 @@ namespace Axon
             if (!invoked)
             {
                 ControlFence.CheckOwnedDialog();
-                try { box.SetFocus(); } catch { }
+                Quick(delegate { box.SetFocus(); }, ClickProbeMs);
                 System.Threading.Thread.Sleep(20);
                 Native.KeyTap(VkOf("enter"));
             }
@@ -4617,7 +4820,7 @@ namespace Axon
             {
                 if(Get(a,"index")!=null){
                     Target target=ResolveTarget(a);
-                    if(!HasTypingFocus(target.El)){try {target.El.SetFocus();}catch {}System.Threading.Thread.Sleep(120);}
+                    if(!HasTypingFocus(target.El)){Quick(delegate { target.El.SetFocus(); }, ClickProbeMs);System.Threading.Thread.Sleep(120);}
                     RequireTypingFocus(target.El,HwndArg(a));
                 }
                 ClipboardSTA(setClipboard);
