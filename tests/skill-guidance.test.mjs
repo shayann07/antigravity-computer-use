@@ -34,6 +34,8 @@ test('every command example in the computer-use skill parses with the real CLI',
   // Pixel rows in the command table, with placeholders filled.
   examples.push(['click', '--hwnd', '1', '--observation-id', 'F', '--x', '10', '--y', '20', '--risk', 'routine', '--reason', 'r']);
   examples.push(['move', '--hwnd', '1', '--observation-id', 'F', '--x', '10', '--y', '20', '--risk', 'routine', '--reason', 'r']);
+  examples.push(['key', '--hwnd', '1', '--observation-id', 'F', '--keys', 'F5', '--risk', 'routine', '--reason', 'r']);
+  examples.push(['run', '--hwnd', '1', '--observation-id', 'F', '--reason', 'r', '--step', 'key', '--keys', 'F5', '--risk', 'routine', '--step', 'click', '--x', '10', '--y', '20', '--risk', 'routine']);
   assert(examples.length >= 7, 'expected the skill examples to be found');
   assert(examples.some(([command, ...rest]) => command === 'run' && rest.includes('wait')), 'a batch example must end with a wait');
   for (const [command, ...rest] of examples) {
@@ -75,4 +77,13 @@ test('computer-use skill teaches multi-point drags, chained pixel steps and step
  assert.ok(file, 'the steps file example is present');
  const steps = JSON.parse(file[1]);
  assert.equal(steps[1].kind, 'drag'); assert.equal(steps[1].points.length, 3);
+});
+
+test('lifecycle commands accept and ignore --reason so an end is never lost to a habit flag', async () => {
+ const {parseArguments} = await import('../scripts/arguments.mjs');
+ for (const command of ['end', 'status', 'ready', 'shutdown']) {
+  assert.deepEqual(parseArguments(describeCommand(command).inputSchema, ['--reason', 'done painting']), {}, command);
+  assert.deepEqual(parseArguments(describeCommand(command).inputSchema, ['--reason=done']), {}, command);
+ }
+ assert.throws(() => parseArguments(describeCommand('end').inputSchema, ['--bogus', 'x']), /Unknown flag/);
 });

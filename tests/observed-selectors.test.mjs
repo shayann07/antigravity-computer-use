@@ -42,7 +42,7 @@ test('unobserved and ambiguous names refuse before native authorization or input
  const r={frames:new Map(),deadline:Date.now()+10000,remaining:10,generation:1,async grant(){return w;},check(){},stamp(){return{};},driver:{epoch:1,async call(){native++;}}};
  for(const elements of [[{i:1,name:'Other'}],[{i:1,name:'JPEG'},{i:2,name:'JPEG'}]]){
   r.frames.set('f',{at:Date.now(),hwnd:1,key:appKey(w),snapshot:'s',workerEpoch:1,elements});
-  await assert.rejects(Runtime.prototype.action.call(r,'click',{hwnd:1,observation_id:'f',name:'JPEG',reason:'Must not guess'}),e=>['target_not_observed','ambiguous_observed_target'].includes(e.code));assert(!r.frames.has('f'));
+  await assert.rejects(Runtime.prototype.action.call(r,'click',{hwnd:1,observation_id:'f',name:'JPEG',reason:'Must not guess'}),e=>['target_not_observed','ambiguous_observed_target'].includes(e.code));assert(r.frames.has('f'),'a refusal that sent no input keeps the frame (#49)');r.frames.delete('f');
  }
  assert.equal(native,0);assert.equal(r.remaining,10);
 });

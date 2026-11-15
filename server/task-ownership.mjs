@@ -25,5 +25,13 @@ export class TaskOwnership {
   if(typeof token!=='string'||!/^[a-f0-9]{64}$/.test(token)||token.length!==64||!timingSafeEqual(Buffer.from(token),Buffer.from(owner.token)))denied('task_owned','This call does not own the current task. Wait for its owner to end it; emergency Stop remains available.');
   owner.used=true;
  }
+ // Who holds the task relative to this caller: self (token matches), other (a
+ // different holder exists), unknown (open but unowned, e.g. recovered) or none.
+ // A coordination aid only; the token is never echoed and this is not authentication.
+ relation(token,state){
+  if(this.owner&&!this.owner.used&&this.now()>this.owner.until)this.owner=null;
+  if(!this.owner)return state?.task_open===true?'unknown':'none';
+  return typeof token==='string'&&/^[a-f0-9]{64}$/.test(token)&&timingSafeEqual(Buffer.from(token),Buffer.from(this.owner.token))?'self':'other';
+ }
  ended(){this.owner=null;}
 }

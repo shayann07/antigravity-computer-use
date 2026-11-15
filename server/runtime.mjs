@@ -24,6 +24,8 @@ const fail=(code,message)=>{throw new HostError(code,message,null);};
 // Post-launch observation settles on the app's main window (#72).
 const LAUNCH_SETTLE_MS=1200,LAUNCH_SETTLE_LIMIT_MS=5000,SMALL_WINDOW=[480,320];
 const UNTIL_GONE_GRACE_MS=3000;
+// A task with no held resources and no activity for this long is reported as orphaned (a coordination hint, not authentication).
+export const TASK_IDLE_MS=10*60*1000;
 const CAPTURE_RETRY_MS=250;
 // A transient overlay (tooltip, toast, menu fading out) can cover the window
 // for a moment while the check capture runs. Capturing sends no input, so one
@@ -39,6 +41,8 @@ async function observeAfterInput(runtime,args){
 }
 // One match is the main window; among several, only one at least twice the
 // area of every other counts. Anything closer stays ambiguous.
+const UNSENT_REFUSALS=new Set(['target_not_observed','ambiguous_observed_target','bad_selector','bad_observed_target','no_image','bad_point','bad_points','points_unsupported']);
+const NO_IMAGE='This frame has no screenshot, so a pixel target cannot be placed. No input was sent. Observe with --image (or add --image to the action that produced this frame), view the image, then use its observation_id.';
 export function mainWindow(matches){
  if(matches.length===1)return matches[0];
  const sorted=[...matches].sort((a,b)=>b.rect[2]*b.rect[3]-a.rect[2]*a.rect[3]);
@@ -90,6 +94,26 @@ export function imagePoint(image,x,y){
   if(!Number.isInteger(x)||!Number.isInteger(y)||x<0||y<0||x>=image.width||y>=image.height)fail('bad_point','Point is outside the screenshot.');
   const r=image.source;
   return [r[0]+Math.floor(x*r[2]/image.width),r[1]+Math.floor(y*r[3]/image.height)];
+}
+// Worst-case time a native drag holds the button, mirroring the Windows host's
+// hop plan. Each hop sleeps 4 or 12 ms, which Windows rounds up to its ~16 ms
+// timer tick, so a capped 1500-hop stroke can take about 25 s, not 6 s. The
+// guardian ends the session at its deadline by terminating the worker, so a
+// stroke that cannot finish first must not start.
+const HOP_MS=16,MAX_STROKE_HOPS=1500;
+export function dragBudgetMs(payload){
+  const path=Array.isArray(payload.points)?payload.points:[payload.from,payload.to];
+  const clamp=(v,lo,hi,d)=>Number.isFinite(v)?Math.min(hi,Math.max(lo,Math.trunc(v))):d;
+  const steps=clamp(payload.steps,2,200,12),hold=clamp(payload.hold_ms,0,2000,60);
+  let hops=0;
+  for(let s=1;s<path.length;s++){
+    const [x0,y0]=path[s-1],[x1,y1]=path[s];
+    hops+=path.length===2?steps:Math.max(1,Math.min(40,Math.trunc(Math.hypot(x1-x0,y1-y0)/8)));
+  }
+  // Scaling never drops a segment below one hop, so the cap can be exceeded by
+  // up to one hop per segment.
+  if(hops>MAX_STROKE_HOPS)hops=MAX_STROKE_HOPS+path.length;
+  return 60+2*hold+hops*HOP_MS+1000;
 }
 
 // Snapshot IDs and row indexes are observation-scoped transport handles, not
@@ -183,7 +207,7 @@ export class Runtime {
   beginTask(){
     if(this.finishing)fail('cleanup_in_progress','Task cleanup is still pending. Wait for its result before starting another task.');
     if(this.taskOpen&&this.taskDurable)return;
-    this.taskOpen=true;this.taskDurable=false;
+    this.taskOpen=true;this.taskDurable=false;this.taskOpenedAt=Date.now();this.lastActivityAt=this.taskOpenedAt;
     try{
       if(this.taskFile){
         // An empty native ledger is evidence that a task that only moved the
@@ -453,11 +477,13 @@ export class Runtime {
         payload.__worker_epoch=f.workerEpoch;
         if(f.key!==appKey(w))fail('identity_changed','App identity changed since observation.');
         if(f.image&&JSON.stringify(f.image.source)!==JSON.stringify(w.rect))fail('window_moved','Window moved or resized. Observe again.');
+        // A refusal raised before any input leaves the frame unchanged, so it stays usable (its original age still applies).
+        try{
         if(['name','role','automation_id'].some(k=>Object.hasOwn(args,k))){payload.index=observedIndex(f.elements,args);delete payload.name;delete payload.role;delete payload.automation_id;}
         if(payload.index!=null){payload.snapshot_id=f.snapshot;}
-        if(args.x!=null||args.y!=null){if(!f.image)fail('no_image','Observe with_image first.');payload.point=imagePoint(f.image,args.x,args.y);delete payload.x;delete payload.y;}
+        if(args.x!=null||args.y!=null){if(!f.image)fail('no_image',NO_IMAGE);payload.point=imagePoint(f.image,args.x,args.y);delete payload.x;delete payload.y;}
         if(op==='drag'){
-          if(!f.image)fail('no_image','Observe with_image first.');
+          if(!f.image)fail('no_image',NO_IMAGE);
           // points is one continuous stroke through every point; from/to alone
           // is a straight drag. Both are screenshot pixels mapped to the screen.
           if(Array.isArray(args.points)){
@@ -469,6 +495,7 @@ export class Runtime {
           else if(args.from&&args.to){payload.from=imagePoint(f.image,...args.from);payload.to=imagePoint(f.image,...args.to);}
           else fail('bad_points','A drag needs from and to, or 2 to 400 points. No input was sent.');
         }
+        }catch(error){if(UNSENT_REFUSALS.has(error.code))this.frames.set(args.observation_id,f);throw error;}
         if(op==='click'&&(payload.point||payload.physical!==false)){
           if(payload.point)hudRegion=[...payload.point,1,1];
           else {
@@ -515,6 +542,7 @@ export class Runtime {
       // Recheck after a sensitive prompt or a wait for the shared input lease.
       await avoidHud();
       if(Date.now()>=this.deadline||this.remaining<=0)fail('session_limit','Session expired while positioning local controls. No app input was sent.');
+      if(op==='drag'&&Date.now()+dragBudgetMs(payload)>=this.deadline)fail('session_limit','Too little session time is left to finish this drag before control ends. No input was sent. End and obtain a new human grant.');
       Runtime.prototype.recordDispatch.call(this);
       // Count an attempted dispatch, including uncertain delivery, but not a
       // rejected lease or a cancellation that never reached the native worker.
@@ -841,6 +869,24 @@ export class Runtime {
     if(unconfirmed)throw Object.assign(Error('The local Stop latch and cleanup were attempted, but delivery to native controls is unconfirmed. Inspect status; do not re-arm or replay.'),{code:'guardian_stop_unconfirmed'});
     return {stopped:true,human_rearm_required:true};
   }
-  status(){return {state:this.state,task_open:this.taskOpen===true,recovered_task:this.recoveredTask===true,remaining_actions:this.remaining,approved_apps:[...this.grants.values()].map(w=>({pid:w.pid,path:w.path})),runtime:nativePlatform().runtime,build_version:VERSION,build_id:BUILD_ID,private_data_storage:this.privateDataStorage,real_cursor:true,custom_cursor:this.guardian.customCursor??null,permission_mode:this.permissionMode,takeover_mode:this.guardian.takeoverMode||savedTakeoverMode(path.join(dataDir(),'control-preferences.json'),this.takeoverMode),control_reason:this.lastControlReason};}
+  markActivity(){if(this.taskOpen===true)this.lastActivityAt=Date.now();}
+  // Read-only evidence that tells a leftover task from a live one. Never includes tokens or window titles.
+  taskInfo(now=Date.now()){
+    const open=this.taskOpen===true,recovered=this.recoveredTask===true;
+    let activityAt=this.lastActivityAt??null;
+    if(open&&recovered&&activityAt===null&&this.taskFile){try{activityAt=fs.statSync(this.taskFile).mtimeMs;}catch{}}
+    const held={grants:this.grants.size,input_held:this.driver?.inputMayBeHeld===true};
+    const holding=held.grants>0||held.input_held;
+    const idle=activityAt===null?null:Math.max(0,Math.round(now-activityAt));
+    let liveness='none',rule='No task is open.';
+    if(open){
+      if(recovered){liveness='orphaned';rule='The task was found after a controller restart; no running controller owns it.';}
+      else if(idle!==null&&idle>TASK_IDLE_MS&&!holding){liveness='orphaned';rule=`No action for over ${TASK_IDLE_MS/1000} s and no grant or input held.`;}
+      else if(idle!==null&&idle>TASK_IDLE_MS){liveness='idle';rule=`No action for over ${TASK_IDLE_MS/1000} s but a grant or input is still held.`;}
+      else{liveness='active';rule=`Opened or acted within ${TASK_IDLE_MS/1000} s.`;}
+    }
+    return {task_age_ms:open&&this.taskOpenedAt?Math.max(0,Math.round(now-this.taskOpenedAt)):null,last_activity_ms_ago:open?idle:null,actions_used:this.token&&Number.isFinite(this.remaining)?Math.max(0,contract.action_budget-this.remaining):0,actions_limit:contract.action_budget,held_resources:held,task_origin:!open?'none':recovered?'previous_controller':'this_controller',controller_uptime_ms:Math.round(process.uptime()*1000),task_liveness:liveness,task_liveness_rule:rule};
+  }
+  status(){return {...Runtime.prototype.taskInfo.call(this),state:this.state,task_open:this.taskOpen===true,recovered_task:this.recoveredTask===true,remaining_actions:this.remaining,approved_apps:[...this.grants.values()].map(w=>({pid:w.pid,path:w.path})),runtime:nativePlatform().runtime,build_version:VERSION,build_id:BUILD_ID,private_data_storage:this.privateDataStorage,real_cursor:true,custom_cursor:this.guardian.customCursor??null,permission_mode:this.permissionMode,takeover_mode:this.guardian.takeoverMode||savedTakeoverMode(path.join(dataDir(),'control-preferences.json'),this.takeoverMode),control_reason:this.lastControlReason};}
   async close(){const normal=this.state==='idle';if(!normal)await this.stop();else await this.driver.abort?.();await this.guardian.close({normal});this.sessions.close();}
 }

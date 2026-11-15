@@ -115,7 +115,7 @@ export function settlePriorStop(file,record,{platform=process.platform,probe=pro
  const directory=path.dirname(file),root=fs.lstatSync(directory,{bigint:true});
  const context=JSON.parse(readRecoveryFile(file+'.context.json',1024,fs));
  if(!context||context.schema!==1||context.guard!==record?.guard||!guardName.test(context.guard)||Object.keys(context).sort().join(',')!=='guard,nonce,schema')throw Error('Prior Stop context is missing or differs');
- const verify=()=>priorWindowsCleanupVerified(directory,record,{platform,probe})||priorMacCleanupVerified(directory,record,{platform,probe});
+ const verify=()=>priorWindowsCleanupVerified(directory,record,{platform,probe})||priorMacCleanupVerified(directory,record,{platform,probe})||priorUndispatchedCleanupVerified(directory,record,{platform,probe})&&priorUndispatchedActorsGone(directory,record,{probe});
  if(!verify())throw Error('Prior actors or ledger remain unverified');
  const result=settleFreshStopLatch(file,context.nonce,root);
  return {...result,prior_cleanup_verified:true};
@@ -184,6 +184,19 @@ export function priorUndispatchedCleanupVerified(directory,record,{platform=proc
   return gone(parent);
  }catch{return false;}
 }
+// Pre-dispatch calls (ready, apps, grant) can start a cursor watchdog or input
+// workers before recordDispatch() records any identity. Settling Stop for an
+// undispatched task additionally requires every actor named by the old guard's
+// markers to be gone. A marker that exists but cannot be read fails closed.
+export function priorUndispatchedActorsGone(directory,record,{probe=process.kill,io=fs}={}){
+ const gone=pid=>{if(!Number.isSafeInteger(pid)||pid<=0||pid>4294967295)return false;try{probe(pid,0);return false;}catch(error){return error.code==='ESRCH';}};
+ try{
+  const guard=path.join(directory,record.guard),missing=file=>{try{io.lstatSync(file);return false;}catch(error){if(error.code==='ENOENT')return true;throw error;}};
+  if(!missing(guard+'.watchdog')){const m=/^([1-9][0-9]{0,9})\|[1-9][0-9]{0,19}(?:\.[0-9]{1,9})?$/.exec(readRecoveryFile(guard+'.watchdog',128,io));if(!m||!gone(Number(m[1])))return false;}
+  if(!missing(guard+'.workers'))for(const line of readRecoveryFile(guard+'.workers',4096,io).split(/\r?\n/).filter(Boolean)){const m=/^([1-9][0-9]{0,9}):[1-9][0-9]{0,19}$/.exec(line);if(!m||!gone(Number(m[1])))return false;}
+  return true;
+ }catch{return false;}
+}
 // operation is the tool name (for example computer_file_dialog) when known; it
 // only refines advice for refusals that sent no input.
 export function recoveryAdvice(result,operation){
@@ -225,5 +238,20 @@ export function recoveryAdvice(result,operation){
  if(code==='window_capture_unavailable')return {...extra,next_action:'focus_target_then_observe',replay_allowed:false};
  if(code==='no_file_dialog')return {...extra,next_action:'observe_app_no_picker',replay_allowed:false};
  if(code==='clipboard_unsafe')return {...extra,next_action:operation==='computer_file_dialog'?'retry_file_dialog_with_keyboard':'enter_without_clipboard',replay_allowed:false};
+ // Refused before anything was sent: a flag, selector or path the agent can fix.
+ // replay_allowed stays true only here, because nothing reached the desktop.
+ if(FIXABLE_CODES.has(code))return {...extra,next_action:'fix_arguments_and_retry',replay_allowed:true};
+ if(POLICY_BLOCK_CODES.has(code))return {...extra,next_action:'choose_permitted_target',replay_allowed:false};
+ if(code==='human_resume_required')return {...extra,next_action:'awaiting_human_resume',replay_allowed:false};
+ if(['needs_confirmation','hand_off_required','model_approval_forbidden'].includes(code))return {...extra,next_action:'await_user_decision',replay_allowed:false};
+ if(code==='desktop_locked')return {...extra,next_action:'await_human_unlock',replay_allowed:false};
+ if(code==='update_in_progress')return {...extra,next_action:'wait_for_update',replay_allowed:false};
+ if(code==='operation_pending')return {...extra,next_action:'wait_for_pending_operation',replay_allowed:false};
+ if(code==='session_unavailable')return {...extra,next_action:'human_restart_controller',replay_allowed:false};
+ if(code==='launch_failed')return {...extra,next_action:'fix_app_path',replay_allowed:false};
+ if(['launch_timeout','no_foreground'].includes(code))return {...extra,next_action:'discover_apps_then_observe',replay_allowed:false};
+ if(['index_out_of_range','bad_observed_target','invalid_observation'].includes(code))return {...extra,next_action:'observe_again',replay_allowed:false};
  return {...extra,next_action:'inspect_diagnostics',replay_allowed:false};
 }
+const FIXABLE_CODES=new Set('bad_arguments bad_point bad_selector bad_text bad_wait bad_files bad_path invalid_steps no_steps too_many_steps text_limit not_text file_too_large is_directory no_app no_target no_window unsupported_action unknown_command invalid_feedback'.split(' '));
+const POLICY_BLOCK_CODES=new Set('protected_app app_blocked open_blocked key_blocked self_window blocked_on_screen'.split(' '));
