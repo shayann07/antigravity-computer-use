@@ -21,6 +21,18 @@ Run `describe feedback` once for the fixed categories; no free text is accepted.
 Reports are explicitly unverified agent observations; the runtime retains them locally and submits sanitized metadata only when the installation's reporting consent and GitHub authentication permit it. Do not claim an issue was opened without confirmation.
 Instructions cannot force every model to notice or report every defect; runtime errors are recorded independently of model compliance.
 
+## Reporting a problem you noticed (ask the user once)
+
+Make no controller calls for this during the task; keep your own notes. After `end`, and only if you have findings, run the read-only draft command with up to 3 findings:
+
+`report_draft --finding "CATEGORY: one line" [--finding ...]`
+
+- CATEGORY is one of cursor_visual, focus, observation, workflow, performance, missing_capability, unexpected_pause, other. Each line is at most 200 characters and describes behaviour, not content: no paths, names, URLs or window titles (the runtime also scrubs these).
+- `status:disabled` or `daily_limit`: do not ask and say nothing about it. `status:ready`: show the user the returned `title` and `body` exactly, mention `duplicate` if present, and ask once: Yes / Not now / Never ask.
+- Yes: `report_submit --draft DRAFT_ID`. It creates the issue (or comments on the duplicate) when `gh` is signed in. If it returns `status:link`, give the user the URL to open themselves; never open it with the controller. Report only what it returned.
+- Not now: do nothing more. Never ask: `report_never`, which stops all offers on this install.
+- One issue per task, at most 3 reports a day per install. Use `describe report_draft` only if the shape is unclear. This is separate from `feedback` and automatic incidents, which stay enum-only.
+
 Ordinary desktop tasks must not edit or replace the installed controller. Authorized development tasks should reproduce the defect, add a regression and submit a reviewable branch/PR. Never self-merge a repair while using the controller.
 
 Use `update status` or `update check` to inspect/stage signed published updates. Automatic installation waits for idle and confirmed input cleanup. Updates cannot clear Stop or approve OS permission dialogs.

@@ -300,7 +300,7 @@
     },
     {
       "path": "scripts/desktop.mjs",
-      "sha256": "805dab9e51778245aeb316447d0c2b2c383007fc7cae31ab9781248fc995b02f"
+      "sha256": "b7896318530b61add36589b35a2b9b8fe86f230f427da8bcba653d17b1e86f09"
     },
     {
       "path": "server/version.mjs",
@@ -600,7 +600,7 @@
     },
     {
       "path": "skills/computer-use/SKILL.md",
-      "sha256": "89b838f273b37c6dfcb013589e93ab2924a18c60e33434a31a88d1ee15714d53"
+      "sha256": "14d2db5182d11266280f274f059755a9f7aa90d9617dcbf81992180c70419b4c"
     },
     {
       "path": "docs/MACOS.md",
@@ -608,7 +608,7 @@
     },
     {
       "path": "server/update-core.mjs",
-      "sha256": "eb1cfda6a8c051639a9d4fd620178ffe181ea46a27e3e76b04263cf68a6be189"
+      "sha256": "46a8a320cf53fc8eba4449593001736d982f000be3bf890a960142f079fee973"
     },
     {
       "path": "server/auto-update.mjs",
@@ -636,7 +636,7 @@
     },
     {
       "path": "tests/update-transaction.test.mjs",
-      "sha256": "eccc64a5b1be45e5a5597ace0838a38aedbe1cc3fa5a637a14890758d13b741d"
+      "sha256": "83cb9265f45d3c8699584330c0cd3860c3988f42ea17165ee2e8814ce9244c95"
     },
     {
       "path": "docs/RELIABILITY-IMPLEMENTATION.md",

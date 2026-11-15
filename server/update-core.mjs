@@ -36,7 +36,7 @@ export function verifyUpdateBundle(directory,m,{node,host,storage}={}){
  if(bundle.build_id!==m.build_id||bundle.version!==m.version||bundle.platform!==m.platform||bundle.arch!==m.arch)throw Error('update_bundle_identity_mismatch');
  const required=[node,'bin/'+host,'bin/'+storage,'skills/computer-use/SKILL.md',
   ...'index desktop-service service-lease desktop-tools receipts incidents update-core storage deployment mcp runtime guardian driver build sessions policy render upstream-utils version platform macos-build auto-update recovery update-notice atomic-json'.split(' ').map(name=>'server/'+name+'.mjs'),
-  'server/control-contract.json','scripts/desktop.mjs','scripts/arguments.mjs','scripts/diagnostics.mjs','scripts/install.mjs','scripts/update.mjs','scripts/rollback.mjs','scripts/sidecar.mjs','release-public-key.pem',
+  'server/control-contract.json','scripts/desktop.mjs','scripts/arguments.mjs','scripts/diagnostics.mjs','scripts/agent-report.mjs','scripts/install.mjs','scripts/update.mjs','scripts/rollback.mjs','scripts/sidecar.mjs','release-public-key.pem',
   ...(m.platform==='win32'?['install.cmd']:['install.command','Setup.Mac.Permissions.command'])];
  // Windows releases from beta.4 onward promise the package-backed HUD. An
  // otherwise signed but incomplete bundle must not silently drop that helper.

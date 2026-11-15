@@ -11,6 +11,7 @@ import {parseArguments,parseRunArguments} from './arguments.mjs';
 import {storageOperation} from '../server/storage.mjs';
 import {loadDeployment,applyDeployment} from '../server/deployment.mjs';
 import {diagnostics} from './diagnostics.mjs';
+import {reportDraft,reportSubmit,reportNever,CATEGORIES} from './agent-report.mjs';
 import {scheduleUpdates} from '../server/auto-update.mjs';
 import {Incidents} from '../server/incidents.mjs';
 import {desktopCommand} from './install.mjs';
@@ -23,6 +24,9 @@ const LIFECYCLE=[
   {command:'serve',description:'Run the exact installed service in the foreground. For an interactive host terminal use run_command IsDaemon:true and WaitMsBeforeAsync:1000. Windows exebox terminals need the installed App sidecar or local starter. No permission/data overrides. Reuses only a matching live build/policy.',inputSchema:EMPTY_INPUT},
   {command:'shutdown',description:'Shut down the native service after input cleanup. No arguments. Preserves emergency Stop for human re-arm.',inputSchema:EMPTY_INPUT},
   {command:'plan',description:'Run a long pre-computed list of steps (drawing, form filling, data entry) as consecutive run batches of at most 8, with a progress ledger. Resumes without replaying input, re-observes after a spoiled frame, halts on any other refusal, and returns a frame every --checkpoint-every batches (default 6) for you to check before running the same command again. --renew-budget N (default 0) lets it end and restart the task at most N times when the 200-action budget runs out; the reply then carries the new task token.',usage:'plan --hwnd H --observation-id F --plan-file STEPS.json --ledger LEDGER.json --reason TEXT [--checkpoint-every N] [--renew-budget N]',inputSchema:{type:'object',properties:{hwnd:{type:'integer'},observation_id:{type:'string'},plan_file:{type:'string'},ledger:{type:'string'},reason:{type:'string'},checkpoint_every:{type:'integer',minimum:1,maximum:50},renew_budget:{type:'integer',minimum:0,maximum:10}},required:['hwnd','observation_id','plan_file','ledger','reason'],additionalProperties:false}},
+  {command:'report_draft',description:'After end, and only if you noticed a problem in the skill or runtime: build the exact GitHub issue text from 1 to 3 findings. Read-only; scrubs paths, emails, URLs, window titles and long numbers; checks open agent-report issues for a duplicate. Show the returned title and body to the user and ask once: Yes / Not now / Never ask. status disabled or daily_limit means do not ask.',usage:'report_draft --finding "CATEGORY: one line of at most 200 characters" [--finding ...]',inputSchema:{type:'object',properties:{finding:{type:'array',maxItems:3,items:{type:'string',maxLength:210,description:'CATEGORY: line; CATEGORY is one of '+CATEGORIES.join(', ')}}},required:['finding'],additionalProperties:false}},
+  {command:'report_submit',description:'Only after the user answered Yes to a report_draft: post that exact draft. Uses the signed-in GitHub CLI to create the issue (or comment on the duplicate); otherwise returns a prefilled link for the user to click. Never open the link yourself.',usage:'report_submit --draft DRAFT_ID [--dry-run]',inputSchema:{type:'object',properties:{draft:{type:'string'},'dry-run':{type:'boolean'}},required:['draft'],additionalProperties:false}},
+  {command:'report_never',description:'Only after the user answered Never ask: stop offering reports on this install. No arguments.',inputSchema:EMPTY_INPUT},
   {command:'describe',description:'Read command descriptions or the exact argument schema for one command, without desktop access.',usage:'describe [COMMAND]',inputSchema:{type:'object',properties:{command:{type:'string'}},required:[],additionalProperties:false}}
 ];
 
@@ -118,6 +122,18 @@ export async function main(){
   let taskToken;const taskIndex=rest.indexOf('--task');
   if(taskIndex>=0){taskToken=rest[taskIndex+1];if(typeof taskToken!=='string'||taskToken.length!==64||!/^[a-f0-9]{64}$/.test(taskToken)||rest.lastIndexOf('--task')!==taskIndex)throw Object.assign(Error('Invalid --task capability'),{code:'bad_arguments'});rest.splice(taskIndex,2);}
   if(command==='diagnostics'){applyDeployment(loadDeployment());if(rest.some(a=>a!=='--submit'))throw Object.assign(Error('Use diagnostics [--submit]'),{code:'bad_arguments'});printReply(await diagnostics(dataDir(),{submit:rest.includes('--submit')}));return;}
+  if(command==='report_draft'||command==='report_submit'||command==='report_never'){
+    applyDeployment(loadDeployment());const dir=dataDir();const bad=()=>Object.assign(Error('Use '+describeCommand(command).usage),{code:'bad_arguments'});
+    if(command==='report_never'){if(rest.length)throw bad();printReply(reportNever(dir));return;}
+    const values=[];let dryRun=false;
+    for(let i=0;i<rest.length;i++){const flag=rest[i];
+      if(flag==='--dry-run'&&command==='report_submit')dryRun=true;
+      else if(flag===(command==='report_draft'?'--finding':'--draft')&&typeof rest[i+1]==='string'&&!rest[i+1].startsWith('--'))values.push(rest[++i]);
+      else throw bad();}
+    if(command==='report_draft')printReply(reportDraft(dir,values));
+    else{if(values.length!==1)throw bad();printReply(reportSubmit(dir,values[0],{dryRun}));}
+    return;
+  }
   if(command==='update'){
     const deployment=applyDeployment(loadDeployment());if(!deployment.installed)throw Error('Updates require a supported installation.');
     if(rest.length!==1||!['status','check','apply','rollback'].includes(rest[0]))throw Object.assign(Error('Use update status|check|apply|rollback'),{code:'bad_arguments'});
