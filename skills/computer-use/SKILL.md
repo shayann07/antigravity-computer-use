@@ -56,6 +56,7 @@ Read only unfamiliar command schemas through one `describe` call. Do not inspect
 Launch returns the window, frame and screenshot; reuse them.
 `observe_pending`, `input_completed:true` or a verification failure after launch means discover the existing process, never launch it again blindly.
 Finish with `end`. `ready` starts a task; to check state after `end`, use `status`, which never opens a task.
+If you noticed a skill or runtime problem, keep private notes during the task and, after `end`, follow the report step in [finishing and reports](references/finishing-and-reports.md).
 Report only what the app showed. If it shows no output path, use at most one visible control that opens the output folder, or say the path was not shown. Do not explore history panels, hover for tooltips or search the disk to find it.
 For physical handoff (a human presses Esc or takes over): at most one bounded input attempt, then stop issuing controller calls and wait for the human. Details in the handoff reference below.
 These common command shapes are complete; use them directly without schema setup. H/F/N are observed handle/frame/index values. Optional flags are in brackets; replace placeholders, not the command names.
