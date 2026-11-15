@@ -616,7 +616,7 @@
     },
     {
       "path": "server/incidents.mjs",
-      "sha256": "9de2c9c8c2162d545e2f47d9529e5eec0499dcfa5feaeb01291919634d879832"
+      "sha256": "177caa0f9363debe95deef74a1090d4bdf951a9ba99fc189d9b441d00a29fc20"
     },
     {
       "path": "scripts/update.mjs",
@@ -648,7 +648,7 @@
     },
     {
       "path": "tests/reporting.test.mjs",
-      "sha256": "b6219e179a0f26a6cee16647c3856324886f98b4c8169b78aed2937a668e938b"
+      "sha256": "d66cfcad98560e5b85b8888da5a5b1d63d86bf8b10084cd4a73ce1522a19dd3a"
     },
     {
       "path": "tests/incident-concurrency.test.mjs",
@@ -656,7 +656,7 @@
     },
     {
       "path": "tests/lifecycle.test.mjs",
-      "sha256": "3f9d9a191e91c0bab672a1b61954a06d13c98e3a344fdd09cd85ae33da3a435c"
+      "sha256": "7b01b0be03c7176e7bdad8ead0d69b7bb7b37358f5b83fc0ac99f9decd928d90"
     },
     {
       "path": "server/native/GuardCleanup.cs",
@@ -708,7 +708,7 @@
     },
     {
       "path": "server/recovery.mjs",
-      "sha256": "bc1ee2f43596efd6dbaa7d81ddaa9472fc8f073b725fbf6a408671285a74e201"
+      "sha256": "89df9d6db6bf6897d3d358f6a52c1103a12081d171be5b422a7f88c03fc6d153"
     },
     {
       "path": "scripts/qualify-guardian-desktop.mjs",
@@ -896,7 +896,7 @@
     },
     {
       "path": "tests/stop-context.test.mjs",
-      "sha256": "9938658b2ae9c37313009b4eb1bce8fef5a049aef0c091675f00c2bbe41ac40e"
+      "sha256": "b5910c4fc70b2d50e2a7d0629cba0c76617e86e74c3219ed415a786537b3ea60"
     },
     {
       "path": "server/task-coordinator.mjs",

@@ -115,7 +115,7 @@ export function settlePriorStop(file,record,{platform=process.platform,probe=pro
  const directory=path.dirname(file),root=fs.lstatSync(directory,{bigint:true});
  const context=JSON.parse(readRecoveryFile(file+'.context.json',1024,fs));
  if(!context||context.schema!==1||context.guard!==record?.guard||!guardName.test(context.guard)||Object.keys(context).sort().join(',')!=='guard,nonce,schema')throw Error('Prior Stop context is missing or differs');
- const verify=()=>priorWindowsCleanupVerified(directory,record,{platform,probe})||priorMacCleanupVerified(directory,record,{platform,probe});
+ const verify=()=>priorWindowsCleanupVerified(directory,record,{platform,probe})||priorMacCleanupVerified(directory,record,{platform,probe})||priorUndispatchedCleanupVerified(directory,record,{platform,probe})&&priorUndispatchedActorsGone(directory,record,{probe});
  if(!verify())throw Error('Prior actors or ledger remain unverified');
  const result=settleFreshStopLatch(file,context.nonce,root);
  return {...result,prior_cleanup_verified:true};
@@ -182,6 +182,19 @@ export function priorUndispatchedCleanupVerified(directory,record,{platform=proc
   if(platform==='win32'){if(ledger!=='')return false;}
   else{const value=JSON.parse(ledger);if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).sort().join(',')!=='buttons,keys'||value.keys.length!==0||value.buttons.length!==0)return false;}
   return gone(parent);
+ }catch{return false;}
+}
+// Pre-dispatch calls (ready, apps, grant) can start a cursor watchdog or input
+// workers before recordDispatch() records any identity. Settling Stop for an
+// undispatched task additionally requires every actor named by the old guard's
+// markers to be gone. A marker that exists but cannot be read fails closed.
+export function priorUndispatchedActorsGone(directory,record,{probe=process.kill,io=fs}={}){
+ const gone=pid=>{if(!Number.isSafeInteger(pid)||pid<=0||pid>4294967295)return false;try{probe(pid,0);return false;}catch(error){return error.code==='ESRCH';}};
+ try{
+  const guard=path.join(directory,record.guard),missing=file=>{try{io.lstatSync(file);return false;}catch(error){if(error.code==='ENOENT')return true;throw error;}};
+  if(!missing(guard+'.watchdog')){const m=/^([1-9][0-9]{0,9})\|[1-9][0-9]{0,19}(?:\.[0-9]{1,9})?$/.exec(readRecoveryFile(guard+'.watchdog',128,io));if(!m||!gone(Number(m[1])))return false;}
+  if(!missing(guard+'.workers'))for(const line of readRecoveryFile(guard+'.workers',4096,io).split(/\r?\n/).filter(Boolean)){const m=/^([1-9][0-9]{0,9}):[1-9][0-9]{0,19}$/.exec(line);if(!m||!gone(Number(m[1])))return false;}
+  return true;
  }catch{return false;}
 }
 // operation is the tool name (for example computer_file_dialog) when known; it
