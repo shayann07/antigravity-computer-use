@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- A refusal raised before any input (`target_not_observed`, `no_image`, a bad point) no longer spends the observation, so the next call can reuse its `observation_id` (#49).
+- The skill's command table now lists `key` (`--keys`), `key` accepts `--text` as an alias, a repeated array flag explains the accepted `X,Y` or JSON form, range errors name the range, and `no_image` says how to get a screenshot (#46, #48, #53).
+
 ## 0.3.0-beta.7 - Long planned tasks (Windows)
 
 - `plan` runs a long pre-computed list of steps (drawing, form filling, data entry) as checked batches of 8, records progress in a ledger, resumes without replaying input that may have landed, returns a frame every few batches to check, and can renew the task when the action budget runs out (#92).
