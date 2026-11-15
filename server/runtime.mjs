@@ -41,6 +41,8 @@ async function observeAfterInput(runtime,args){
 }
 // One match is the main window; among several, only one at least twice the
 // area of every other counts. Anything closer stays ambiguous.
+const UNSENT_REFUSALS=new Set(['target_not_observed','ambiguous_observed_target','bad_selector','bad_observed_target','no_image','bad_point','bad_points','points_unsupported']);
+const NO_IMAGE='This frame has no screenshot, so a pixel target cannot be placed. No input was sent. Observe with --image (or add --image to the action that produced this frame), view the image, then use its observation_id.';
 export function mainWindow(matches){
  if(matches.length===1)return matches[0];
  const sorted=[...matches].sort((a,b)=>b.rect[2]*b.rect[3]-a.rect[2]*a.rect[3]);
@@ -475,11 +477,13 @@ export class Runtime {
         payload.__worker_epoch=f.workerEpoch;
         if(f.key!==appKey(w))fail('identity_changed','App identity changed since observation.');
         if(f.image&&JSON.stringify(f.image.source)!==JSON.stringify(w.rect))fail('window_moved','Window moved or resized. Observe again.');
+        // A refusal raised before any input leaves the frame unchanged, so it stays usable (its original age still applies).
+        try{
         if(['name','role','automation_id'].some(k=>Object.hasOwn(args,k))){payload.index=observedIndex(f.elements,args);delete payload.name;delete payload.role;delete payload.automation_id;}
         if(payload.index!=null){payload.snapshot_id=f.snapshot;}
-        if(args.x!=null||args.y!=null){if(!f.image)fail('no_image','Observe with_image first.');payload.point=imagePoint(f.image,args.x,args.y);delete payload.x;delete payload.y;}
+        if(args.x!=null||args.y!=null){if(!f.image)fail('no_image',NO_IMAGE);payload.point=imagePoint(f.image,args.x,args.y);delete payload.x;delete payload.y;}
         if(op==='drag'){
-          if(!f.image)fail('no_image','Observe with_image first.');
+          if(!f.image)fail('no_image',NO_IMAGE);
           // points is one continuous stroke through every point; from/to alone
           // is a straight drag. Both are screenshot pixels mapped to the screen.
           if(Array.isArray(args.points)){
@@ -491,6 +495,7 @@ export class Runtime {
           else if(args.from&&args.to){payload.from=imagePoint(f.image,...args.from);payload.to=imagePoint(f.image,...args.to);}
           else fail('bad_points','A drag needs from and to, or 2 to 400 points. No input was sent.');
         }
+        }catch(error){if(UNSENT_REFUSALS.has(error.code))this.frames.set(args.observation_id,f);throw error;}
         if(op==='click'&&(payload.point||payload.physical!==false)){
           if(payload.point)hudRegion=[...payload.point,1,1];
           else {

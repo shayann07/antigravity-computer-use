@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "baf1797b0e46032c468df5c42254f1cb470a1739dd5cacc2ad7d36c36dd83794"
+      "sha256": "beb6d025d2d99bb79a2ff15cdf924739e925aa0a53d6eb65fdb4a01540ffd254"
     },
     {
       "path": "server/mcp.mjs",
@@ -296,7 +296,7 @@
     },
     {
       "path": "server/desktop-tools.mjs",
-      "sha256": "f79424a086de8d19ba962c927dd7680b4781f4cb76f695816d0ea324c1b154d7"
+      "sha256": "258211c1a55ad69be7a8bff7c9c2be99f3cbce4d371694f92206f4ab49792a92"
     },
     {
       "path": "scripts/desktop.mjs",
@@ -328,7 +328,7 @@
     },
     {
       "path": "scripts/arguments.mjs",
-      "sha256": "dda63076cbc9aae8c5f6e9105e3207887a49f25347026eb075a3617ef512569e"
+      "sha256": "593ed9737839028a0fea41e3fac39f0e07964823a29cdd5b8ee3f4faec9df9d5"
     },
     {
       "path": "server/receipts.mjs",
@@ -452,7 +452,7 @@
     },
     {
       "path": "tests/observed-selectors.test.mjs",
-      "sha256": "156a73aff37ad19032291f0040be0b51a57996579615b8dc368e52202e248bc4"
+      "sha256": "f2cef24d367662c34c906a92498bb43b789c96623959c58dd4d3cab850329aa3"
     },
     {
       "path": "tests/observed-selectors-integration.mjs",
@@ -600,7 +600,7 @@
     },
     {
       "path": "skills/computer-use/SKILL.md",
-      "sha256": "6fb10d88cbc733beebe031d5e63bf42f65373aa6f0114f86d45c7dce91a6162e"
+      "sha256": "2f9ec70183667a34f9b9d09706aa368b98d743a7592eabf4036b3a59f423de7b"
     },
     {
       "path": "docs/MACOS.md",
@@ -864,7 +864,7 @@
     },
     {
       "path": "tests/skill-guidance.test.mjs",
-      "sha256": "d75a3b72a2f1807efb72f82e969a042e4c10c427e5ef250b219122b6af6a072b"
+      "sha256": "8544dc5ea3c54319e931a0cceb19447fa5d2135745e5c43aed838d31aac10520"
     },
     {
       "path": "tests/brief-reply.test.mjs",
