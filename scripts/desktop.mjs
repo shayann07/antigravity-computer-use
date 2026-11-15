@@ -113,14 +113,14 @@ export async function request(session,command,args={},timeout=100000,expectedPer
 
 export async function main(){
   const words=process.argv.slice(2);
-  if(words[0]==='--task'){const prefix=words.splice(0,2);if(words.length===0)throw Error('--task needs a token and command');words.splice(1,0,...prefix);}
+  if(words[0]==='--task'){const prefix=words.splice(0,2);if(words.length===0)throw Object.assign(Error('--task needs a token and command'),{code:'bad_arguments'});words.splice(1,0,...prefix);}
   const [rawCommand,...rest]=words;const command=rawCommand?.replace(/^computer_/,'');
   let taskToken;const taskIndex=rest.indexOf('--task');
-  if(taskIndex>=0){taskToken=rest[taskIndex+1];if(typeof taskToken!=='string'||taskToken.length!==64||!/^[a-f0-9]{64}$/.test(taskToken)||rest.lastIndexOf('--task')!==taskIndex)throw Error('Invalid --task capability');rest.splice(taskIndex,2);}
-  if(command==='diagnostics'){applyDeployment(loadDeployment());if(rest.some(a=>a!=='--submit'))throw Error('Use diagnostics [--submit]');printReply(await diagnostics(dataDir(),{submit:rest.includes('--submit')}));return;}
+  if(taskIndex>=0){taskToken=rest[taskIndex+1];if(typeof taskToken!=='string'||taskToken.length!==64||!/^[a-f0-9]{64}$/.test(taskToken)||rest.lastIndexOf('--task')!==taskIndex)throw Object.assign(Error('Invalid --task capability'),{code:'bad_arguments'});rest.splice(taskIndex,2);}
+  if(command==='diagnostics'){applyDeployment(loadDeployment());if(rest.some(a=>a!=='--submit'))throw Object.assign(Error('Use diagnostics [--submit]'),{code:'bad_arguments'});printReply(await diagnostics(dataDir(),{submit:rest.includes('--submit')}));return;}
   if(command==='update'){
     const deployment=applyDeployment(loadDeployment());if(!deployment.installed)throw Error('Updates require a supported installation.');
-    if(rest.length!==1||!['status','check','apply','rollback'].includes(rest[0]))throw Error('Use update status|check|apply|rollback');
+    if(rest.length!==1||!['status','check','apply','rollback'].includes(rest[0]))throw Object.assign(Error('Use update status|check|apply|rollback'),{code:'bad_arguments'});
     // Use immutable release Node, not the mutable short launcher being replaced.
     const {spawn}=await import('node:child_process');const {nativePlatform}=await import('../server/platform.mjs');
     const asynchronous=['apply','rollback'].includes(rest[0]);

@@ -24,6 +24,8 @@ const fail=(code,message)=>{throw new HostError(code,message,null);};
 // Post-launch observation settles on the app's main window (#72).
 const LAUNCH_SETTLE_MS=1200,LAUNCH_SETTLE_LIMIT_MS=5000,SMALL_WINDOW=[480,320];
 const UNTIL_GONE_GRACE_MS=3000;
+// A task with no held resources and no activity for this long is reported as orphaned (a coordination hint, not authentication).
+export const TASK_IDLE_MS=10*60*1000;
 const CAPTURE_RETRY_MS=250;
 // A transient overlay (tooltip, toast, menu fading out) can cover the window
 // for a moment while the check capture runs. Capturing sends no input, so one
@@ -183,7 +185,7 @@ export class Runtime {
   beginTask(){
     if(this.finishing)fail('cleanup_in_progress','Task cleanup is still pending. Wait for its result before starting another task.');
     if(this.taskOpen&&this.taskDurable)return;
-    this.taskOpen=true;this.taskDurable=false;
+    this.taskOpen=true;this.taskDurable=false;this.taskOpenedAt=Date.now();this.lastActivityAt=this.taskOpenedAt;
     try{
       if(this.taskFile){
         // An empty native ledger is evidence that a task that only moved the
@@ -841,6 +843,24 @@ export class Runtime {
     if(unconfirmed)throw Object.assign(Error('The local Stop latch and cleanup were attempted, but delivery to native controls is unconfirmed. Inspect status; do not re-arm or replay.'),{code:'guardian_stop_unconfirmed'});
     return {stopped:true,human_rearm_required:true};
   }
-  status(){return {state:this.state,task_open:this.taskOpen===true,recovered_task:this.recoveredTask===true,remaining_actions:this.remaining,approved_apps:[...this.grants.values()].map(w=>({pid:w.pid,path:w.path})),runtime:nativePlatform().runtime,build_version:VERSION,build_id:BUILD_ID,private_data_storage:this.privateDataStorage,real_cursor:true,custom_cursor:this.guardian.customCursor??null,permission_mode:this.permissionMode,takeover_mode:this.guardian.takeoverMode||savedTakeoverMode(path.join(dataDir(),'control-preferences.json'),this.takeoverMode),control_reason:this.lastControlReason};}
+  markActivity(){if(this.taskOpen===true)this.lastActivityAt=Date.now();}
+  // Read-only evidence that tells a leftover task from a live one. Never includes tokens or window titles.
+  taskInfo(now=Date.now()){
+    const open=this.taskOpen===true,recovered=this.recoveredTask===true;
+    let activityAt=this.lastActivityAt??null;
+    if(open&&recovered&&activityAt===null&&this.taskFile){try{activityAt=fs.statSync(this.taskFile).mtimeMs;}catch{}}
+    const held={grants:this.grants.size,input_held:this.driver?.inputMayBeHeld===true};
+    const holding=held.grants>0||held.input_held;
+    const idle=activityAt===null?null:Math.max(0,Math.round(now-activityAt));
+    let liveness='none',rule='No task is open.';
+    if(open){
+      if(recovered){liveness='orphaned';rule='The task was found after a controller restart; no running controller owns it.';}
+      else if(idle!==null&&idle>TASK_IDLE_MS&&!holding){liveness='orphaned';rule=`No action for over ${TASK_IDLE_MS/1000} s and no grant or input held.`;}
+      else if(idle!==null&&idle>TASK_IDLE_MS){liveness='idle';rule=`No action for over ${TASK_IDLE_MS/1000} s but a grant or input is still held.`;}
+      else{liveness='active';rule=`Opened or acted within ${TASK_IDLE_MS/1000} s.`;}
+    }
+    return {task_age_ms:open&&this.taskOpenedAt?Math.max(0,Math.round(now-this.taskOpenedAt)):null,last_activity_ms_ago:open?idle:null,actions_used:this.token&&Number.isFinite(this.remaining)?Math.max(0,contract.action_budget-this.remaining):0,actions_limit:contract.action_budget,held_resources:held,task_origin:!open?'none':recovered?'previous_controller':'this_controller',controller_uptime_ms:Math.round(process.uptime()*1000),task_liveness:liveness,task_liveness_rule:rule};
+  }
+  status(){return {...Runtime.prototype.taskInfo.call(this),state:this.state,task_open:this.taskOpen===true,recovered_task:this.recoveredTask===true,remaining_actions:this.remaining,approved_apps:[...this.grants.values()].map(w=>({pid:w.pid,path:w.path})),runtime:nativePlatform().runtime,build_version:VERSION,build_id:BUILD_ID,private_data_storage:this.privateDataStorage,real_cursor:true,custom_cursor:this.guardian.customCursor??null,permission_mode:this.permissionMode,takeover_mode:this.guardian.takeoverMode||savedTakeoverMode(path.join(dataDir(),'control-preferences.json'),this.takeoverMode),control_reason:this.lastControlReason};}
   async close(){const normal=this.state==='idle';if(!normal)await this.stop();else await this.driver.abort?.();await this.guardian.close({normal});this.sessions.close();}
 }

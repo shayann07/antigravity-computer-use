@@ -18,6 +18,12 @@ export const RECOVERY_GUIDE=Object.freeze({
  observe_app_no_picker:entry(A,'snapshot','No filename was entered. The control did not open a picker; observe the app and send file_dialog only after a picker is seen.'),
  retry_file_dialog_with_keyboard:entry(A,'file_dialog','Nothing was pasted and no confirmation was sent. Observe the dialog, then run file_dialog alone once with --entry-method keyboard; a filename mismatch is refused before confirmation.'),
  enter_without_clipboard:entry(A,'snapshot','Nothing was pasted. Observe again, then enter short text with type, a file name with file_dialog --entry-method keyboard, or ask the human to copy something else first.'),
+ fix_arguments_and_retry:entry(A,'describe','Nothing was sent to the desktop, so replay is allowed. Correct the flag, selector, path or text named in the error (describe COMMAND lists the accepted flags) and run the command once more.'),
+ choose_permitted_target:entry(A,'apps','No input was sent. Do not retry this target or key; pick a different window or action, or tell the human which step they must do themselves.'),
+ await_human_unlock:entry(H,null,'The human unlocks the desktop; then run ready again.','The lock screen is human-only.'),
+ wait_for_update:entry(A,'status','Wait until status shows the update finished; send no input meanwhile.'),
+ wait_for_pending_operation:entry(A,'status','Wait for the running action to finish (status shows it), then send the next one.'),
+ human_restart_controller:entry(H,'start','The human starts the installed controller launcher on the normal desktop; then run apps and observe again.'),
  ready_then_use_task_token:entry(A,'ready','No other task is open in this session.'),
  end_owned_task_then_shutdown:entry(A,'end','This session owns the open task.'),
  end_owned_task_then_reauthorize:entry(A,'end','This session owns the open task; ask the human for a new grant afterwards.'),
@@ -68,5 +74,9 @@ export const RECOVERY_GUIDE=Object.freeze({
 export function recoveryFor(nextAction){return typeof nextAction==='string'?RECOVERY_GUIDE[nextAction]:undefined;}
 export function withRecovery(value){
  if(!value||typeof value!=='object'||Array.isArray(value)||value.recovery!==undefined)return value;
- const recovery=recoveryFor(value.next_action);return recovery?{...value,recovery}:value;
+ const recovery=recoveryFor(value.next_action);if(recovery)return {...value,recovery};
+ // A blocked reply must never leave the reader without a next step. Only the
+ // recovery object is added; next_action and every other field stay untouched.
+ const blocked=value.ok===false||value.ready===false||!!value.error||!!value.verification_error;
+ return blocked?{...value,recovery:RECOVERY_GUIDE.inspect_diagnostics}:value;
 }
