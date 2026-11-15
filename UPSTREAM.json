@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "b42f597f9847fcef3b4bbfa1802b952095a79afe89eedb774eb276ec1ab3cbbb"
+      "sha256": "6504132bda06ce51f82bfd5542197b638d136794927140d2e4ed702d1e660db9"
     },
     {
       "path": "server/mcp.mjs",
@@ -264,11 +264,11 @@
     },
     {
       "path": "server/guardian.mjs",
-      "sha256": "0c7dde026332d28685d0e34e3742067cfb87c47ae0dc1a2916e865aa8fe58ce6"
+      "sha256": "ae7e0312fcbd9f1eedc057ca02bcced8958ee4573d172f06ae3396666e801d2f"
     },
     {
       "path": "server/native/Guardian.cs",
-      "sha256": "3b46fe91f6174bd3d95668003fc8d81aaee1912024e34278fb8fc2f09d43bb56"
+      "sha256": "b48912b5094b1568e8cbc79918e81bb4686434ccabc31a1167c4d7d6b51d517f"
     },
     {
       "path": "server/native/CursorSafety.cs",
@@ -708,7 +708,7 @@
     },
     {
       "path": "server/recovery.mjs",
-      "sha256": "466911728c1aac17a20aa4cd3c14ba7f162adadcb42146c8ab07b321b6987350"
+      "sha256": "12a452d1789799aee9e7e749eccbd96731eb03b846e3d127e0b7cdaf3032c313"
     },
     {
       "path": "scripts/qualify-guardian-desktop.mjs",
@@ -740,7 +740,7 @@
     },
     {
       "path": "tests/NativeRiskPolicyTests.cs",
-      "sha256": "660c6808905047e3af9005ee802aec00504ca6a534e76502d5e89986b563d1ac"
+      "sha256": "98c1bf592f3273a740108082ea615a774666aef85760081e4166f43bef1bfde8"
     },
     {
       "path": "tests/native-risk-policy.test.mjs",

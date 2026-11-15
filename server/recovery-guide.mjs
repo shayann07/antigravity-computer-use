@@ -42,6 +42,7 @@ export const RECOVERY_GUIDE=Object.freeze({
  await_human_space_switch:entry(H,null,'The human switches to the desktop or Space holding the target.','Desktop switching is human-only.'),
  await_human_fullscreen_exit:entry(H,null,'The human leaves full screen on the target.','Full-screen exit is human-only.'),
  await_human_permission_grant:entry(H,null,'The human grants the requested OS permission in system settings.','OS permissions are human-only.'),
+ human_close_other_copy:entry(H,null,'The human closes the other copy of Computer Use, or ends its task; then run ready again.','Only one copy can control this PC at a time.'),
  human_start_on_visible_desktop:entry(H,null,'The human opens the installed Start Computer Use launcher once on the normal desktop.','Starting on the visible desktop is human-only.'),
  await_legacy_owner_shutdown:entry(H,null,'The human closes the older controller that still owns the desktop.','The older controller cannot be ended by this one.'),
  inspect_prior_input_cleanup:entry(O,'diagnostics','Run diagnostics once and report the incident ID; the previous task may have sent input, so do not end or replay until its cleanup is verified. controls shows the bar with Stop available.'),

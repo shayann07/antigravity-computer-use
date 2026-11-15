@@ -38,7 +38,7 @@ export class Guardian extends EventEmitter {
       if(this.proc!==proc||this.pipeFailed)return;
       let m;try{m=JSON.parse(line);}catch{return;}
       if(m.ev==='ready'){clearTimeout(this.bootTimer);this.initialized=true;this.pid=m.pid;this.capabilities={clear_stop:m.clear_stop===true,session_reason:m.session_reason===true,remembered_approvals:m.remembered_approvals===true,access_tiers:m.access_tiers===true};this.ready();}
-      if(m.ev==='error'){clearTimeout(this.bootTimer);this.bootReject(failure(m.code==='desktop_context_unavailable'?m.code:'guardian_start_failed',m.message));proc.kill();}
+      if(m.ev==='error'){clearTimeout(this.bootTimer);this.bootReject(failure(['desktop_context_unavailable','input_lease_held','input_lease_unavailable'].includes(m.code)?m.code:'guardian_start_failed',m.message));proc.kill();}
       if(m.ev==='state'){this.state=m.state;this.customCursor=m.custom_cursor;this.emit('state',m.state,m.reason);}
       if(m.ev==='human_resume'||m.ev==='host_resume')this.emit('resume',m.state,m.ev);
       if(m.ev==='human_end'&&m.state==='stopped')this.emit('human_end');

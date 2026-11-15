@@ -221,13 +221,14 @@ export function recoveryAdvice(result,operation){
  if(result.delivery_unknown===true||result.input_completed===true&&code||code==='input_outcome_unknown')return {...extra,next_action:'inspect_effect_without_replay',replay_allowed:false};
  if(['wait_failure_observed','wait_observation_incomplete','wait_observation_timeout','wait_condition_timeout','wait_change_timeout','op_timeout','capture_preparation_timeout'].includes(code))return {...extra,next_action:'inspect_effect_without_replay',replay_allowed:false};
  if(code==='wait_label_not_observed'&&typeof result.metadata?.observation_id==='string')return {...extra,next_action:'use_returned_frame',replay_allowed:false};
- if(['stale_observation','element_stale','window_moved','no_image','control_changed','focus_changed','wait_label_not_observed'].includes(code))return {...extra,next_action:'observe_again',replay_allowed:false};
+ if(['stale_observation','element_stale','window_moved','no_image','control_changed','focus_changed','wait_label_not_observed','window_not_responding'].includes(code))return {...extra,next_action:'observe_again',replay_allowed:false};
  if(['window_minimized','window_hidden','window_capture_unavailable'].includes(code))return {...extra,next_action:result.repeated_failure===true?'await_human_window_recovery':'focus_target_then_observe',replay_allowed:false};
  if(code==='other_desktop')return {...extra,next_action:'await_human_space_switch',replay_allowed:false};
  if(code==='window_fullscreen')return {...extra,next_action:'await_human_fullscreen_exit',replay_allowed:false};
  if(['identity_changed','window_not_found','ambiguous_selector'].includes(code))return {...extra,next_action:'discover_apps_then_observe',replay_allowed:false};
  if(['mac_permissions_required','accessibility_denied'].includes(code))return {...extra,next_action:'await_human_permission_grant',replay_allowed:false};
  if(code==='desktop_context_unavailable')return {...extra,next_action:'human_start_on_visible_desktop',replay_allowed:false};
+ if(code==='input_lease_held')return {...extra,next_action:'human_close_other_copy',replay_allowed:false};
  if(code==='version_mismatch')return {...extra,next_action:'resolve_version_mismatch',replay_allowed:false};
  if(code==='recovered_task_requires_end')return {...extra,next_action:'inspect_recovered_task',replay_allowed:false};
  if(code==='global_stop_latched')return {...extra,next_action:'inspect_owner_stop',replay_allowed:false};

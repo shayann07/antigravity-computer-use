@@ -50,3 +50,8 @@ test('a fixable refusal after earlier batch steps landed is not replayable', asy
  const clean = recoveryAdvice({ok:false, completed:[], failed_index:0, error:{code:'bad_point'}}, 'computer_run');
  assert.equal(clean.replay_allowed, true);
 });
+
+test('a second copy of Computer Use and a hung window get their own recovery advice',()=>{
+ const held=recoveryAdvice({error:{code:'input_lease_held'}});assert.equal(held.next_action,'human_close_other_copy');assert.equal(held.replay_allowed,false);assert.equal(RECOVERY_GUIDE.human_close_other_copy.actor,'human');
+ const hung=recoveryAdvice({error:{code:'window_not_responding'}});assert.equal(hung.next_action,'observe_again');assert.equal(hung.replay_allowed,false);
+});

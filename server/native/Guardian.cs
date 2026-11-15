@@ -332,6 +332,52 @@ namespace Axon {
             return true;
         }
     }
+    // One controller per signed-in user and desktop session may drive input.
+    // Every installation derives the same mutex name from the user's SID, so
+    // a second copy (another install, an old build left running) is refused
+    // instead of sharing the mouse and keyboard. The operating system
+    // releases the mutex when its holder exits; no file or heartbeat decides.
+    internal static class InputLease {
+        internal const string HeldMessage="Another copy of Computer Use is controlling this PC; multiple copies are not supported yet.";
+        static Mutex held;
+        internal static string Name(string sid) {
+            using(SHA256 sha=SHA256.Create()) {
+                StringBuilder hex=new StringBuilder();
+                foreach(byte b in sha.ComputeHash(Encoding.UTF8.GetBytes(sid)))hex.Append(b.ToString("x2"));
+                return "Local\\AGCU.Input.v1."+hex.ToString();
+            }
+        }
+        // Must be called on the thread that lives as long as the controls:
+        // a mutex belongs to the thread that acquired it. Returns null when
+        // acquired, otherwise the refusal code.
+        internal static string Acquire(int waitMs,out bool abandoned) {
+            abandoned=false;
+            if(held!=null)return null;
+            Mutex mutex=null;
+            try {
+                string name=Name(System.Security.Principal.WindowsIdentity.GetCurrent().User.Value);
+                bool created;
+                mutex=new Mutex(false,name,out created);
+                bool owned;
+                // A holder that died is not a second copy. Its held input is
+                // released by the ledger recovery that runs before any task.
+                try {owned=mutex.WaitOne(waitMs);}catch(AbandonedMutexException) {owned=true;abandoned=true;}
+                if(!owned) {mutex.Dispose();return "input_lease_held";}
+                held=mutex;return null;
+            } catch(UnauthorizedAccessException) {
+                // The name exists but belongs to someone this user cannot open.
+                if(mutex!=null)mutex.Dispose();return "input_lease_held";
+            } catch {
+                if(mutex!=null)mutex.Dispose();return "input_lease_unavailable";
+            }
+        }
+        internal static void Release() {
+            Mutex mutex=held;held=null;
+            if(mutex==null)return;
+            try {mutex.ReleaseMutex();}catch {}
+            try {mutex.Dispose();}catch {}
+        }
+    }
     internal sealed class Guardian : Form {
         [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h,int how);
         [DllImport("user32.dll")] static extern bool RegisterHotKey(IntPtr h, int id, uint modifiers, uint vk);
@@ -433,6 +479,16 @@ namespace Axon {
         // that implicit startup request hidden until a task explicitly needs it.
         bool Initialize() {
                 Mark(this); ApplyRecordingPreference();
+                // Taken before any hook or hotkey so a refused second copy
+                // leaves nothing behind. The short wait covers this install's
+                // own previous controls still exiting.
+                bool leaseAbandoned;
+                string lease=InputLease.Acquire(2000,out leaseAbandoned);
+                if(lease!=null) {
+                    Emit(new {ev="error",code=lease,message=lease=="input_lease_held"?InputLease.HeldMessage:"The single-controller lock for this user could not be checked, so control was refused."});
+                    return false;
+                }
+                if(leaseAbandoned)try {ControlFence.Recover();}catch {}
                 registered = RegisterHotKey(Handle, 1, 0x4003, 0x7B);
                 if (!registered) { Emit(new { ev="error", message="Ctrl+Alt+F12 is unavailable; refusing control" }); return false; }
                 Presence.Start();
@@ -830,7 +886,7 @@ namespace Axon {
         protected override void OnClosed(EventArgs e) {
             if (registered) UnregisterHotKey(Handle,1);
             LiquidGlassPackageClient.SurfaceReady -= PackageSurfaceReady;LiquidGlassPackageClient.Close();
-            CursorSafety.Close();Presence.Stop(); Overlay.Stop(); base.OnClosed(e);
+            CursorSafety.Close();Presence.Stop(); Overlay.Stop(); InputLease.Release(); base.OnClosed(e);
         }
     }
 }
