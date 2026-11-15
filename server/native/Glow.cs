@@ -66,6 +66,8 @@ namespace Axon {
         static readonly double Strength=ControlContract.UiNumber("glow_strength",.6,0,1),Lift=ControlContract.UiNumber("glow_lift",.3,0,2);
         // One lap of colour around the window, in seconds.
         static readonly double Lap=ControlContract.UiNumber("glow_lap_seconds",18,2,120);
+        // The person's own setting, a share of full strength. Set from the Settings menu.
+        internal static volatile float Brightness=.55f;
         const double RibbonWeight=.62,SwellWeight=.9,BloomWeight=.55,WashWeight=.24;
         internal readonly int Kind;
         internal readonly Rectangle Frame,Clip;internal readonly bool[] Inside;internal readonly float Scale;internal readonly int Radius;
@@ -218,7 +220,7 @@ namespace Axon {
         // point; each pulse 0..1 is one swell travelling away from that
         // point, both ways.
         internal void Compose(double time,float lift,float reveal,float[] pulses) {
-            double travel=.48*perimeter/2.0,width=110*Scale,raise=1+Lift*Math.Max(0,Math.Min(1,lift)),turn=time/Lap;
+            double travel=.48*perimeter/2.0,width=110*Scale,raise=1+Lift*Math.Max(0,Math.Min(1,lift)),turn=time/Lap,power=Strength*Math.Max(.1f,Math.Min(1f,Brightness));
             for(int i=0;i<perimeter;i++) {
                 double d=Math.Abs(i-actionIndex);d=Math.Min(d,perimeter-d);
                 double place=i/(double)perimeter,near=rest[i],shown=1,surge=0;
@@ -239,10 +241,10 @@ namespace Axon {
                 // The band's centre is the same colour, a little lighter. Never white.
                 hot[i]=((cr+(255-cr)*30/100)<<16)|((cg+(255-cg)*30/100)<<8)|(cb+(255-cb)*30/100);
                 if(Kind==Edge) {
-                    gainA[i]=(int)(256*Strength*RibbonWeight*(.84+.16*near)*shown);
-                    gainB[i]=(int)(256*Strength*SwellWeight*Math.Min(1,(.22+.78*thick)*(.7+.3*near)+.8*surge)*raise*shown);
-                    gainC[i]=(int)(256*Strength*BloomWeight*Math.Min(1.25,(.6+.4*breath)*(.6+.4*near)+.6*surge)*raise*shown);
-                } else gainA[i]=(int)(256*Strength*WashWeight*(.55+.45*near)*(.8+.2*breath)*raise*shown);
+                    gainA[i]=(int)(256*power*RibbonWeight*(.84+.16*near)*shown);
+                    gainB[i]=(int)(256*power*SwellWeight*Math.Min(1,(.22+.78*thick)*(.7+.3*near)+.8*surge)*raise*shown);
+                    gainC[i]=(int)(256*power*BloomWeight*Math.Min(1.25,(.6+.4*breath)*(.6+.4*near)+.6*surge)*raise*shown);
+                } else gainA[i]=(int)(256*power*WashWeight*(.55+.45*near)*(.8+.2*breath)*raise*shown);
             }
             for(int k=0;k<4;k++) {
                 int[] output=Pixels[k],ix=index[k];byte[] pa=first[k],pb=second[k],pc=third[k];

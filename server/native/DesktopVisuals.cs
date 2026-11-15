@@ -393,8 +393,9 @@ namespace Axon {
                 if(image.GetPixel(54,56).A<110)throw new Exception("The pointer glow is too faint to see");
                 if(image.GetPixel(2,2).A!=0)throw new Exception("The pointer glow must end inside its surface");
             }
-            // What the glow may never do, checked at its strongest (a click
-            // landing right at the point tested).
+            // What the glow may never do, checked at its strongest: full
+            // brightness, and a click landing right at the point tested.
+            GlowField.Brightness=1;
             int[] clear=new int[800*700];
             foreach(GlowField field in Glow(new Rectangle(0,0,800,700),true,new Rectangle(0,0,800,700),400,0,4,1,new float[]{.2f}))field.Over(clear,800,700);
             if(AlphaAt(clear,800,400,350)!=0)throw new Exception("The glow covers the middle of the app");

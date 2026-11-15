@@ -404,6 +404,9 @@ namespace Axon {
         static readonly string[] Docks={"top-left","top-centre","top-right","bottom-left","bottom-centre","bottom-right"};
         // Where the person keeps the bar: a dock, or a fraction of the work area.
         string dock="top-centre";double dockX,dockY;
+        // How bright the person wants the glow: soft, medium or bright.
+        string glowLevel="soft";
+        void ApplyGlowLevel() {GlowField.Brightness=glowLevel=="bright"?1f:glowLevel=="medium"?.75f:.55f;}
         bool dragging,dragArmed,displaced,sliding,entering;Point dragGrab,dragStart,slideFrom,slideTo;DateTime displacedAt,slideAt,enterAt;int slideMs;
         string activity="";DateTime activityAt;
         // Where the current action lands and who is acting. Carried by the
@@ -709,10 +712,13 @@ namespace Axon {
                     if(x>=0&&x<=1&&y>=0&&y<=1){dock="free";dockX=x;dockY=y;}
                 }
                 else if(Array.IndexOf(Docks,saved)>=0)dock=saved;
+                string level=prefs.ContainsKey("glow_brightness")?Convert.ToString(prefs["glow_brightness"]):null;
+                if(level=="soft"||level=="medium"||level=="bright")glowLevel=level;
             }catch {}
+            ApplyGlowLevel();
         }
         void SavePreferences() {
-            try {string file=PreferenceFile,temp=file+".tmp";File.WriteAllText(temp,js.Serialize(new {takeover_mode=takeover.Mode,record_visuals=recordVisuals,bar_dock=dock,bar_x=dockX,bar_y=dockY}));if(File.Exists(file))File.Replace(temp,file,null);else File.Move(temp,file);}catch {Emit(new {ev="visual_warning",message="Could not save control preference"});}
+            try {string file=PreferenceFile,temp=file+".tmp";File.WriteAllText(temp,js.Serialize(new {takeover_mode=takeover.Mode,record_visuals=recordVisuals,bar_dock=dock,bar_x=dockX,bar_y=dockY,glow_brightness=glowLevel}));if(File.Exists(file))File.Replace(temp,file,null);else File.Move(temp,file);}catch {Emit(new {ev="visual_warning",message="Could not save control preference"});}
         }
         void ApplyRecordingPreference() {
             // Unlike the recording chrome, permission dialogs always remain excluded.
@@ -737,6 +743,8 @@ namespace Axon {
             DesktopVisuals.MenuItem head=new DesktopVisuals.MenuItem();head.Kind="head";head.Text="Computer Use";items.Add(head);
             DesktopVisuals.MenuItem record=new DesktopVisuals.MenuItem();record.Id=1;record.Text="Show bar and glow in recordings";record.Ticks=true;record.Checked=recordVisuals;items.Add(record);
             DesktopVisuals.MenuItem move=new DesktopVisuals.MenuItem();move.Id=2;move.Text="Move bar";move.Note=DockLabel(dock);move.Chevron=true;items.Add(move);
+            // One press steps to the next level; the glow changes at once.
+            DesktopVisuals.MenuItem bright=new DesktopVisuals.MenuItem();bright.Id=3;bright.Text="Glow brightness";bright.Note=glowLevel=="bright"?"Bright":glowLevel=="medium"?"Medium":"Soft";items.Add(bright);
             DesktopVisuals.MenuItem rule=new DesktopVisuals.MenuItem();rule.Kind="rule";items.Add(rule);
             DesktopVisuals.MenuItem foot=new DesktopVisuals.MenuItem();foot.Kind="foot";items.Add(foot);
             return items;
@@ -753,6 +761,7 @@ namespace Axon {
         void MenuChosen(int id) {
             if(id==1){ChangeRecordingPreference();if(MenuOpen)menu.Open(MainMenu());}
             else if(id==2){if(MenuOpen)menu.Open(DockMenu());}
+            else if(id==3){glowLevel=glowLevel=="soft"?"medium":glowLevel=="medium"?"bright":"soft";ApplyGlowLevel();SavePreferences();if(MenuOpen)menu.Open(MainMenu());}
             else if(id>=10&&id<10+Docks.Length){CloseMenu();MoveToDock(Docks[id-10]);}
             else if(id==20){CloseMenu();MoveToDock("top-centre");}
         }
