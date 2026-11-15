@@ -732,3 +732,35 @@ export class Policy {
     return { ok: true, app: this.key(win), control: label, source };
   }
 }
+
+// Access tiers for the desktop runtime, following the per-app model of
+// Claude's own computer use. They sit on top of classify(): blocked apps stay
+// blocked, shell-tier apps (terminals and IDEs) are click-only, and everything
+// else, browsers included (owner decision), is full. READ is kept for a
+// future category; no app maps to it today.
+export const ACCESS = Object.freeze({ READ: 'read', CLICK: 'click', FULL: 'full' });
+export function accessTier(win) {
+  const { tier } = classify(win);
+  if (tier === TIER.BLOCKED) return null;
+  if (tier === TIER.SHELL) return ACCESS.CLICK;
+  return ACCESS.FULL;
+}
+// Operations each tier permits. focus is a read-level operation at every tier.
+// Click tier allows a plain left click (single or double), pointer moves and
+// scrolling: no typing, keys, right/middle/modified clicks, drags, pastes,
+// value writes, file pickers or document opens.
+const READ_OPS = new Set(['focus']);
+const CLICK_OPS = new Set(['focus', 'click', 'move', 'scroll', 'fit_window']);
+export function accessRefusal(tier, op, args = {}) {
+  if (tier === ACCESS.FULL) return null;
+  if (tier === ACCESS.READ && !READ_OPS.has(op)) {
+    return { code: 'app_tier_read', message: `This app has access tier "read": it is visible in snapshots, but ${op} is not allowed and no input was sent. Ask the human to do this step.` };
+  }
+  if (tier === ACCESS.CLICK) {
+    const plainClick = op !== 'click' || ((args.button == null || args.button === 'left') && !args.modifiers);
+    if (!CLICK_OPS.has(op) || !plainClick) {
+      return { code: 'app_tier_click', message: `This app has access tier "click" (terminal or IDE): only left clicks, pointer moves and scrolling are allowed, so ${op}${op === 'click' ? ' with that button' : ''} was refused and no input was sent. Run shell commands with your own shell tool, or ask the human to type here.` };
+    }
+  }
+  return null;
+}

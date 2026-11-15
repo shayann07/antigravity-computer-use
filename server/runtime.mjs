@@ -8,7 +8,7 @@ import {Driver,HostError} from './driver.mjs';
 import {Guardian} from './guardian.mjs';
 import {Sessions} from './sessions.mjs';
 import {dataDir} from './build.mjs';
-import {classify,TIER} from './policy.mjs';
+import {classify,TIER,accessTier,accessRefusal} from './policy.mjs';
 import {renderSnapshot,subtreeNodes} from './render.mjs';
 import {targetImageSize} from './upstream-utils.mjs';
 import {VERSION,BUILD_ID} from './version.mjs';
@@ -16,7 +16,7 @@ import {storageOperation} from './storage.mjs';
 import {contract,nativePlatform,launchTarget,executableKey} from './platform.mjs';
 import {Incidents} from './incidents.mjs';
 import {updateNotice} from './update-notice.mjs';
-import {currentStopNonce,persistRecoveryStop,settlePriorStop,recoveryAdvice,priorWindowsCleanupVerified,priorMacCleanupVerified,priorUndispatchedCleanupVerified,readStopLatch,persistStopLatch,settleFreshStopLatch} from './recovery.mjs';
+import {clearConfirmedStop,currentStopNonce,persistRecoveryStop,settlePriorStop,recoveryAdvice,priorWindowsCleanupVerified,priorMacCleanupVerified,priorUndispatchedCleanupVerified,readStopLatch,persistStopLatch,settleFreshStopLatch} from './recovery.mjs';
 import {writeAtomicJSON,readTaskRecord} from './atomic-json.mjs';
 
 const input=new Set(['move','click','type','set_value','key','scroll','drag','focus','fit_window','close_window','paste','paste_files','clipboard','open','file_dialog']);
@@ -65,6 +65,9 @@ function attachWaitMetrics(error,started,budget,observations){
   if(error&&typeof error==='object')try{error.wait_metrics={elapsed_ms:Math.round(performance.now()-started),observations,polling_budget_ms:budget};}catch{}
   return error;
 }
+// Stop halts input and ends the current task. There is no latch to re-arm:
+// the agent reports and waits, and the next ready starts a fresh task.
+const STOP_ENDS_TASK=Object.freeze({task_ended:true,next_action:'report_and_wait_for_human'});
 const persistenceFailure=reason=>['stop_persistence_failed','guard_persistence_failed'].includes(reason);
 function initializeInputLedger(guardFile){
   const ledger=guardFile+'.inputs';let fd;
@@ -152,7 +155,10 @@ export class Runtime {
   constructor({driver=null,guardian=null,sessions=null,latchFile=undefined,taskFile=undefined,permissionMode=process.env.AGCU_PERMISSION_MODE||'standalone',takeoverMode=process.env.AGCU_TAKEOVER_MODE||'manual'}={}){
     if(!['standalone','host-managed'].includes(permissionMode))throw new Error('Invalid startup permission mode');
     this.permissionMode=permissionMode;
-    if(!['manual','smart'].includes(takeoverMode))throw new Error('Invalid startup takeover mode');this.takeoverMode=takeoverMode;
+    // Human mouse or keyboard input never pauses the agent: only Esc or the
+    // bar's Stop halts it. Smart takeover is retired; a saved "smart" value
+    // is accepted for compatibility but native always starts in manual.
+    if(!['manual','smart'].includes(takeoverMode))throw new Error('Invalid startup takeover mode');this.takeoverMode='manual';
     this.privateDataStorage=null;
     if(!driver&&!guardian)this.privateDataStorage=storageOperation('data',dataDir()).private_storage===true;
     else fs.mkdirSync(dataDir(),{recursive:true}); // inert unit-test dependencies
@@ -164,14 +170,16 @@ export class Runtime {
     // Human controls may start before an agent calls ready. Ensure their native
     // cleanup checks have an explicit empty ledger even in a passive session.
     if(!driver&&!guardian)initializeInputLedger(this.guardFile);
-    const env={AGCU_GUARD_FILE:this.guardFile,AGCU_CONTRACT_FILE:fileURLToPath(new URL('./control-contract.json',import.meta.url)),AGCU_STOP_LATCH:this.latchFile||'',AGCU_PARENT_PID:String(process.pid),AGCU_REARM_LOCKED:priorTask?'1':'0',AGCU_PERMISSION_MODE:permissionMode,AGCU_TAKEOVER_MODE:takeoverMode,AGCU_REAL_CURSOR:'1',CU_OVERLAY:'off',CU_PRESENCE:'off',CU_MODE:'take'};
+    const env={AGCU_GUARD_FILE:this.guardFile,AGCU_CONTRACT_FILE:fileURLToPath(new URL('./control-contract.json',import.meta.url)),AGCU_STOP_LATCH:this.latchFile||'',AGCU_PARENT_PID:String(process.pid),AGCU_REARM_LOCKED:priorTask?'1':'0',AGCU_PERMISSION_MODE:permissionMode,AGCU_TAKEOVER_MODE:'manual',AGCU_REAL_CURSOR:'1',CU_OVERLAY:'off',CU_PRESENCE:'off',CU_MODE:'take'};
     this.driver=driver||new Driver({env,onEvent:event=>{if(event.event==='input_cleanup_failed')this.stop().catch(()=>{});}});this.guardian=guardian||new Guardian(env);
     this.sessions=sessions||new Sessions({sessionId:randomUUID(),onInputLeaseLost:()=>this.stop().catch(()=>{})});this.sessions.register();
     this.grants=new Map();this.frames=new Map();this.generation=0;this.state='idle';this.token='';this.taskOpen=priorTask;this.recoveredTask=priorTask;this.priorGuard=priorTask?prior.guard:null;this.priorChildren=priorTask?prior.children:null;this.priorDispatched=priorTask?prior.dispatched:null;this.priorWatchdogsComplete=priorTask?prior.watchdogs_complete:null;this.dispatchChildren=[];this.dispatchStarted=false;this.watchdogsComplete=true;this.taskDurable=true;this.remaining=contract.action_budget;
     this.lastControlReason='';
     if(this.latchFile){
       const saved=readStopLatch(this.latchFile);if(saved){this.state='stopped';
-        this.lastControlReason=saved.unconfirmed?'guardian_stop_unconfirmed':saved.value==='stopped'?'persisted_emergency_stop':'stop_persistence_failed';
+        // A confirmed Stop only ended the earlier task. The next ready clears
+        // it after cleanup proof; uncertain or unreadable markers stay fenced.
+        this.lastControlReason=saved.unconfirmed?'guardian_stop_unconfirmed':saved.value==='stopped'?'task_ended_by_stop':'stop_persistence_failed';
       }
     }
     this.guardian.on('state',(s,reason)=>{
@@ -183,6 +191,9 @@ export class Runtime {
       // attempted reached the native guardian. Preserve the uncertain state.
       const priorStopUnconfirmed=previousState==='stopped'&&this.lastControlReason==='guardian_stop_unconfirmed';
       if((reason||s!==this.state)&&(!priorStopUnconfirmed||persistenceFailure(reason)))this.lastControlReason=reason||s;
+      // Native ends an active session at its deadline by going idle with no
+      // reason. Report that to in-flight calls as a renewable session_limit.
+      if(previousState==='active'&&s==='idle'&&!reason&&this.token)this.sessionExpired=true;
       this.state=s;
       if((reason==='guardian_exited'&&previousState!=='idle'||reason==='guardian_unresponsive')&&this.latchFile)try{persistRecoveryStop(this.latchFile,this.recoveredTask&&this.priorGuard?this.priorGuard:path.basename(this.guardFile),{unconfirmed:reason==='guardian_unresponsive'||priorStopUnconfirmed});}catch{}
       if(s==='stopped'&&this.latchFile){try{const latch=readStopLatch(this.latchFile);if(!latch||latch.value!=='stopped'&&!latch.unconfirmed)throw Error('invalid latch');if(latch.unconfirmed&&!persistenceFailure(reason))this.lastControlReason='guardian_stop_unconfirmed';}catch{this.lastControlReason='stop_persistence_failed';this.diagnosticError='stop_persistence_failed';}}
@@ -254,6 +265,14 @@ export class Runtime {
   async ready(){
     // ready is the explicit task start; status is the read-only check. Report
     // whether this call opened the task so a ready after end is not misread.
+    // A confirmed Stop ended the previous task. Clear it here, after proof
+    // that inputs were released and workers are gone, so this ready starts
+    // fresh. Uncertain delivery and storage failures are never cleared.
+    // While local controls are failing, keep reporting that bounded failure.
+    if(this.state==='stopped'&&this.lastControlReason!=='guardian_stop_unconfirmed'&&!persistenceFailure(this.lastControlReason)&&!this.recoveredTask&&!this.recoveryFailure){
+      const cleared=await Runtime.prototype.clearStop.call(this);
+      if(cleared)return cleared;
+    }
     const wasOpen=this.taskOpen;Runtime.prototype.beginTask.call(this);const taskStarted=!wasOpen&&this.taskOpen===true;
     if(this.state==='stopped'&&this.lastControlReason==='guardian_stop_unconfirmed'&&this.driver?.inputMayBeHeld===true)return {...this.status(),ready:false,controls_visible:null,next_action:'inspect_input_cleanup',replay_allowed:false,error:{code:'input_cleanup_failed',message:'Input cleanup and native Stop delivery are unconfirmed. Inspect diagnostics; do not restart, re-arm or replay.'}};
     if(this.state==='stopped'&&this.lastControlReason==='guardian_stop_unconfirmed')return {...this.status(),ready:false,controls_visible:null,next_action:'inspect_diagnostics',replay_allowed:false,error:{code:'guardian_stop_unconfirmed',message:'Stop delivery to native controls is unconfirmed. Inspect diagnostics and input cleanup; do not restart, re-arm or replay.'}};
@@ -279,14 +298,42 @@ export class Runtime {
       const visible=controls.controls_visible===true;
       if(!visible)throw Object.assign(Error('Local controls did not report a visible bar.'),{code:'guardian_controls_not_visible'});
       return {...this.status(),task_started:taskStarted,update_notice:updateNotice(dataDir()),ready:visible&&this.state!=='stopped'&&this.state!=='paused'&&!this.recoveredTask,controls_visible:visible,desktop_context:controls.desktop_context,...(['native_liquid_glass','visual_effect_fallback'].includes(controls.material_backend)?{visual_material:controls.material_backend}:{}),guardian_running:!!this.guardian.proc,guardian_exit:this.guardian.lastExit??null,
-        next_action:this.state==='stopped'?(this.lastControlReason==='input_cleanup_failed'||this.driver?.inputMayBeHeld===true?'inspect_input_cleanup':'awaiting_human_rearm'):this.state==='paused'?'awaiting_human_resume':this.recoveredTask?'inspect_recovered_task':'discover_or_launch'};
+        ...(this.state==='stopped'&&!(this.lastControlReason==='input_cleanup_failed'||this.driver?.inputMayBeHeld===true)?{replay_allowed:false,error:{code:'native_latch_still_enforced',message:'These native controls still hold Stop after a restart. Update the installation; this build needs the native change described in CLAUDE-STYLE-CONTROL.md. No input was sent.'}}:{}),
+        next_action:this.state==='stopped'?(this.lastControlReason==='input_cleanup_failed'||this.driver?.inputMayBeHeld===true?'inspect_input_cleanup':'native_update_required'):this.state==='paused'?'ask_human_before_resume':this.recoveredTask?'inspect_recovered_task':'discover_or_launch'};
     }catch(error){this.recoveryVisibility=controls?.controls_visible===false?false:null;this.recoveryFailure={code:error.code||'guardian_unavailable',message:error.code==='desktop_context_unavailable'?'Start the installed local launcher on the visible desktop. No desktop was switched and Stop remains latched.':'Local controls failed to start. Run diagnostics; do not repeat launch commands.'};return unavailable();}
   }
+  // Returns null once a confirmed Stop is cleared, or a ready refusal.
+  async clearStop(){
+    const refuse=(code,next_action,message)=>({...this.status(),ready:false,controls_visible:null,next_action,replay_allowed:false,error:{code,message}});
+    if(this.lastControlReason==='input_cleanup_failed'||this.driver?.inputMayBeHeld===true)return refuse('input_cleanup_failed','inspect_input_cleanup','Input release after Stop is unconfirmed. Inspect diagnostics; do not restart or replay.');
+    const latch=this.latchFile?readStopLatch(this.latchFile):null;
+    if(latch?.unconfirmed){this.lastControlReason='guardian_stop_unconfirmed';return refuse('guardian_stop_unconfirmed','inspect_input_cleanup','Stop delivery is unconfirmed. Inspect diagnostics and input cleanup; do not restart or replay.');}
+    if(latch?.invalid){this.lastControlReason='stop_persistence_failed';return refuse('stop_persistence_failed','inspect_stop_persistence_without_restart','The Stop marker cannot be read. Inspect private storage; do not send input.');}
+    // Cleanup proof replaces the human re-arm: the live guardian confirms its
+    // workers exited and no key or button is held, or this process proves its
+    // own recorded actors exited. A Stop that never dispatched needs neither.
+    if(this.guardian?.proc&&this.guardian.initialized&&typeof this.guardian.stopAcknowledged==='function'){
+      try{await this.guardian.stopAcknowledged(randomUUID().replaceAll('-',''));}
+      catch{return refuse('stop_cleanup_unverified','inspect_input_cleanup','Native controls did not confirm that inputs were released after Stop. Inspect diagnostics; do not replay.');}
+    }else if(this.taskOpen&&this.dispatchStarted&&!(await this.exitedCurrentCleanupVerified()))return refuse('stop_cleanup_unverified','inspect_input_cleanup','Input release after Stop could not be verified. Inspect diagnostics; do not replay.');
+    if(this.taskFile&&this.taskOpen)try{writeAtomicJSON(this.taskFile,{schema:1,open:false});}catch{return refuse('task_state_write_failed','inspect_diagnostics','The stopped task could not be closed. Inspect private storage.');}
+    this.taskOpen=false;this.dispatchChildren=[];this.dispatchStarted=false;this.watchdogsComplete=true;this.taskDurable=true;
+    if(latch){
+      // Current native controls still enforce the marker until they restart,
+      // so close them, clear the confirmed marker and let ready start fresh.
+      if(this.guardian.proc)try{await this.guardian.close({normal:true});}catch{return refuse('guardian_cleanup_unconfirmed','inspect_diagnostics','The previous controls did not exit. Inspect diagnostics before starting another task.');}
+      try{clearConfirmedStop(this.latchFile);}catch(error){this.lastControlReason=error.code||'stop_persistence_failed';return refuse(this.lastControlReason,error.code==='guardian_stop_unconfirmed'?'inspect_input_cleanup':'inspect_stop_persistence_without_restart','The Stop marker changed or could not be cleared. Inspect diagnostics; do not replay.');}
+    }
+    this.generation=(this.generation||0)+1;this.frames?.clear();this.grants?.clear();this.token='';this.state='idle';this.lastControlReason='fresh_task_after_stop';
+    return null;
+  }
   enforceStopLatch(){
-    if(this.latchFile){const latch=readStopLatch(this.latchFile);if(latch){this.stop().catch(()=>{});if(latch.invalid)fail('stop_persistence_failed','Cannot verify the emergency Stop latch; no input was sent.');fail('control_stopped','Emergency Stop remains latched; local human re-arm is required.');}}
+    if(this.latchFile){const latch=readStopLatch(this.latchFile);if(latch){this.stop().catch(()=>{});if(latch.invalid)fail('stop_persistence_failed','Cannot verify the Stop marker; no input was sent.');fail('control_stopped','The human stopped this task. No input was sent. Report what you did and wait for the human; do not retry. The next ready starts a fresh task.');}}
   }
   check(){
-    if(this.state!=='active')fail('control_inactive',`Control is ${this.state}. Use the local Resume/Re-arm control or request a new grant.`);
+    if(this.state==='idle'&&this.sessionExpired)fail('session_limit','The control session reached its time limit. No input was sent. Renew the task (end, then ready) and continue from a fresh observation.');
+    if(this.state==='stopped')fail('control_stopped','The human stopped this task. No input was sent. Report what you did and wait for the human; do not retry. The next ready starts a fresh task.');
+    if(this.state!=='active')fail('control_inactive',`Control is ${this.state}. Ask the human before continuing; resume only when they say so, or start a fresh task with ready.`);
     Runtime.prototype.enforceStopLatch.call(this);
   }
   async identity(hwnd){
@@ -351,16 +398,33 @@ export class Runtime {
     if(this.state==='paused')this.check();
     const w=await this.app(hwnd);const key=appKey(w);
     if(this.grants.has(key)&&this.state==='active'){this.check();return w;}
+    const tier=accessTier(w);
+    const tierText=tier==='read'?'Access: read only. Visible to the agent, but no clicks or typing.':tier==='click'?'Access: click only (terminal or IDE). Left clicks and scrolling; no typing, keys, right click or drag.':'Access: full.';
     const answer=await this.guardian.prompt({kind:'app',hwnd:Number(hwnd),app_pid:w.pid,host_pid:this.driver.info?.pid,
-      message:`Allow this application for this session?\r\n\r\n${w.title}\r\n${w.path}\r\nPID ${w.pid}\r\n\r\nTask: ${purpose}\r\n\r\nIts screenshots and accessibility text go to Antigravity's configured model. Ordinary actions run autonomously. Consequential effects need a separate confirmation. Your real mouse/keyboard will be used. Esc or Ctrl+Alt+F12 stops. Use a disposable account/VM for important data.`});
+      message:`Allow this application for this session?\r\n\r\n${w.title}\r\n${w.path}\r\nPID ${w.pid}\r\n${tierText}\r\n\r\nTask: ${purpose}\r\n\r\nIts screenshots and accessibility text go to Antigravity's configured model. Ordinary actions run autonomously. Consequential effects need a separate confirmation. Your real mouse/keyboard will be used. Esc or Ctrl+Alt+F12 stops. Use a disposable account/VM for important data.`});
     if(!answer.allowed)fail(answer.decision==='timeout'?'approval_timeout':'permission_denied',answer.decision==='timeout'?'Local application approval timed out.':'The human denied this application.');
     this.guardian.send({op:'attach',pid:this.driver.info?.pid});
     const current=await this.app(hwnd);if(appKey(current)!==key)fail('identity_changed','Application restarted during approval.');
-    if(!this.token){this.token=randomUUID();this.deadline=Date.now()+contract.session_ms;this.remaining=contract.action_budget;}
+    if(!this.token){this.sessionExpired=false;this.token=randomUUID();this.deadline=Date.now()+contract.session_ms;this.remaining=contract.action_budget;}
     const activationGeneration=this.generation;
     const active=await this.guardian.request({op:'activate',token:this.token,deadline:(BigInt(this.deadline)*10000n+621355968000000000n).toString()});
     if(!active.allowed||this.state==='stopped'||this.state==='paused'||this.generation!==activationGeneration)fail('control_inactive','Control changed during activation. Use local controls and observe again.');
-    this.state='active';this.check();this.grants.set(key,{...current,purpose});return current;
+    this.state='active';this.check();this.grants.set(key,{...current,purpose,tier});return current;
+  }
+  // Ask the human to approve several apps up front, one local dialog each.
+  // Input is later allowed only into approved apps, within each app's tier.
+  async requestAccess({hwnds,reason}){
+    if(!Array.isArray(hwnds)||!hwnds.length||hwnds.length>8||hwnds.some(h=>!Number.isSafeInteger(h)||h<=0))fail('bad_arguments','Pass 1 to 8 window handles from apps.');
+    const apps=[];
+    for(const hwnd of [...new Set(hwnds)]){
+      try{const w=await this.grant(hwnd,reason,{observationOnly:true});apps.push({hwnd,app:w.path,title:w.title,approved:true,tier:accessTier(w)});}
+      catch(error){
+        apps.push({hwnd,approved:false,error:{code:error.code||'access_failed',message:error.message}});
+        // A Stop during approval ends the task; ask nothing further.
+        if(error.code==='control_stopped'||this.state==='stopped')break;
+      }
+    }
+    return {apps,approved:apps.filter(a=>a.approved).length};
   }
   async observe(args){
     const w=await this.grant(Number(args.hwnd),args.reason,{observationOnly:true});this.check();
@@ -453,7 +517,9 @@ export class Runtime {
     if(this.recoveredTask)fail('recovered_task_requires_end','Inspect the prior result without replay, then end the owning task before new input.');
     if('confirmed' in args||'preapprove' in args)fail('model_approval_forbidden','Model-supplied approval flags are not accepted.');
     const w=args.hwnd!=null?await this.grant(Number(args.hwnd),args.reason):null;
-    this.check();if(Date.now()>=this.deadline||this.remaining<=0)fail('session_limit','Session expired or action budget exhausted. End and obtain a new human grant.');
+    this.check();if(Date.now()>=this.deadline||this.remaining<=0)fail('session_limit','Session expired or action budget exhausted. Renew the task (end, then ready) and continue from a fresh observation.');
+    // Per-app access tier, enforced against the target before any input.
+    if(w){const refusal=accessRefusal(accessTier(w),op,args);if(refusal)throw Object.assign(Error(refusal.message),{code:refusal.code,tier:accessTier(w)});}
     if(op==='focus'||op==='fit_window'){
       if(w?.fullscreen)throw Object.assign(Error('Bring the approved window out of macOS full-screen mode yourself before focusing or fitting it. No Space switch was performed.'),{code:'window_fullscreen',recovery_attempts_remaining:0});
       if(w?.other_desktop)throw Object.assign(Error('Bring the approved window to the current virtual desktop before fitting or focusing it. No desktop switch was performed.'),{code:'other_desktop',recovery_attempts_remaining:0});
@@ -538,7 +604,7 @@ export class Runtime {
     if(w&&appKey(await this.app(w.hwnd))!==appKey(w))fail('identity_changed','Approved process identity changed.');
     const result=await this.sessions.withInput(op,{hwnd:w?.hwnd,title:w?.title},async()=>{
       this.check();if(generation!==this.generation)fail('control_changed','Cancelled before execution.');
-      if(Date.now()>=this.deadline||this.remaining<=0)fail('session_limit','Session expired or action budget exhausted. End and obtain a new human grant.');
+      if(Date.now()>=this.deadline||this.remaining<=0)fail('session_limit','Session expired or action budget exhausted. Renew the task (end, then ready) and continue from a fresh observation.');
       // Recheck after a sensitive prompt or a wait for the shared input lease.
       await avoidHud();
       if(Date.now()>=this.deadline||this.remaining<=0)fail('session_limit','Session expired while positioning local controls. No app input was sent.');
@@ -745,11 +811,11 @@ export class Runtime {
     await this.driver.start();
     await this.guardian.start();
     if(this.state==='stopped'||this.state==='paused')this.check();
-    if(!this.token){this.token=randomUUID();this.deadline=Date.now()+contract.session_ms;this.remaining=contract.action_budget;}
+    if(!this.token){this.sessionExpired=false;this.token=randomUUID();this.deadline=Date.now()+contract.session_ms;this.remaining=contract.action_budget;}
     const activationGeneration=this.generation;
     const active=await this.guardian.request({op:'activate',token:this.token,deadline:(BigInt(this.deadline)*10000n+621355968000000000n).toString()});
     if(!active.allowed||this.state==='stopped'||this.state==='paused'||this.generation!==activationGeneration)fail('control_inactive','Control changed during activation. Use local controls and observe again.');this.state='active';this.check();
-    if(Date.now()>=this.deadline||this.remaining<=0)fail('session_limit','Session expired or action budget exhausted. End and obtain a new human grant.');
+    if(Date.now()>=this.deadline||this.remaining<=0)fail('session_limit','Session expired or action budget exhausted. Renew the task (end, then ready) and continue from a fresh observation.');
     const payload={app,args:args.args||[],...this.stamp(),__risk:'sensitive'};
     await this.driver.start();
     this.guardian.send({op:'attach',pid:this.driver.info.pid});
@@ -759,7 +825,7 @@ export class Runtime {
     this.check();const launchGeneration=this.generation;
     const result=await this.sessions.withInput('launch',{title:path.basename(app)},async()=>{
       this.check();if(launchGeneration!==this.generation)fail('control_changed','Cancelled before launch.');
-      if(Date.now()>=this.deadline||this.remaining<=0)fail('session_limit','Session expired or action budget exhausted. End and obtain a new human grant.');
+      if(Date.now()>=this.deadline||this.remaining<=0)fail('session_limit','Session expired or action budget exhausted. Renew the task (end, then ready) and continue from a fresh observation.');
       Runtime.prototype.recordDispatch.call(this);this.remaining--;
       return (await this.driver.call('launch',{...payload,__permit:a.permit})).result;
     });
@@ -805,14 +871,17 @@ export class Runtime {
       return {...result,input_completed:true,observe_pending:true,observation_hint:'No unambiguous visible window matched the launched PID and executable within8seconds. Discover apps; do not relaunch.'};
     }catch(error){return {...result,input_completed:true,observe_before_continuing:true,verification_error:{code:error.code||'observation_failed',message:error.message}};}
   }
-  async pause(){this.generation++;this.frames.clear();this.state='paused';this.lastControlReason='requested_pause';this.guardian.send({op:'pause'});await this.driver.abort?.();return {paused:true,human_resume_required:true};}
+  async pause(){this.generation++;this.frames.clear();this.state='paused';this.lastControlReason='requested_pause';this.guardian.send({op:'pause'});await this.driver.abort?.();return {paused:true,resume_when:'the human says to continue'};}
   async resume(){
-    if(this.state!=='paused'||this.permissionMode!=='host-managed')fail('human_resume_required','Only host-authorized soft pauses can resume in chat. Emergency Stop requires the local human re-arm control.');
+    if(this.state==='stopped')fail('control_stopped','The human stopped this task. Report and wait; a later ready starts a fresh task. Resume does not apply to Stop.');
+    if(this.state!=='paused')fail('not_paused',`Control is ${this.state}, not paused. Nothing to resume.`);
     this.generation++;this.frames.clear();const generation=this.generation;
     await this.driver.abort?.();
     if(this.state!=='paused'||generation!==this.generation)fail('control_changed','Control changed before Resume completed. Inspect status.');
     const result=await this.guardian.request({op:'resume'});
-    if(!result.allowed||result.state!=='active'||generation!==this.generation||this.state==='stopped')fail('human_resume_required','Native runtime refused Resume or emergency Stop won the race. Use the local controls.');
+    // Current native controls accept a chat Resume only in host-managed mode;
+    // standalone resume needs the native change in CLAUDE-STYLE-CONTROL.md.
+    if(!result.allowed||result.state!=='active'||generation!==this.generation||this.state==='stopped')fail('resume_refused',this.state==='stopped'?'Stop won the race; the task ended. Report and wait.':this.permissionMode==='host-managed'?'Native controls refused Resume because input cleanup is incomplete. Inspect status; do not replay.':'These native controls only resume from the bar in standalone mode until the native update ships. Ask the human to press Resume on the bar, or start a fresh task with ready.');
     this.state='active';this.check();this.lastControlReason='host_authorized_resume';this.deadline=Date.now()+contract.session_ms;
     return {resumed:true,fresh_observation_required:true,replayed_actions:0};
   }
@@ -856,7 +925,7 @@ export class Runtime {
         this.lastControlReason='guardian_stop_unconfirmed';throw Object.assign(Error('Native Stop or prior cleanup is unconfirmed. Inspect diagnostics; do not re-arm or replay.'),{code:'guardian_stop_unconfirmed'});
       }
       try{settleFreshStopLatch(this.latchFile,nonce,rootIdentity);}catch{this.lastControlReason='guardian_stop_unconfirmed';throw Object.assign(Error('Stop changed before confirmation could be persisted; control remains stopped.'),{code:'guardian_stop_unconfirmed'});}
-      this.lastControlReason='requested_stop';return {stopped:true,human_rearm_required:true,native_stop_confirmed:true,...(exitedProof?{exited_native_cleanup_verified:true}:{} )};
+      this.lastControlReason='requested_stop';return {stopped:true,...STOP_ENDS_TASK,native_stop_confirmed:true,...(exitedProof?{exited_native_cleanup_verified:true}:{} )};
     }
     let unconfirmed=priorUnconfirmed||this.privateDataStorage===true&&typeof this.guardian.stopAcknowledged!=='function';
     try{const sent=this.guardian.send({op:'stop'});unconfirmed=unconfirmed||sent===false&&!!(this.guardian.proc||this.guardian.starting||this.guardian.cleanupFailed);}catch{unconfirmed=true;}
@@ -867,7 +936,7 @@ export class Runtime {
     await this.driver.abort?.();
     if(persistenceFailed)throw Object.assign(Error('Control is stopped, but the emergency Stop latch could not be saved. Do not restart the controller; inspect its private storage.'),{code:'stop_persistence_failed'});
     if(unconfirmed)throw Object.assign(Error('The local Stop latch and cleanup were attempted, but delivery to native controls is unconfirmed. Inspect status; do not re-arm or replay.'),{code:'guardian_stop_unconfirmed'});
-    return {stopped:true,human_rearm_required:true};
+    return {stopped:true,...STOP_ENDS_TASK};
   }
   markActivity(){if(this.taskOpen===true)this.lastActivityAt=Date.now();}
   // Read-only evidence that tells a leftover task from a live one. Never includes tokens or window titles.
@@ -887,6 +956,6 @@ export class Runtime {
     }
     return {task_age_ms:open&&this.taskOpenedAt?Math.max(0,Math.round(now-this.taskOpenedAt)):null,last_activity_ms_ago:open?idle:null,actions_used:this.token&&Number.isFinite(this.remaining)?Math.max(0,contract.action_budget-this.remaining):0,actions_limit:contract.action_budget,held_resources:held,task_origin:!open?'none':recovered?'previous_controller':'this_controller',controller_uptime_ms:Math.round(process.uptime()*1000),task_liveness:liveness,task_liveness_rule:rule};
   }
-  status(){return {...Runtime.prototype.taskInfo.call(this),state:this.state,task_open:this.taskOpen===true,recovered_task:this.recoveredTask===true,remaining_actions:this.remaining,approved_apps:[...this.grants.values()].map(w=>({pid:w.pid,path:w.path})),runtime:nativePlatform().runtime,build_version:VERSION,build_id:BUILD_ID,private_data_storage:this.privateDataStorage,real_cursor:true,custom_cursor:this.guardian.customCursor??null,permission_mode:this.permissionMode,takeover_mode:this.guardian.takeoverMode||savedTakeoverMode(path.join(dataDir(),'control-preferences.json'),this.takeoverMode),control_reason:this.lastControlReason};}
+  status(){return {...Runtime.prototype.taskInfo.call(this),state:this.state,task_open:this.taskOpen===true,recovered_task:this.recoveredTask===true,remaining_actions:this.remaining,approved_apps:[...this.grants.values()].map(w=>({pid:w.pid,path:w.path,tier:w.tier??accessTier(w)})),runtime:nativePlatform().runtime,build_version:VERSION,build_id:BUILD_ID,private_data_storage:this.privateDataStorage,real_cursor:true,custom_cursor:this.guardian.customCursor??null,permission_mode:this.permissionMode,takeover_mode:this.guardian.takeoverMode||savedTakeoverMode(path.join(dataDir(),'control-preferences.json'),this.takeoverMode),control_reason:this.lastControlReason};}
   async close(){const normal=this.state==='idle';if(!normal)await this.stop();else await this.driver.abort?.();await this.guardian.close({normal});this.sessions.close();}
 }

@@ -12,14 +12,14 @@ test('prior Stop settlement requires matching old guard, dead actors and clean n
   assert.throws(()=>settlePriorStop(file,record,{platform,probe:()=>{}}));assert(readStopLatch(file).unconfirmed);
   fs.writeFileSync(ledger,'held');assert.throws(()=>settlePriorStop(file,record,{platform,probe}));assert(readStopLatch(file).unconfirmed);
   fs.writeFileSync(ledger,platform==='win32'?'':'{"keys":[],"buttons":[]}');
-  const result=settlePriorStop(file,record,{platform,probe});assert.equal(result.human_rearm_required,true);assert.equal(result.prior_cleanup_verified,true);assert.equal(readStopLatch(file).value,'stopped');assert.equal(fs.existsSync(file+'.unconfirmed'),false);
+  const result=settlePriorStop(file,record,{platform,probe});assert.equal(result.task_ended,true);assert.equal(result.prior_cleanup_verified,true);assert.equal(readStopLatch(file).value,'stopped');assert.equal(fs.existsSync(file+'.unconfirmed'),false);
  }}finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
 test('unwritable recovery context still persists Stop and cannot be settled from missing context',()=>{
  const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'stop-context-failure-')),file=path.join(dir,'emergency.stop'),guard='guard-101-12345678-1234-1234-1234-123456789abc.state';
  try{fs.mkdirSync(file+'.context.json');assert.throws(()=>persistRecoveryStop(file,guard,{unconfirmed:true}));assert(readStopLatch(file).unconfirmed);assert.throws(()=>settlePriorStop(file,{guard}));assert(readStopLatch(file).unconfirmed);}finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
-test('undispatched prior Stop settles only when the old guard markers name no live actor, and keeps human re-arm',()=>{
+test('undispatched prior Stop settles only when the old guard markers name no live actor, and keeps the confirmed Stop for the next ready',()=>{
  const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'stop-undispatched-')),guard='guard-101-12345678-1234-1234-1234-123456789abc.state',record={guard,open:true,children:[],dispatched:false,watchdogs_complete:true},file=path.join(dir,'emergency.stop'),state=path.join(dir,guard);
  const gone=()=>{throw Object.assign(Error('gone'),{code:'ESRCH'});},live=pid=>id=>{if(id===pid)return true;gone();};
  try{for(const platform of ['win32','darwin']){
@@ -32,6 +32,6 @@ test('undispatched prior Stop settles only when the old guard markers name no li
   fs.writeFileSync(state+'.watchdog','105|123456');fs.writeFileSync(state+'.workers','106:99\n');assert.throws(()=>settlePriorStop(file,record,{platform,probe:live(106)}));assert(readStopLatch(file).unconfirmed);
   fs.writeFileSync(state+'.workers','nonsense\n');assert.throws(()=>settlePriorStop(file,record,{platform,probe:gone}));assert(readStopLatch(file).unconfirmed);
   fs.writeFileSync(state+'.workers','');assert.throws(()=>settlePriorStop(file,{...record,children:[102]},{platform,probe:gone}));assert(readStopLatch(file).unconfirmed);
-  const result=settlePriorStop(file,record,{platform,probe:gone});assert.equal(result.human_rearm_required,true);assert.equal(result.prior_cleanup_verified,true);assert.equal(readStopLatch(file).value,'stopped');assert.equal(fs.existsSync(file+'.unconfirmed'),false);
+  const result=settlePriorStop(file,record,{platform,probe:gone});assert.equal(result.task_ended,true);assert.equal(result.prior_cleanup_verified,true);assert.equal(readStopLatch(file).value,'stopped');assert.equal(fs.existsSync(file+'.unconfirmed'),false);
  }}finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
