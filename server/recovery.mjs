@@ -230,7 +230,7 @@ export function recoveryAdvice(result,operation){
  if(code==='desktop_context_unavailable')return {...extra,next_action:'human_start_on_visible_desktop',replay_allowed:false};
  if(code==='version_mismatch')return {...extra,next_action:'resolve_version_mismatch',replay_allowed:false};
  if(code==='recovered_task_requires_end')return {...extra,next_action:'inspect_recovered_task',replay_allowed:false};
- if(code==='global_stop_latched')return {...extra,next_action:'awaiting_human_owner_rearm',replay_allowed:false};
+ if(code==='global_stop_latched')return {...extra,next_action:'inspect_owner_stop',replay_allowed:false};
  if(code==='global_owner_unverified')return {...extra,next_action:'inspect_prior_input_cleanup',replay_allowed:false};
  if(code==='legacy_controller_running')return {...extra,next_action:'await_legacy_owner_shutdown',replay_allowed:false};
  if(code==='task_required')return {...extra,next_action:'ready_then_use_task_token',replay_allowed:false};

@@ -113,7 +113,7 @@ export async function serveDesktop({directory=dataDir(),runtime,idlePolicy='shut
         if(fs.existsSync(path.join(path.dirname(directory),'update-switching.json'))&&!['computer_status','computer_stop','computer_shutdown','computer_prepare_update'].includes(name))throw Object.assign(Error('Installation update is in progress; no desktop input was accepted.'),{code:'update_in_progress'});
         ticket=receipts.begin(name,request.args);
         if(!closing)try{ownership.assertHeld();}catch{ownershipLost=true;}
-        if(ownershipLost&&!['computer_status','computer_stop','computer_end','computer_shutdown'].includes(name))throw Object.assign(Error('Controller ownership was lost. Control is stopped; do not send or replay input.'),{code:'service_ownership_lost',hint:'End/shutdown for cleanup, then restart the App sidecar. A latched Stop still needs local human re-arm. Do not repeat the interrupted action.'});
+        if(ownershipLost&&!['computer_status','computer_stop','computer_end','computer_shutdown'].includes(name))throw Object.assign(Error('Controller ownership was lost. Control is stopped; do not send or replay input.'),{code:'service_ownership_lost',hint:'End/shutdown for cleanup, then restart the App sidecar. Do not repeat the interrupted action.'});
         if(closing&&!['computer_status','computer_stop','computer_shutdown'].includes(name))throw Error('Desktop service is shutting down; no more actions are accepted.');
         if(humanEnding&&!['computer_status','computer_stop','computer_pause'].includes(name))throw Object.assign(Error('Local End is confirming cleanup. Wait for its result.'),{code:'cleanup_in_progress'});
         const versionMismatch=request.expected_build_id!==BUILD_ID;

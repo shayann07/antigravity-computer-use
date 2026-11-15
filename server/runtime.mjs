@@ -202,6 +202,7 @@ export class Runtime {
       if(s!=='active'){
         this.generation++;this.frames.clear();
         if(s==='stopped'||s==='idle'){this.grants.clear();this.token='';}
+        if(s==='stopped')Runtime.prototype.revokeSession.call(this);
         if(s==='stopped'||s==='paused')this.driver.abort?.().catch(()=>{});
       }
     });
@@ -258,11 +259,21 @@ export class Runtime {
       if(result.rearm_locked!==true){try{await this.guardian.request({op:'dismiss_controls'});}catch{}fail('recovered_cleanup_unverified','Local controls could not lock re-arm, so they were not shown. Verify the previous task\'s input cleanup first.');}
       return {...result,rearm_locked:true};
     }
-    if(this.state==='stopped'&&this.lastControlReason==='guardian_stop_unconfirmed')fail('guardian_stop_unconfirmed','Native Stop delivery is unconfirmed. Inspect diagnostics and input cleanup before showing controls; do not re-arm or replay.');
-    if(this.state==='stopped'&&persistenceFailure(this.lastControlReason))fail(this.lastControlReason,'Control storage failed. Inspect private storage before showing controls; do not re-arm.');
+    if(this.state==='stopped'&&this.lastControlReason==='guardian_stop_unconfirmed')fail('guardian_stop_unconfirmed','Native Stop delivery is unconfirmed. Inspect diagnostics and input cleanup before showing controls; do not replay.');
+    if(this.state==='stopped'&&persistenceFailure(this.lastControlReason))fail(this.lastControlReason,'Control storage failed. Inspect private storage before showing controls.');
     const result=await this.guardian.request({op:'show_controls'});if(result.controls_visible===true)this.recoveryFailure=null;return result;
   }
-  async ready(){
+  // App approvals last for the agent's conversation: ready returns a
+  // session_handle that later ready calls present. A new conversation (no or
+  // unknown handle) asks again; Stop revokes the handle and its approvals.
+  revokeSession(){if(this.sessionHandle)this.conversationGrants?.delete(this.sessionHandle);this.sessionHandle=null;}
+  bindSession(handle){
+    const sessions=(this.conversationGrants??=new Map());
+    if(typeof handle==='string'&&sessions.has(handle)){this.sessionHandle=handle;return;}
+    this.sessionHandle=randomUUID();sessions.set(this.sessionHandle,new Map());
+  }
+  async ready({session_handle}={}){
+    Runtime.prototype.bindSession.call(this,session_handle);
     // ready is the explicit task start; status is the read-only check. Report
     // whether this call opened the task so a ready after end is not misread.
     // A confirmed Stop ended the previous task. Clear it here, after proof
@@ -274,8 +285,8 @@ export class Runtime {
       if(cleared)return cleared;
     }
     const wasOpen=this.taskOpen;Runtime.prototype.beginTask.call(this);const taskStarted=!wasOpen&&this.taskOpen===true;
-    if(this.state==='stopped'&&this.lastControlReason==='guardian_stop_unconfirmed'&&this.driver?.inputMayBeHeld===true)return {...this.status(),ready:false,controls_visible:null,next_action:'inspect_input_cleanup',replay_allowed:false,error:{code:'input_cleanup_failed',message:'Input cleanup and native Stop delivery are unconfirmed. Inspect diagnostics; do not restart, re-arm or replay.'}};
-    if(this.state==='stopped'&&this.lastControlReason==='guardian_stop_unconfirmed')return {...this.status(),ready:false,controls_visible:null,next_action:'inspect_diagnostics',replay_allowed:false,error:{code:'guardian_stop_unconfirmed',message:'Stop delivery to native controls is unconfirmed. Inspect diagnostics and input cleanup; do not restart, re-arm or replay.'}};
+    if(this.state==='stopped'&&this.lastControlReason==='guardian_stop_unconfirmed'&&this.driver?.inputMayBeHeld===true)return {...this.status(),ready:false,controls_visible:null,next_action:'inspect_input_cleanup',replay_allowed:false,error:{code:'input_cleanup_failed',message:'Input cleanup and native Stop delivery are unconfirmed. Inspect diagnostics; do not restart or replay.'}};
+    if(this.state==='stopped'&&this.lastControlReason==='guardian_stop_unconfirmed')return {...this.status(),ready:false,controls_visible:null,next_action:'inspect_diagnostics',replay_allowed:false,error:{code:'guardian_stop_unconfirmed',message:'Stop delivery to native controls is unconfirmed. Inspect diagnostics and input cleanup; do not restart or replay.'}};
     if(this.state==='stopped'&&persistenceFailure(this.lastControlReason))return {...this.status(),ready:false,controls_visible:null,next_action:'inspect_stop_persistence_without_restart',replay_allowed:false,error:{code:this.lastControlReason,message:'Control is stopped because native control storage failed. Inspect private storage; do not restart or send input.'}};
     // A replacement process cannot use its own empty ledger as evidence that
     // the previous process released input. Do not lead the agent toward re-arm
@@ -297,7 +308,7 @@ export class Runtime {
       if(this.state==='stopped'&&persistenceFailure(this.lastControlReason))return {...this.status(),ready:false,controls_visible:controls.controls_visible??null,next_action:'inspect_stop_persistence_without_restart',replay_allowed:false,error:{code:this.lastControlReason,message:'Control is stopped because native control storage failed. Inspect private storage; do not restart or send input.'}};
       const visible=controls.controls_visible===true;
       if(!visible)throw Object.assign(Error('Local controls did not report a visible bar.'),{code:'guardian_controls_not_visible'});
-      return {...this.status(),task_started:taskStarted,update_notice:updateNotice(dataDir()),ready:visible&&this.state!=='stopped'&&this.state!=='paused'&&!this.recoveredTask,controls_visible:visible,desktop_context:controls.desktop_context,...(['native_liquid_glass','visual_effect_fallback'].includes(controls.material_backend)?{visual_material:controls.material_backend}:{}),guardian_running:!!this.guardian.proc,guardian_exit:this.guardian.lastExit??null,
+      return {...this.status(),session_handle:this.sessionHandle,task_started:taskStarted,update_notice:updateNotice(dataDir()),ready:visible&&this.state!=='stopped'&&this.state!=='paused'&&!this.recoveredTask,controls_visible:visible,desktop_context:controls.desktop_context,...(['native_liquid_glass','visual_effect_fallback'].includes(controls.material_backend)?{visual_material:controls.material_backend}:{}),guardian_running:!!this.guardian.proc,guardian_exit:this.guardian.lastExit??null,
         ...(this.state==='stopped'&&!(this.lastControlReason==='input_cleanup_failed'||this.driver?.inputMayBeHeld===true)?{replay_allowed:false,error:{code:'native_latch_still_enforced',message:'These native controls still hold Stop after a restart. Update the installation; this build needs the native change described in CLAUDE-STYLE-CONTROL.md. No input was sent.'}}:{}),
         next_action:this.state==='stopped'?(this.lastControlReason==='input_cleanup_failed'||this.driver?.inputMayBeHeld===true?'inspect_input_cleanup':'native_update_required'):this.state==='paused'?'ask_human_before_resume':this.recoveredTask?'inspect_recovered_task':'discover_or_launch'};
     }catch(error){this.recoveryVisibility=controls?.controls_visible===false?false:null;this.recoveryFailure={code:error.code||'guardian_unavailable',message:error.code==='desktop_context_unavailable'?'Start the installed local launcher on the visible desktop. No desktop was switched and Stop remains latched.':'Local controls failed to start. Run diagnostics; do not repeat launch commands.'};return unavailable();}
@@ -324,7 +335,7 @@ export class Runtime {
       if(this.guardian.proc)try{await this.guardian.close({normal:true});}catch{return refuse('guardian_cleanup_unconfirmed','inspect_diagnostics','The previous controls did not exit. Inspect diagnostics before starting another task.');}
       try{clearConfirmedStop(this.latchFile);}catch(error){this.lastControlReason=error.code||'stop_persistence_failed';return refuse(this.lastControlReason,error.code==='guardian_stop_unconfirmed'?'inspect_input_cleanup':'inspect_stop_persistence_without_restart','The Stop marker changed or could not be cleared. Inspect diagnostics; do not replay.');}
     }
-    this.generation=(this.generation||0)+1;this.frames?.clear();this.grants?.clear();this.token='';this.state='idle';this.lastControlReason='fresh_task_after_stop';
+    this.generation=(this.generation||0)+1;this.frames?.clear();this.grants?.clear();this.token='';this.sessionExpired=false;this.state='idle';this.lastControlReason='fresh_task_after_stop';
     return null;
   }
   enforceStopLatch(){
@@ -391,7 +402,7 @@ export class Runtime {
   }
   async grant(hwnd,purpose='Operate this app for the requested desktop task',{observationOnly=false}={}){
     Runtime.prototype.beginTask.call(this);
-    if(this.state==='stopped'&&this.lastControlReason==='guardian_stop_unconfirmed')fail('guardian_stop_unconfirmed','Stop delivery to native controls is unconfirmed. Inspect diagnostics and input cleanup; do not restart, re-arm or replay.');
+    if(this.state==='stopped'&&this.lastControlReason==='guardian_stop_unconfirmed')fail('guardian_stop_unconfirmed','Stop delivery to native controls is unconfirmed. Inspect diagnostics and input cleanup; do not restart or replay.');
     if(this.recoveredTask&&!observationOnly)fail('recovered_task_requires_end','The controller restarted with an unfinished task. Inspect the prior result without replay, then end the owning task before new input.');
     if(this.state==='stopped'&&persistenceFailure(this.lastControlReason))fail(this.lastControlReason,'Control storage failed. Inspect private storage; do not restart or send input.');
     if(this.state==='stopped'){await this.showControls();this.check();}
@@ -400,7 +411,10 @@ export class Runtime {
     if(this.grants.has(key)&&this.state==='active'){this.check();return w;}
     const tier=accessTier(w);
     const tierText=tier==='read'?'Access: read only. Visible to the agent, but no clicks or typing.':tier==='click'?'Access: click only (terminal or IDE). Left clicks and scrolling; no typing, keys, right click or drag.':'Access: full.';
-    const answer=await this.guardian.prompt({kind:'app',hwnd:Number(hwnd),app_pid:w.pid,host_pid:this.driver.info?.pid,
+    // Already approved in this conversation: native controls that support it
+    // (see CLAUDE-STYLE-CONTROL.md) restore the grant without a new dialog.
+    const remembered=!!this.sessionHandle&&this.conversationGrants?.get(this.sessionHandle)?.has(executableKey(w.path))===true;
+    const answer=await this.guardian.prompt({kind:'app',hwnd:Number(hwnd),app_pid:w.pid,host_pid:this.driver.info?.pid,...(remembered?{remembered:true,session_handle:this.sessionHandle}:{}),
       message:`Allow this application for this session?\r\n\r\n${w.title}\r\n${w.path}\r\nPID ${w.pid}\r\n${tierText}\r\n\r\nTask: ${purpose}\r\n\r\nIts screenshots and accessibility text go to Antigravity's configured model. Ordinary actions run autonomously. Consequential effects need a separate confirmation. Your real mouse/keyboard will be used. Esc or Ctrl+Alt+F12 stops. Use a disposable account/VM for important data.`});
     if(!answer.allowed)fail(answer.decision==='timeout'?'approval_timeout':'permission_denied',answer.decision==='timeout'?'Local application approval timed out.':'The human denied this application.');
     this.guardian.send({op:'attach',pid:this.driver.info?.pid});
@@ -409,7 +423,9 @@ export class Runtime {
     const activationGeneration=this.generation;
     const active=await this.guardian.request({op:'activate',token:this.token,deadline:(BigInt(this.deadline)*10000n+621355968000000000n).toString()});
     if(!active.allowed||this.state==='stopped'||this.state==='paused'||this.generation!==activationGeneration)fail('control_inactive','Control changed during activation. Use local controls and observe again.');
-    this.state='active';this.check();this.grants.set(key,{...current,purpose,tier});return current;
+    this.state='active';this.check();this.grants.set(key,{...current,purpose,tier});
+    if(this.sessionHandle)this.conversationGrants?.get(this.sessionHandle)?.set(executableKey(current.path),tier);
+    return current;
   }
   // Ask the human to approve several apps up front, one local dialog each.
   // Input is later allowed only into approved apps, within each app's tier.
@@ -730,7 +746,7 @@ export class Runtime {
   }
   async finish(options={}){
     if(this.finishing)return this.finishing;
-    this.generation++;this.frames.clear();this.grants.clear();this.token='';
+    this.generation++;this.frames.clear();this.grants.clear();this.token='';this.sessionExpired=false;
     this.finishing=Promise.resolve().then(()=>Runtime.prototype.finishTransaction.call(this,options));
     try{return await this.finishing;}finally{this.finishing=null;}
   }
@@ -778,7 +794,7 @@ export class Runtime {
       catch{fail('recovered_cleanup_unverified','Previous input ownership could not be safely cleared. Keep the task open; do not repeat input or force an update.');}
       if(this.latchFile&&readStopLatch(this.latchFile)?.unconfirmed){
         try{const record=readTaskRecord(this.taskFile);if(record.guard!==this.priorGuard||JSON.stringify(record.children)!==JSON.stringify(this.priorChildren))throw Error('Prior task changed');settlePriorStop(this.latchFile,record);this.state='stopped';this.lastControlReason='prior_cleanup_verified';}
-        catch{fail('guardian_stop_unconfirmed','Prior Stop context or native cleanup is unverified. Keep the recovery record and do not re-arm or replay.');}
+        catch{fail('guardian_stop_unconfirmed','Prior Stop context or native cleanup is unverified. Keep the recovery record and do not replay.');}
       }
     }
     if(!preserveTask){
@@ -799,7 +815,7 @@ export class Runtime {
   }
   async launch(args){
     Runtime.prototype.beginTask.call(this);
-    if(this.state==='stopped'&&this.lastControlReason==='guardian_stop_unconfirmed')fail('guardian_stop_unconfirmed','Stop delivery to native controls is unconfirmed. Inspect diagnostics and input cleanup; do not restart, re-arm or replay.');
+    if(this.state==='stopped'&&this.lastControlReason==='guardian_stop_unconfirmed')fail('guardian_stop_unconfirmed','Stop delivery to native controls is unconfirmed. Inspect diagnostics and input cleanup; do not restart or replay.');
     if(this.recoveredTask)fail('recovered_task_requires_end','The controller restarted with an unfinished task. Inspect the prior result without replay, then end the owning task before launching another application.');
     if(this.state==='stopped'&&persistenceFailure(this.lastControlReason))fail(this.lastControlReason,'Control storage failed. Inspect private storage; do not restart or send input.');
     if(this.state==='stopped'){await this.showControls();this.check();}
@@ -888,7 +904,7 @@ export class Runtime {
   async stop(){
     if(this.stopping)return this.stopping;
     const priorUnconfirmed=this.lastControlReason==='guardian_stop_unconfirmed';
-    this.generation++;this.frames.clear();this.grants.clear();this.state='stopped';this.lastControlReason='requested_stop';
+    this.generation++;this.frames.clear();this.grants.clear();Runtime.prototype.revokeSession.call(this);this.state='stopped';this.lastControlReason='requested_stop';
     const work=Promise.resolve().then(()=>this.stopTransaction(priorUnconfirmed));this.stopping=work;
     try{return await work;}finally{if(this.stopping===work)this.stopping=null;}
   }
@@ -917,12 +933,12 @@ export class Runtime {
       catch{persistenceFailed=true;this.lastControlReason='stop_persistence_failed';}
       const outcomes=await Promise.allSettled([Promise.resolve().then(()=>this.guardian.stopAcknowledged(nonce)),Promise.resolve().then(()=>this.driver.abort?.())]);
       if(outcomes[1].status==='rejected'){this.lastControlReason='input_cleanup_failed';throw outcomes[1].reason;}
-      if(persistenceFailed||persistenceFailure(this.lastControlReason))throw Object.assign(Error('Stop persistence is unconfirmed. Inspect private storage; do not restart or re-arm.'),{code:'stop_persistence_failed'});
+      if(persistenceFailed||persistenceFailure(this.lastControlReason))throw Object.assign(Error('Stop persistence is unconfirmed. Inspect private storage; do not restart.'),{code:'stop_persistence_failed'});
       const receipt=outcomes[0].status==='fulfilled'?outcomes[0].value:null;
       const freshReceipt=receipt?.stop_nonce===nonce&&receipt.workers_stopped===true&&receipt.input_cleanup_confirmed===true;
       const exitedProof=!freshReceipt&&maySettle&&await this.exitedCurrentCleanupVerified();
       if(!maySettle||marker?.value!=='unconfirmed:'+nonce||(!freshReceipt&&!exitedProof)||this.driver.inputMayBeHeld!==false){
-        this.lastControlReason='guardian_stop_unconfirmed';throw Object.assign(Error('Native Stop or prior cleanup is unconfirmed. Inspect diagnostics; do not re-arm or replay.'),{code:'guardian_stop_unconfirmed'});
+        this.lastControlReason='guardian_stop_unconfirmed';throw Object.assign(Error('Native Stop or prior cleanup is unconfirmed. Inspect diagnostics; do not replay.'),{code:'guardian_stop_unconfirmed'});
       }
       try{settleFreshStopLatch(this.latchFile,nonce,rootIdentity);}catch{this.lastControlReason='guardian_stop_unconfirmed';throw Object.assign(Error('Stop changed before confirmation could be persisted; control remains stopped.'),{code:'guardian_stop_unconfirmed'});}
       this.lastControlReason='requested_stop';return {stopped:true,...STOP_ENDS_TASK,native_stop_confirmed:true,...(exitedProof?{exited_native_cleanup_verified:true}:{} )};
@@ -935,7 +951,7 @@ export class Runtime {
     if(unconfirmed&&!persistenceFailed)this.lastControlReason='guardian_stop_unconfirmed';
     await this.driver.abort?.();
     if(persistenceFailed)throw Object.assign(Error('Control is stopped, but the emergency Stop latch could not be saved. Do not restart the controller; inspect its private storage.'),{code:'stop_persistence_failed'});
-    if(unconfirmed)throw Object.assign(Error('The local Stop latch and cleanup were attempted, but delivery to native controls is unconfirmed. Inspect status; do not re-arm or replay.'),{code:'guardian_stop_unconfirmed'});
+    if(unconfirmed)throw Object.assign(Error('The local Stop latch and cleanup were attempted, but delivery to native controls is unconfirmed. Inspect status; do not replay.'),{code:'guardian_stop_unconfirmed'});
     return {stopped:true,...STOP_ENDS_TASK};
   }
   markActivity(){if(this.taskOpen===true)this.lastActivityAt=Date.now();}

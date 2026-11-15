@@ -256,11 +256,11 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "bf0cdf3b650675c5e3c02fd723f232072a685ed19c05f4a16eb08eb15c536c6f"
+      "sha256": "f0f710deec7f4bf19e199f615ccdea96761a8da5c37b2538cb4f90c5a2062e10"
     },
     {
       "path": "server/mcp.mjs",
-      "sha256": "ed43f25dffe8f6df4ecf8ddf2da14adcff0e637402fdb134dfd1adc0ffc03cef"
+      "sha256": "0901975a7d8010b43d0c505adc7d93aedff2c403208e55fbb90672e27685ceea"
     },
     {
       "path": "server/guardian.mjs",
@@ -292,15 +292,15 @@
     },
     {
       "path": "server/desktop-service.mjs",
-      "sha256": "b890a5b33544f2439078433329b23a5197e88708b58680419331692b1b5b3c62"
+      "sha256": "e42463195237d2bf91cc948c3fdb2fe0bfe4847680f1524a5a76eb517c789451"
     },
     {
       "path": "server/desktop-tools.mjs",
-      "sha256": "e9fa8d91c392566ddb814a9cd5118fbd9a632c52a4446491a691dcfc4f7bd12e"
+      "sha256": "32baaeafdf76750829b4c1ac9a158de3f62121a00a55d1631960f999676152b2"
     },
     {
       "path": "scripts/desktop.mjs",
-      "sha256": "1f71633c127ee87519061ea0158858e656c1f199b7e951b2ac456bb055f8cbf4"
+      "sha256": "d3c1c2bd73c030669df7ada5ea2b16a061bc72904739244284f4c9273329a2f3"
     },
     {
       "path": "server/version.mjs",
@@ -600,7 +600,7 @@
     },
     {
       "path": "skills/computer-use/SKILL.md",
-      "sha256": "e078f20dd19acaff1a2542f1f260bc92d8f12537c885e574ea4f2d4d5be8df23"
+      "sha256": "8118b70bfc978270cafbf2e5722eeb8cf00fb29a38ae41bd568e0689dc44ff73"
     },
     {
       "path": "docs/MACOS.md",
@@ -708,7 +708,7 @@
     },
     {
       "path": "server/recovery.mjs",
-      "sha256": "8732342f8d624d75ee98ddd812ef079f22427c2b8de31e280530779ce7b0e27a"
+      "sha256": "466911728c1aac17a20aa4cd3c14ba7f162adadcb42146c8ab07b321b6987350"
     },
     {
       "path": "scripts/qualify-guardian-desktop.mjs",
@@ -900,11 +900,11 @@
     },
     {
       "path": "server/task-coordinator.mjs",
-      "sha256": "917301f8f04d22e6b42fc3c2e15c8b5017b31d2a96dd7ec998e4041ad368ab08"
+      "sha256": "a35379f99870155903f9730ec1037e46a1b75895c87d17396d428b73798bd21f"
     },
     {
       "path": "tests/task-coordinator.test.mjs",
-      "sha256": "41c741eb2ad325c33e66fee8be8f876b302f869a94b713c0467453826937fa68"
+      "sha256": "cfc2778134e7dbc67923bb650e6873d87641c6e14c51a095f6e7e6d898ce8b3b"
     },
     {
       "path": "docs/TASK-OWNERSHIP.md",

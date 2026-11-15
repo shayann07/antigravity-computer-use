@@ -182,14 +182,14 @@ export async function main(){
   }
   if(!fs.existsSync(file)){
     if(command==='status'){const latch=readStopLatch(path.join(dataDir(),'emergency.stop'));printReply({ok:true,state:latch?'stopped':'not_running',...(latch?.unconfirmed?{control_reason:'guardian_stop_unconfirmed'}:{}),...(latch?.invalid?{control_reason:'stop_persistence_failed'}:{}),build_version:VERSION,build_id:BUILD_ID,reconnect_required:true});return;}
-    throw Object.assign(Error('No desktop session is running (it may have expired after15 idle minutes). Restart the installed App sidecar (or use its human starter on the normal Windows desktop), then discover apps and take a fresh observation. Antigravity does not need to restart; emergency Stop remains latched.'),{code:'no_session'});
+    throw Object.assign(Error('No desktop session is running (it may have expired after15 idle minutes). Restart the installed App sidecar (or use its human starter on the normal Windows desktop), then discover apps and take a fresh observation. Antigravity does not need to restart.'),{code:'no_session'});
   }
   const session=JSON.parse(fs.readFileSync(file));session.task_token=taskToken;
   if(command==='plan'){
     const steps=loadPlan(args.plan_file);
     const call=(name,input)=>{if(name==='run')validate('computer_run',input);return request(session,name,input,100000,policy.permission_mode).catch(failureReply);};
     const renew=async()=>{const ended=await request(session,'end',{},100000,policy.permission_mode).catch(failureReply);if(!ended.ok)return ended;session.task_token=undefined;return request(session,'ready',{},15000,policy.permission_mode).catch(failureReply);};
-    const result=await runPlan({steps,hwnd:args.hwnd,observationId:args.observation_id,reason:args.reason,ledgerFile:args.ledger,call,renew,checkpointEvery:args.checkpoint_every??6,maxRenewals:args.renew_budget??0});
+    const result=await runPlan({steps,hwnd:args.hwnd,observationId:args.observation_id,reason:args.reason,ledgerFile:args.ledger,call,renew,checkpointEvery:args.checkpoint_every??6,maxRenewals:args.renew_budget??1});
     printReply(result);if(!result.ok)process.exitCode=1;return;
   }
   if(command==='shutdown'){

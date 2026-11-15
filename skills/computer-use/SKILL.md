@@ -174,7 +174,7 @@ Click the actual Open/Browse/Save control first. In a batch, put `file_dialog` o
 
 ### App access and tiers
 
-Before input, ask for the apps the task needs with `request_access --hwnds 123,456 --reason '...'` (or let the first action ask). The human approves each app in a local dialog; input goes only to approved apps. Each app has a tier, returned in the reply and in `status` `approved_apps`:
+Before input, ask for the apps the task needs with `request_access --hwnds 123,456 --reason '...'` (or let the first action ask). The human approves each app in a local dialog; input goes only to approved apps. Approvals last for this conversation: pass the `session_handle` from your first `ready` to every later `ready` (`ready --session-handle H`) so approved apps are not asked again. A new conversation omits it. Each app has a tier, returned in the reply and in `status` `approved_apps`:
 
 - **full**: no restrictions. Browsers are full.
 - **click** (terminals and IDEs): left click, pointer moves and scrolling only. Typing, keys, right or middle click, drags, pastes and value writes are refused with `app_tier_click`. Run shell commands with your own shell tool instead; never type into a terminal.

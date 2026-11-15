@@ -62,9 +62,28 @@ Next actions that changed:
 | `session_limit` -> `end_owned_task_then_reauthorize` | `session_limit` -> `renew_task_and_continue` |
 | stop reply `human_rearm_required:true` | `task_ended:true, next_action:'report_and_wait_for_human'` |
 
-`awaiting_human_owner_rearm` stays for the cross-installation `global_stop_latched`
-refusal in `task-coordinator.mjs`. Its text no longer says re-arm, but the
-cross-install path itself is unchanged and is a follow-up.
+`awaiting_human_owner_rearm` became `inspect_owner_stop`. The cross-installation
+`global_stop_latched` refusal in `task-coordinator.mjs` now fires only for an
+unconfirmed or unreadable Stop in the other installation; a confirmed Stop there
+only ended that installation's task.
+
+## How long an approval lasts
+
+An approval lasts for the agent's conversation. `ready` returns a
+`session_handle`; the agent passes it to later `ready` calls in the same
+conversation. Approvals are remembered per handle and per executable, with no
+idle timer, and native session expiry or End does not drop them. A missing or
+unknown handle starts a new conversation that asks again. Stop or Esc revokes
+the handle and every approval on it.
+
+Gated on native: the guardian only lets input reach an app that a `prompt
+kind:'app'` added to its own grant list, and that list is cleared on End,
+expiry and Stop. So today a remembered app still shows the dialog after the
+native session ends. JS sends `remembered:true` and `session_handle` with that
+prompt; the native change below must honour them. The handle lives in the
+service process memory, so a controller restart also starts a new conversation.
+The `plan` command's automatic renewal calls `ready` without a handle; passing
+it through is a follow-up.
 
 ## How `ready` clears a confirmed Stop with today's native binaries
 
@@ -86,7 +105,12 @@ the human re-arm handler. On startup it comes up `idle` when no marker exists
    `stopped`, `ready` refuses with `native_latch_still_enforced` and
    `native_update_required`.
 
-This works without native changes, but it is a stopgap: the bar still shows
+This needs no native change on Windows, as far as the source shows, but it was
+not run against a real guardian. The cleanup watchdog (`CursorSafety.cs`,
+`CrashCleanup`) can rewrite the marker when its owner exits; if that lands after
+JS removes it, the new guardian comes up stopped and `ready` refuses with
+`native_latch_still_enforced`, which fails closed. The Mac guardian was not
+read for this path. It is also a stopgap: the bar still shows
 Re-arm, the old guardian process is restarted on every post-Stop task, and a
 standalone chat `resume` is still refused by native code.
 
@@ -123,15 +147,29 @@ Windows, `server/native/Guardian.cs` and friends:
   `KeyboardTargetPolicy.cs` already verifies the foreground window for keys),
   so a click-tier window that comes to the front between check and dispatch
   cannot receive typing.
+- **Remembered approvals.** For a `prompt kind:'app'` carrying
+  `remembered:true` and a `session_handle` the guardian has seen approved, add
+  the grant without a dialog. Clear the remembered set on Stop and Esc.
+- **Host-managed mode.** The prompt handler starts with `allowed=hostManaged`,
+  so no dialog is ever shown there and an app is re-approved silently after
+  Stop. This conflicts with the owner rule that Stop must not let the agent
+  regain control silently. Owner decision needed: show the dialog after a Stop
+  even in host-managed mode, or accept host approval.
 - **Session expiry.** `Tick` goes `idle` with no reason at the deadline. Emit a
   reason such as `session_expired`; JS currently infers expiry from an
   unexplained `active -> idle`.
 - **CursorSafety watchdog** reads the marker (`CursorSafety.cs` around line
   206); keep it consistent with the per-task Stop record.
 
-macOS, `server/native/macos/MacGuardian.swift`, `MacOperations.swift`,
-`MacControl.swift`, `MacVisuals.swift`: the same changes: the latch file, the
-re-arm button, takeover, resume and the access dialog.
+macOS, not read in detail for this change; the same list applies:
+
+- `MacOperations.swift` and `MacGuardian.swift`: the latch read and write
+  (`LatchBlocks`/`LatchStop` equivalents, 38 and 20 references), the re-arm
+  handler, the stopped-to-idle transition, the resume rule and the watchdog
+  marker rewrite.
+- `MacControl.swift` and `MacVisuals.swift`: the bar's Re-arm button and
+  tooltip, the Smart takeover menu item, and the access approval list dialog.
+- The remembered-approval prompt and the host-managed decision, as on Windows.
 
 ## Migration of existing marker files on upgrade
 
@@ -151,8 +189,10 @@ re-arm button, takeover, resume and the access dialog.
 
 ## Risks
 
-- **Silent regain of control.** Mitigated: Stop clears every grant in JS and
-  native, and the next task must show the Allow prompt again. Tested.
+- **Silent regain of control.** In standalone mode Stop clears every grant in
+  JS and native and the next task must show the Allow prompt again (tested
+  against a fake guardian only). In host-managed mode native auto-allows the
+  prompt, so control returns without a dialog; see the native list.
 - **Clearing a Stop whose input is still held.** Mitigated by the receipt or
   exited-actor proof and by never touching unconfirmed markers. The receipt is
   transport evidence from the guardian process, not physical proof.

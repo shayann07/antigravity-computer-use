@@ -37,7 +37,7 @@ export const RECOVERY_GUIDE=Object.freeze({
  renew_task_and_continue:entry(A,'end','The session or action budget ran out and no input was sent. Run end, then ready, then observe and continue from the first unfinished step.'),
  ask_human_before_resume:entry(H,null,'The human says to continue, or presses Resume on the bar.','Resume follows the human.'),
  native_update_required:entry(O,'update','The native controls are older than this runtime and still hold Stop. Install the update that removes the native latch.'),
- awaiting_human_owner_rearm:entry(H,null,'The human resolves Stop in the installation that holds it.','Only that installation can clear its Stop.'),
+ inspect_owner_stop:entry(O,null,'The operator inspects the unconfirmed Stop from the installation that holds it.','Only that installation can settle its Stop.'),
  await_human_window_recovery:entry(H,null,'The human restores or shows the target window.','Window state is changed by the human.'),
  await_human_space_switch:entry(H,null,'The human switches to the desktop or Space holding the target.','Desktop switching is human-only.'),
  await_human_fullscreen_exit:entry(H,null,'The human leaves full screen on the target.','Full-screen exit is human-only.'),

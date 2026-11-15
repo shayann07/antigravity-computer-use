@@ -96,6 +96,23 @@ test('clearConfirmedStop never removes an unconfirmed or invalid marker',()=>{
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
 
+test('approvals last for the conversation handle, survive End and expiry, and Stop revokes them',async()=>{
+ const r=runtime({request:async m=>m.op==='activate'?{allowed:true}:{state:'idle',controls_visible:true}});
+ const seen=[];r.guardian.prompt=async m=>{seen.push(m.remembered===true);return {allowed:true};};
+ r.app=async()=>({hwnd:1,pid:11,started:'a',path:'C:/x/mspaint.exe',process:'mspaint',title:'Paint'});
+ try{
+  const first=await r.ready();assert.match(first.session_handle,/^[0-9a-f-]{36}$/);
+  await r.grant(1,'first');await r.finish();
+  r.guardian.emit('state','idle');
+  const later=await r.ready({session_handle:first.session_handle});assert.equal(later.session_handle,first.session_handle);
+  await r.grant(1,'later');assert.deepEqual(seen,[false,true],'same conversation marks the app as already approved');
+  await r.stop();assert.equal(r.sessionHandle,null);
+  const after=await r.ready({session_handle:first.session_handle});assert.notEqual(after.session_handle,first.session_handle,'Stop revoked the handle');
+  await r.grant(1,'after stop');assert.equal(seen.at(-1),false);
+  const other=await r.ready();assert.notEqual(other.session_handle,after.session_handle,'a new conversation asks again');
+ }finally{fs.unlinkSync(r.guardFile);}
+});
+
 test('native controls always start in manual takeover: human input never pauses the agent',()=>{
  const r=new Runtime({guardian:Object.assign(new EventEmitter(),{send(){}}),driver:{async abort(){}},sessions:{register(){},close(){}},takeoverMode:'smart'});
  try{assert.equal(r.takeoverMode,'manual');}finally{fs.unlinkSync(r.guardFile);}
