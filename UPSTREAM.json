@@ -5,7 +5,7 @@
     {
       "path": "server/build.mjs",
       "upstream_sha256": "81260b378fffb46573cfe475a3a336930113c8abc465d3d278bbb0851d8a4377",
-      "local_sha256": "667f0fe9da5585784f23b7fe9ed6224ec29266cde5eacf8417b60dd48a50320f",
+      "local_sha256": "2478deae029fb616ecb7726a1d5068204f731f67b2d696fa0901e55cd20746ee",
       "modified": true
     },
     {
@@ -556,7 +556,7 @@
     },
     {
       "path": "server/macos-build.mjs",
-      "sha256": "5890dd6013eca6128675dbc8b62d30e0858f6e3460884a93a5f020176d7e9453"
+      "sha256": "814a10913015eabe9b1d42137497c93b71176ffdc1c44853318daeccf96e4a9c"
     },
     {
       "path": "tests/platform-contract.test.mjs",
@@ -708,7 +708,7 @@
     },
     {
       "path": ".github/workflows/prepare-signed-release.yml",
-      "sha256": "eacc2b65ffc0775d3e48e03f2a478f914701f11e806c2079d7fa764e6558dcc4"
+      "sha256": "d3eeabe099a4dfe8ff185a9526edb7619cde94975cf4597080ceff101b997d19"
     },
     {
       "path": "server/recovery.mjs",
