@@ -116,13 +116,12 @@ pattern for `ctrl+shift+…`.
 
 #### Not checked
 
-- The installed build C2 is `1002b5a`. The base merge and the action-point fix
-  (`d732f64` and later) have not run on this Mac yet.
+- The installed build is C5 (`d685fe0`, CDHash `e6402e3f…`); Screen Recording was
+  turned on again after it, and Accessibility and Input Monitoring were kept.
 - The alert-click fix on a visible alert; the tick slide installed on screen.
 - Recovery condition "never resumes" is tested at helper level and seen once
   physically; there is no Runtime-level test yet.
-- Physical Esc and Control+Option+F12 during a task, with and without held
-  input (#99 tests 4–6).
+- Control+Option+F12, and Esc during held input (#99 test 5).
 - The drawing test (blocked, above); s per click and s per drag.
 - Entrance frame time (16 ms target).
 - The glow easing toward an action point, on screen.
@@ -144,9 +143,9 @@ pattern for `ctrl+shift+…`.
 | 1 Baseline | pass | see Results |
 | 2 Allow / Deny / timeout | pass (physically observed) | installed 0.3.0-beta.7, standalone. Allow: the human approved a TextEdit launch card and TextEdit started; the launch approval also grants the launched app, so its access card does not repeat. Deny: the human denied the Calculator access card (13.8 s), reported as `permission_denied`. Timeout: three unanswered cards stayed on screen (modal-panel level, alpha 1) and closed at 90.2–90.4 s with nothing launched; the runtime wrongly reported that as `permission_denied`, fixed in this branch to `approval_timeout` |
 | 3 Tiers | partial (physically observed) | the human approved Terminal; the card and status showed tier `click`. `type`, `key` and a right click were each refused with `app_tier_click` and nothing reached Terminal. The allowed left click was refused as `obscured`: the new window glow, drawn by the guardian 46 pt around the target, counted as a covering window. Fixed in this branch (windows owned by this AxonHost executable are skipped); the left click and the full-tier TextEdit side are rerun after reinstall |
-| 4 Esc ends the task | unrun (`clear_stop` path passes headless) | needs physical Esc |
+| 4 Esc ends the task | pass (physically observed, build C5) | the human pressed Esc during an active task: the bar showed "Stopped · You pressed Esc or ⌃⌥F12", status `stopped` with reason `escape`, the marker a confirmed `stopped`, no input held, and the next `ready` started fresh. On C4 the same Esc stopped too, but the bar said "The task was ended" (fixed in `d685fe0`) |
 | 5 Esc during held input | unrun | needs physical Esc and a disposable target |
-| 6 Human input does not pause | unrun (takeover and Pause code removed) | needs a human moving the mouse during a task |
+| 6 Human input does not pause | pass (physically observed) | the human moved the mouse during an active task; it stayed active and the bar kept reading "Antigravity is working" until Esc |
 | 7 Dispatch race | partial | existing lock-holder and worker-exit fixtures pass; no new many-iteration harness yet |
 | 8 Stop latch robustness | pass (headless) | missing, dangling link, directory, companion, unreadable cases in the native contract |
 | 9 Watchdog | pass (headless, existing fixtures) | no change in this branch |
@@ -198,6 +197,10 @@ is not verified here. Apple Silicon is unverified.
 | Switching a Mac permission, or a second AxonHost instance exiting, can end the guardian; the live controller cannot settle the resulting unconfirmed Stop, and recovery needed a controller restart | fixed for the reproduced case (all helpers killed with `kill -9` mid-task, then Stop): the dead guardian's `active` state now settles when every recorded actor is gone and the ledger is empty (`server/recovery.mjs`, `tests/recovery-mac-active.test.mjs`); physically re-run on this Mac, `end` settled it and the next `ready` was idle. Still needs a controller restart or `end`; the live controller does not settle it alone |
 | The installer refuses to install over an unconfirmed Stop, but only the newer build can settle it | open, owner decision; worked around here by running the new build's `end` once, after a rehearsal on a copy of the data |
 | After an unanswered card the bar disappeared until the next `ready`; on build B the access card window existed (modal-panel level, alpha 1) but was not visible to the human, three times | fixed: the card panel hid itself when the helper was not the active app (`hidesOnDeactivate`), and the bar is restored after every capture; physically re-run twice, both cards visible with the amber "Waiting for your answer" bar |
+| A live Esc was labelled as a persisted Stop, so the bar said "The task was ended" | fixed in `d685fe0`; physically re-run, the bar says "You pressed Esc or ⌃⌥F12" |
+| The glow was at status-bar level and drew over windows covering its target | fixed in `d685fe0` (normal level, just above the target); the human's screenshot shows it around the front window; the covered case still to be looked at |
+| With the glow at normal level, AppKit moved its panel out from under the menu bar, so for a window at the top of the screen the band slid 46 pt down (none on top, double at the bottom); seen by the human on Preview | fixed: the glow panel is never constrained (`MacGlowPanel`), with a contract check that fails without the fix; to be re-seen on screen |
+| Quitting Antigravity ends the service and its guardian together; the Stop then goes unacknowledged and is recorded as unconfirmed, with no open task naming the guard, so nothing could settle it and the installer refused | fixed in `c47ff83` (Mac only, same evidence as the `active` rule: no task open, not the current guard, no cleanup pending, every recorded actor gone, empty ledger); physically re-run, `ready` settled it and started fresh |
 | Clicks on an app's own alert (Preview, layer 8) were refused as covered | fixed (`macTopWindowVerdict`); not yet re-run on a visible alert |
 | A service started from a shell without Accessibility (for example an agent's terminal) gets `accessibility_denied` though setup reports access, because macOS checks the app that launched it | by design of macOS; documented. Start the service from Antigravity or the human starter |
 | Pixel clicks on an unnamed target need a sensitive-action card (by contract); agents must prefer `--index` | by design on Mac, but Windows hit-tests the pixel first; parity is an owner decision (see Drawing test) |

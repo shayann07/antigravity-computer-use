@@ -154,7 +154,7 @@ final class MacWindowGlow {
     var recordable = false { didSet { panel?.sharingType = recordable ? .readOnly : .none } }
     private func build() {
         guard panel == nil else { return }
-        let p = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        let p = MacGlowPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         p.isOpaque = false; p.backgroundColor = .clear; p.hasShadow = false; p.ignoresMouseEvents = true
         // Normal level, ordered just above the target window: a window that covers
         // the target also covers its glow, as on Windows.
@@ -369,4 +369,11 @@ final class MacWindowGlow {
 
 private extension NSColor {
     var whiteComponentSafe: CGFloat { (usingColorSpace(.genericGray) ?? self).whiteComponent }
+}
+
+// At normal level AppKit moves a window out from under the menu bar. The glow
+// reaches past its window's edges, so for a window near the top that shifted
+// the whole band down. The glow's frame is exact; never constrain it.
+final class MacGlowPanel: NSPanel {
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }
 }

@@ -888,6 +888,16 @@ func macContractTest() throws {
           MacGlowShape.alpha(30, spread: 0.35) < MacGlowShape.alpha(30) else {
         throw AxonError("contract_test_failed", "Full-screen edges are not lit inside, or the entrance band does not widen.")
     }
+    // The glow reaches past a window at the top of the screen; AppKit must not
+    // push its panel down under the menu bar, or the band shifts off its window.
+    if let screen = NSScreen.main {
+        let reach = NSRect(x: screen.frame.minX + 40, y: screen.frame.maxY - 300, width: 400, height: 346)
+        let probe = MacGlowPanel(contentRect: reach, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
+        probe.level = .normal; probe.alphaValue = 0; probe.ignoresMouseEvents = true
+        probe.setFrame(reach, display: false); probe.orderFrontRegardless(); probe.setFrame(reach, display: false)
+        let kept = probe.frame; probe.orderOut(nil)
+        guard kept == reach else { throw AxonError("contract_test_failed", "The glow panel was moved off its window's frame.") }
+    }
     guard let glowMask = MacGlowShape.mask(size: CGSize(width: 392, height: 292), window: glowWindow),
           let glowBytes = glowMask.dataProvider?.data as Data?, glowMask.width == 392, glowMask.height == 292 else {
         throw AxonError("contract_test_failed", "Glow mask was not produced.")
@@ -953,7 +963,7 @@ func macContractTest() throws {
           MacBarPlacement.avoid(hud: barAtTop, target: CGRect(x: 700, y: 830, width: 0, height: 4), work: barWork) == nil else {
         throw AxonError("contract_test_failed", "Bar avoidance differs from WindowGeometry.AvoidHud.")
     }
-    emit(["ok": true, "control_contract": 1, "checks": ["shared state codec", "own HUD chrome excluded from occlusion", "an app's own alert above layer 0 is a valid target", "typed characters carry text without modifiers", "saved approvals expire and are capped", "malformed state refusal", "canonical approval fingerprint", "sensitive action classification", "kernel process birth identity", "native idle/paused/stopped/expired/session/monitor/Stop refusals", "empty cleanup and malformed input-journal refusal", "official Phosphor resource rendering", "bar words, states and geometry; menu layout, page timing; drag band and spring", "capture visibility and dismissal lifecycle", "access tier enforcement for target and frontmost app", "conversation-scoped remembered approvals", "confirmed-only Stop clearing", "approval completion fenced by Stop and legacy pause", "shared motion curves", "access prompt layout and placement", "access card stays visible when the helper is inactive", "window glow falloff, mask, matching and levels", "glow lit inside on full-screen edges, entrance widens", "bar docks, drag landing and avoidance"], "hud_icon_assets": iconAssets, "hud_material": "ink_surface", "desktop_input_sent": false])
+    emit(["ok": true, "control_contract": 1, "checks": ["shared state codec", "own HUD chrome excluded from occlusion", "an app's own alert above layer 0 is a valid target", "typed characters carry text without modifiers", "saved approvals expire and are capped", "malformed state refusal", "canonical approval fingerprint", "sensitive action classification", "kernel process birth identity", "native idle/paused/stopped/expired/session/monitor/Stop refusals", "empty cleanup and malformed input-journal refusal", "official Phosphor resource rendering", "bar words, states and geometry; menu layout, page timing; drag band and spring", "capture visibility and dismissal lifecycle", "access tier enforcement for target and frontmost app", "conversation-scoped remembered approvals", "confirmed-only Stop clearing", "approval completion fenced by Stop and legacy pause", "shared motion curves", "access prompt layout and placement", "access card stays visible when the helper is inactive", "window glow falloff, mask, matching and levels", "glow lit inside on full-screen edges, entrance widens, panel never moved under the menu bar", "bar docks, drag landing and avoidance"], "hud_icon_assets": iconAssets, "hud_material": "ink_surface", "desktop_input_sent": false])
 }
 
 func macMoveCursor(_ point: CGPoint, _ args: [String: Any]) throws -> [String: Any] {
