@@ -332,7 +332,12 @@ final class MacGuardian: NSObject {
     func tick() {
         if Date() > controlsUntil { visuals.hide(); controlsUntil = .distantFuture }
         if (["active", "paused"].contains(state) || prompt != nil), MacFence.latchBlocks(MacFence.latch) {
-            if prompt != nil { NSApp.abortModal() }; stop(MacFence.latchEntryBlocks(MacFence.latch + ".unconfirmed") ? "guardian_stop_unconfirmed" : "persisted_emergency_stop"); return
+            // The watchdog latches, then writes the fence as stopped. A fence it
+            // has just stopped during this task is a live Esc or Control+Option+F12,
+            // not a Stop persisted from before, so the bar says so.
+            let live = state == "active" && (try? MacFence.read())?.state == "stopped"
+            if prompt != nil { NSApp.abortModal() }
+            stop(MacFence.latchEntryBlocks(MacFence.latch + ".unconfirmed") ? "guardian_stop_unconfirmed" : live ? "escape" : "persisted_emergency_stop"); return
         }
         guard let stored = try? MacFence.read() else { if state == "active" { stop("state_unavailable") }; return }
         if stored.state == "stopped" && state != "stopped" { if prompt != nil { NSApp.abortModal() }; set("stopped", reason: "escape") }

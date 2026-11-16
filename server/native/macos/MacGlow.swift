@@ -150,12 +150,15 @@ final class MacWindowGlow {
         return CGPoint(x: p.x, y: height - p.y)
     }
 
+    private var orderedAt: CFTimeInterval = 0
     var recordable = false { didSet { panel?.sharingType = recordable ? .readOnly : .none } }
     private func build() {
         guard panel == nil else { return }
         let p = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         p.isOpaque = false; p.backgroundColor = .clear; p.hasShadow = false; p.ignoresMouseEvents = true
-        p.level = .statusBar; p.hidesOnDeactivate = false; p.isReleasedWhenClosed = false
+        // Normal level, ordered just above the target window: a window that covers
+        // the target also covers its glow, as on Windows.
+        p.level = .normal; p.hidesOnDeactivate = false; p.isReleasedWhenClosed = false
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         // Out of recordings unless the human turns "Show bar and glow in
         // recordings" on; the runtime's own screenshots hide it either way.
@@ -205,7 +208,7 @@ final class MacWindowGlow {
         aim(at: pending.flatMap { near.contains($0) ? $0 : nil } ?? CGPoint(x: window.midX, y: window.minY), animated: false); pending = nil
         CATransaction.begin(); CATransaction.setDisableActions(true); root.opacity = 0
         wide.opacity = reduce ? 1 : 0; narrow.opacity = reduce ? 0 : 1; CATransaction.commit()
-        panel.orderFrontRegardless()
+        panel.order(.above, relativeTo: Int(windowID)); orderedAt = CACurrentMediaTime()
         startDrift(reduce: reduce)
         CATransaction.begin(); CATransaction.setAnimationDuration(reduce ? MacDesign.fast : MacDesign.slow)
         CATransaction.setAnimationTimingFunction(MacDesign.easeOut)
@@ -315,6 +318,8 @@ final class MacWindowGlow {
             seen = window; seenAt = now; return
         }
         if parked && !passing && now - seenAt >= 0.12 { enter(window) }
+        // The target may have been raised above the glow since; stay just above it.
+        if shown, let panel = panel, now - orderedAt >= 0.5 { panel.order(.above, relativeTo: Int(windowID)); orderedAt = now }
     }
     func hide(immediately: Bool = false) {
         parked = false; pending = nil
