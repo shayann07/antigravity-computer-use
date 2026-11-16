@@ -16,7 +16,7 @@ import {storageOperation} from './storage.mjs';
 import {contract,nativePlatform,launchTarget,executableKey} from './platform.mjs';
 import {Incidents} from './incidents.mjs';
 import {updateNotice} from './update-notice.mjs';
-import {settleOrphanMacStop,clearConfirmedStop,currentStopNonce,persistRecoveryStop,settlePriorStop,recoveryAdvice,priorWindowsCleanupVerified,priorMacCleanupVerified,priorUndispatchedCleanupVerified,readStopLatch,persistStopLatch,settleFreshStopLatch} from './recovery.mjs';
+import {settleOrphanMacStop,writeMacControllerMarker,clearConfirmedStop,currentStopNonce,persistRecoveryStop,settlePriorStop,recoveryAdvice,priorWindowsCleanupVerified,priorMacCleanupVerified,priorUndispatchedCleanupVerified,readStopLatch,persistStopLatch,settleFreshStopLatch} from './recovery.mjs';
 import {writeAtomicJSON,readTaskRecord} from './atomic-json.mjs';
 import {loadConversationApprovals,saveConversationApprovals} from './conversation-approvals.mjs';
 
@@ -180,6 +180,9 @@ export class Runtime {
     // Human controls may start before an agent calls ready. Ensure their native
     // cleanup checks have an explicit empty ledger even in a passive session.
     if(!driver&&!guardian)initializeInputLedger(this.guardFile);
+    // macOS: the controller's own start time, so recovery can tell a reused
+    // controller pid apart from this process (recovery.mjs macStopSettles).
+    if(!driver&&!guardian&&process.platform==='darwin')try{writeMacControllerMarker(this.guardFile);}catch{}
     const env={AGCU_GUARD_FILE:this.guardFile,AGCU_CONTRACT_FILE:fileURLToPath(new URL('./control-contract.json',import.meta.url)),AGCU_STOP_LATCH:this.latchFile||'',AGCU_PARENT_PID:String(process.pid),AGCU_REARM_LOCKED:priorTask?'1':'0',AGCU_PERMISSION_MODE:permissionMode,AGCU_TAKEOVER_MODE:'manual',AGCU_REAL_CURSOR:'1',CU_OVERLAY:'off',CU_PRESENCE:'off',CU_MODE:'take'};
     this.driver=driver||new Driver({env,onEvent:event=>{if(event.event==='input_cleanup_failed')this.stop().catch(()=>{});}});this.guardian=guardian||new Guardian(env);
     this.sessions=sessions||new Sessions({sessionId:randomUUID(),onInputLeaseLost:()=>this.stop().catch(()=>{})});this.sessions.register();
@@ -332,7 +335,11 @@ export class Runtime {
     // macOS: an unconfirmed Stop left by a controller that ended together
     // with its guardian, with no task open, settles only on full evidence.
     if(process.platform==='darwin'&&this.state==='stopped'&&this.lastControlReason==='guardian_stop_unconfirmed'&&!this.recoveredTask&&this.latchFile&&this.taskFile&&this.guardFile){
-      try{if(!readTaskRecord(this.taskFile).open){settleOrphanMacStop(this.latchFile,{currentGuard:path.basename(this.guardFile)});this.lastControlReason='prior_cleanup_verified';}}catch{}
+      // Settling leaves a confirmed "stopped" and is reported as such. The
+      // ordinary Stop clearing happens on the next ready, never in this call.
+      let settled=null;
+      try{if(!readTaskRecord(this.taskFile).open)settled=settleOrphanMacStop(this.latchFile,{currentGuard:path.basename(this.guardFile)});}catch{}
+      if(settled){this.lastControlReason='prior_cleanup_verified';return {...this.status(),ready:false,controls_visible:null,replay_allowed:false,prior_cleanup_verified:true,next_action:settled.next_action};}
     }
     if(this.state==='stopped'&&this.lastControlReason!=='guardian_stop_unconfirmed'&&!persistenceFailure(this.lastControlReason)&&!this.recoveredTask&&!this.recoveryFailure){
       const cleared=await Runtime.prototype.clearStop.call(this);

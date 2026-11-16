@@ -127,7 +127,7 @@ export function settlePriorStop(file,record,{platform=process.platform,probe=pro
  const directory=path.dirname(file),root=fs.lstatSync(directory,{bigint:true});
  const context=JSON.parse(readRecoveryFile(file+'.context.json',1024,fs));
  if(!context||context.schema!==1||context.guard!==record?.guard||!guardName.test(context.guard)||Object.keys(context).sort().join(',')!=='guard,nonce,schema')throw Error('Prior Stop context is missing or differs');
- const verify=()=>priorWindowsCleanupVerified(directory,record,{platform,probe})||priorMacCleanupVerified(directory,record,{platform,probe,startOf})||priorUndispatchedCleanupVerified(directory,record,{platform,probe,startOf})&&priorUndispatchedActorsGone(directory,record,{probe});
+ const verify=()=>priorWindowsCleanupVerified(directory,record,{platform,probe})||priorMacCleanupVerified(directory,record,{platform,probe,startOf})||priorUndispatchedCleanupVerified(directory,record,{platform,probe,startOf})&&(platform==='darwin'||priorUndispatchedActorsGone(directory,record,{probe}));
  if(!verify())throw Error('Prior actors or ledger remain unverified');
  const result=settleFreshStopLatch(file,context.nonce,root);
  return {...result,prior_cleanup_verified:true};
@@ -182,51 +182,89 @@ function macActorGone(pid,recordedStart,{probe,startOf}){
  const live=startOf(pid);if(typeof live!=='number'||!Number.isFinite(live))return false;
  return Math.abs(live-recordedStart)>START_TOLERANCE_S;
 }
-const startText=/^([1-9][0-9]{0,19}(?:\.[0-9]{1,9})?)$/;
-export function priorMacActiveActorsGone(directory,record,{probe=process.kill,startOf=macProcessStartSeconds,io=fs}={}){
+const startText=/^([1-9][0-9]{0,19}(?:\.[0-9]{1,9})?)$/,markerText=/^([1-9][0-9]{0,9})\|([1-9][0-9]{0,19}(?:\.[0-9]{1,9})?)$/;
+// Every actor the old guard recorded, each with the start time a marker
+// recorded for it: the controller (.controller), the guardian (.guardian), the
+// watchdog (.watchdog) and the input workers (.worker-<pid>, or a .workers list). A task-record
+// child is matched to its marker by pid. A marker that exists but cannot be
+// read, or two markers that disagree about one pid, fail closed.
+function macRecordedActors(directory,record,{io,requireGuardian,requireWatchdog}){
+ const guard=path.join(directory,record.guard),parent=Number(/^guard-(\d+)-/.exec(record.guard)[1]);
+ const missing=file=>{try{io.lstatSync(file);return false;}catch(error){if(error.code==='ENOENT')return true;throw error;}};
+ const starts=new Map();
+ const note=(pid,start)=>{if(starts.has(pid)&&starts.get(pid)!==start)throw Error('conflicting start times');starts.set(pid,start);};
+ const marker=(suffix,required)=>{
+  const file=guard+suffix;if(missing(file)){if(required)throw Error('required marker missing');return null;}
+  const m=markerText.exec(readRecoveryFile(file,128,io));if(!m)throw Error('invalid marker');
+  note(Number(m[1]),Number(m[2]));return Number(m[1]);
+ };
+ const controller=marker('.controller',false);if(controller!==null&&controller!==parent)throw Error('controller marker differs');
+ marker('.guardian',requireGuardian);
+ marker('.watchdog',requireWatchdog);
+ if(!missing(guard+'.workers'))for(const line of readRecoveryFile(guard+'.workers',4096,io).split(/\r?\n/).filter(Boolean)){const m=/^([1-9][0-9]{0,9}):([1-9][0-9]{0,19}(?:\.[0-9]{1,9})?)$/.exec(line);if(!m)throw Error('invalid workers list');note(Number(m[1]),Number(m[2]));}
+ const prefix=record.guard+'.worker-';
+ for(const name of io.readdirSync(directory)){
+  if(!name.startsWith(prefix))continue;
+  const m=/^([1-9][0-9]{0,9})$/.exec(name.slice(prefix.length)),start=startText.exec(readRecoveryFile(path.join(directory,name),128,io).trim());
+  if(!m||!start)throw Error('invalid worker marker');note(Number(m[1]),Number(start[1]));
+ }
+ const pids=[...new Set([parent,...record.children,...starts.keys()])];
+ return pids.map(pid=>[pid,starts.has(pid)?starts.get(pid):null]);
+}
+// The one macOS proof that an old guard's Stop can settle. It is used for a
+// recovered task (dispatched or not), for an orphan Stop when the controller
+// and guardian ended together, and by install.mjs. It requires:
+// - the guard state reads idle or stopped, or "active" (a guardian killed mid
+//   task) with seven or six fields and no cleanup pending;
+// - every recorded actor is gone. An actor is gone when no process holds its
+//   pid, or when the live process at that pid provably started at another time
+//   (pid reuse). An actor with no recorded start time (an old guard without
+//   .controller, or a child without a marker) counts as gone only when no
+//   process holds its pid: anything unknown fails closed;
+// - the input ledger is a plain, single-link, readable file holding the empty
+//   ledger. Missing, damaged, linked or unreadable fails closed.
+// Settling writes an ordinary confirmed "stopped". It never writes idle, never
+// resumes the old task and never lets a queued action run.
+export function macStopSettles(directory,record,{undispatched=false,probe=process.kill,startOf=macProcessStartSeconds,io=fs}={}){
  try{
-  const guard=path.join(directory,record.guard),parent=Number(/^guard-(\d+)-/.exec(record.guard)[1]);
-  const missing=file=>{try{io.lstatSync(file);return false;}catch(error){if(error.code==='ENOENT')return true;throw error;}};
-  const actors=[[parent,null],...record.children.map(pid=>[pid,null])];
-  // The guardian wrote the "active" state, so its identity marker must exist.
-  const guardian=/^([1-9][0-9]{0,9})\|([1-9][0-9]{0,19}(?:\.[0-9]{1,9})?)$/.exec(readRecoveryFile(guard+'.guardian',128,io));if(!guardian)return false;
-  actors.push([Number(guardian[1]),Number(guardian[2])]);
-  if(!missing(guard+'.watchdog')){const m=/^([1-9][0-9]{0,9})\|([1-9][0-9]{0,19}(?:\.[0-9]{1,9})?)$/.exec(readRecoveryFile(guard+'.watchdog',128,io));if(!m)return false;actors.push([Number(m[1]),Number(m[2])]);}
-  else if(record.watchdogs_complete===true&&record.dispatched===true)return false;
-  if(!missing(guard+'.workers'))for(const line of readRecoveryFile(guard+'.workers',4096,io).split(/\r?\n/).filter(Boolean)){const m=/^([1-9][0-9]{0,9}):([1-9][0-9]{0,19}(?:\.[0-9]{1,9})?)$/.exec(line);if(!m)return false;actors.push([Number(m[1]),Number(m[2])]);}
-  const prefix=record.guard+'.worker-';
-  for(const name of io.readdirSync(directory)){
-   if(!name.startsWith(prefix))continue;
-   const m=/^([1-9][0-9]{0,9})$/.exec(name.slice(prefix.length)),start=startText.exec(readRecoveryFile(path.join(directory,name),128,io).trim());
-   if(!m||!start)return false;actors.push([Number(m[1]),Number(start[1])]);
-  }
+  if(typeof record?.guard!=='string'||!guardName.test(record.guard)||!Array.isArray(record.children))return false;
+  const guard=path.join(directory,record.guard),fields=readRecoveryFile(guard,4096,io).split('|');
+  const full=[6,7].includes(fields.length)&&fields[5]==='0';
+  const settled=fields[0]==='active'?full:['idle','stopped'].includes(fields[0])&&(undispatched?fields.length>=4:full);
+  if(!settled)return false;
+  const actors=macRecordedActors(directory,record,{io,requireGuardian:fields[0]==='active',requireWatchdog:fields[0]==='active'&&record.dispatched===true&&record.watchdogs_complete===true});
   const allGone=()=>actors.every(([pid,start])=>macActorGone(pid,start,{probe,startOf}));
+  if(!allGone())return false;
+  const ledger=JSON.parse(readRecoveryFile(guard+'.inputs',65536,io));
+  if(!ledger||typeof ledger!=='object'||Array.isArray(ledger)||Object.keys(ledger).sort().join(',')!=='buttons,keys'||!Array.isArray(ledger.keys)||ledger.keys.length!==0||!Array.isArray(ledger.buttons)||ledger.buttons.length!==0)return false;
   return allGone();
  }catch{return false;}
 }
-function macActiveStateSettles(directory,record,fields,options){
- // Six or seven fields and no cleanup pending, as for idle or stopped.
- return fields[0]==='active'&&[6,7].includes(fields.length)&&fields[5]==='0'&&priorMacActiveActorsGone(directory,record,options);
+// Kept for callers and tests that ask only about the actors of an "active" guard.
+export function priorMacActiveActorsGone(directory,record,{probe=process.kill,startOf=macProcessStartSeconds,io=fs}={}){
+ try{
+  if(typeof record?.guard!=='string'||!guardName.test(record.guard)||!Array.isArray(record.children))return false;
+  const actors=macRecordedActors(directory,record,{io,requireGuardian:true,requireWatchdog:record.dispatched===true&&record.watchdogs_complete===true});
+  return actors.every(([pid,start])=>macActorGone(pid,start,{probe,startOf}));
+ }catch{return false;}
 }
-// macOS only. A controller and its guardian ended together (for example the
-// host app quit) leave an unconfirmed Stop bound to a guard that no open task
-// names, so no recovered-task path can settle it. Settle it with the same
-// evidence as above: the old guard reads idle, stopped or active with no
-// cleanup pending, every actor it recorded is gone (by pid and recorded start
-// time), and its ledger is a plain file holding the empty ledger. Never the
-// current controller's own guard; settling writes an ordinary "stopped".
-export function settleOrphanMacStop(file,{currentGuard,platform=process.platform,probe=process.kill,startOf=macProcessStartSeconds,io=fs}={}){
+// The controller writes its own start time beside the guard file, from the same
+// source the proof compares with, so a reused controller pid is told apart.
+export function writeMacControllerMarker(guardFile,{pid=process.pid,startOf=macProcessStartSeconds}={}){
+ const start=startOf(pid);if(typeof start!=='number'||!Number.isFinite(start)||start<=0)return false;
+ writeAtomicText(guardFile+'.controller',`${pid}|${start.toFixed(6)}`,{exclusive:true});return true;
+}
+// macOS only. Settles an unconfirmed Stop whose guard no open task names (the
+// controller and its guardian ended together, for example when the host app
+// quit). ready calls it while no task is open; install.mjs calls it so a newer
+// build can install over such a Stop. Never the current controller's own guard.
+export function settleOrphanMacStop(file,{currentGuard=null,platform=process.platform,probe=process.kill,startOf=macProcessStartSeconds,io=fs}={}){
  if(platform!=='darwin')throw Error('Orphan Stop settlement is macOS only');
  const directory=path.dirname(file),root=io.lstatSync(directory,{bigint:true});
  const context=JSON.parse(readRecoveryFile(file+'.context.json',1024,io));
  if(!context||context.schema!==1||!guardName.test(context.guard??'')||context.guard===currentGuard||Object.keys(context).sort().join(',')!=='guard,nonce,schema')throw Error('Prior Stop context is missing or differs');
  const record={guard:context.guard,open:false,children:[],dispatched:false,watchdogs_complete:false};
- const guard=path.join(directory,context.guard);
- const fields=readRecoveryFile(guard,4096,io).split('|');
- if(![6,7].includes(fields.length)||fields[5]!=='0'||!['idle','stopped','active'].includes(fields[0]))throw Error('Prior guard state is not settled');
- if(!priorMacActiveActorsGone(directory,record,{probe,startOf,io}))throw Error('Prior actors remain');
- const ledger=JSON.parse(readRecoveryFile(guard+'.inputs',65536,io));
- if(!ledger||typeof ledger!=='object'||Array.isArray(ledger)||Object.keys(ledger).sort().join(',')!=='buttons,keys'||!Array.isArray(ledger.keys)||ledger.keys.length!==0||!Array.isArray(ledger.buttons)||ledger.buttons.length!==0)throw Error('Prior input ledger is not empty');
+ if(!macStopSettles(directory,record,{probe,startOf,io}))throw Error('Prior actors or ledger remain unverified');
  return {...settleFreshStopLatch(file,context.nonce,root,{io}),prior_cleanup_verified:true};
 }
 export function priorWindowsCleanupVerified(directory,record,{platform=process.platform,probe=process.kill,io=fs}={}){
@@ -244,19 +282,10 @@ export function priorWindowsCleanupVerified(directory,record,{platform=process.p
  }catch{return false;}
 }
 export function priorMacCleanupVerified(directory,record,{platform=process.platform,probe=process.kill,startOf=macProcessStartSeconds,io=fs}={}){
- if(platform!=='darwin'||record?.dispatched!==true||record.watchdogs_complete!==true||!Array.isArray(record.children)||record.children.length<3||typeof record.guard!=='string'||!/^guard-[1-9][0-9]{0,9}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.state$/.test(record.guard))return false;
- const read=(file,limit)=>readRecoveryFile(file,limit,io);
- const gone=pid=>{if(!Number.isSafeInteger(pid)||pid<=0||pid>4294967295)return false;try{probe(pid,0);return false;}catch(error){return error.code==='ESRCH';}};
+ if(platform!=='darwin'||record?.dispatched!==true||record.watchdogs_complete!==true||!Array.isArray(record.children)||record.children.length<3||typeof record.guard!=='string'||!guardName.test(record.guard))return false;
  try{
-  const guard=path.join(directory,record.guard),parent=Number(/^guard-(\d+)-/.exec(record.guard)[1]);
-  const watchdog=/^([1-9][0-9]{0,9})\|([1-9][0-9]{0,19}(?:\.[0-9]{1,9})?)$/.exec(read(guard+'.watchdog',128));if(!watchdog||!record.children.includes(Number(watchdog[1])))return false;
-  const pids=[parent,...record.children,Number(watchdog[1])];if(!pids.every(gone))return false;
-  // Six fields, or seven when the guardian records click-tier grants.
-  const fields=read(guard,4096).split('|');if(![6,7].includes(fields.length)||fields[5]!=='0')return false;
-  if(!['idle','stopped'].includes(fields[0])&&!macActiveStateSettles(directory,record,fields,{probe,startOf,io}))return false;
-  const ledger=JSON.parse(read(guard+'.inputs',65536));
-  if(!ledger||typeof ledger!=='object'||Array.isArray(ledger)||Object.keys(ledger).sort().join(',')!=='buttons,keys'||!Array.isArray(ledger.keys)||ledger.keys.length!==0||!Array.isArray(ledger.buttons)||ledger.buttons.length!==0)return false;
-  return pids.every(gone);
+  const watchdog=markerText.exec(readRecoveryFile(path.join(directory,record.guard)+'.watchdog',128,io));if(!watchdog||!record.children.includes(Number(watchdog[1])))return false;
+  return macStopSettles(directory,record,{probe,startOf,io});
  }catch{return false;}
 }
 // A task that was opened but never reached recordDispatch() started no native
@@ -266,15 +295,15 @@ export function priorMacCleanupVerified(directory,record,{platform=process.platf
 // record is gone, and its input ledger is the platform's empty ledger.
 export function priorUndispatchedCleanupVerified(directory,record,{platform=process.platform,probe=process.kill,startOf=macProcessStartSeconds,io=fs}={}){
  if(!['win32','darwin'].includes(platform)||record?.open!==true||record.dispatched!==false||!Array.isArray(record.children)||record.children.length!==0||typeof record.guard!=='string'||!/^guard-[1-9][0-9]{0,9}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.state$/.test(record.guard))return false;
+ if(platform==='darwin')return macStopSettles(directory,record,{undispatched:true,probe,startOf,io});
  const gone=pid=>{if(!Number.isSafeInteger(pid)||pid<=0||pid>4294967295)return false;try{probe(pid,0);return false;}catch(error){return error.code==='ESRCH';}};
  try{
   const guard=path.join(directory,record.guard),parent=Number(/^guard-(\d+)-/.exec(record.guard)[1]);
   if(!gone(parent))return false;
   const fields=readRecoveryFile(guard,4096,io).split('|');if(fields.length<4)return false;
-  if(!['idle','stopped'].includes(fields[0])&&!(platform==='darwin'&&macActiveStateSettles(directory,record,fields,{probe,startOf,io})))return false;
+  if(!['idle','stopped'].includes(fields[0]))return false;
   const ledger=readRecoveryFile(guard+'.inputs',65536,io);
-  if(platform==='win32'){if(ledger!=='')return false;}
-  else{const value=JSON.parse(ledger);if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).sort().join(',')!=='buttons,keys'||value.keys.length!==0||value.buttons.length!==0)return false;}
+  if(ledger!=='')return false;
   return gone(parent);
  }catch{return false;}
 }

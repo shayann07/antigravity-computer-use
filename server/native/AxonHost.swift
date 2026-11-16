@@ -250,6 +250,32 @@ func axAlive(_ el: AXUIElement) -> Bool {
 }
 
 // The element under a screen point, for point clicks and describe.
+// The name a snapshot lists for an element. A pixel click's approval label
+// uses the same rule (MacFence.preview), so a target is named the same way.
+func macSnapshotName(_ el: AXUIElement) -> String? {
+    axString(el, kAXTitleAttribute as String)
+        ?? axString(el, kAXDescriptionAttribute as String)
+        ?? axString(el, "AXPlaceholderValue")
+}
+
+// The label of the element under a pixel click, for the approval rule only:
+// hit-tested through the target app, which must own the element, inside the
+// target window. Any failure, a secure field or no name gives "", which the
+// ambiguous-target rule treats as sensitive. There is no fallback to the role
+// (as on Windows, AxonHost.cs PreviewLabel).
+func macPointLabel(_ point: [Int], _ a: [String: Any]) -> String {
+    guard let (win, pid, _, _) = try? resolveWindow(a) else { return "" }
+    let app = AXUIElementCreateApplication(pid)
+    AXUIElementSetMessagingTimeout(app, 0.25)
+    var hit: AXUIElement?
+    guard AXUIElementCopyElementAtPosition(app, Float(point[0]), Float(point[1]), &hit) == .success, let el = hit else { return "" }
+    var owner: pid_t = 0
+    guard AXUIElementGetPid(el, &owner) == .success, owner == pid, macElementInWindow(el, win) else { return "" }
+    let role = (axString(el, kAXRoleAttribute as String) ?? "") + (axString(el, kAXSubroleAttribute as String) ?? "")
+    if role.lowercased().contains("secure") { return "" }
+    return macSnapshotName(el)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+}
+
 func elementAt(_ x: Int, _ y: Int) -> AXUIElement? {
     let system = AXUIElementCreateSystemWide()
     var el: AXUIElement?
@@ -610,9 +636,7 @@ func opSnapshot(_ a: [String: Any]) throws -> [String: Any] {
         let subrole = axString(el, kAXSubroleAttribute as String) ?? ""
         let isSecure = role.lowercased().contains("secure") || subrole.lowercased().contains("secure")
         if role == "AXWebArea" { foundWebArea = true }
-        let name = axString(el, kAXTitleAttribute as String)
-            ?? axString(el, kAXDescriptionAttribute as String)
-            ?? axString(el, "AXPlaceholderValue")
+        let name = macSnapshotName(el)
         let ident = axString(el, kAXIdentifierAttribute as String)
         let textVal = !isSecure ? axValueText(el) : nil
         let hasNameOrId = !(name?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
@@ -896,11 +920,38 @@ func opClick(_ a: [String: Any]) throws -> [String: Any] {
     return res
 }
 
+let macMaxStrokeHops = 1500
+// Hops per segment of a stroke (index 0 unused): steps for a straight drag,
+// otherwise about 8 pt per hop (1 to 40), scaled down to macMaxStrokeHops.
+func macStrokeHops(_ path: [[Int]], steps: Int) -> [Int] {
+    var hops = [Int](repeating: 0, count: path.count), wanted = 0
+    for s in 1..<path.count {
+        let dx = Double(path[s][0] - path[s - 1][0]), dy = Double(path[s][1] - path[s - 1][1])
+        hops[s] = path.count == 2 ? steps : max(1, min(40, Int((dx * dx + dy * dy).squareRoot() / 8)))
+        wanted += hops[s]
+    }
+    if wanted > macMaxStrokeHops { for s in 1..<path.count { hops[s] = max(1, hops[s] * macMaxStrokeHops / wanted) } }
+    return hops
+}
+
 func opDrag(_ a: [String: Any]) throws -> [String: Any] {
     var res: [String: Any] = [:]
     guard let from = pair(a["from"]), let to = pair(a["to"]) else {
         throw AxonError("bad_points", "drag needs from:[x,y] and to:[x,y] in screen coordinates.",
                         "Read the window with with_rects:true to find the points.")
+    }
+    // Optional points draw one continuous stroke through every point (curves
+    // on a canvas); from/to are its first and last points. Same rule and
+    // timing as the Windows host (AxonHost.cs OpDrag).
+    var path: [[Int]] = [from, to]
+    if let raw = a["points"] as? [Any] {
+        path = []
+        for p in raw {
+            guard let q = pair(p) else { throw AxonError("bad_points", "Every point must be [x,y].") }
+            path.append(q)
+        }
+        guard path.count >= 2 && path.count <= 400 else { throw AxonError("bad_points", "A points drag needs 2 to 400 points.") }
+        guard path[0] == from, path[path.count - 1] == to else { throw AxonError("bad_points", "from and to must be the first and last points.") }
     }
     let button = (str(a["button"]) ?? "left").lowercased()
     let steps = max(2, min(200, int(a["steps"], 12)))
@@ -908,8 +959,10 @@ func opDrag(_ a: [String: Any]) throws -> [String: Any] {
     let (win, pid, _, _) = try resolveWindow(a)
     try guardSameWindow(a, pid)
     try macBringToFront(a)
-    try macCheckTargetPoint(CGPoint(x: from[0], y: from[1]), a)
-    try macCheckTargetPoint(CGPoint(x: to[0], y: to[1]), a)
+    // Validate every point before moving or holding a button.
+    for p in path { try macCheckTargetPoint(CGPoint(x: p[0], y: p[1]), a) }
+    // About 8 pt per hop, at most macMaxStrokeHops hops in total, whatever the point count.
+    let hops = macStrokeHops(path, steps: steps)
     let waited = try guardDisturb(a)
     if waited > 0 { res["waited_for_user_ms"] = waited }
     try checkStop()
@@ -936,11 +989,14 @@ func opDrag(_ a: [String: Any]) throws -> [String: Any] {
     Thread.sleep(forTimeInterval: 0.03)
     try post(CGEvent(mouseEventSource: src, mouseType: downType, mouseCursorPosition: start, mouseButton: cgButton))
     Thread.sleep(forTimeInterval: Double(holdMs) / 1000.0)
-    for i in 1...steps {
-        let p = CGPoint(x: Double(from[0] + (to[0] - from[0]) * i / steps),
-                        y: Double(from[1] + (to[1] - from[1]) * i / steps))
-        try post(CGEvent(mouseEventSource: src, mouseType: dragType, mouseCursorPosition: p, mouseButton: cgButton))
-        Thread.sleep(forTimeInterval: 0.012)
+    for s in 1..<path.count {
+        let p0 = path[s - 1], p1 = path[s], n = hops[s]
+        for i in 1...n {
+            let p = CGPoint(x: Double(p0[0] + (p1[0] - p0[0]) * i / n),
+                            y: Double(p0[1] + (p1[1] - p0[1]) * i / n))
+            try post(CGEvent(mouseEventSource: src, mouseType: dragType, mouseCursorPosition: p, mouseButton: cgButton))
+            Thread.sleep(forTimeInterval: path.count == 2 ? 0.012 : 0.004)
+        }
     }
     Thread.sleep(forTimeInterval: Double(holdMs) / 1000.0)
     let end = CGPoint(x: Double(to[0]), y: Double(to[1]))
@@ -955,6 +1011,7 @@ func opDrag(_ a: [String: Any]) throws -> [String: Any] {
     res["to"] = to
     res["button"] = button
     res["steps"] = steps
+    if path.count > 2 { res["points"] = path.count }
     return res
 }
 

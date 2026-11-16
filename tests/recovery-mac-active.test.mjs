@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import path from 'node:path';
 import {testDirectory} from './paths.mjs';
-import {priorMacCleanupVerified,priorUndispatchedCleanupVerified,priorMacActiveActorsGone,macProcessStartSeconds,persistRecoveryStop,settlePriorStop,readStopLatch} from '../server/recovery.mjs';
+import {writeMacControllerMarker,macStopSettles,priorMacCleanupVerified,priorUndispatchedCleanupVerified,priorMacActiveActorsGone,macProcessStartSeconds,persistRecoveryStop,settlePriorStop,readStopLatch} from '../server/recovery.mjs';
 
 // A guardian killed mid-task leaves "active" in its state file. On macOS that
 // settles a stuck Stop only when every recorded actor is gone (by pid and
@@ -48,9 +48,9 @@ test('mac active state: a reused pid is told apart by its start time, both ways'
   // Another user's process (EPERM) at the pid is still identity-checked.
   const eperm=pid=>{if(pid===202)throw Object.assign(Error('perm'),{code:'EPERM'});gone();};
   assert.equal(verify(dir,{probe:eperm,startOf:()=>START.watchdog}),false,kind+' EPERM same start');
-  // A dispatched task also lists the watchdog among its children, which must
-  // have no process at all, so only the undispatched path tolerates reuse here.
-  assert.equal(verify(dir,{probe:eperm,startOf:()=>START.watchdog-600}),kind==='undispatched',kind+' EPERM other start');
+  // A task-record child is matched to its marker by pid, so a dispatched
+  // task's watchdog is identity-checked by start time as well.
+  assert.equal(verify(dir,{probe:eperm,startOf:()=>START.watchdog-600}),true,kind+' EPERM other start');
   // Worker markers carry their start time; a live worker with that start blocks.
   assert.equal(verify(dir,{probe:liveOnly([203]),startOf:()=>START.worker}),false,kind+' live worker');
   assert.equal(verify(dir,{probe:liveOnly([203]),startOf:()=>START.worker+90}),true,kind+' reused worker pid');
@@ -131,14 +131,60 @@ test('mac orphan Stop: a controller that ended with its guardian settles only on
   fs.writeFileSync(state,'idle|t|9||9|0|');persistRecoveryStop(file,guard,{unconfirmed:true,nonce:'c'.repeat(32)});
   assert.throws(()=>settleOrphanMacStop(file,options({platform:'win32'})));
   assert.throws(()=>settleOrphanMacStop(file,options({currentGuard:guard})),/context/);
-  assert.throws(()=>settleOrphanMacStop(file,options({probe:liveOnly([101])})),/actors/);
-  assert.throws(()=>settleOrphanMacStop(file,options({probe:liveOnly([201]),startOf:()=>START.guardian})),/actors/);
-  fs.writeFileSync(state+'.inputs','{"keys":[42],"buttons":[]}');assert.throws(()=>settleOrphanMacStop(file,options()),/ledger/);fs.writeFileSync(state+'.inputs',EMPTY);
-  fs.writeFileSync(state,'idle|t|9||9|1|');assert.throws(()=>settleOrphanMacStop(file,options()),/state/);fs.writeFileSync(state,'idle|t|9||9|0|');
+  assert.throws(()=>settleOrphanMacStop(file,options({probe:liveOnly([101])})),/unverified/);
+  assert.throws(()=>settleOrphanMacStop(file,options({probe:liveOnly([201]),startOf:()=>START.guardian})),/unverified/);
+  fs.writeFileSync(state+'.inputs','{"keys":[42],"buttons":[]}');assert.throws(()=>settleOrphanMacStop(file,options()),/unverified/);fs.writeFileSync(state+'.inputs',EMPTY);
+  fs.writeFileSync(state,'idle|t|9||9|1|');assert.throws(()=>settleOrphanMacStop(file,options()),/unverified/);fs.writeFileSync(state,'idle|t|9||9|0|');
   assert(readStopLatch(file).unconfirmed);
   // A reused guardian pid (another start time) counts as gone.
   const result=settleOrphanMacStop(file,options({probe:liveOnly([201]),startOf:()=>START.guardian+3600}));
   assert.equal(result.prior_cleanup_verified,true);assert.equal(result.next_action,'report_and_wait_for_human');
   assert.equal(readStopLatch(file).value,'stopped');assert.equal(fs.existsSync(file+'.unconfirmed'),false);
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
+
+test('mac stop proof: the controller and children are checked by pid and start time',()=>{
+ const {dir,state}=fixture('mac-controller-');const CONTROLLER=1794832500.125;
+ try{
+  fs.writeFileSync(state+'.controller',`101|${CONTROLLER}`);
+  for(const [kind,verify] of checks){
+   // The controller's pid now holds a process that started later: reused, so gone.
+   assert.equal(verify(dir,{probe:liveOnly([101]),startOf:()=>CONTROLLER+600}),true,kind+' reused controller pid');
+   // The controller itself, alive at its recorded start: not gone.
+   assert.equal(verify(dir,{probe:liveOnly([101]),startOf:()=>CONTROLLER+1}),false,kind+' live controller');
+   assert.equal(verify(dir,{probe:liveOnly([101]),startOf:()=>null}),false,kind+' controller start unreadable');
+  }
+  // A marker naming another pid than the guard, or a malformed one, fails closed.
+  fs.writeFileSync(state+'.controller',`102|${CONTROLLER}`);for(const [kind,verify] of checks)assert.equal(verify(dir,{probe:gone,startOf:noStart}),false,kind+' controller marker for another pid');
+  fs.writeFileSync(state+'.controller','101');for(const [kind,verify] of checks)assert.equal(verify(dir,{probe:gone,startOf:noStart}),false,kind+' malformed controller marker');
+  fs.rmSync(state+'.controller');
+  // A child with a marker is identity-checked by that marker's start time.
+  assert.equal(priorMacCleanupVerified(dir,dispatched,{platform:'darwin',probe:liveOnly([202]),startOf:()=>START.watchdog+600}),true,'reused child pid');
+  assert.equal(priorMacCleanupVerified(dir,dispatched,{platform:'darwin',probe:liveOnly([202]),startOf:()=>START.watchdog}),false,'live child');
+  // Two markers that disagree about one pid fail closed.
+  fs.writeFileSync(state+'.worker-202','1794832000.5');assert.equal(priorMacCleanupVerified(dir,dispatched,{platform:'darwin',probe:gone,startOf:noStart}),false,'conflicting markers');
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
+
+test('mac stop proof: idle and stopped guards use the same proof, and only settle to stopped',()=>{
+ const {dir,state}=fixture('mac-proof-states-');const record={guard,children:[],dispatched:false,watchdogs_complete:false};
+ try{
+  for(const ok of ['idle|t|9||9|0|','stopped||0||0|0','active|t|9||9|0|'])
+  {fs.writeFileSync(state,ok);assert.equal(macStopSettles(dir,record,{probe:gone,startOf:noStart}),true,ok);}
+  for(const bad of ['idle|t|9||9|1|','paused|t|9||9|0|','idle||0|','stopped|t|9||9|0||x|y'])
+  {fs.writeFileSync(state,bad);assert.equal(macStopSettles(dir,record,{probe:gone,startOf:noStart}),false,bad);}
+  // A guard the guardian never wrote (four fields) settles only for an undispatched task.
+  fs.writeFileSync(state,'idle||0|');assert.equal(macStopSettles(dir,record,{undispatched:true,probe:gone,startOf:noStart}),true);
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
+
+test('mac controller marker records the pid with the ps start time, once',()=>{
+ const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'mac-controller-marker-')),file=path.join(dir,guard);
+ try{
+  assert.equal(writeMacControllerMarker(file,{pid:101,startOf:()=>1794832500.125}),true);
+  assert.equal(fs.readFileSync(file+'.controller','utf8'),'101|1794832500.125000');
+  assert.throws(()=>writeMacControllerMarker(file,{pid:101,startOf:()=>1}));
+  assert.equal(writeMacControllerMarker(path.join(dir,'other'),{pid:101,startOf:()=>null}),false);
+  assert.equal(fs.existsSync(path.join(dir,'other.controller')),false);
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });

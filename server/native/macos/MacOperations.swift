@@ -648,6 +648,33 @@ func macContractTest() throws {
           !MacFence.sensitive("move", ["__risk":"routine"], label: ""),
           !MacFence.sensitive("click", ["__risk":"routine"], label: "Open settings Button"),
           try macProcessStart(getpid()) == macProcessStart(getpid()) else { throw AxonError("contract_test_failed", "Approval fingerprint or classification differs.") }
+    // The shared key rule (control-contract.json) through ICU, as JS reads it
+    // (tests/sensitive-keys.test.mjs): Cmd/Ctrl plus exactly S, V or X asks.
+    for keys in ["ctrl+s", "cmd+v", "command+x", "ctrl+shift+s", "shift+ctrl+v", "cmd+shift+s", "ctrl+alt+v", "enter", "ctrl+s ctrl+v"]
+    where !MacFence.sensitive("key", ["__risk": "routine", "keys": keys], label: keys) {
+        throw AxonError("contract_test_failed", "Key chord \(keys) must ask.")
+    }
+    for keys in ["ctrl+shift+n", "ctrl+shift+t", "cmd+shift+4", "ctrl+space", "cmd+a", "ctrl+shift+esc", "shift+tab"]
+    where MacFence.sensitive("key", ["__risk": "routine", "keys": keys], label: keys) {
+        throw AxonError("contract_test_failed", "Key chord \(keys) must not ask.")
+    }
+    // Drags are never named, so they always ask; a click with no reachable
+    // target gets no label either.
+    guard try MacFence.preview(["from": [1, 1], "to": [9, 9], "point": [1, 1]]) == "",
+          try MacFence.preview(["from": [1, 1], "to": [9, 9], "points": [[1, 1], [5, 5], [9, 9]]]) == "",
+          try MacFence.preview(["point": [1, 1]]) == "" else {
+        throw AxonError("contract_test_failed", "An unnamed pixel target received a label.")
+    }
+    // A stroke's hops: steps for a straight drag, about 8 pt per hop otherwise,
+    // and never more than macMaxStrokeHops in total.
+    guard macStrokeHops([[0, 0], [80, 0]], steps: 12) == [0, 12],
+          macStrokeHops([[0, 0], [80, 0], [80, 4], [80, 900]], steps: 12) == [0, 10, 1, 40] else {
+        throw AxonError("contract_test_failed", "Stroke hops differ from the Windows host.")
+    }
+    let longStroke = (0..<400).map { [$0 % 2 == 0 ? 0 : 1000, $0] }
+    guard macStrokeHops(longStroke, steps: 12).reduce(0, +) <= macMaxStrokeHops else {
+        throw AxonError("contract_test_failed", "A long stroke exceeds the hop budget.")
+    }
     // Exercise the actual native fence in isolated project-local storage.
     // Refusals only: no fake live permission, application grant or input event.
     try MacFence.initialize()
@@ -963,7 +990,7 @@ func macContractTest() throws {
           MacBarPlacement.avoid(hud: barAtTop, target: CGRect(x: 700, y: 830, width: 0, height: 4), work: barWork) == nil else {
         throw AxonError("contract_test_failed", "Bar avoidance differs from WindowGeometry.AvoidHud.")
     }
-    emit(["ok": true, "control_contract": 1, "checks": ["shared state codec", "own HUD chrome excluded from occlusion", "an app's own alert above layer 0 is a valid target", "typed characters carry text without modifiers", "saved approvals expire and are capped", "malformed state refusal", "canonical approval fingerprint", "sensitive action classification", "kernel process birth identity", "native idle/paused/stopped/expired/session/monitor/Stop refusals", "empty cleanup and malformed input-journal refusal", "official Phosphor resource rendering", "bar words, states and geometry; menu layout, page timing; drag band and spring", "capture visibility and dismissal lifecycle", "access tier enforcement for target and frontmost app", "conversation-scoped remembered approvals", "confirmed-only Stop clearing", "approval completion fenced by Stop and legacy pause", "shared motion curves", "access prompt layout and placement", "access card stays visible when the helper is inactive", "window glow falloff, mask, matching and levels", "glow lit inside on full-screen edges, entrance widens, panel never moved under the menu bar", "bar docks, drag landing and avoidance"], "hud_icon_assets": iconAssets, "hud_material": "ink_surface", "desktop_input_sent": false])
+    emit(["ok": true, "control_contract": 1, "checks": ["shared state codec", "own HUD chrome excluded from occlusion", "an app's own alert above layer 0 is a valid target", "typed characters carry text without modifiers", "saved approvals expire and are capped", "malformed state refusal", "canonical approval fingerprint", "sensitive action classification", "kernel process birth identity", "native idle/paused/stopped/expired/session/monitor/Stop refusals", "empty cleanup and malformed input-journal refusal", "official Phosphor resource rendering", "bar words, states and geometry; menu layout, page timing; drag band and spring", "capture visibility and dismissal lifecycle", "access tier enforcement for target and frontmost app", "conversation-scoped remembered approvals", "confirmed-only Stop clearing", "approval completion fenced by Stop and legacy pause", "shared motion curves", "access prompt layout and placement", "access card stays visible when the helper is inactive", "window glow falloff, mask, matching and levels", "glow lit inside on full-screen edges, entrance widens, panel never moved under the menu bar", "bar docks, drag landing and avoidance", "shared Cmd/Ctrl key rule through ICU", "pixel drags and unreachable click targets stay unnamed", "polyline stroke hops match Windows"], "hud_icon_assets": iconAssets, "hud_material": "ink_surface", "desktop_input_sent": false])
 }
 
 func macMoveCursor(_ point: CGPoint, _ args: [String: Any]) throws -> [String: Any] {

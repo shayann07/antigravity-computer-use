@@ -310,8 +310,12 @@ enum MacFence {
             }
             return [axString(element, kAXTitleAttribute as String), axString(element, kAXDescriptionAttribute as String), axString(element, kAXRoleAttribute as String)].compactMap { $0 }.joined(separator: " ")
         }
-        // Pixels carry no reliable semantic label; ambiguous effects remain sensitive.
-        return args["point"] != nil || args["from"] != nil ? "" : str(args["keys"]) ?? ""
+        // A pixel click is named by the element under it, like a snapshot names
+        // it; an unnamed target stays ambiguous and sensitive. A drag carries
+        // from/to and no point, so it is never named (as on Windows).
+        if args["from"] != nil || args["points"] != nil { return "" }
+        if let point = pair(args["point"]) { return macPointLabel(point, args) }
+        return args["point"] != nil ? "" : str(args["keys"]) ?? ""
     }
     static func sensitive(_ op: String, _ args: [String: Any], label: String) -> Bool {
         // Only risk matching drops Unicode format characters. Observed and
