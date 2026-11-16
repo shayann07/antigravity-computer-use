@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Pause and Resume are removed. The tools `computer_pause` and `computer_resume` no longer exist; Esc or the bar's Stop ends the task and the next `ready` starts a fresh one.
+- A request to use an app shows the app's name, what its access tier allows and a tier tag ("Full control" or "Click only"), with how long the approval lasts.
+- Windows keeps the apps you approved across a guardian restart or an update, per conversation, for up to 24 hours without use. A click-only approval never covers full control.
+- The glow's bright part now also moves to actions that do not move the real pointer, such as background clicks.
 - macOS: the bar, its Settings menu and the access card now match Windows: a 440×48 dark bar with two lines, Stop and Settings at 44×44, a 312-wide menu that opens with a 0.96 scale, the Windows spring when the bar lands on a dock, and Reduce Motion support. There is no Pause or Resume on the Mac (#99).
 - macOS: the window glow widens as it fades in, lights the edges inside the screen for full-screen windows, and has Soft, Medium and Bright levels (#99).
 - macOS: the access card is shown even when the helper is not the active app; before, it could exist without being visible. The bar stays, reading "Waiting for your answer", while a card waits (#99).
@@ -9,7 +13,6 @@
 - macOS: clicks on an app's own alert or sheet are no longer refused as covered (#99).
 - macOS: after a helper update, turn Screen Recording on again in System Settings; Accessibility and Input Monitoring are kept. Helpers are signed with the project's own certificate, not an Apple Developer ID (#99).
 - The installed bundle now includes `conversation-approvals.mjs`; without it the installed service could not start (#99).
-
 - A refusal raised before any input (`target_not_observed`, `no_image`, a bad point) no longer spends the observation, so the next call can reuse its `observation_id` (#49).
 - The skill's command table now lists `key` (`--keys`), `key` accepts `--text` as an alias, a repeated array flag explains the accepted `X,Y` or JSON form, range errors name the range, and `no_image` says how to get a screenshot (#46, #48, #53).
 

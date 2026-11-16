@@ -105,6 +105,14 @@ export function imagePoint(image,x,y){
 // guardian ends the session at its deadline by terminating the worker, so a
 // stroke that cannot finish first must not start.
 const HOP_MS=16,MAX_STROKE_HOPS=1500;
+// What an app approval lets the agent do, shown on every app prompt.
+const APP_NOTICE="Its screenshots and accessibility text go to Antigravity's configured model. Ordinary actions run autonomously. Consequential effects need a separate confirmation. Your real mouse/keyboard will be used. Esc or Ctrl+Alt+F12 stops. Use a disposable account/VM for important data.";
+// The screen point a native action reports having used, or null. Only two
+// whole numbers in a sane range are passed on to native controls.
+export function actionPoint(result){
+  const p=result?.point;
+  return Array.isArray(p)&&p.length===2&&p.every(v=>Number.isInteger(v)&&Math.abs(v)<10000000)?[p[0],p[1]]:null;
+}
 export function dragBudgetMs(payload){
   const path=Array.isArray(payload.points)?payload.points:[payload.from,payload.to];
   const clamp=(v,lo,hi,d)=>Number.isFinite(v)?Math.min(hi,Math.max(lo,Math.trunc(v))):d;
@@ -472,7 +480,11 @@ export class Runtime {
     // (see CLAUDE-STYLE-CONTROL.md) restore the grant without a new dialog.
     const remembered=!!this.sessionHandle&&this.conversationGrants?.get(this.sessionHandle)?.has(executableKey(w.path))===true;
     const answer=await this.guardian.prompt({kind:'app',hwnd:Number(hwnd),app_pid:w.pid,host_pid:this.driver.info?.pid,tier,...(this.sessionHandle?{session_handle:this.sessionHandle}:{}),...(remembered?{remembered:true}:{}),
-      message:`Allow this application for this session?\r\n\r\n${w.title}\r\n${w.path}\r\nPID ${w.pid}\r\n${tierText}\r\n\r\nTask: ${purpose}\r\n\r\nIts screenshots and accessibility text go to Antigravity's configured model. Ordinary actions run autonomously. Consequential effects need a separate confirmation. Your real mouse/keyboard will be used. Esc or Ctrl+Alt+F12 stops. Use a disposable account/VM for important data.`});
+      // card:1 asks native controls for the app row (name and tier tag from
+      // their own look at the window); task and notice are its detail text.
+      // message stays for controls that only show text.
+      card:1,task:String(purpose).slice(0,500),notice:APP_NOTICE,
+      message:`Allow this application for this session?\r\n\r\n${w.title}\r\n${w.path}\r\nPID ${w.pid}\r\n${tierText}\r\n\r\nTask: ${purpose}\r\n\r\n${APP_NOTICE}`});
     if(!answer.allowed)fail(answer.decision==='timeout'?'approval_timeout':'permission_denied',answer.decision==='timeout'?'Local application approval timed out.':'The human denied this application.');
     this.guardian.send({op:'attach',pid:this.driver.info?.pid});
     const current=await this.app(hwnd);if(appKey(current)!==key)fail('identity_changed','Application restarted during approval.');
@@ -691,6 +703,10 @@ export class Runtime {
       // glow; native accepts it only for an approved app.
       this.guardian.send({op:'activity',action:op,...(w?{hwnd:Number(w.hwnd)}:{}),...Runtime.prototype.glowTarget.call(this,w),...Runtime.prototype.hostLabel.call(this)});
       const result=(await this.driver.call(op,payload)).result;
+      // Where the action landed, in screen pixels, so the glow's bright part
+      // can ease towards it even when the real pointer did not move.
+      const landed=actionPoint(result);
+      if(landed&&w)this.guardian.send({op:'activity',action:op,hwnd:Number(w.hwnd),point:landed});
       if(op==='click'&&payload.physical)this.guardian.send({op:'activity',action:op,click_feedback:true,...(w?{hwnd:Number(w.hwnd)}:{})});
       return result;
     });
@@ -946,20 +962,6 @@ export class Runtime {
       this.check();
       return {...result,input_completed:true,observe_pending:true,observation_hint:'No unambiguous visible window matched the launched PID and executable within8seconds. Discover apps; do not relaunch.'};
     }catch(error){return {...result,input_completed:true,observe_before_continuing:true,verification_error:{code:error.code||'observation_failed',message:error.message}};}
-  }
-  async pause(){this.generation++;this.frames.clear();this.state='paused';this.lastControlReason='requested_pause';this.guardian.send({op:'pause'});await this.driver.abort?.();return {paused:true,resume_when:'the human says to continue'};}
-  async resume(){
-    if(this.state==='stopped')fail('control_stopped','The human stopped this task. Report and wait; a later ready starts a fresh task. Resume does not apply to Stop.');
-    if(this.state!=='paused')fail('not_paused',`Control is ${this.state}, not paused. Nothing to resume.`);
-    this.generation++;this.frames.clear();const generation=this.generation;
-    await this.driver.abort?.();
-    if(this.state!=='paused'||generation!==this.generation)fail('control_changed','Control changed before Resume completed. Inspect status.');
-    const result=await this.guardian.request({op:'resume'});
-    // Current native controls accept a chat Resume only in host-managed mode;
-    // standalone resume needs the native change in CLAUDE-STYLE-CONTROL.md.
-    if(!result.allowed||result.state!=='active'||generation!==this.generation||this.state==='stopped')fail('resume_refused',this.state==='stopped'?'Stop won the race; the task ended. Report and wait.':this.permissionMode==='host-managed'?'Native controls refused Resume because input cleanup is incomplete. Inspect status; do not replay.':'These native controls only resume from the bar in standalone mode until the native update ships. Ask the human to press Resume on the bar, or start a fresh task with ready.');
-    this.state='active';this.check();this.lastControlReason='host_authorized_resume';this.deadline=Date.now()+contract.session_ms;
-    return {resumed:true,fresh_observation_required:true,replayed_actions:0};
   }
   async stop(){
     this.callerHost=null;

@@ -16,7 +16,7 @@ Each app has a tier, returned in the reply and in `status` `approved_apps`:
 
 Human mouse and keyboard input does not pause you. Esc, Ctrl+Alt+F12 (Control+Option+F12 on Mac) and the bar's Stop halt input at once and end your task. There is no re-arm: report and wait for the human, and never retry immediately.
 When the human asks you to continue, `ready --session-handle H` starts a fresh task after the runtime verifies that inputs were released; apps approved earlier in the conversation stay approved.
-On a pause, say “Paused — you have control” and wait for the human to say continue before `resume`, followed by a fresh observation. Never restart a service to get around Stop.
+There is no Pause and no Resume. Never restart a service to get around Stop.
 
 ## Links and money
 

@@ -908,7 +908,7 @@ namespace Axon
                 }
                 if (leaving) { leaving = false; if (shown) FadeTo(1, DesktopVisuals.Normal); }
                 suspended = false;
-                if (point) SetPoint(x, y);
+                if (point) { sampleAt = -1; SetPoint(x, y); }   // a reported point outranks a pending pointer sample
                 else if (sampleNow) SamplePointer();
                 else if (acted) sampleAt = Now + 180;
                 if (!watch.Enabled) { watch.Start(); Watch(); }

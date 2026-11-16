@@ -107,7 +107,7 @@ These are packaged operating guidance, not a reason to explore source files. Rea
 | Targets, batches, steps files, waits, schemas | [observe and act](references/observe-and-act.md) |
 | Dozens or hundreds of steps (drawing, repetitive entry) | [complex tasks](references/complex-tasks.md) |
 | Typing, paste, Unicode, Open/Save dialogs | [dialogs and text](references/dialogs-and-text.md) |
-| Pause, Stop, permissions, `input_completed`, `delivery_unknown` | [control and permissions](references/control-and-permissions.md) |
+| Stop, Esc, permissions, `input_completed`, `delivery_unknown` | [control and permissions](references/control-and-permissions.md) |
 | macOS, sidecar unavailable, control bar, task ownership | [platform and sidecar](references/platform-and-sidecar.md) |
 | Any other failure code | [recovery](references/recovery.md) |
 | Reporting, giving up, feedback, updates | [finishing and reports](references/finishing-and-reports.md) |

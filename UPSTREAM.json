@@ -5,7 +5,7 @@
     {
       "path": "server/build.mjs",
       "upstream_sha256": "81260b378fffb46573cfe475a3a336930113c8abc465d3d278bbb0851d8a4377",
-      "local_sha256": "45485499c5dc59af5ff707db6589b732773a90e4ab84bab2c644b3b253be83e6",
+      "local_sha256": "1bf024fdcb01f4b0ed5c7abc9ebc5eb693a0a123398717cd61b392319a93c554",
       "modified": true
     },
     {
@@ -72,7 +72,7 @@
     {
       "path": "server/native/Overlay.cs",
       "upstream_sha256": "eaadd8bc72befd9f42aa214dbb1a3ba45f2e28d0c40ed3491ece4414280a4551",
-      "local_sha256": "961e84c7ea34eacb48c8bd735b991aeb508ec150c823b296f2926a2197a923b2",
+      "local_sha256": "91cb6ef251d420edea8dbb6a769cf66b84127cff0f391d6f4810ca3766f448c2",
       "modified": true
     },
     {
@@ -224,7 +224,7 @@
     },
     {
       "path": "tests/cursor-recovery.mjs",
-      "sha256": "16cfeeb210b59dad96ff1d867cc977789ce4deaf3b6fc3c6aeccd0f8d55e9c3b"
+      "sha256": "7eacc8ec1b8e48618cbd67e4f0285b17b38a17fa715ce966e55604267c3d3d44"
     },
     {
       "path": "tests/physical-escape.mjs",
@@ -256,11 +256,11 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "bcb724a3c6a74e874c6495e81d08aa8a44f93d78e8acc8500d61bed16925fd60"
+      "sha256": "3f0fe78f7ba8b91dfa233fbab02d1d1a9a88b02aafdf0650faa410c3686b6e40"
     },
     {
       "path": "server/mcp.mjs",
-      "sha256": "0901975a7d8010b43d0c505adc7d93aedff2c403208e55fbb90672e27685ceea"
+      "sha256": "9b420b7a63889a01dd753d636ef262c8acbb2327dc8f3ee8732bdf8988152fe9"
     },
     {
       "path": "server/guardian.mjs",
@@ -268,7 +268,7 @@
     },
     {
       "path": "server/native/Guardian.cs",
-      "sha256": "03be615829f91d25cbc8de2ac0a17ae0fb6dc14dd87bfb927eb966a1b067a89b"
+      "sha256": "116eb9c532c1c8680640e498c7954845f1d6024369d5dd337e2778db1aad8e70"
     },
     {
       "path": "server/native/CursorSafety.cs",
@@ -276,7 +276,7 @@
     },
     {
       "path": "server/native/DesktopVisuals.cs",
-      "sha256": "e1b6e963122edd47a94d24ca173544e7eab9833f7d089ae034cab5df0576f9c0"
+      "sha256": "c8ea96b68a59cf2b78e0b533625697fb9ca4744f7eca464d19abc25e9e758516"
     },
     {
       "path": "server/native/Glow.cs",
@@ -296,11 +296,11 @@
     },
     {
       "path": "server/desktop-service.mjs",
-      "sha256": "2e2f69de6d71c65dd2e665b58a47838885a1f45542fa6c805ca997f11b524492"
+      "sha256": "245986867f6825e4d562b33c724acca3c2e6b9697e2b2f014b392b9e88765d5d"
     },
     {
       "path": "server/desktop-tools.mjs",
-      "sha256": "bf15d555836c41239c986be6cd1e15fde359eacf7031a14fc1ffb8c8b802c258"
+      "sha256": "095fa7276d4f27e5742e3c97d50964d2b2587c5e423255d35cb45d2bfe478674"
     },
     {
       "path": "scripts/desktop.mjs",
@@ -372,7 +372,7 @@
     },
     {
       "path": "tests/core.test.mjs",
-      "sha256": "a58f01b62e6137dff7222a912eafdd13512c115cd6557812dda0c40bffa765a6"
+      "sha256": "ab9c0db83e53d8f982b64f5d176a5542d7dc1e906f421618503be232b756a98a"
     },
     {
       "path": "tests/workflow.test.mjs",
@@ -604,7 +604,7 @@
     },
     {
       "path": "skills/computer-use/SKILL.md",
-      "sha256": "a4a8e4a720c83e841efdaf5b43f3baafab9033b640159f62414ff4868df937a9"
+      "sha256": "12817d5f6943a6666c5f91da2a58dbba50d11f217951057215015920740706bf"
     },
     {
       "path": "docs/MACOS.md",
@@ -660,7 +660,7 @@
     },
     {
       "path": "tests/lifecycle.test.mjs",
-      "sha256": "9e658299e4507c233576ae09143706203fe8bce7dd1273ced15f8e835e0a0800"
+      "sha256": "b65041c7701fb93eedb1838eb4919be3bab3285a9ddc69cc9fa5fa730c868d20"
     },
     {
       "path": "server/native/GuardCleanup.cs",
@@ -712,7 +712,7 @@
     },
     {
       "path": "server/recovery.mjs",
-      "sha256": "540c09c61e1b1f7ca4bda5246c09ad2611efc19573508784a547fd82391fb6c9"
+      "sha256": "0c5e7328c992ae5890830660c72629cc12663751cc462edea0cd7c1ba3fd488d"
     },
     {
       "path": "scripts/qualify-guardian-desktop.mjs",
@@ -884,11 +884,11 @@
     },
     {
       "path": "tests/stop-acknowledgement.test.mjs",
-      "sha256": "f5638fa973d0ac71d7a410d4cd6fb2755352f8146e85768143e4bb24217f9d11"
+      "sha256": "cb27f24e7b99f33bc2d2967af13133b9a2c703d95f1e2fb56a7bdd69dfdd155d"
     },
     {
       "path": "server/task-ownership.mjs",
-      "sha256": "51350a4542d4839b105134ae3105f09009864bd23ccc5f650b5421d233dea29d"
+      "sha256": "1a454e595caecfb4b87a98d81623e9f60aeee5e6796bc695cae76abfa37edc36"
     },
     {
       "path": "tests/task-ownership.test.mjs",
@@ -945,18 +945,6 @@
     {
       "path": "docs/MACOS-CONSENT-TAKEOVER.md",
       "sha256": "c79f78ca8a6ecd5ab4457b75346d58eeaf8a331cfa3b3fafacf291c8fbef4d46"
-    },
-    {
-      "path": "server/native/macos/MacDesign.swift",
-      "sha256": "8f095fe3e7f6d9fe4faf17f06d4121f94fce722c433a0e00d0f5a6fe5e9af255"
-    },
-    {
-      "path": "server/native/macos/MacAccessPrompt.swift",
-      "sha256": "2000e8866c8e96f10e35900949e23e0abadbbfa1befcd7e40a01dcb605943d5e"
-    },
-    {
-      "path": "server/native/macos/MacGlow.swift",
-      "sha256": "c18bd2f94e2b8ab72d301f6695474e9222827975f51085162a285d4bddef3a9f"
     }
   ],
   "external_files": [

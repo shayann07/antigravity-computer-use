@@ -4,7 +4,8 @@ import {validate,TOOLS,content,call} from '../server/mcp.mjs';
 import {appKey,imagePoint,requireObservation} from '../server/runtime.mjs';
 import {targetImageSize} from '../server/upstream-utils.mjs';
 test('MCP contains discovery, native actions, lifecycle and clip tools',()=>{
- for(const name of ['apps','snapshot','move','click','type','key','drag','scroll','grant','end','pause','stop','clipboard','launch'])assert(TOOLS.some(t=>t.name==='computer_'+name));
+ for(const name of ['apps','snapshot','move','click','type','key','drag','scroll','grant','end','stop','clipboard','launch'])assert(TOOLS.some(t=>t.name==='computer_'+name));
+ for(const name of ['pause','resume'])assert(!TOOLS.some(t=>t.name==='computer_'+name),'there is no Pause or Resume');
 });
 for(const extra of ['confirmed','preapprove','__permit','__session','mode','takeover_mode'])test('model cannot provide '+extra,()=>assert.throws(()=>validate('computer_click',{hwnd:1,observation_id:'x',reason:'test',[extra]:true})));
 test('booleans/fractions cannot act as handles',()=>{for(const hwnd of [true,1.5])assert.throws(()=>validate('computer_snapshot',{hwnd}));});

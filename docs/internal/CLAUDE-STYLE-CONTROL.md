@@ -28,8 +28,8 @@ Swift were deliberately left untouched.
    already approved. The skill tells the agent to report and wait, never to
    retry immediately.
 4. **Human input does not pause the agent.** Smart takeover is retired. Only
-   Esc, the bar's Stop, or an explicit Pause halts the agent. A pause resumes
-   when the human says so; no re-arm is involved.
+   Esc or the bar's Stop halts the agent. There is no Pause and no Resume
+   (removed 16 Nov 2026, owner decision); no re-arm is involved.
 5. **Kept safety.** Stop is always reachable. Unknown delivery is never
    replayed. An unconfirmed Stop (`guardian_stop_unconfirmed`), a Stop storage
    failure and a recovered task with unverified cleanup keep every existing
@@ -45,8 +45,7 @@ that the prior workers are gone.
 | State | How it is entered | Agent input | Leaves by |
 |---|---|---|---|
 | `idle` | startup with no marker; End; a cleared Stop; native session expiry | none until an app is approved | approving an app (`active`) |
-| `active` | an app approval plus native activation | approved apps only, within each tier | Stop/Esc (`stopped`), Pause (`paused`), End (`idle`), deadline (`idle`, reported as `session_limit`) |
-| `paused` | `pause`, or the bar's Pause | none | `resume` when the human says so, or the bar's Resume (`active`); Stop (`stopped`) |
+| `active` | an app approval plus native activation | approved apps only, within each tier | Stop/Esc (`stopped`), End (`idle`), deadline (`idle`, reported as `session_limit`) |
 | `stopped` (confirmed) | Stop, Esc, Ctrl+Alt+F12; a confirmed persisted marker at startup | none; calls fail `control_stopped` with `report_and_wait_for_human` | the next `ready`, after cleanup proof (`idle`, fresh task, approvals kept) |
 | `stopped` (unconfirmed) | Stop whose native delivery or cleanup is unproven | none | unchanged: inspection and the existing nonce settlement only |
 | `stopped` (storage failure) | Stop marker could not be written or read | none | unchanged: operator inspection |
@@ -57,8 +56,8 @@ Next actions that changed:
 | Old | New |
 |---|---|
 | `awaiting_human_rearm` | removed. A confirmed Stop is cleared by `ready`; an old native build reports `native_update_required` |
-| `awaiting_human_resume` | `ask_human_before_resume` |
-| `human_resume_required` (code) | `resume_refused` or `not_paused` |
+| `awaiting_human_resume` | removed with Pause. `ask_human_before_resume` remains only for an older native helper that still reports `paused`; the runtime treats that state as inactive |
+| `human_resume_required` (code) | removed with Pause |
 | `control_stopped` -> `inspect_status_then_human_controls` | `control_stopped` -> `report_and_wait_for_human` |
 | `session_limit` -> `end_owned_task_then_reauthorize` | `session_limit` -> `renew_task_and_continue` |
 | stop reply `human_rearm_required:true` | `task_ended:true, next_action:'report_and_wait_for_human'` |
@@ -72,15 +71,27 @@ only ended that installation's task.
 
 An approval lasts for the agent's conversation. `ready` returns a
 `session_handle`; the agent passes it to later `ready` calls in the same
-conversation. Approvals are remembered per handle and per executable, with no
-idle timer, and native session expiry, End and Stop do not drop them. A missing
+conversation. Approvals are remembered per handle and per executable; native
+session expiry, End and Stop do not drop them, and a conversation unused for 24
+hours is forgotten. A missing
 or unknown handle starts a new conversation that asks again.
 
 The Windows guardian honours this: JS sends `remembered:true` and
 `session_handle` with the `prompt kind:'app'`, and the guardian adds the grant
-without a dialog for a handle and executable it has seen approved. The handle
-lives in the
-service process memory, so a controller restart also starts a new conversation.
+without a dialog for a handle and executable it has seen approved.
+
+The guardian keeps its own record of those approvals in
+`guardian-approvals.json` beside the guard files (`ApprovalMemory.cs`), so a
+guardian restart or an update does not ask again. Only a person's Allow in the
+guardian's own prompt is recorded, never a host-managed authorisation and never
+the runtime's claim. Each entry holds the executable and the tier that was
+shown; a click-only approval never covers full control. A conversation unused
+for 24 hours is dropped, at most 64 conversations of 64 apps are kept, and the
+one used longest ago makes room. A missing, oversized or malformed file, or a
+reparse point in its place, is an empty record. Hard links are not detected;
+the folder's access control is what keeps other accounts out. The runtime still has to send
+`remembered:true`; keeping its list across a controller restart arrives with
+the Mac branch (PR #105).
 The `plan` command's automatic renewal calls `ready` without a handle; passing
 it through is a follow-up.
 
@@ -129,10 +140,10 @@ marked; the rest is open.
 - **`SetState`. DONE.** Allow `stopped -> idle` from that op; keep refusing
   `stopped -> active`.
 - **Bar. OPEN, waiting on design approval.** Remove the Re-arm path from the toggle button (lines around 350-372)
-  and its tooltip text. The toggle becomes Pause/Resume only. Stop keeps its
+  and its tooltip text. The toggle is gone: there is no Pause or Resume. Stop keeps its
   button, Esc and Ctrl+Alt+F12. Drop `rearm_locked` and `AGCU_REARM_LOCKED`;
   for a recovered task, show the bar with Stop only.
-- **Resume. DONE.** Let `resume` succeed in standalone mode for a pause that the
+- **Resume. REMOVED 16 Nov 2026.** `pause`, `resume`, `computer_pause` and `computer_resume` no longer exist. Earlier plan: let `resume` succeed in standalone mode for a pause that the
   agent or the bar requested, under the same cleanup checks; today it requires
   `hostManaged`.
 - **Takeover. DONE.** `Presence` and `TakeoverPolicy` must never pause on human

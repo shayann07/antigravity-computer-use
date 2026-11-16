@@ -10,7 +10,7 @@ state, restart the host or interrupt the requested task to investigate it.
   Windows 11 Store apps (Paint, Calculator, Notepad) need the real `.exe` inside their package: `(Get-AppxPackage Microsoft.Paint).InstallLocation`; aliases in System32 or WindowsApps are refused.
 - `report_and_wait_for_human` or `control_stopped`: the human pressed Esc or Stop. That halted input and ended your task. Report what you did and what is left, then wait for the human. Never retry immediately or start another batch.
   When the human asks you to continue, `ready --session-handle H` starts a fresh task; apps approved earlier in this conversation are not asked again.
-- `ask_human_before_resume`: control is paused. Tell the human what action is needed, then wait. Never claim a bar is visible unless `controls_visible:true` was returned.
+- `ask_human_before_resume`: an older native helper still reports a pause. There is no Resume. Ask the human to press Esc, then run `ready` for a fresh task.
 - `renew_task_and_continue` (`session_limit`): the session time or action budget ran out and no input was sent. Run `end`, then `ready --session-handle H`, observe again and continue from the first unfinished step.
 - `native_update_required`: the native controls are older than this runtime and still hold Stop. Report it; the operator installs the update.
 - `inspect_diagnostics`: run `DESKTOP_COMMAND diagnostics` once, report the incident ID and stop repeating startup. Do not invent an Antigravity Sidecar panel or repeatedly ask the user to rerun the starter.

@@ -184,9 +184,6 @@ test('task reservation remains open after actual controller process termination'
   const saved=JSON.parse(fs.readFileSync(file));assert(saved.guard);assert.equal(restarted.priorGuard,saved.guard);assert.equal(restarted.status().task_open,true);await assert.rejects(restarted.finish(),e=>e.code==='recovered_cleanup_unverified');assert.equal(JSON.parse(fs.readFileSync(file)).open,true);
  }finally{if(child.exitCode===null&&child.signalCode===null)child.kill();await closed;fs.rmSync(dir,{recursive:true,force:true});}
 });
-test('pause invalidates frames synchronously and keeps per-app session grants',async()=>{
- const r=fixture();r.state='active';r.frames.set('old',{});r.grants.set('app',{});const generation=r.generation;const pending=r.pause();assert.equal(r.state,'paused');assert(r.generation>generation);assert.equal(r.frames.size,0);assert.equal(r.grants.size,1);await pending;assert.equal(r.driver.abortCalls,1);
-});
 test('emergency stop invalidates grants/frames before awaiting the native worker',async()=>{
  const r=fixture();r.state='active';r.frames.set('old',{});r.grants.set('app',{});const pending=r.stop();assert.equal(r.state,'stopped');assert.equal(r.frames.size,0);assert.equal(r.grants.size,0);await pending;
  await assert.rejects(r.grant(123,'cannot silently regain control'),e=>e.code==='control_stopped');
@@ -209,13 +206,11 @@ test('Stop wins over a delayed successful native activation reply',async()=>{
  try{await assert.rejects(r.grant(1,'fixture'),e=>e.code==='control_inactive');assert.equal(r.state,'stopped');assert.equal(r.grants.size,0);assert.equal(fs.readFileSync(latchFile,'utf8'),'stopped');}
  finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
-test('persisted Stop wins over cached grants and a soft-resume reply',async()=>{
+test('persisted Stop wins over cached grants',async()=>{
  const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'agcu-latch-race-')),latchFile=path.join(dir,'emergency.stop');const guardian=new EventEmitter();guardian.send=()=>{};
  const r=new Runtime({guardian,driver:{async abort(){}},sessions:{register(){},close(){}},latchFile,permissionMode:'host-managed'});const app={pid:11,started:'birth',path:'C:/fixture.exe',hwnd:1};r.app=async()=>app;
  try{
   r.state='active';r.grants.set(appKey(app),app);fs.writeFileSync(latchFile,'stopped');await assert.rejects(r.grant(1,'fixture'),e=>e.code==='control_stopped');assert.equal(r.state,'stopped');assert.equal(r.grants.size,0);
-  fs.unlinkSync(latchFile);r.state='paused';guardian.request=async()=>{fs.writeFileSync(latchFile,'stopped');return {allowed:true,state:'active'};};
-  await assert.rejects(r.resume(),e=>e.code==='control_stopped');assert.equal(r.state,'stopped');assert.equal(fs.readFileSync(latchFile,'utf8'),'stopped');
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
 test('failed Stop persistence keeps the service stopped and refuses shutdown until repaired',async()=>{
@@ -260,27 +255,6 @@ test('permission authority is fixed at startup and surfaced in status',()=>{
 });
 
 
-test('host-authorized soft resume requires native consent and invalidates old observations',async()=>{
- const r=fixture();r.permissionMode='host-managed';r.state='paused';r.frames.set('old',{});const generation=r.generation;
- r.guardian.request=async m=>{assert.equal(m.op,'resume');return {allowed:true,state:'active'};};
- const result=await r.resume();assert.equal(r.state,'active');assert.equal(r.frames.size,0);assert(r.generation>generation);assert.equal(result.replayed_actions,0);assert.equal(r.status().control_reason,'host_authorized_resume');
-});
-test('chat resume never applies to Stop and follows the native answer for a pause',async()=>{
- for(const [mode,state,code] of [['host-managed','stopped','control_stopped'],['host-managed','idle','not_paused'],['standalone','idle','not_paused']]){
-  const r=fixture();r.permissionMode=mode;r.state=state;r.guardian.request=()=>{throw Error('must not ask native');};
-  await assert.rejects(r.resume(),e=>e.code===code);assert.equal(r.state,state);
- }
- // Current native controls refuse a standalone chat resume; the reply says so.
- const r=fixture();r.state='paused';r.guardian.request=async m=>{assert.equal(m.op,'resume');return {allowed:false,state:'paused'};};
- await assert.rejects(r.resume(),e=>e.code==='resume_refused'&&/bar/.test(e.message));assert.equal(r.state,'paused');
-});
-
-test('emergency Stop wins a race with a successful native soft-resume reply',async()=>{
- const r=fixture();r.permissionMode='host-managed';r.state='paused';
- r.guardian.request=async()=>{r.guardian.emit('state','stopped','escape');return {allowed:true,state:'active'};};
- await assert.rejects(r.resume(),e=>e.code==='resume_refused');assert.equal(r.state,'stopped');
- assert.equal(r.status().control_reason,'escape');
-});
 
 test('Stop survives service replacement until the next ready; ordinary idle shutdown does not create a marker',async()=>{
  const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'agcu-latch-'));const file=path.join(dir,'emergency.stop');
@@ -291,8 +265,8 @@ test('Stop survives service replacement until the next ready; ordinary idle shut
   const guardian=new EventEmitter();guardian.send=()=>{};guardian.request=async()=>({state:'stopped',controls_visible:true});
   const replacement=new Runtime({latchFile:file,guardian,driver:{abort:async()=>{}},sessions:{register(){}}});
   assert.equal(replacement.state,'stopped');await assert.rejects(replacement.grant(1),e=>e.code==='control_stopped');
-  replacement.permissionMode='host-managed';await assert.rejects(replacement.resume(),e=>e.code==='control_stopped');
-  assert(fs.existsSync(file),'grant and resume never clear Stop; only ready does');
+  assert.equal(replacement.resume,undefined,'there is no Resume');
+  assert(fs.existsSync(file),'grant never clears Stop; only ready does');
   // Native controls that still report stopped after the marker is cleared are an old build.
   const old=await replacement.ready();assert.equal(old.ready,false);assert.equal(old.error.code,'native_latch_still_enforced');assert.equal(old.next_action,'native_update_required');
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
