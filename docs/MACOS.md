@@ -159,6 +159,14 @@ macOS may require new permission approval after an ad-hoc-signed update.
   with the same values as Windows' `DesktopVisuals.cs` (a test keeps them
   equal). The bar enters over `normal` (200 ms) easing out from 0.96; Reduce
   Motion keeps a short fade without the scale.
+- The bar can be dragged by its body (4 pt threshold, never from a button,
+  never by an event the agent posted), stays inside the work area, lands on
+  one of six docks (top or bottom by left, centre, right) within 12 pt or stays
+  where it was dropped, and remembers its place in `control-preferences.json`.
+  Settings ▸ Move bar lists the docks and Reset. HUD avoidance now works on Mac
+  (`hud_avoidance`, guardian `avoid_input`, a port of `WindowGeometry.AvoidHud`):
+  before a click the bar steps aside from the target, and it returns home
+  afterwards. The landing is an eased slide, not yet the Windows spring.
 - The glow (`MacGlow.swift`) lights the window that last received an action,
   as on Windows: a soft blue-to-violet band on the window's edge that tapers
   to nothing (no rectangle, dithered so there are no steps), turning one lap

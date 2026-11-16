@@ -780,7 +780,35 @@ func macContractTest() throws {
           MacGlowLevel(rawValue: "soft") == .soft, MacGlowLevel(rawValue: "loud") == nil else {
         throw AxonError("contract_test_failed", "Glow brightness levels differ.")
     }
-    emit(["ok": true, "control_contract": 1, "checks": ["shared state codec", "malformed state refusal", "canonical approval fingerprint", "sensitive action classification", "kernel process birth identity", "native idle/paused/stopped/expired/session/monitor/Stop refusals", "empty cleanup and malformed input-journal refusal", "official Phosphor resource rendering", "SDK and runtime material selection", "capture visibility and dismissal lifecycle", "access tier enforcement for target and frontmost app", "conversation-scoped remembered approvals", "confirmed-only Stop clearing", "approval completion fenced by Stop and legacy pause", "shared motion curves", "access prompt layout and placement", "window glow falloff, mask, matching and levels"], "hud_icon_assets": iconAssets, "hud_material": materialBackend, "native_glass_compiled": MacVisuals.nativeGlassCompiled, "desktop_input_sent": false])
+    // Bar placement: docks, clamp, settle and avoidance (pure; AppKit coordinates).
+    let barWork = CGRect(x: 0, y: 0, width: 1440, height: 875), barSize = CGSize(width: 396, height: 44)
+    guard MacBarPlacement.dockOrigin("top-centre", size: barSize, work: barWork) == CGPoint(x: 522, y: 819),
+          MacBarPlacement.dockOrigin("bottom-left", size: barSize, work: barWork) == CGPoint(x: 12, y: 12),
+          MacBarPlacement.dockOrigin("top-right", size: barSize, work: barWork) == CGPoint(x: 1032, y: 819),
+          MacBarPlacement.dockOrigin("middle", size: barSize, work: barWork) == nil,
+          MacBarPlacement.clamp(CGPoint(x: -500, y: 5000), size: barSize, work: barWork) == CGPoint(x: 12, y: 819),
+          MacBarPlacement.settle(CGPoint(x: 530, y: 812), size: barSize, work: barWork).dock == "top-centre",
+          MacBarPlacement.settle(CGPoint(x: 530, y: 812), size: barSize, work: barWork).origin == CGPoint(x: 522, y: 819),
+          MacBarPlacement.settle(CGPoint(x: 700, y: 400), size: barSize, work: barWork).dock == "free" else {
+        throw AxonError("contract_test_failed", "Bar docks, clamp or snapping differ.")
+    }
+    let freeLanding = MacBarPlacement.settle(CGPoint(x: 700, y: 400), size: barSize, work: barWork)
+    let freeHome = MacBarPlacement.home(dock: "free", fraction: freeLanding.fraction, size: barSize, work: barWork)
+    guard abs(freeHome.x - 700) < 0.5, abs(freeHome.y - 400) < 0.5,
+          MacBarPlacement.home(dock: "free", fraction: CGPoint(x: 9, y: -9), size: barSize, work: barWork) == CGPoint(x: 1032, y: 819),
+          MacBarPlacement.home(dock: "bottom-centre", fraction: .zero, size: barSize, work: barWork) == CGPoint(x: 522, y: 12) else {
+        throw AxonError("contract_test_failed", "Bar home from a free fraction differs.")
+    }
+    let barAtTop = CGRect(origin: CGPoint(x: 522, y: 819), size: barSize)
+    guard MacBarPlacement.avoid(hud: barAtTop, target: CGRect(x: 100, y: 100, width: 10, height: 10), work: barWork) == barAtTop,
+          MacBarPlacement.avoid(hud: barAtTop, target: CGRect(x: 700, y: 830, width: 4, height: 4), work: barWork)?.minY == 819,
+          MacBarPlacement.avoid(hud: barAtTop, target: CGRect(x: 700, y: 830, width: 4, height: 4), work: barWork)?.minX == 12,
+          MacBarPlacement.avoid(hud: barAtTop, target: CGRect(x: 100, y: 830, width: 700, height: 4), work: barWork)?.minX == 1032,
+          MacBarPlacement.avoid(hud: barAtTop, target: CGRect(x: 0, y: 0, width: 1440, height: 875), work: barWork) == nil,
+          MacBarPlacement.avoid(hud: barAtTop, target: CGRect(x: 700, y: 830, width: 0, height: 4), work: barWork) == nil else {
+        throw AxonError("contract_test_failed", "Bar avoidance differs from WindowGeometry.AvoidHud.")
+    }
+    emit(["ok": true, "control_contract": 1, "checks": ["shared state codec", "malformed state refusal", "canonical approval fingerprint", "sensitive action classification", "kernel process birth identity", "native idle/paused/stopped/expired/session/monitor/Stop refusals", "empty cleanup and malformed input-journal refusal", "official Phosphor resource rendering", "SDK and runtime material selection", "capture visibility and dismissal lifecycle", "access tier enforcement for target and frontmost app", "conversation-scoped remembered approvals", "confirmed-only Stop clearing", "approval completion fenced by Stop and legacy pause", "shared motion curves", "access prompt layout and placement", "window glow falloff, mask, matching and levels", "bar docks, drag landing and avoidance"], "hud_icon_assets": iconAssets, "hud_material": materialBackend, "native_glass_compiled": MacVisuals.nativeGlassCompiled, "desktop_input_sent": false])
 }
 
 func macMoveCursor(_ point: CGPoint, _ args: [String: Any]) throws -> [String: Any] {

@@ -352,6 +352,19 @@ final class MacGuardian: NSObject {
                 guard !nextToken.isEmpty, nextBoot > 0 else { reply(["allowed": false]); return }
                 token = nextToken; until = requested; bootUntil = nextBoot
                 set("active"); reply(["allowed": state == "active"])
+            case "avoid_input":
+                // Moves the bar clear of a click target (global points, top-left
+                // origin). Only the agent's own active task can ask; it never
+                // changes Stop, state, grants or visibility.
+                var allowed = state == "active" && !token.isEmpty && str(message["token"]) == token, moved = false
+                if let r = message["rect"] as? [NSNumber], r.count == 4,
+                   r.allSatisfy({ $0.doubleValue.isFinite && abs($0.doubleValue) <= 10_000_000 }), r[2].doubleValue > 0, r[3].doubleValue > 0 {
+                    if allowed {
+                        let target = MacWindowGlow.appKit(CGRect(x: r[0].doubleValue, y: r[1].doubleValue, width: r[2].doubleValue, height: r[3].doubleValue))
+                        (allowed, moved) = visuals.avoid(target)
+                    }
+                } else { allowed = false }
+                reply(["allowed": allowed, "moved": moved])
             case "pause", "resume":
                 // Removed: nothing pauses or resumes control. Refused without effect.
                 reply(["allowed": false, "error": "pause_removed"])

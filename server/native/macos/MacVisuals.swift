@@ -35,8 +35,72 @@ struct MacHudStatePresentation: Equatable {
     let contrastTarget: Double // A design target; not measured composited contrast.
 }
 
+// Where the bar lives (docs/internal/HUD-REDESIGN.md, section 8): six docks
+// per screen (top and bottom by left, centre, right) or a free place saved as a
+// fraction of the work area. Pure geometry in AppKit coordinates.
+enum MacBarPlacement {
+    static let docks = ["top-left", "top-centre", "top-right", "bottom-left", "bottom-centre", "bottom-right"]
+    static let margin: CGFloat = 12, snap: CGFloat = 12, threshold: CGFloat = 4
+    static func dockOrigin(_ name: String, size: CGSize, work: CGRect) -> CGPoint? {
+        guard docks.contains(name) else { return nil }
+        let x = name.hasSuffix("left") ? work.minX + margin : name.hasSuffix("right") ? work.maxX - margin - size.width : work.midX - size.width / 2
+        let y = name.hasPrefix("top") ? work.maxY - margin - size.height : work.minY + margin
+        return CGPoint(x: x.rounded(), y: y.rounded())
+    }
+    static func clamp(_ origin: CGPoint, size: CGSize, work: CGRect) -> CGPoint {
+        CGPoint(x: max(work.minX + margin, min(origin.x, work.maxX - margin - size.width)),
+                y: max(work.minY + margin, min(origin.y, work.maxY - margin - size.height)))
+    }
+    // fraction: (0, 0) is the top-left of the free range, (1, 1) its bottom-right.
+    static func home(dock: String, fraction: CGPoint, size: CGSize, work: CGRect) -> CGPoint {
+        if let origin = dockOrigin(dock, size: size, work: work) { return clamp(origin, size: size, work: work) }
+        let fx = max(0, min(1, fraction.x.isFinite ? fraction.x : 0.5)), fy = max(0, min(1, fraction.y.isFinite ? fraction.y : 0))
+        let rangeX = max(0, work.width - 2 * margin - size.width), rangeY = max(0, work.height - 2 * margin - size.height)
+        return clamp(CGPoint(x: work.minX + margin + fx * rangeX, y: work.maxY - margin - size.height - fy * rangeY), size: size, work: work)
+    }
+    // Within snap distance of a dock the bar lands on it; elsewhere it stays.
+    static func settle(_ origin: CGPoint, size: CGSize, work: CGRect) -> (dock: String, fraction: CGPoint, origin: CGPoint) {
+        let placed = clamp(origin, size: size, work: work)
+        for name in docks {
+            if let dock = dockOrigin(name, size: size, work: work), hypot(dock.x - placed.x, dock.y - placed.y) <= snap {
+                return (name, .zero, clamp(dock, size: size, work: work))
+            }
+        }
+        let rangeX = max(1, work.width - 2 * margin - size.width), rangeY = max(1, work.height - 2 * margin - size.height)
+        let fraction = CGPoint(x: (placed.x - work.minX - margin) / rangeX, y: (work.maxY - margin - size.height - placed.y) / rangeY)
+        return ("free", fraction, placed)
+    }
+    // Port of WindowGeometry.AvoidHud: the nearest top or bottom placement
+    // that keeps the bar inside the work area and clear of the padded target.
+    // nil when no placement exists; the same frame when there is no overlap.
+    static func avoid(hud: CGRect, target: CGRect, work: CGRect, margin: CGFloat = 12) -> CGRect? {
+        guard hud.width > 0, hud.height > 0, target.width > 0, target.height > 0, work.width >= hud.width, work.height >= hud.height else { return nil }
+        let padded = target.insetBy(dx: -margin, dy: -margin)
+        if !hud.intersects(padded) { return hud }
+        var best: (CGRect, CGFloat)?
+        for y in [work.maxY - hud.height - margin, work.minY + margin] {
+            for x in [work.minX + margin, work.minX + (work.width - hud.width) / 2, work.maxX - hud.width - margin] {
+                let candidate = CGRect(x: x.rounded(), y: y.rounded(), width: hud.width, height: hud.height)
+                guard work.contains(candidate), !candidate.intersects(padded) else { continue }
+                let score = pow(candidate.minX - hud.minX, 2) + pow(candidate.minY - hud.minY, 2)
+                if best == nil || score < best!.1 { best = (candidate, score) }
+            }
+        }
+        return best?.0
+    }
+}
+
 final class MacControlPanel: NSPanel {
     var onEscape: (() -> Void)?
+    // Physical pointer drags on the bar's body (never on a button, never an
+    // event the agent posted). Returns true when the event was a drag.
+    var onDrag: ((NSEvent) -> Bool)?
+    override func sendEvent(_ event: NSEvent) {
+        if [.leftMouseDown, .leftMouseDragged, .leftMouseUp].contains(event.type),
+           event.cgEvent?.getIntegerValueField(.eventSourceUserData) != AXON_EVENT_MARKER,
+           onDrag?(event) == true { return }
+        super.sendEvent(event)
+    }
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
     override func cancelOperation(_ sender: Any?) { onEscape?() }
@@ -130,6 +194,10 @@ final class MacVisuals: NSObject {
     var hoverChecked = Date.distantPast
     let origin = ProcessInfo.processInfo.systemUptime
     var visible: Bool { panel?.isVisible == true }
+    // The bar's home: a dock or a free fraction, saved in control-preferences.json.
+    var dock = "top-centre", dockFraction = CGPoint(x: 0.5, y: 0)
+    var displaced = false, displacedAt = Date.distantPast
+    private var dragArmed = false, dragging = false, dragGrab = CGPoint.zero, dragStart = CGPoint.zero
     var cursorApplied: Bool { !hiddenDisplays.isEmpty }
 
     static var nativeGlassCompiled: Bool {
@@ -237,7 +305,10 @@ final class MacVisuals: NSObject {
         guard panel == nil else { return }
         let barWidth: CGFloat = 396, barHeight: CGFloat = 44
         let screen = NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) }) ?? NSScreen.main!
-        let p = makePanel(NSRect(x: screen.frame.midX - barWidth / 2, y: screen.frame.maxY - 62, width: barWidth, height: barHeight), clickThrough: false) as! MacControlPanel
+        loadPlacement()
+        let origin = MacBarPlacement.home(dock: dock, fraction: dockFraction, size: CGSize(width: barWidth, height: barHeight), work: screen.visibleFrame)
+        let p = makePanel(NSRect(origin: origin, size: CGSize(width: barWidth, height: barHeight)), clickThrough: false) as! MacControlPanel
+        p.onDrag = { [weak self] event in self?.drag(event) ?? false }
         p.title = "Antigravity Computer Use"
         p.setAccessibilityRole(.toolbar)
         p.setAccessibilityLabel("Antigravity Computer Use Controls")
@@ -406,6 +477,7 @@ final class MacVisuals: NSObject {
         let alpha = reduce ? 0.94 : max(0, min(1, base + amplitude * sin((ProcessInfo.processInfo.systemUptime - origin) * .pi * 2 / seconds)))
         _ = alpha
         windowGlow.follow()
+        returnHomeIfDue()
         if cursorApplied {
             let point = NSEvent.mouseLocation
             pointer?.setFrameOrigin(NSPoint(x: point.x - 4, y: point.y - 38))
@@ -438,11 +510,100 @@ final class MacVisuals: NSObject {
             item.target = self; item.representedObject = level.rawValue; item.state = windowGlow.level == level ? .on : .off; menu.addItem(item)
         }
         menu.addItem(.separator())
+        let move = NSMenuItem(title: "Move bar", action: nil, keyEquivalent: ""), docks = NSMenu()
+        for name in MacBarPlacement.docks {
+            let item = NSMenuItem(title: name.replacingOccurrences(of: "-", with: " ").capitalized, action: #selector(moveToDock(_:)), keyEquivalent: "")
+            item.target = self; item.representedObject = name; item.state = dock == name ? .on : .off; docks.addItem(item)
+        }
+        docks.addItem(.separator())
+        let reset = NSMenuItem(title: "Reset", action: #selector(moveToDock(_:)), keyEquivalent: ""); reset.target = self; reset.representedObject = "top-centre"; docks.addItem(reset)
+        move.submenu = docks; menu.addItem(move)
+        menu.addItem(.separator())
         let hint = NSMenuItem(title: "Esc always stops immediately", action: nil, keyEquivalent: "")
         hint.isEnabled = false; menu.addItem(hint)
         let end = NSMenuItem(title: "End session and hide", action: #selector(endControl), keyEquivalent: "")
         end.target = self; menu.addItem(end)
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: 0), in: more)
+    }
+    var preferenceDirectory: URL? { MacFence.file.isEmpty ? nil : URL(fileURLWithPath: MacFence.file).deletingLastPathComponent() }
+    func loadPlacement() {
+        guard let dir = preferenceDirectory,
+              let value = (try? Data(contentsOf: dir.appendingPathComponent("control-preferences.json"))).flatMap({ try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }) else { return }
+        if let saved = value["bar_dock"] as? String, MacBarPlacement.docks.contains(saved) { dock = saved }
+        else if value["bar_dock"] as? String == "free", let x = (value["bar_x"] as? NSNumber)?.doubleValue, let y = (value["bar_y"] as? NSNumber)?.doubleValue,
+                (0...1).contains(x), (0...1).contains(y) { dock = "free"; dockFraction = CGPoint(x: x, y: y) }
+    }
+    func savePlacement() {
+        guard let dir = preferenceDirectory else { return }
+        let path = dir.appendingPathComponent("control-preferences.json")
+        var value = (try? Data(contentsOf: path)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
+        value["bar_dock"] = dock
+        if dock == "free" { value["bar_x"] = Double(dockFraction.x); value["bar_y"] = Double(dockFraction.y) } else { value.removeValue(forKey: "bar_x"); value.removeValue(forKey: "bar_y") }
+        if let bytes = try? JSONSerialization.data(withJSONObject: value) { try? bytes.write(to: path, options: [.atomic]); chmod(path.path, 0o600) }
+    }
+    var workArea: CGRect { (panel?.screen ?? NSScreen.main)?.visibleFrame ?? .zero }
+    // Drag: 4 pt before it starts, 1:1 from the grab point, clamped inside the
+    // work area, landing on a dock within 12 pt. Dragging never changes state,
+    // access or visibility, and a press on a button is never a drag.
+    func drag(_ event: NSEvent) -> Bool {
+        guard let p = panel else { return false }
+        switch event.type {
+        case .leftMouseDown:
+            if [more, stop].contains(where: { $0.convert($0.bounds, to: nil).contains(event.locationInWindow) }) { return false }
+            dragArmed = true; dragging = false; dragGrab = NSEvent.mouseLocation; dragStart = p.frame.origin
+            return true
+        case .leftMouseDragged:
+            guard dragArmed else { return false }
+            let now = NSEvent.mouseLocation, dx = now.x - dragGrab.x, dy = now.y - dragGrab.y
+            if !dragging && hypot(dx, dy) < MacBarPlacement.threshold { return true }
+            dragging = true
+            let screen = NSScreen.screens.first(where: { $0.frame.contains(now) })?.visibleFrame ?? workArea
+            p.setFrameOrigin(MacBarPlacement.clamp(CGPoint(x: dragStart.x + dx, y: dragStart.y + dy), size: p.frame.size, work: screen))
+            writeHudBounds(p.frame)
+            return true
+        case .leftMouseUp:
+            guard dragArmed else { return false }
+            dragArmed = false
+            guard dragging else { return true }
+            dragging = false
+            let landing = MacBarPlacement.settle(p.frame.origin, size: p.frame.size, work: workArea)
+            dock = landing.dock; dockFraction = landing.fraction; displaced = false
+            moveBar(to: landing.origin, duration: MacDesign.normal)
+            savePlacement()
+            return true
+        default: return false
+        }
+    }
+    func moveBar(to origin: CGPoint, duration: TimeInterval) {
+        guard let p = panel else { return }
+        let target = NSRect(origin: origin, size: p.frame.size)
+        writeHudBounds(target)
+        if duration <= 0 || MacDesign.reduceMotion { p.setFrame(target, display: true); return }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = duration; context.timingFunction = MacDesign.easeInOut
+            p.animator().setFrame(target, display: true)
+        }
+    }
+    // avoid_input: step aside from a target (AppKit global rect). A jump, so
+    // the reply reports the final place. Never changes Stop, state or access.
+    func avoid(_ target: CGRect) -> (allowed: Bool, moved: Bool) {
+        guard let p = panel, visible else { return (true, false) }
+        guard let placement = MacBarPlacement.avoid(hud: p.frame, target: target, work: workArea) else { return (false, false) }
+        if placement == p.frame { return (true, false) }
+        p.setFrameOrigin(placement.origin); writeHudBounds(placement); displaced = true; displacedAt = Date()
+        return (true, true)
+    }
+    // After the click that needed the space, the bar returns home.
+    func returnHomeIfDue() {
+        guard displaced, !dragging, Date().timeIntervalSince(displacedAt) > 1.5, let p = panel else { return }
+        displaced = false
+        moveBar(to: MacBarPlacement.home(dock: dock, fraction: dockFraction, size: p.frame.size, work: workArea), duration: MacDesign.slow)
+    }
+    @objc func moveToDock(_ item: NSMenuItem) {
+        guard let name = item.representedObject as? String, let p = panel else { return }
+        dock = MacBarPlacement.docks.contains(name) ? name : "top-centre"; displaced = false
+        moveBar(to: MacBarPlacement.home(dock: dock, fraction: dockFraction, size: p.frame.size, work: workArea), duration: MacDesign.slow)
+        savePlacement()
     }
     @objc func changeGlow(_ item: NSMenuItem) {
         guard let raw = item.representedObject as? String, let level = MacGlowLevel(rawValue: raw) else { return }

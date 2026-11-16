@@ -41,6 +41,10 @@ test('Mac guardian advertises the unlatched control model and clears only a conf
   // Clearing an idle guardian is a no-op that reports idle.
   const again=await g.request({op:'clear_stop'});assert.equal(again.cleared,true);assert.equal(again.state,'idle');
   const visual=await g.request({op:'visual_status'});assert.equal(visual.takeover_mode,'manual');
+  // Only the agent's own active task can move the bar out of the way.
+  for(const args of [{token:'',rect:[10,10,4,4]},{token:'x',rect:[10,10,4,4]},{rect:[10,10,0,4]},{rect:'bad'}]){
+   const r=await g.request({op:'avoid_input',...args});assert.equal(r.allowed,false);assert.equal(r.moved,false);assert.equal(r.state,'idle');
+  }
  }finally{await g.close({normal:true}).catch(()=>{});fs.rmSync(files.dir,{recursive:true,force:true});}
 });
 

@@ -55,7 +55,7 @@ evidence only, labelled as such.
 | 13 Real pointer vs semantic | unrun | needs permissions |
 | 14 Multi-app and dialogs | unrun | needs permissions |
 | 15 Permissions revoke/regrant | unrun | needs a human in System Settings |
-| 16 HUD | partial | prompt and glow drawing and glow cost recorded; live prompt focus, Return/Esc, VoiceOver, contrast, capture exclusion and motion feel unrun |
+| 16 HUD | partial | prompt and glow drawing, glow cost, and bar dock/avoidance geometry recorded; live prompt focus, Return/Esc, VoiceOver, contrast, capture exclusion and motion feel unrun |
 | 17 Install lifecycle | pass (fake home) | `macos-install-check`; real install on this Mac unrun |
 | 18 Both architectures | Apple Silicon unrun | no Apple Silicon Mac available; CI covers compile and headless contracts only |
 

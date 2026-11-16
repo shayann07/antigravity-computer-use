@@ -1547,7 +1547,7 @@ func readLoop() {
             MacWorkerLifetime.start()
             defaultMode = "take"
             emit(["event": "ready", "pid": Int(getpid()), "platform": "darwin", "dpi_mode": "native",
-                  "control_contract": 1, "native_fence": true, "held_input_cleanup": true,
+                  "control_contract": 1, "native_fence": true, "held_input_cleanup": true, "hud_avoidance": true,
                   "accessibility": AXIsProcessTrusted()])
             Thread.detachNewThread { readLoop() }
             RunLoop.current.run()
