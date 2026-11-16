@@ -412,7 +412,6 @@ namespace Axon {
         void ApplyGlowLevel() {Overlay.GlowBrightness(glowLevel=="bright"?1f:glowLevel=="medium"?.75f:.55f);}
         bool dragging,dragArmed,displaced,sliding,entering,leaving,quitting;Point dragGrab,dragStart,slideFrom,slideTo;DateTime displacedAt,slideAt,enterAt,leaveAt;int slideMs;float enterFrom,leaveFrom;
         // The last moments of a drag, for the speed the bar is let go at.
-        readonly Queue<KeyValuePair<long,Point>> dragTrail=new Queue<KeyValuePair<long,Point>>();
         // A bar that is fading out is already gone to everything that asks.
         internal bool BarShown {get {return Visible&&!leaving;}}
         string activity="";DateTime activityAt;
@@ -822,15 +821,13 @@ namespace Axon {
         protected override void OnMouseMove(MouseEventArgs e) {
             if(dragArmed) {
                 Point p=Cursor.Position;
-                if(!dragging&&(Math.Abs(p.X-dragStart.X)>=4||Math.Abs(p.Y-dragStart.Y)>=4)){dragging=true;sliding=false;dragTrail.Clear();if(body==null||body.Done)StartBody();}
+                if(!dragging&&(Math.Abs(p.X-dragStart.X)>=4||Math.Abs(p.Y-dragStart.Y)>=4)){dragging=true;sliding=false;if(body==null||body.Done)StartBody();}
                 if(dragging) {
                     // bar.drag: 1:1 from the grab point. Past the inset the bar
                     // resists, and it never leaves the work area. The frame
                     // timer feeds the body and draws; this only moves the bar.
                     Rectangle work=Screen.FromPoint(p).WorkingArea;int margin=(int)Math.Ceiling(12*visualScale);
                     Location=new Point(Band(p.X-dragGrab.X,work.Left,work.Right-Width,margin),Band(p.Y-dragGrab.Y,work.Top,work.Bottom-Height,margin));
-                    long now=Stopwatch.GetTimestamp();dragTrail.Enqueue(new KeyValuePair<long,Point>(now,Location));
-                    while(dragTrail.Count>2&&now-dragTrail.Peek().Key>Stopwatch.Frequency*DesktopVisuals.SpringTrail/1000)dragTrail.Dequeue();
                     Trace("move",p.X,p.Y,Left,Top,0);
                     // The drawn bar follows the pointer on the same event, not a frame later.
                     // At most one frame every GhostGap ms: a mouse can report every 5 ms.
@@ -854,18 +851,6 @@ namespace Axon {
             return (int)Math.Round(value);
         }
         static double Resist(double over,double dim) {return dim<=0?0:(1-1/(over*.55/dim+1))*dim;}
-        // The speed the bar was let go at, from the last moments of the drag.
-        PointF ReleaseSpeed() {
-            KeyValuePair<long,Point>[] trail=dragTrail.ToArray();dragTrail.Clear();
-            long now=Stopwatch.GetTimestamp(),window=Stopwatch.Frequency*DesktopVisuals.SpringTrail/1000;
-            int first=-1;
-            for(int i=0;i<trail.Length;i++)if(now-trail[i].Key<=window){first=i;break;}
-            if(first<0||first==trail.Length-1)return PointF.Empty;
-            KeyValuePair<long,Point> a=trail[first],b=trail[trail.Length-1];
-            double seconds=(b.Key-a.Key)/(double)Stopwatch.Frequency;
-            if(seconds<=0)return PointF.Empty;
-            return new PointF((float)((b.Value.X-a.Value.X)/seconds),(float)((b.Value.Y-a.Value.Y)/seconds));
-        }
         // bar.throw: let go at BarBody.FlingSpeed or faster, the bar glides on
         // with its own speed; reaching a screen edge still fast it squashes
         // against it (BarBody). bar.settle: put down slower, it stays. Either
@@ -874,7 +859,6 @@ namespace Axon {
         void Settle() {
             bool moving=body!=null&&!body.Done&&body.Held;
             if(moving&&!demo){long tick=Stopwatch.GetTimestamp();body.Hold(Left+Width/2.0,Top+Height/2.0,HandX()+Width/2.0,HandY()+Height/2.0,(tick-bodyTick)/(double)Stopwatch.Frequency);body.Advance((tick-bodyTick)/(double)Stopwatch.Frequency);bodyTick=tick;}
-            dragTrail.Clear();
             Screen screen=Screen.FromRectangle(Bounds);float scale=Overlay.ScreenScale(screen);Rectangle work=screen.WorkingArea;
             if(scale!=visualScale) {
                 CancelBody();moving=false;

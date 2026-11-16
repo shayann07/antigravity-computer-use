@@ -27,7 +27,7 @@ Departures for a 440 by 48 bar on a whole screen:
 - **A throw glides.** The library's landing spring is made for a hop of a tab or two; across a screen it would snap. A release at 900 DIP/s or more keeps its own speed, fading over 0.4 s. It lands on two edges only if it reaches a screen edge still faster than 0.6 of its width a second. Where it stops, a dock within 12 px takes it.
 - The trailing edge keeps its real impact speed (the library keeps 0.1 of it as the lead reaches its rest, which here is the moment of handover), so the squash scales with how hard the bar hits.
 - A slot is 96 DIP.
-- The stretch is capped at 0.2 (the library allows 0.336). Each axis is driven by its own speed, with no shear term, so a long bar never tilts.
+- The stretch is capped at 0.2 (the library allows 0.336). It follows the direction of travel in any direction, and the slant this gives a long bar on a diagonal is capped at 24 DIP at its ends, so it never visibly tilts. A squash swells the other axis a little, so the bar keeps its volume.
 - An edge stays between 0.6 of its length and its full length, and no stretch draws the bar past the screen's edge.
 - The wall is the work area's edge, so the dock's inset is all the give.
 

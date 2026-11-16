@@ -7,7 +7,7 @@
 - Windows keeps the apps you approved across a guardian restart or an update, per conversation, for up to 24 hours without use. A click-only approval never covers full control.
 - Ctrl+Shift and Cmd+Shift shortcuts other than S, V and X no longer ask for approval. The key rule matched the "s" of "shift", so every such chord was treated as Save, Paste or Cut.
 - A launched app is brought to the front before its first screenshot, so you see what the agent will work on and a window that resizes as it activates no longer refuses the first click (`window_moved`).
-- The control bar can be thrown: it carries on to the nearest dock, springs in and squashes against the screen edge. Put down slowly, it stays where you leave it.
+- The control bar can be thrown: it glides on with its own speed, squashes against a screen edge it hits fast and springs back to shape, and lands on a dock it stops near. Put down slowly, it stays where you leave it.
 - In the Settings menu, unticked rows sit at the left and a tick slides in and out, matching macOS.
 - The glow's bright part now also moves to actions that do not move the real pointer, such as background clicks.
 - A refusal raised before any input (`target_not_observed`, `no_image`, a bad point) no longer spends the observation, so the next call can reuse its `observation_id` (#49).

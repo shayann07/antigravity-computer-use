@@ -24,11 +24,8 @@ namespace Axon {
         internal const double SpringSeconds=.45,SpringBounce=.15;
         // How it is solved: a fixed step and the longest stretch taken at once
         // (seconds); at rest within SpringNear px moving under SpringSlow px a
-        // second; let go at the speed of the drag's last SpringTrail ms.
-        internal const double SpringStep=.001,SpringLongest=.064,SpringNear=.5,SpringSlow=20;internal const int SpringTrail=80;
-        // bar.throw: where a throw aims, ThrowGlide seconds of its release speed
-        // ahead. The rest of its physics is in BarBody.
-        internal const double ThrowGlide=.3;
+        // second. The bar's throw physics are in BarBody.
+        internal const double SpringStep=.001,SpringLongest=.064,SpringNear=.5,SpringSlow=20;
         // The glow's slow life, in seconds: one lap of colour, one swell of
         // the band, one wander of the colours. And its frame times, in
         // milliseconds: in a transition, at rest, and for the deep wash.
