@@ -71,8 +71,9 @@ only ended that installation's task.
 
 An approval lasts for the agent's conversation. `ready` returns a
 `session_handle`; the agent passes it to later `ready` calls in the same
-conversation. Approvals are remembered per handle and per executable, with no
-idle timer, and native session expiry, End and Stop do not drop them. A missing
+conversation. Approvals are remembered per handle and per executable; native
+session expiry, End and Stop do not drop them, and a conversation unused for 24
+hours is forgotten. A missing
 or unknown handle starts a new conversation that asks again.
 
 The Windows guardian honours this: JS sends `remembered:true` and
@@ -86,8 +87,9 @@ guardian's own prompt is recorded, never a host-managed authorisation and never
 the runtime's claim. Each entry holds the executable and the tier that was
 shown; a click-only approval never covers full control. A conversation unused
 for 24 hours is dropped, at most 64 conversations of 64 apps are kept, and the
-one used longest ago makes room. A missing, linked, oversized or malformed file
-is an empty record. The runtime still has to send
+one used longest ago makes room. A missing, oversized or malformed file, or a
+reparse point in its place, is an empty record. Hard links are not detected;
+the folder's access control is what keeps other accounts out. The runtime still has to send
 `remembered:true`; keeping its list across a controller restart arrives with
 the Mac branch (PR #105).
 The `plan` command's automatic renewal calls `ready` without a handle; passing

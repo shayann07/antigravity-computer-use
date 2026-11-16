@@ -1388,6 +1388,9 @@ namespace Axon {
                 string action=Convert.ToString(m["action"]);bool feedback=m.ContainsKey("click_feedback")&&Convert.ToBoolean(m["click_feedback"]);
                 switch(action) {case "move":activity="Moving";break;case "click":activity="Clicking";break;case "drag":activity="Dragging";break;case "scroll":activity="Scrolling";break;case "type":case "set_value":case "key":activity="Typing";break;case "observe":activity="Reading the screen";break;default:activity="Working";break;}
                 activityAt=DateTime.UtcNow;
+                // A point belongs only to the message that carries it: a later
+                // action without one goes back to following the pointer.
+                bool pointed=false;
                 try {
                     long target;
                     if(m.ContainsKey("hwnd")&&Int64.TryParse(Convert.ToString(m["hwnd"]),out target)&&target>0) {
@@ -1397,12 +1400,12 @@ namespace Axon {
                         if(grants.Contains(key)){if(activityHwnd!=target){activityX=Int32.MinValue;activityY=Int32.MinValue;}activityHwnd=target;}
                     }
                     object[] point=m.ContainsKey("point")?m["point"] as object[]:null;int px,py;
-                    if(activityHwnd!=0&&point!=null&&point.Length==2&&Int32.TryParse(Convert.ToString(point[0]),out px)&&Int32.TryParse(Convert.ToString(point[1]),out py)&&Math.Abs((long)px)<10000000&&Math.Abs((long)py)<10000000) {activityX=px;activityY=py;}
+                    if(activityHwnd!=0&&point!=null&&point.Length==2&&Int32.TryParse(Convert.ToString(point[0]),out px)&&Int32.TryParse(Convert.ToString(point[1]),out py)&&Math.Abs((long)px)<10000000&&Math.Abs((long)py)<10000000) {activityX=px;activityY=py;pointed=true;}
                     if(m.ContainsKey("host_name"))SetHost(Convert.ToString(m["host_name"]),m.ContainsKey("host_path")?Convert.ToString(m["host_path"]):null);
                 } catch {}
                 // The glow follows the last window that received an action.
                 // Reading the screen shows it without a pulse.
-                if(activityHwnd!=0)Overlay.GlowTarget(activityHwnd,activityX,activityY,activityX!=Int32.MinValue,action!="observe",feedback);
+                if(activityHwnd!=0)Overlay.GlowTarget(activityHwnd,activityX,activityY,pointed,action!="observe",feedback);
                 RefreshHud();
                 if(feedback)Overlay.ClickFeedback();
                 return;
@@ -1496,7 +1499,7 @@ namespace Axon {
             if(kind=="app")try {executable=Convert.ToString(ControlFence.Identity(Convert.ToInt64(m["hwnd"]))["path"]).ToLowerInvariant();}catch {}
             // Already approved in this conversation: restored without a prompt.
             bool known=kind=="app"&&handle!=null&&executable!=null&&m.ContainsKey("remembered")&&Convert.ToBoolean(m["remembered"])
-                &&Approvals().Allows(handle,executable,m.ContainsKey("tier")&&Convert.ToString(m["tier"])=="click"?"click":"full",ApprovalMemory.Now());
+                &&Approvals().Allows(handle,executable,m.ContainsKey("tier")?Convert.ToString(m["tier"]):"full",ApprovalMemory.Now());
             bool allowed=hostManaged||known; bool timedOut=false;
             if(!allowed) {
             prompting=true; Overlay.HideAll();
@@ -1537,7 +1540,8 @@ namespace Axon {
                 // use). A host-managed deployment never showed a prompt, so
                 // nothing it authorises is recorded as human-approved.
                 if(!hostManaged&&handle!=null&&executable!=null) {
-                    if(Approvals().Remember(handle,executable,clickGrants.Contains(appKey)?"click":"full",ApprovalMemory.Now()))Approvals().Save(ApprovalFile);
+                    // The tier as it was asked for: one this record has no rule for is not kept.
+                    if(Approvals().Remember(handle,executable,m.ContainsKey("tier")?Convert.ToString(m["tier"]):"full",ApprovalMemory.Now()))Approvals().Save(ApprovalFile);
                 }
                 WriteState();
             }
