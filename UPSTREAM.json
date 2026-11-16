@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "544d3c9a2bf333f44afde6da450529a2e51ec6f0e85df52f51eafaf2c6c7aee9"
+      "sha256": "bcb724a3c6a74e874c6495e81d08aa8a44f93d78e8acc8500d61bed16925fd60"
     },
     {
       "path": "server/mcp.mjs",
@@ -572,11 +572,11 @@
     },
     {
       "path": "server/native/macos/MacGuardian.swift",
-      "sha256": "98eaa100e3fbd25cf9e4b3b00e87d33ee5b631ce8778d8ab5ad580134a2f1ff5"
+      "sha256": "47fa22b23705ef327b2f8b3bc29fbecb880b0d4895d7e7b30f549249a3979eec"
     },
     {
       "path": "server/native/macos/MacOperations.swift",
-      "sha256": "ec5f14f5579ef753a9e26c894c96a67ae28ed5062eb5d0d5202cb285881a7f73"
+      "sha256": "ee8f579241c84c28f81be62c2039a8498f1287f4449514df081dc88abea7b2b1"
     },
     {
       "path": "server/native/macos/MacVisuals.swift",

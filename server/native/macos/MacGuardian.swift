@@ -195,9 +195,17 @@ final class MacGuardian: NSObject {
     // App keys approved at the click tier (terminals and IDEs).
     var clickGrants = Set<String>()
     // Approvals last for the agent's conversation: per session_handle, the
-    // executables the human approved. Kept across Stop, End and expiry; a
-    // controller restart starts empty, so a new conversation asks again.
+    // executables the human approved. Kept across Stop, End and expiry, and
+    // saved for 24 hours without use so a restart does not ask again; a new
+    // conversation (a new handle) always asks.
     var remembered: [String: Set<String>] = [:]
+    var rememberedSeen: [String: Double] = [:]
+    var rememberedLoaded = false
+    // Apps the human approved in this guardian's own cards, per conversation,
+    // kept beside the guard files so a controller restart or update does not
+    // ask again. Written only after a human Allow; the runtime's claim alone
+    // is never enough.
+    static var approvalsFile: String { (MacFence.file as NSString).deletingLastPathComponent + "/guardian-approvals.json" }
     var watchdog: Process?
     var timer: Timer?
     var visuals = MacVisuals()
@@ -424,6 +432,10 @@ final class MacGuardian: NSObject {
                 let executable = identity?["path"] as? String
                 // Already approved in this conversation: restored without a prompt.
                 // The handle alone is never an approval; the executable must match.
+                if !rememberedLoaded {
+                    rememberedLoaded = true
+                    (remembered, rememberedSeen) = MacGuardian.loadRemembered(MacGuardian.approvalsFile, now: Date().timeIntervalSince1970)
+                }
                 let known = kind == "app" && (message["remembered"] as? Bool) == true &&
                     MacGuardian.rememberedAllows(remembered, handle: handle, executable: executable)
                 var allowed = hostManaged || known, timedOut = false
@@ -472,6 +484,13 @@ final class MacGuardian: NSObject {
                         }
                     }
                 }
+                if allowed, kind == "app", let handle = handle, remembered[handle] != nil {
+                    // Saved for a later controller; a failed save only means
+                    // the human is asked again after a restart.
+                    rememberedSeen[handle] = Date().timeIntervalSince1970
+                    (remembered, rememberedSeen) = MacGuardian.pruneRemembered(remembered, rememberedSeen, now: Date().timeIntervalSince1970)
+                    _ = MacGuardian.saveRemembered(MacGuardian.approvalsFile, remembered, rememberedSeen)
+                }
                 reply(result)
             default: reply(["allowed": false, "error": "unknown_guardian_operation"])
             }
@@ -484,10 +503,39 @@ final class MacGuardian: NSObject {
               let executable = executable, !executable.isEmpty else { return false }
         return table[handle]?.contains(executable) == true
     }
+    static let rememberedIdleSeconds: Double = 24 * 60 * 60
+    static func pruneRemembered(_ table: [String: Set<String>], _ seen: [String: Double], now: Double) -> ([String: Set<String>], [String: Double]) {
+        let live = table.keys.filter { key in seen[key].map { now - $0 <= rememberedIdleSeconds && $0 <= now + 60 } ?? false }
+            .sorted { (seen[$0] ?? 0) > (seen[$1] ?? 0) }.prefix(64)
+        var nextTable: [String: Set<String>] = [:], nextSeen: [String: Double] = [:]
+        for key in live { nextTable[key] = Set(table[key]!.sorted().prefix(64)); nextSeen[key] = seen[key] }
+        return (nextTable, nextSeen)
+    }
+    static func loadRemembered(_ path: String, now: Double) -> ([String: Set<String>], [String: Double]) {
+        var info = stat()
+        guard lstat(path, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG, info.st_nlink == 1, info.st_uid == getuid(),
+              info.st_size <= 256 * 1024,
+              let data = FileManager.default.contents(atPath: path),
+              let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              value["schema"] as? Int == 1, let sessions = value["sessions"] as? [String: Any] else { return ([:], [:]) }
+        var table: [String: Set<String>] = [:], seen: [String: Double] = [:]
+        for (handle, raw) in sessions {
+            guard !handle.isEmpty, handle.utf8.count <= 64, let record = raw as? [String: Any],
+                  let when = record["seen"] as? Double, let apps = record["apps"] as? [String] else { continue }
+            let paths = apps.filter { $0.hasPrefix("/") && !$0.contains("\0") && $0.utf8.count <= 4096 }
+            if !paths.isEmpty { table[handle] = Set(paths); seen[handle] = when }
+        }
+        return pruneRemembered(table, seen, now: now)
+    }
+    static func saveRemembered(_ path: String, _ table: [String: Set<String>], _ seen: [String: Double]) -> Bool {
+        var sessions: [String: Any] = [:]
+        for (handle, apps) in table { sessions[handle] = ["seen": seen[handle] ?? 0, "apps": apps.sorted()] }
+        guard let data = try? JSONSerialization.data(withJSONObject: ["schema": 1, "sessions": sessions], options: [.sortedKeys]) else { return false }
+        do { try data.write(to: URL(fileURLWithPath: path), options: [.atomic]); chmod(path, 0o600); return true } catch { return false }
+    }
     static func remember(_ table: [String: Set<String>], handle: String, executable: String) -> [String: Set<String>] {
         guard !handle.isEmpty, handle.utf8.count <= 64, !executable.isEmpty else { return table }
         var next = table
-        if next[handle] == nil && next.count >= 64 { next.removeAll() }
         next[handle, default: []].insert(executable)
         return next
     }

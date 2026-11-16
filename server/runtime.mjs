@@ -18,6 +18,7 @@ import {Incidents} from './incidents.mjs';
 import {updateNotice} from './update-notice.mjs';
 import {clearConfirmedStop,currentStopNonce,persistRecoveryStop,settlePriorStop,recoveryAdvice,priorWindowsCleanupVerified,priorMacCleanupVerified,priorUndispatchedCleanupVerified,readStopLatch,persistStopLatch,settleFreshStopLatch} from './recovery.mjs';
 import {writeAtomicJSON,readTaskRecord} from './atomic-json.mjs';
+import {loadConversationApprovals,saveConversationApprovals} from './conversation-approvals.mjs';
 
 const input=new Set(['move','click','type','set_value','key','scroll','drag','focus','fit_window','resize_window','close_window','paste','paste_files','clipboard','open','file_dialog']);
 const fail=(code,message)=>{throw new HostError(code,message,null);};
@@ -164,6 +165,7 @@ export class Runtime {
     else fs.mkdirSync(dataDir(),{recursive:true}); // inert unit-test dependencies
     this.latchFile=latchFile===undefined?(!driver&&!guardian?path.join(dataDir(),'emergency.stop'):null):latchFile;
     this.taskFile=taskFile===undefined?(!driver&&!guardian?path.join(dataDir(),'task-state.json'):null):taskFile;
+    this.approvalsFile=!driver&&!guardian?path.join(dataDir(),'conversation-approvals.json'):null;
     const prior=this.taskFile?readTaskRecord(this.taskFile):{open:false,guard:null};const priorTask=prior.open;
     this.guardFile=path.join(dataDir(),`guard-${process.pid}-${randomUUID()}.state`);
     fs.writeFileSync(this.guardFile,'idle||0|',{mode:0o600});
@@ -267,10 +269,25 @@ export class Runtime {
   // session_handle that later ready calls present. A new conversation (no or
   // unknown handle) asks again. Stop and Esc end the task but keep the
   // conversation's approvals, so continuing afterwards shows no new prompt.
+  // They are kept in private storage (conversation-approvals.mjs) so a
+  // controller restart, update or idle shutdown does not ask again; native
+  // guardians keep their own record and still decide whether to show a card.
   bindSession(handle){
-    const sessions=(this.conversationGrants??=new Map());
-    if(typeof handle==='string'&&sessions.has(handle)){this.sessionHandle=handle;return;}
-    this.sessionHandle=randomUUID();sessions.set(this.sessionHandle,new Map());
+    const sessions=(this.conversationGrants??=new Map());const seen=(this.conversationSeen??=new Map());
+    if(this.approvalsFile&&!this.approvalsLoaded){
+      this.approvalsLoaded=true;
+      for(const [saved,record] of loadConversationApprovals(this.approvalsFile))if(!sessions.has(saved)){sessions.set(saved,record.apps);seen.set(saved,record.seen);}
+    }
+    if(typeof handle==='string'&&sessions.has(handle))this.sessionHandle=handle;
+    else {this.sessionHandle=randomUUID();sessions.set(this.sessionHandle,new Map());}
+    seen.set(this.sessionHandle,Date.now());Runtime.prototype.saveApprovals.call(this);
+  }
+  saveApprovals(){
+    if(!this.approvalsFile)return;
+    const records=new Map([...(this.conversationGrants??new Map())].map(([handle,apps])=>[handle,{seen:this.conversationSeen?.get(handle)??Date.now(),apps}]));
+    // Approvals still hold in memory for this controller; a failed save only
+    // means a restart asks again. status reports it.
+    try{saveConversationApprovals(this.approvalsFile,records);this.approvalsSaved=true;}catch{this.approvalsSaved=false;}
   }
   // #60: the verified caller host for this task, from the native gate. Null
   // (the default, and after end or stop) keeps every AI app blocked.
@@ -464,7 +481,7 @@ export class Runtime {
     const active=await this.guardian.request({op:'activate',token:this.token,deadline:(BigInt(this.deadline)*10000n+621355968000000000n).toString()});
     if(!active.allowed||this.state==='stopped'||this.state==='paused'||this.generation!==activationGeneration)fail('control_inactive','Control changed during activation. Use local controls and observe again.');
     this.state='active';this.check();this.grants.set(key,{...current,purpose,tier});
-    if(this.sessionHandle)this.conversationGrants?.get(this.sessionHandle)?.set(executableKey(current.path),tier);
+    if(this.sessionHandle){this.conversationGrants?.get(this.sessionHandle)?.set(executableKey(current.path),tier);this.conversationSeen?.set(this.sessionHandle,Date.now());Runtime.prototype.saveApprovals.call(this);}
     return current;
   }
   // Ask the human to approve several apps up front, one local dialog each.
@@ -1016,6 +1033,6 @@ export class Runtime {
     }
     return {task_age_ms:open&&this.taskOpenedAt?Math.max(0,Math.round(now-this.taskOpenedAt)):null,last_activity_ms_ago:open?idle:null,actions_used:this.token&&Number.isFinite(this.remaining)?Math.max(0,contract.action_budget-this.remaining):0,actions_limit:contract.action_budget,held_resources:held,task_origin:!open?'none':recovered?'previous_controller':'this_controller',controller_uptime_ms:Math.round(process.uptime()*1000),task_liveness:liveness,task_liveness_rule:rule};
   }
-  status(){return {...Runtime.prototype.taskInfo.call(this),state:this.state,task_open:this.taskOpen===true,recovered_task:this.recoveredTask===true,remaining_actions:this.remaining,approved_apps:[...this.grants.values()].map(w=>({pid:w.pid,path:w.path,tier:w.tier??accessTier(w,Runtime.prototype.callerPolicy.call(this))})),runtime:nativePlatform().runtime,build_version:VERSION,build_id:BUILD_ID,private_data_storage:this.privateDataStorage,real_cursor:true,custom_cursor:this.guardian.customCursor??null,permission_mode:this.permissionMode,takeover_mode:this.guardian.takeoverMode||savedTakeoverMode(path.join(dataDir(),'control-preferences.json'),this.takeoverMode),control_reason:this.lastControlReason,...Runtime.prototype.callerReport.call(this)};}
+  status(){return {...Runtime.prototype.taskInfo.call(this),state:this.state,task_open:this.taskOpen===true,recovered_task:this.recoveredTask===true,remaining_actions:this.remaining,approved_apps:[...this.grants.values()].map(w=>({pid:w.pid,path:w.path,tier:w.tier??accessTier(w,Runtime.prototype.callerPolicy.call(this))})),runtime:nativePlatform().runtime,build_version:VERSION,build_id:BUILD_ID,private_data_storage:this.privateDataStorage,real_cursor:true,custom_cursor:this.guardian.customCursor??null,permission_mode:this.permissionMode,...(this.approvalsSaved===false?{approvals_saved:false}:{}),takeover_mode:this.guardian.takeoverMode||savedTakeoverMode(path.join(dataDir(),'control-preferences.json'),this.takeoverMode),control_reason:this.lastControlReason,...Runtime.prototype.callerReport.call(this)};}
   async close(){const normal=this.state==='idle';if(!normal)await this.stop();else await this.driver.abort?.();await this.guardian.close({normal});this.sessions.close();}
 }

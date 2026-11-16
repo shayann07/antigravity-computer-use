@@ -283,6 +283,20 @@ func macSetup() {
 
 func macContractTest() throws {
     try MacContract.load()
+    let approvalsPath = NSTemporaryDirectory() + "agcu-approvals-\(getpid()).json"
+    defer { unlink(approvalsPath) }
+    let day = MacGuardian.rememberedIdleSeconds, nowSeconds = Date().timeIntervalSince1970
+    var many: [String: Set<String>] = [:], manySeen: [String: Double] = [:]
+    for i in 0..<70 { many["h\(i)"] = ["/Applications/A\(i).app/Contents/MacOS/A"]; manySeen["h\(i)"] = nowSeconds - Double(i) }
+    many["old"] = ["/x/Old"]; manySeen["old"] = nowSeconds - day - 1
+    let pruned = MacGuardian.pruneRemembered(many, manySeen, now: nowSeconds)
+    guard pruned.0.count == 64, pruned.0["h0"] != nil, pruned.0["h69"] == nil, pruned.0["old"] == nil,
+          MacGuardian.saveRemembered(approvalsPath, ["h": ["/Applications/T.app/Contents/MacOS/T"]], ["h": nowSeconds]),
+          MacGuardian.loadRemembered(approvalsPath, now: nowSeconds).0["h"] == ["/Applications/T.app/Contents/MacOS/T"],
+          MacGuardian.loadRemembered(approvalsPath, now: nowSeconds + day + 1).0.isEmpty,
+          MacGuardian.loadRemembered(approvalsPath + ".missing", now: nowSeconds).0.isEmpty else {
+        throw AxonError("contract_test_failed", "Saved conversation approvals differ.")
+    }
     let typingSource = CGEventSource(stateID: .privateState)
     let typed = macTypingEvents(source: typingSource, scalar: "ہ"), newline = macTypingEvents(source: typingSource, scalar: "\n")
     guard typed.count == 2, newline.count == 2, (typed + newline).allSatisfy({ $0.flags.intersection([.maskCommand, .maskControl, .maskAlternate, .maskShift]).isEmpty }),
@@ -580,7 +594,12 @@ func macContractTest() throws {
     }
     var full: [String: Set<String>] = [:]
     for index in 0..<64 { full = MacGuardian.remember(full, handle: "h\(index)", executable: "/x") }
-    guard full.count == 64, MacGuardian.remember(full, handle: "h65", executable: "/x").count == 1,
+    // The bound is applied by pruneRemembered, which keeps the 64 most recently
+    // used conversations rather than clearing them all.
+    var fullSeen: [String: Double] = [:]; for index in 0..<65 { fullSeen["h\(index)"] = Double(1_000 + index) }
+    let grown = MacGuardian.remember(full, handle: "h64", executable: "/x")
+    guard full.count == 64, grown.count == 65, MacGuardian.pruneRemembered(grown, fullSeen, now: 1_100).0.count == 64,
+          MacGuardian.pruneRemembered(grown, fullSeen, now: 1_100).0["h0"] == nil,
           MacGuardian.remember(full, handle: "h3", executable: "/y").count == 64 else {
         throw AxonError("contract_test_failed", "Remembered approval bound differs.")
     }
@@ -872,7 +891,7 @@ func macContractTest() throws {
           MacBarPlacement.avoid(hud: barAtTop, target: CGRect(x: 700, y: 830, width: 0, height: 4), work: barWork) == nil else {
         throw AxonError("contract_test_failed", "Bar avoidance differs from WindowGeometry.AvoidHud.")
     }
-    emit(["ok": true, "control_contract": 1, "checks": ["shared state codec", "own HUD chrome excluded from occlusion", "typed characters carry text without modifiers", "malformed state refusal", "canonical approval fingerprint", "sensitive action classification", "kernel process birth identity", "native idle/paused/stopped/expired/session/monitor/Stop refusals", "empty cleanup and malformed input-journal refusal", "official Phosphor resource rendering", "SDK and runtime material selection", "capture visibility and dismissal lifecycle", "access tier enforcement for target and frontmost app", "conversation-scoped remembered approvals", "confirmed-only Stop clearing", "approval completion fenced by Stop and legacy pause", "shared motion curves", "access prompt layout and placement", "window glow falloff, mask, matching and levels", "bar docks, drag landing and avoidance"], "hud_icon_assets": iconAssets, "hud_material": materialBackend, "native_glass_compiled": MacVisuals.nativeGlassCompiled, "desktop_input_sent": false])
+    emit(["ok": true, "control_contract": 1, "checks": ["shared state codec", "own HUD chrome excluded from occlusion", "typed characters carry text without modifiers", "saved approvals expire and are capped", "malformed state refusal", "canonical approval fingerprint", "sensitive action classification", "kernel process birth identity", "native idle/paused/stopped/expired/session/monitor/Stop refusals", "empty cleanup and malformed input-journal refusal", "official Phosphor resource rendering", "SDK and runtime material selection", "capture visibility and dismissal lifecycle", "access tier enforcement for target and frontmost app", "conversation-scoped remembered approvals", "confirmed-only Stop clearing", "approval completion fenced by Stop and legacy pause", "shared motion curves", "access prompt layout and placement", "window glow falloff, mask, matching and levels", "bar docks, drag landing and avoidance"], "hud_icon_assets": iconAssets, "hud_material": materialBackend, "native_glass_compiled": MacVisuals.nativeGlassCompiled, "desktop_input_sent": false])
 }
 
 func macMoveCursor(_ point: CGPoint, _ args: [String: Any]) throws -> [String: Any] {
