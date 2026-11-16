@@ -5,7 +5,7 @@
     {
       "path": "server/build.mjs",
       "upstream_sha256": "81260b378fffb46573cfe475a3a336930113c8abc465d3d278bbb0851d8a4377",
-      "local_sha256": "2478deae029fb616ecb7726a1d5068204f731f67b2d696fa0901e55cd20746ee",
+      "local_sha256": "45485499c5dc59af5ff707db6589b732773a90e4ab84bab2c644b3b253be83e6",
       "modified": true
     },
     {
@@ -66,7 +66,7 @@
     {
       "path": "server/native/AxonHost.swift",
       "upstream_sha256": "b50c68feff8bd783ba2f92580358c69491c0ffee31f6182b76543f3aba9f962f",
-      "local_sha256": "42e518fd17e810eac07a075f01c958c641d044a19b408104316a310ff319a04e",
+      "local_sha256": "cb43c9c175df31d05e1a5ab1718a3306a40d0044834457c0e9b8e7d4ac6031d7",
       "modified": true
     },
     {
@@ -364,7 +364,7 @@
     },
     {
       "path": "scripts/bundle.mjs",
-      "sha256": "5cb9b90735f7e1c24fc525b408ab31f5940c653c05238122adc37052fe585d98"
+      "sha256": "d0411bf1aac21e141369a1683eaecc7134789341b08045b78e359475f9c0b9b9"
     },
     {
       "path": "tests/install.test.mjs",
@@ -572,15 +572,15 @@
     },
     {
       "path": "server/native/macos/MacGuardian.swift",
-      "sha256": "47fa22b23705ef327b2f8b3bc29fbecb880b0d4895d7e7b30f549249a3979eec"
+      "sha256": "123256534fee637342c7df0f04efd032c54edf8c6b2e0d73109bf5af5f32dd4b"
     },
     {
       "path": "server/native/macos/MacOperations.swift",
-      "sha256": "ee8f579241c84c28f81be62c2039a8498f1287f4449514df081dc88abea7b2b1"
+      "sha256": "6598c39368572c8d3aac98d9e09371dd06a00975e5e67059830e78bf29ef341d"
     },
     {
       "path": "server/native/macos/MacVisuals.swift",
-      "sha256": "1347b3be799aca9f8385d0436200a572eab1397ea69966e70f4eb48acd4d069d"
+      "sha256": "9199a9becd42c24f268ec817814b640357dc1f845ee105061013e37e4a8e4692"
     },
     {
       "path": "server/native/macos/PrivateStorage.swift",
@@ -608,7 +608,7 @@
     },
     {
       "path": "docs/MACOS.md",
-      "sha256": "62a5a175b063f931557d423f734803705ada0f5b75017edb4cd7a0328d0639fb"
+      "sha256": "7fb9ec8a6e9618c52aaa6f4f1f077c461f81e5449f508ee405f66b3e9a39541f"
     },
     {
       "path": "server/update-core.mjs",
@@ -712,7 +712,7 @@
     },
     {
       "path": "server/recovery.mjs",
-      "sha256": "dcae585517102b40506b5267fc6d29843e3c5ad16629e68b839a2780664221b6"
+      "sha256": "540c09c61e1b1f7ca4bda5246c09ad2611efc19573508784a547fd82391fb6c9"
     },
     {
       "path": "scripts/qualify-guardian-desktop.mjs",
@@ -764,7 +764,7 @@
     },
     {
       "path": "docs/MACOS-QUALIFICATION.md",
-      "sha256": "f1d8c1a548fc4699bf512225bede812051c7a2121ce8c70dfd4a4684291dce50"
+      "sha256": "c7a788537c9683d5365c2cfa1d01eff446d4fdb4d63fc2d618a524fa9b066b0c"
     },
     {
       "path": "tests/MacStorageMarkerWriter.swift",
@@ -936,7 +936,7 @@
     },
     {
       "path": "docs/MACOS-GLASS-MATERIAL.md",
-      "sha256": "21a450eefbb2347c8e71c6e3e0de20d23404262a469e1e0e0bddbf6411218851"
+      "sha256": "b1ed6ab42fef3d33a9cc83a79cc9afe7e867af19d17ab509f96ea2e2a0dd92a4"
     },
     {
       "path": "tests/macos-compiler-lease.test.mjs",
@@ -952,11 +952,11 @@
     },
     {
       "path": "server/native/macos/MacAccessPrompt.swift",
-      "sha256": "a6df38699346ee73519d061f9b366c2e3e946b1b1069b73f06707e26d2f0a73b"
+      "sha256": "2000e8866c8e96f10e35900949e23e0abadbbfa1befcd7e40a01dcb605943d5e"
     },
     {
       "path": "server/native/macos/MacGlow.swift",
-      "sha256": "d6895b70dca2f99105ba98dc5b01233e6bef05f37d23669f8d1194f876a9e9ca"
+      "sha256": "c18bd2f94e2b8ab72d301f6695474e9222827975f51085162a285d4bddef3a9f"
     }
   ],
   "external_files": [

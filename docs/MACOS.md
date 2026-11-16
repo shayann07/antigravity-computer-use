@@ -68,10 +68,18 @@ into host-managed permissions:
 
 The default standalone mode uses native app-session and sensitive-action
 approval dialogs. Host-managed deployment relies on host execution review;
-neither platform claims to authenticate Turbo. The helpers are ad-hoc signed for
-development, not Developer ID signed or notarized. Do not disable Gatekeeper or
-system security to run them. A permission/quarantine refusal needs human review.
-macOS may require new permission approval after an ad-hoc-signed update.
+neither platform claims to authenticate Turbo. Release helpers are signed with
+the project's own certificate, not an Apple Developer ID (owner decision), and
+are not notarized. Do not disable Gatekeeper or system security to run them. A
+permission/quarantine refusal needs human review.
+
+**After a helper update, turn Screen Recording on again.** macOS keeps
+Accessibility and Input Monitoring for a helper signed with the same
+certificate, but no longer applies Screen Recording, even though its switch
+still shows on. Open System Settings > Privacy & Security > Screen & System
+Audio Recording and switch AxonHost off and on (or run the setup again).
+Observed on an Intel Mac with macOS 26.6 and a test certificate; Apple Silicon
+is unverified. Development builds signed ad hoc may lose all three.
 
 ## Native behavior
 
@@ -122,7 +130,14 @@ macOS may require new permission approval after an ad-hoc-signed update.
   restart. Prior macOS task
   recovery verifies that parent, worker and watchdog PIDs have exited and the
   JSON `.inputs` ledger (`{"buttons":[],"keys":[]}`) is empty before closing a
-  recovered task.
+  recovered task. A guardian killed mid-task leaves its state reading `active`;
+  that settles a stuck Stop only when every actor the task recorded is gone
+  (guardian, watchdog and workers by pid and recorded start time, so a reused
+  pid is told apart; the controller and recorded children by pid alone) and
+  the ledger is a plain, single-link, readable file holding the empty ledger.
+  Settling writes an ordinary `stopped` and ends the task; it never resumes
+  the old task. This is the evidence the Windows guardian relies on: no held
+  input and every worker exited.
 - Input permission and point ownership are rechecked while dispatching native
   events. Errors attempt journaled input cleanup and preserve unknown delivery;
   detected cleanup failure latches Stop. Native headless refusal tests do not
@@ -131,8 +146,10 @@ macOS may require new permission approval after an ad-hoc-signed update.
   prompt. Approvals last for the agent's conversation: `ready` returns a
   `session_handle`, and the guardian restores an app approved under that handle
   (matched by handle and executable path) without a prompt, across Stop, End
-  and session expiry. A missing or unknown handle, a controller restart or a
-  new app asks again. The handle is never an approval by itself.
+  and session expiry. Approvals are kept in private storage, so they also
+  survive a controller restart and a relaunch of the approved app (same
+  executable path). A missing or unknown handle or a new app asks again. The
+  handle is never an approval by itself.
 - Access tiers: terminals and IDEs (Terminal, iTerm2, Warp, Ghostty, Xcode,
   VS Code, Cursor, Zed, Sublime Text, Nova and the JetBrains IDEs) are
   click-only: left click, pointer moves, scrolling, focus and window sizing.
@@ -146,27 +163,32 @@ macOS may require new permission approval after an ad-hoc-signed update.
   Resume (owner decision, #99): the guardian refuses both ops with
   `pause_removed`, and a `paused` record from an older build is treated as no
   control.
-- AppKit renders the HIG-aligned Liquid Glass control bar (`396×44` rounded
-  capsule using Apple's native `NSGlassEffectView` on macOS 26+ with
-  `NSVisualEffectView` fallback on macOS 14/15, pure filled Phosphor Icons
-  without status dots or strokes, and clear state labels for
-  `Antigravity is working`, `Paused · you have control` and
-  `Stopped · task ended`), the window glow and an original arrow/text
-  pointer. The bar has Stop and a settings menu only; there is no Pause, Resume
-  or Re-arm control. Emergency Stop uses a high-opacity crimson glass tint (`alpha = 0.88`,
-  `>= 8.5:1` contrast) so translucent material never obscures the stopped state.
-  Motion and colour come from one file, `server/native/macos/MacDesign.swift`,
-  with the same values as Windows' `DesktopVisuals.cs` (a test keeps them
-  equal). The bar enters over `normal` (200 ms) easing out from 0.96; Reduce
-  Motion keeps a short fade without the scale.
+- The control bar is drawn as on Windows (`docs/visual-design.md`,
+  `DesktopVisuals.cs`): a 440×48 pill on the always-dark ink surface, two
+  lines (line 1 coloured by state: working, asking, stopped, ended; line 2 the
+  current activity), an Esc key cap, and Stop and Settings buttons at 44×44
+  with hover and pressed states. No status dots, no Pause, Resume or Re-arm.
+  The earlier Liquid Glass capsule is replaced
+  ([material note](MACOS-GLASS-MATERIAL.md)). Motion and colour come from one
+  file, `server/native/macos/MacDesign.swift`, with the same values as
+  `DesktopVisuals.cs` (a test keeps them equal). Reduce Motion turns hover and
+  menu motion into instant changes.
+- Settings opens a 312-wide menu (12 radius, 44-pt rows) 8 pt under the bar,
+  or above it when the bar is docked low. It opens with opacity and a scale
+  from 0.96 over 200 ms and closes over 133 ms; Move bar changes page in place.
+  Rows: Show bar and glow in recordings, Move bar (six docks and Reset), Glow
+  brightness (Soft, Medium, Bright). One Mac-only difference, asked for on
+  the Mac: a row's tick slides in and out, and an unticked row is left-aligned.
+  Clicking outside closes the menu.
 - The bar can be dragged by its body (4 pt threshold, never from a button,
-  never by an event the agent posted), stays inside the work area, lands on
-  one of six docks (top or bottom by left, centre, right) within 12 pt or stays
-  where it was dropped, and remembers its place in `control-preferences.json`.
-  Settings ▸ Move bar lists the docks and Reset. HUD avoidance now works on Mac
-  (`hud_avoidance`, guardian `avoid_input`, a port of `WindowGeometry.AvoidHud`):
-  before a click the bar steps aside from the target, and it returns home
-  afterwards. The landing is an eased slide, not yet the Windows spring.
+  never by an event the agent posted), resists at the screen edge, and lands
+  on one of six docks (top or bottom by left, centre, right; 12 pt from the
+  sides, 18 pt from top and bottom) with the Windows spring (0.45 s, bounce
+  0.15), or stays where it was dropped. It remembers its place in
+  `control-preferences.json`. HUD avoidance works on Mac (`hud_avoidance`,
+  guardian `avoid_input`, a port of `WindowGeometry.AvoidHud`): before a click
+  the bar steps aside from the target, and it returns home afterwards.
+  While an access card waits, the bar stays and reads "Waiting for your answer".
 - The glow (`MacGlow.swift`) lights the window that last received an action,
   as on Windows: a soft blue-to-violet band on the window's edge that tapers
   to nothing (no rectangle, dithered so there are no steps), turning one lap
@@ -176,8 +198,11 @@ macOS may require new permission approval after an ad-hoc-signed update.
   scroll. Brightness is a menu
   setting: Soft (default), Medium, Bright. The runtime passes the window's pid
   and frame; the guardian lights it only for a granted process. Measured at
-  rest on an Intel i7-9750H around a 1132x995 window: the process about 0.9 %
-  of one core and the window server about 6 points more than without it.
+  rest on an Intel i7-9750H around a 708x965 window, all three levels: the
+  process 0.87–0.90 % of one core (3.2–3.7 % during the entrance), one frame
+  every 66 ms with 0.11 ms of work (worst 0.27 ms), and the window server
+  about 4.5–5 points more than without it. The entrance fades in while the
+  band widens; in full screen the edges are lit inside the screen.
   `AxonHost --glow-preview <dir>` and `--glow-trial <seconds>` review it.
 - The access prompt is a card on the bar's dark surface, matching the Windows
   design (`docs/visual-design.md`): 496 wide, 18 radius, one soft shadow and a

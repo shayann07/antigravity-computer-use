@@ -4,10 +4,10 @@
 
 Branch `mac/umbrella-x86_64` (draft PR #105), built on `feat/final-native`
 (#103) because the shared runtime for the new control model exists only there;
-`main` is an ancestor of that branch. Interactive acceptance has **not** been
-run yet: no permission was granted, no app approved, no desktop input sent and
-no physical Esc pressed. Results below are compile, headless and offscreen
-evidence only, labelled as such.
+`main` is an ancestor of that branch. The human granted permissions and
+answered cards on this Mac; each row says whether it was physically observed,
+measured, rendered offscreen or checked headless. No physical Esc has been
+pressed yet.
 
 ### Identities
 
@@ -32,11 +32,94 @@ evidence only, labelled as such.
 | Full suite | `7808f4f` | 695 tests, 653 pass, 0 fail, 42 skipped | local log |
 | Native check, provenance, bundle, install check | `2d9b0c7` (bar drag, docks, avoidance) | pass | local logs |
 | Full suite | `2d9b0c7` | 695 tests, 653 pass, 0 fail, 42 skipped | local log |
+| Native check, provenance, bundle, install check | `1002b5a` + docs (parity, recovery) | pass | local logs |
+| Full suite | `1002b5a` | 709 tests, 667 pass, 0 fail, 42 skipped (Windows-only) | local log |
 | Native contract: tiers (target and frontmost), remembered approvals, confirmed-only Stop clearing, approval fenced by Pause/Stop, easing, prompt layout, glow maths | branch head | pass | `macos-native-check` |
 | Real guardian binary, headless: `clear_stop` clears only a confirmed Stop; unconfirmed, companion, invalid, directory and recovered-task markers stay; Smart preference rewritten | branch head | pass | `tests/macos-guardian-control.test.mjs` |
 | Access prompt drawing (short, long scrolling, launch, hover/press/focus) | branch head | inspected offscreen | `--prompt-preview` pictures, kept local |
 | Glow drawing on dark and light, small window | branch head | inspected offscreen | `--glow-preview` pictures, kept local |
 | Glow cost at rest, 1132x995 window, Soft | branch head | process about 0.9 % of one core; window server 24.9 % idle vs about 31 % with the glow (two runs) | `--glow-trial 10`; physically observed on screen, not judged for feel |
+
+### Parity with Windows (owner's list, 16 November)
+
+Build C2 (test-certificate signed, CDHash `f66c9471…`) installed on this Mac.
+Pictures are rendered by `AxonHost --visual-preview <dir>`, one file per
+surface and state (48 files: `bar-*`, `menu-*`, `prompt-*`, `glow-*`), and
+kept local, as the rules for this PR require. The Windows pictures are not yet
+beside them; that comparison is open.
+
+| Item | Result | How shown |
+| --- | --- | --- |
+| 1 Drawing test (Preview Markup) | **blocked** | see "Drawing test" below |
+| 2 Bar: 440×48, always dark, two lines, line 1 by state, no dots, Stop and Settings 44×44 with hover and pressed | done | pictures `bar-ready`, `bar-working`, `bar-working-clicking`, `bar-working-one-minute-left`, `bar-asking`, `bar-stopped-esc`, `bar-stopped-button`, `bar-stopped-safety-check`, `bar-session-ended`, `bar-stop-hover`/`-pressed`, `bar-settings-hover`/`-pressed`, `bar-working-increase-contrast`; the human saw the ready, working and amber asking bars on screen |
+| 2 Bar drag, edge resistance, spring 0.45 s / bounce 0.15 | done; feel not agreed | the human dragged it ("moves but no spring"): the Windows constants make the landing subtle; from rest it settles in 0.35 s with no visible overshoot, a 1500 pt/s throw overshoots about 3 pt (contract check). To compare with Windows side by side |
+| 2 Menu: 312 wide, 12 radius, 44-pt rows, opacity and 0.96 scale, 200 ms in, 133 ms out | done | pictures `menu-main`, `menu-main-row-hover`/`-pressed`, `menu-move-bar`, `menu-page-change-33ms`…`150ms`, `menu-opening-25pct`/`50pct`, `menu-main-above-low-bar`, `menu-main-recording-on`; the human used the tick, Move bar and click-outside close |
+| 2 Menu tick slides; unticked rows left-aligned | done (Mac-only, asked for by the human) | picture `menu-main-tick-sliding-in-50pct`; differs from Windows |
+| 2 Prompt card: 496 wide, 18 radius, Allow and Deny 104×44, Deny focused, Return and Esc deny, 90 s note | done | pictures `prompt-app`, `prompt-action-long`, `prompt-launch`, `prompt-states-*`; two cards seen on screen by the human, Allow used |
+| 2 No Pause anywhere | done | the guardian refuses `pause`/`resume` with `pause_removed`; no Pause in the bar or menu. `runtime.mjs:930` and `:937` are left alone, as asked |
+| 3 Glow: one palette, thick, never static, no rectangle or steps | done | pictures `glow-{dark,light}-{window,full-screen}-{soft,medium,bright}` (12); the human saw it around Preview's alert |
+| 3 Glow: Soft default, Medium, Bright; one 60 s lap; entrance fades while the band widens | done | pictures above and `glow-entrance-start`/`-end`; level is a menu row |
+| 3 Glow: 15 fps at rest | measured | 302 frames in 20 s, one every 66.0 ms, at each level |
+| 3 Glow: 16 ms frames in transitions | not measured | the entrance runs in the render server; only its in-process CPU is measured (below) |
+| 3 Glow eases toward the action point | done in code, not shown | `"point": [x, y]` is read when present; the runtime does not send it yet |
+| 3 Glow never takes a click; hidden from the runtime's own screenshots | done in code; physically the click-through was seen | the window ignores mouse events; capture excludes it unless "Show bar and glow in recordings" is on |
+| 3 Glow recording | not taken | needs the human's screen recording |
+| 4 Performance | measured | table below |
+| 5 Rejected motions (on Stop/Esc, per action, easing during a window drag, hover fade on menu rows) | not added | code review; the only added motion is the tick slide above |
+| 6 Reduce Motion | done in code | hover and menu changes become instant, the bar enters with a fade only; not checked with the setting on |
+
+#### Performance (Intel i7-9750H, macOS 26.6, busy desktop)
+
+| Measure | Mac | Windows reference |
+| --- | --- | --- |
+| Glow process CPU at rest, Soft / Medium / Bright, 708x965 window, 20 s each | 0.90 / 0.89 / 0.87 % of one core | 8.9 % / 0.8 % (as reported) |
+| Glow process CPU during the entrance | 3.2–3.7 % of one core | |
+| Rest frame interval; work per frame | 66.0 ms; 0.11 ms mean, 0.27 ms worst | 66 ms |
+| Entrance frame time | not measured (render server) | about 19 ms |
+| WindowServer CPU without / with the glow | 28.4 % / 32.8–33.3 % (+4.4–4.9 points) | |
+| Idle service helpers, no glow | guardian 2.4 %, watchdog 1.7 % of one core | |
+| `snapshot` without / with picture | 0.59–0.65 s / 1.14–1.62 s | |
+| `apps`, `ready` | 0.27–0.76 s, 0.42 s | |
+| s per click, s per drag | not measured: every pixel click and drag on Preview needed a card (below) | about 1.04 s per drag |
+
+CPU is from `getrusage` in the trial and from cumulative `cputime` of
+WindowServer over the same span (`AxonHost --glow-trial 20 --level …`).
+
+#### Drawing test
+
+Blocked before the first stroke. Preview opened the 900x1200 dark canvas (the
+earlier "couldn't be opened" alert came from a launch that passed the file as
+an argument; opening it through Launch Services works). Every pixel click and
+drag on the Mac is sensitive: `MacFence.preview` gives pixel actions an empty
+label (`MacControl.swift:313-314`), and the shared contract makes a click or
+drag with an empty label sensitive (`ambiguous_target_operations`). Windows
+instead hit-tests the pixel and uses that control's name (`AxonHost.cs:634`),
+so the Mac asks where Windows may not. Preview's canvas image has no name
+either way, so every stroke would need its own approval card. Markup's toolbar
+pen is not exposed to accessibility, so turning Markup on is also a pixel
+click. The human approved one card; the click was then refused as covered
+(Claude was in front), and the next card timed out at 90 s. Unblocking needs
+an owner decision: hit-test pixels on the Mac as on Windows, and decide
+whether an unnamed canvas in a full-tier app may take routine drags.
+
+Also seen: `cmd+shift+a` (Markup's shortcut) is sensitive because
+`(?:ctrl|cmd|command)\+[svx]` matches the `s` of `shift`; Windows has the same
+pattern for `ctrl+shift+…`.
+
+#### Not checked
+
+- Physical Esc and Control+Option+F12 during a task, with and without held
+  input (#99 tests 4–6).
+- The drawing test (blocked, above); s per click and s per drag.
+- Entrance frame time (16 ms target).
+- The glow easing toward an action point (the runtime does not send one yet).
+- A screen recording of the bar, menu and glow, and full-screen windows on
+  screen (only rendered offscreen).
+- Reduce Motion and Increase Contrast with the settings on.
+- VoiceOver on the bar, menu and card.
+- The spring's feel next to Windows.
+- The Windows pictures beside the Mac ones.
+- Apple Silicon.
 
 ### Acceptance tests (#99 table)
 
@@ -94,10 +177,14 @@ is not verified here. Apple Silicon is unverified.
 | The guardian's own window glow made every real-pointer click on the target `obscured` | fixed in b1b0af5; physically re-run, click delivered |
 | Launch and sensitive-action timeouts were reported as human denial | fixed in bc94383; physically re-run, `approval_timeout` |
 | CLI `ready` dropped `session_handle`, so every task re-asked every app | fixed in efa2758 |
-| Conversation approvals live only in controller memory: any controller restart, update or idle shutdown re-asks every app | open, blocks release |
-| Switching a Mac permission, or a second AxonHost instance exiting, can end the guardian; the live controller cannot settle the resulting unconfirmed Stop, and recovery needed a controller restart | open, blocks release |
-| After an unanswered card the bar disappeared until the next `ready`; on build B the access card window existed (modal-panel level, alpha 1) but was not visible to the human, three times | open, blocks release; cause not found |
-| Pixel clicks on an unnamed target need a sensitive-action card (by contract); agents must prefer `--index` | by design, documented here |
+| Conversation approvals live only in controller memory: any controller restart, update or idle shutdown re-asks every app | fixed (approvals kept in private storage); physically re-run on C2: Preview, approved under an earlier handle, was used after a controller restart and a Preview relaunch with no card |
+| The bundle left out `conversation-approvals.mjs`, so the installed service could not start | fixed; `tests/bundle-imports.test.mjs` fails without the fix |
+| Switching a Mac permission, or a second AxonHost instance exiting, can end the guardian; the live controller cannot settle the resulting unconfirmed Stop, and recovery needed a controller restart | fixed for the reproduced case (all helpers killed with `kill -9` mid-task, then Stop): the dead guardian's `active` state now settles when every recorded actor is gone and the ledger is empty (`server/recovery.mjs`, `tests/recovery-mac-active.test.mjs`); physically re-run on this Mac, `end` settled it and the next `ready` was idle. Still needs a controller restart or `end`; the live controller does not settle it alone |
+| The installer refuses to install over an unconfirmed Stop, but only the newer build can settle it | open, owner decision; worked around here by running the new build's `end` once, after a rehearsal on a copy of the data |
+| After an unanswered card the bar disappeared until the next `ready`; on build B the access card window existed (modal-panel level, alpha 1) but was not visible to the human, three times | fixed: the card panel hid itself when the helper was not the active app (`hidesOnDeactivate`), and the bar is restored after every capture; physically re-run twice, both cards visible with the amber "Waiting for your answer" bar |
+| Clicks on an app's own alert (Preview, layer 8) were refused as covered | fixed (`macTopWindowVerdict`); not yet re-run on a visible alert |
+| A service started from a shell without Accessibility (for example an agent's terminal) gets `accessibility_denied` though setup reports access, because macOS checks the app that launched it | by design of macOS; documented. Start the service from Antigravity or the human starter |
+| Pixel clicks on an unnamed target need a sensitive-action card (by contract); agents must prefer `--index` | by design on Mac, but Windows hit-tests the pixel first; parity is an owner decision (see Drawing test) |
 
 ### Changes in this branch
 
