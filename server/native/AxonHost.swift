@@ -1506,14 +1506,44 @@ func readLoop() {
                 RunLoop.main.add(tick, forMode: .common)
                 func cpu() -> Double { var u = rusage(); getrusage(RUSAGE_SELF, &u)
                     return Double(u.ru_utime.tv_sec + u.ru_stime.tv_sec) + Double(u.ru_utime.tv_usec + u.ru_stime.tv_usec) / 1_000_000 }
-                RunLoop.main.run(until: Date().addingTimeInterval(1.5))   // past the entrance
+                // The entrance runs in the render server at the display's rate;
+                // only its in-process share is measured here.
+                let enterCPU = cpu(), enterWall = Date()
+                RunLoop.main.run(until: Date().addingTimeInterval(MacDesign.slow))
+                let enterUsed = cpu() - enterCPU, enterSpan = Date().timeIntervalSince(enterWall)
+                RunLoop.main.run(until: Date().addingTimeInterval(1.2))   // past the entrance
+                glow.resetStats()
                 let startCPU = cpu(), startWall = Date()
                 RunLoop.main.run(until: Date().addingTimeInterval(seconds))
                 let used = cpu() - startCPU, wall = Date().timeIntervalSince(startWall)
+                let ticks = max(1, glow.tickCount)
                 glow.hide(immediately: true); tick.invalidate()
                 emit(["window_size": [bounds.width, bounds.height], "seconds": wall, "cpu_seconds": used,
                       "cpu_percent_of_one_core": wall > 0 ? used / wall * 100 : 0, "reduce_motion": MacDesign.reduceMotion,
+                      "rest_frames": glow.tickCount, "rest_frame_interval_ms": glow.intervalSeconds / Double(ticks) * 1000,
+                      "rest_frame_work_ms_mean": glow.tickSeconds / Double(ticks) * 1000, "rest_frame_work_ms_worst": glow.tickWorst * 1000,
+                      "entrance_cpu_percent_of_one_core": enterSpan > 0 ? enterUsed / enterSpan * 100 : 0,
                       "level": glow.level.rawValue, "desktop_input_sent": false]); return
+            }
+            if let at = args.firstIndex(of: "--visual-preview"), args.count > at + 1 {
+                try? MacContract.load(); _ = NSApplication.shared
+                let dir = args[at + 1]
+                var written = try MacBarBench.write(to: dir) + (try MacAccessPrompt.preview(to: dir))
+                for (name, size, background, full) in [("dark-window", CGSize(width: 640, height: 420), NSColor(white: 0.12, alpha: 1), false),
+                                                       ("light-window", CGSize(width: 640, height: 420), NSColor(white: 0.93, alpha: 1), false),
+                                                       ("dark-full-screen", CGSize(width: 720, height: 450), NSColor(white: 0.12, alpha: 1), true),
+                                                       ("light-full-screen", CGSize(width: 720, height: 450), NSColor(white: 0.93, alpha: 1), true)] {
+                    for level in MacGlowLevel.allCases {
+                        let path = (dir as NSString).appendingPathComponent("glow-\(name)-\(level.rawValue).png")
+                        try MacWindowGlow.preview(window: size, to: path, background: background, level: level, fullScreen: full); written.append(path)
+                    }
+                }
+                // The entrance: the narrow band it widens from, and full width.
+                for (name, spread) in [("entrance-start", CGFloat(0.35)), ("entrance-end", CGFloat(1))] {
+                    let path = (dir as NSString).appendingPathComponent("glow-\(name).png")
+                    try MacWindowGlow.preview(window: CGSize(width: 640, height: 420), to: path, background: NSColor(white: 0.12, alpha: 1), spread: spread); written.append(path)
+                }
+                emit(["written": written, "desktop_input_sent": false]); return
             }
             if let at = args.firstIndex(of: "--prompt-preview"), args.count > at + 1 {
                 try? MacContract.load(); _ = NSApplication.shared

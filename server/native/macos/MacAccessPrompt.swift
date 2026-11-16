@@ -83,10 +83,46 @@ final class MacPromptButton: NSButton {
     }
 }
 
+// The card's body area: one replaceable view. Today it is the request's
+// text; per-app rows with tier tags will be another MacPromptBody that fills
+// the same slot without changing the card, its buttons or its placement.
+protocol MacPromptBody: NSView {
+    // The height the body wants at the card's inner width, before the limit.
+    var naturalHeight: CGFloat { get }
+    // The view that takes Tab after Allow.
+    var keyView: NSView { get }
+}
+
+// The request as text: shown whole, scrolling past promptBodyMost, never cut.
+final class MacPromptTextBody: NSScrollView, MacPromptBody {
+    let text = NSTextView()
+    let naturalHeight: CGFloat
+    var keyView: NSView { text }
+    init(_ string: String, width: CGFloat) {
+        let contrast = MacDesign.increaseContrast
+        text.string = string; text.isEditable = false; text.isSelectable = true; text.drawsBackground = false
+        text.font = MacDesign.promptBodyFont; text.textColor = contrast ? .labelColor : MacDesign.rest
+        text.textContainerInset = .zero; text.textContainer?.lineFragmentPadding = 0
+        text.textContainer?.widthTracksTextView = true; text.isVerticallyResizable = true; text.isHorizontallyResizable = false
+        text.frame = NSRect(x: 0, y: 0, width: width, height: 10)
+        text.textContainer?.containerSize = NSSize(width: width, height: .greatestFiniteMagnitude)
+        text.setAccessibilityLabel("Request")
+        text.layoutManager?.ensureLayout(for: text.textContainer!)
+        naturalHeight = ceil(text.layoutManager?.usedRect(for: text.textContainer!).height ?? 0) + 2
+        super.init(frame: .zero)
+        text.frame.size.height = max(naturalHeight, 18)
+        documentView = text; drawsBackground = false; borderType = .noBorder
+        scrollerStyle = .overlay; scrollerKnobStyle = contrast ? .default : .light
+    }
+    required init?(coder: NSCoder) { fatalError("unused") }
+}
+
 final class MacPromptCardView: NSView {
     let title: String
-    let scroll = NSScrollView()
-    let body = NSTextView()
+    let content: MacPromptBody
+    // The text body, when the card shows the request as text.
+    var body: NSTextView { (content as? MacPromptTextBody)?.text ?? NSTextView() }
+    var scroll: NSView { content }
     let allow = MacPromptButton(title: "Allow", filled: true)
     let deny = MacPromptButton(title: "Deny", filled: false)
     let margin: CGFloat
@@ -102,30 +138,19 @@ final class MacPromptCardView: NSView {
         }
         return (fallback, text)
     }
-    init(message: String, fallback: String, margin: CGFloat = 36) {
+    init(message: String, fallback: String, margin: CGFloat = 36, content replacement: MacPromptBody? = nil) {
         let parts = MacPromptCardView.split(message, fallback: fallback)
         title = parts.title; self.margin = margin
-        super.init(frame: .zero)
         let pad = MacDesign.promptPad, width = MacDesign.promptWidth, inner = width - 2 * pad
-        let contrast = MacDesign.increaseContrast
-        body.string = parts.body; body.isEditable = false; body.isSelectable = true; body.drawsBackground = false
-        body.font = MacDesign.promptBodyFont; body.textColor = contrast ? .labelColor : MacDesign.rest
-        body.textContainerInset = .zero; body.textContainer?.lineFragmentPadding = 0
-        body.textContainer?.widthTracksTextView = true; body.isVerticallyResizable = true; body.isHorizontallyResizable = false
-        body.frame = NSRect(x: 0, y: 0, width: inner, height: 10)
-        body.textContainer?.containerSize = NSSize(width: inner, height: .greatestFiniteMagnitude)
-        body.setAccessibilityLabel("Request")
-        body.layoutManager?.ensureLayout(for: body.textContainer!)
-        let used = ceil(body.layoutManager?.usedRect(for: body.textContainer!).height ?? 0) + 2
-        // As tall as its text, up to the limit; past that it scrolls, and nothing is cut.
-        bodyScrolls = used > MacDesign.promptBodyMost
-        let tall = min(max(used, 18), MacDesign.promptBodyMost)
-        body.frame.size.height = max(used, tall)
-        scroll.documentView = body; scroll.drawsBackground = false; scroll.borderType = .noBorder
-        scroll.hasVerticalScroller = bodyScrolls; scroll.scrollerStyle = .overlay; scroll.scrollerKnobStyle = contrast ? .default : .light
+        content = replacement ?? MacPromptTextBody(parts.body, width: inner)
+        super.init(frame: .zero)
+        // As tall as its content, up to the limit; past that it scrolls, and nothing is cut.
+        bodyScrolls = content.naturalHeight > MacDesign.promptBodyMost
+        let tall = min(max(content.naturalHeight, 18), MacDesign.promptBodyMost)
+        (content as? NSScrollView)?.hasVerticalScroller = bodyScrolls
         let top = pad + MacDesign.promptTitle + 8
         card = NSRect(x: margin, y: margin, width: width, height: 0)
-        scroll.frame = NSRect(x: margin + pad, y: margin + top, width: inner, height: tall)
+        content.frame = NSRect(x: margin + pad, y: margin + top, width: inner, height: tall)
         rule = top + tall + 12
         let row = rule + 12
         let ring = MacDesign.promptRing, across = MacDesign.promptButtonWidth + 2 * ring, down = MacDesign.promptButtonHeight + 2 * ring
@@ -134,8 +159,8 @@ final class MacPromptCardView: NSView {
         card.size.height = row + MacDesign.promptButtonHeight + pad
         frame = NSRect(x: 0, y: 0, width: width + 2 * margin, height: card.height + 2 * margin)
         // Deny first in the key loop: it holds the focus when the prompt opens.
-        deny.nextKeyView = allow; allow.nextKeyView = body; body.nextKeyView = deny
-        [scroll, allow, deny].forEach(addSubview)
+        deny.nextKeyView = allow; allow.nextKeyView = content.keyView; content.keyView.nextKeyView = deny
+        [content, allow, deny].forEach(addSubview)
         setAccessibilityElement(true); setAccessibilityRole(.group); setAccessibilityLabel(title)
     }
     required init?(coder: NSCoder) { fatalError("unused") }
@@ -186,6 +211,19 @@ final class MacPromptCardView: NSView {
 }
 
 enum MacAccessPrompt {
+    // The card's window. It must stay on screen while the helper is not the
+    // active app: an NSPanel hides on deactivation by default, which left the
+    // card existing but invisible whenever macOS declined to activate the
+    // helper (Intel, macOS 26.6, three times).
+    static func makePanel(_ frame: NSRect) -> MacPromptPanel {
+        let panel = MacPromptPanel(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        panel.isOpaque = false; panel.backgroundColor = .clear; panel.hasShadow = false
+        panel.hidesOnDeactivate = false; panel.isReleasedWhenClosed = false
+        panel.level = .modalPanel; panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
+        // Excluded from capture: the agent can neither see nor click it.
+        panel.sharingType = .none
+        return panel
+    }
     // Runs the prompt modally. Returns true only for an explicit Allow.
     // onPanel lets the guardian abort it on Stop; the expiry denies.
     static func run(message: String, fallback: String, bar: NSRect?, onPanel: (NSPanel?) -> Void, timedOut: inout Bool) -> Bool {
@@ -194,11 +232,7 @@ enum MacAccessPrompt {
             ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
         let cardRect = MacPromptCardView.placement(card: view.card.size, bar: bar, screen: screen)
         let frame = cardRect.insetBy(dx: -view.margin, dy: -view.margin)
-        let panel = MacPromptPanel(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: false)
-        panel.isOpaque = false; panel.backgroundColor = .clear; panel.hasShadow = false
-        panel.level = .modalPanel; panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
-        // Excluded from capture: the agent can neither see nor click it.
-        panel.sharingType = .none
+        let panel = makePanel(frame)
         panel.isMovableByWindowBackground = true   // the card body (title strip, note) drags it
         panel.title = view.title; panel.setAccessibilitySubrole(.dialog); panel.setAccessibilityTitle(view.title)
         panel.contentView = view
@@ -209,9 +243,12 @@ enum MacAccessPrompt {
         panel.onDeny = { Stopper.shared.deny() }
         panel.initialFirstResponder = deny
         onPanel(panel)
-        NSApp.activate(ignoringOtherApps: true)
+        // Ask to become the active app so Return and Esc reach the card. macOS
+        // may refuse a background helper; the card is shown regardless and a
+        // click on it gives it the keyboard.
+        if #available(macOS 14.0, *) { NSApp.activate() } else { NSApp.activate(ignoringOtherApps: true) }
         // It appears and disappears at once: live controls are not scaled.
-        panel.makeKeyAndOrderFront(nil); panel.makeFirstResponder(deny)
+        panel.orderFrontRegardless(); panel.makeKey(); panel.makeFirstResponder(deny)
         var expired = false
         let expiry = Timer(timeInterval: MacDesign.promptTimeout, repeats: false) { _ in expired = true; NSApp.abortModal() }
         RunLoop.main.add(expiry, forMode: .common); RunLoop.main.add(expiry, forMode: .modalPanel)

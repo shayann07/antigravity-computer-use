@@ -221,7 +221,6 @@ final class MacGuardian: NSObject {
         try Data("\(getpid())|\(try macProcessStart(getpid()))".utf8).write(to: URL(fileURLWithPath: MacFence.file + ".guardian"), options: [.atomic])
         chmod(MacFence.file + ".guardian", 0o600)
         visuals.onStop = { [weak self] in self?.stop("button") }
-        visuals.onEnd = { [weak self] in guard let self = self else { return }; self.stop("human_end"); self.visuals.hide(); emit(["ev":"human_end","state":self.state]) }
         retireSmartMode()
         state = MacFence.latchBlocks(MacFence.latch) ? "stopped" : "idle"
         try writeState(); visuals.hide()
@@ -293,7 +292,10 @@ final class MacGuardian: NSObject {
             }
             visuals.releaseCursor()
         }
-        if state == "idle" { visuals.hide() }
+        visuals.reason = effectiveReason
+        // A session that ran out says so for a few seconds; any other idle hides the bar.
+        if state == "idle" && effectiveReason == "session_expired" && visuals.visible { visuals.ended = true; visuals.show(state); controlsUntil = Date().addingTimeInterval(8) }
+        else if state == "idle" { visuals.ended = false; visuals.hide() }
         else { visuals.show(state); controlsUntil = state == "stopped" ? Date().addingTimeInterval(8) : .distantFuture }
         emit(["ev": "state", "state": state, "reason": effectiveReason, "custom_cursor": visuals.cursorApplied])
     }
@@ -349,8 +351,12 @@ final class MacGuardian: NSObject {
         func reply(_ extra: [String: Any] = [:]) { emit(extra.merging(["id": id, "state": state]) { _, new in new }) }
         do {
             switch op {
-            case "visual_status": reply(["controls_visible": visuals.visible, "cursor": state == "active", "takeover_mode": "manual", "material_backend": MacVisuals.materialBackend(for: visuals.rootView)])
-            case "show_controls": rearmLocked = (message["rearm_locked"] as? Bool) ?? false; visuals.show(state); controlsUntil = .distantFuture; reply(["controls_visible": visuals.visible, "rearm_locked": rearmLocked, "material_backend": MacVisuals.materialBackend(for: visuals.rootView)])
+            case "visual_status":
+                visuals.loadPreferences()
+                reply(["controls_visible": visuals.visible, "cursor": state == "active", "takeover_mode": "manual", "material_backend": "ink_surface",
+                       "record_visuals": visuals.recordVisuals, "line1": visuals.barView?.model.line1 ?? "", "line2": visuals.barView?.model.line2 ?? "",
+                       "dock": visuals.dock, "glow_level": visuals.windowGlow.level.rawValue])
+            case "show_controls": rearmLocked = (message["rearm_locked"] as? Bool) ?? false; visuals.ended = false; visuals.show(state); controlsUntil = .distantFuture; reply(["controls_visible": visuals.visible, "rearm_locked": rearmLocked, "material_backend": "ink_surface"])
             case "dismiss_controls": if ["active", "paused"].contains(state) { stop("dismiss") }; visuals.hide(); reply(["controls_visible": false])
             case "attach": reply(["registered": true]) // worker self-registers before reporting ready
             case "activate":
@@ -358,7 +364,7 @@ final class MacGuardian: NSObject {
                 try ensureWatchdog(); let nextToken = str(message["token"]) ?? "", requested = Int64(str(message["deadline"]) ?? "0") ?? 0
                 let nextBoot = MacDeadline.create(requested: requested, wallNow: MacFenceState.now, bootNow: MacDeadline.now, maximumMs: MacContract.value["session_ms"] as? Int ?? 600_000)
                 guard !nextToken.isEmpty, nextBoot > 0 else { reply(["allowed": false]); return }
-                token = nextToken; until = requested; bootUntil = nextBoot
+                token = nextToken; until = requested; bootUntil = nextBoot; visuals.deadlineMs = requested
                 set("active"); reply(["allowed": state == "active"])
             case "avoid_input":
                 // Moves the bar clear of a click target (global points, top-left
@@ -402,7 +408,8 @@ final class MacGuardian: NSObject {
             case "capture_end": visuals.finishCapture(state)
             case "activity":
                 let action = str(message["action"]) ?? "Checking"
-                visuals.activity(action)
+                if state == "active" { visuals.activity(action) }
+                if let name = str(message["host_name"]) { visuals.setHost(name: name, path: str(message["host_path"])) }
                 // The glow follows the last window that received an action. Only
                 // a window of an app approved for this task is accepted.
                 // point: the action in global screen points, top-left origin
@@ -442,10 +449,9 @@ final class MacGuardian: NSObject {
                 if !allowed {
                     // The prompt hangs from the bar where it was before capture hiding.
                     let bar = visuals.visible ? visuals.panel?.frame : nil
-                    visuals.hideForCapture()
-                    // Capture hiding removes our pointer window; the human
-                    // needs the normal OS cursor throughout a modal decision.
-                    visuals.releaseCursor()
+                    // The bar stays, says it is waiting for an answer and keeps
+                    // Stop; the human gets the normal OS cursor for the decision.
+                    visuals.beginPrompt()
                     var request = String((str(message["message"]) ?? "").prefix(6000))
                     if let path = identity?["path"] as? String, !request.contains(path) {
                         // Keep the native identity in view when the request omits it.
@@ -455,8 +461,8 @@ final class MacGuardian: NSObject {
                     allowed = MacAccessPrompt.run(message: request,
                                                   fallback: kind == "app" ? "Allow this app for this session?" : "Allow one sensitive action?",
                                                   bar: bar, onPanel: { [weak self] in self?.prompt = $0 }, timedOut: &timedOut)
-                    tick() // Resolve takeover, Stop and expiry before restoring control visuals.
-                    visuals.finishCapture(state)
+                    tick() // Resolve Stop and expiry before restoring control visuals.
+                    visuals.endPrompt()
                 }
                 if state == "stopped" || state == "paused" || MacFence.latchBlocks(MacFence.latch) { allowed = false }
                 var result: [String: Any] = ["allowed": allowed, "decision": allowed ? (hostManaged ? "host-authorized" : known ? "remembered" : "allowed") : (state == "stopped" ? "stopped" : timedOut ? "timeout" : "denied")]

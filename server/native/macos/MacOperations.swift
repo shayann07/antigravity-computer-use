@@ -187,27 +187,45 @@ func macCheckTargetPoint(_ point: CGPoint, _ args: [String: Any]) throws {
     let guardianAlive = guardian != nil && (try? macProcessStart(guardian!)) == String(guardianRecord.last ?? "")
     let ownExecutable = macExecutablePath(getpid())
     var chrome: [Int32: Bool] = [:]
-    for candidate in windows {
+    let rows: [MacStackRow] = windows.map { candidate in
         let owner = (candidate[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value ?? -1
-        if guardianAlive && owner == guardian { continue } // only this runtime's native click-through chrome
         // The bar, glow and access card are drawn by this same AxonHost
         // executable. They are this runtime's own chrome, never the human's
         // window, even when the guardian record cannot be verified.
-        if let cached = chrome[owner] { if cached { continue } }
-        else { let own = macIsOwnChrome(ownerPath: macExecutablePath(owner), selfPath: ownExecutable); chrome[owner] = own; if own { continue } }
-        let ownerName = candidate[kCGWindowOwnerName as String] as? String ?? ""
-        if ownerName == "Dock" || ownerName == "Window Server" { continue }
-        let layer = (candidate[kCGWindowLayer as String] as? NSNumber)?.int32Value ?? 0
-        if owner == pid && layer > 0 { continue } // same-app context menu, popup, or popover layer
-        guard (candidate[kCGWindowAlpha as String] as? NSNumber)?.doubleValue ?? 0 > 0,
-              let bounds = candidate[kCGWindowBounds as String] as? [String:Any],
-              let boundsRect = CGRect(dictionaryRepresentation: bounds as CFDictionary), boundsRect.contains(point) else { continue }
-        guard (candidate[kCGWindowNumber as String] as? NSNumber)?.uint32Value == expected else {
-            throw AxonError("obscured", "Another window covers this point. No click was sent.")
+        var own = guardianAlive && owner == guardian
+        if !own {
+            if let cached = chrome[owner] { own = cached }
+            else { own = macIsOwnChrome(ownerPath: macExecutablePath(owner), selfPath: ownExecutable); chrome[owner] = own }
         }
-        return
+        let bounds = (candidate[kCGWindowBounds as String] as? [String: Any]).flatMap { CGRect(dictionaryRepresentation: $0 as CFDictionary) } ?? .zero
+        return MacStackRow(number: (candidate[kCGWindowNumber as String] as? NSNumber)?.uint32Value ?? 0, owner: owner,
+                           ownerName: candidate[kCGWindowOwnerName as String] as? String ?? "", layer: (candidate[kCGWindowLayer as String] as? NSNumber)?.int32Value ?? 0,
+                           alpha: (candidate[kCGWindowAlpha as String] as? NSNumber)?.doubleValue ?? 0, bounds: bounds, own: own)
     }
-    throw AxonError("obscured", "The target point has no verifiable owning window.")
+    switch macTopWindowVerdict(rows, point: point, expected: expected, pid: pid) {
+    case .target: return
+    case .covered: throw AxonError("obscured", "Another window covers this point. No click was sent.")
+    case .none: throw AxonError("obscured", "The target point has no verifiable owning window.")
+    }
+}
+
+// One on-screen window, front to back, as the occlusion check sees it.
+struct MacStackRow { let number: CGWindowID; let owner: Int32; let ownerName: String; let layer: Int32; let alpha: Double; let bounds: CGRect; let own: Bool }
+enum MacTopWindow { case target, covered, none }
+// The frontmost window at the point decides. This runtime's own chrome, the
+// Dock and the Window Server are looked through. The approved window wins
+// wherever it is, including an alert, sheet or panel the app shows above
+// layer 0; another window of the same app above layer 0 (a menu, popup or
+// popover) is looked through.
+func macTopWindowVerdict(_ rows: [MacStackRow], point: CGPoint, expected: CGWindowID, pid: Int32) -> MacTopWindow {
+    for row in rows {
+        if row.own || row.ownerName == "Dock" || row.ownerName == "Window Server" { continue }
+        guard row.alpha > 0, row.bounds.contains(point) else { continue }
+        if row.number == expected { return .target }
+        if row.owner == pid && row.layer > 0 { continue }
+        return .covered
+    }
+    return .none
 }
 
 func macBringToFront(_ args: [String: Any]) throws {
@@ -369,7 +387,6 @@ func macContractTest() throws {
           classifyMacWindowState(hasScreenCapturePermission: true, minimized: false, hidden: false, fullscreen: false, onCurrentSpace: true, onAnySpace: true).errorCode == nil else {
         throw AxonError("contract_test_failed", "macOS Space and window capture failure classification differs.")
     }
-    let activeHud = MacVisuals.statePresentation(for: "active", latched: false)
     var hudVisibility = MacHudVisibility()
     guard !hudVisibility.requestedVisible, !hudVisibility.captureHidden,
           hudVisibility.requestShow() else {
@@ -413,26 +430,38 @@ func macContractTest() throws {
     }
     let iconAssets = try MacPhosphorIcon.validateAssets()
     guard iconAssets == 5 else { throw AxonError("contract_test_failed", "Official HUD icon inventory differs.") }
-    let material = MacVisuals.makeMaterial(frame: NSRect(x: 0, y: 0, width: 396, height: 44), content: NSView())
-    let materialBackend = MacVisuals.materialBackend(for: material)
-    #if AGCU_MACOS26_SDK
-    if #available(macOS 26.0, *) {
-        guard materialBackend == "native_liquid_glass" else { throw AxonError("contract_test_failed", "The native glass view was not selected.") }
-    } else {
-        guard materialBackend == "visual_effect_fallback" else { throw AxonError("contract_test_failed", "The older-system material fallback differs.") }
+    // The bar says what Guardian.cs Model() says, in every state; no Pause,
+    // no Resume and no Re-arm anywhere; Stop and Settings sit where Windows has them.
+    let working = MacBarModel.make(state: "active", prompting: false, host: "Antigravity", activity: "Clicking", lowTime: true, reason: "", ended: false)
+    let asking = MacBarModel.make(state: "active", prompting: true, host: "Antigravity", activity: "", lowTime: false, reason: "", ended: false)
+    let stopped = MacBarModel.make(state: "stopped", prompting: false, host: "Antigravity", activity: "", lowTime: false, reason: "button", ended: false)
+    let readyBar = MacBarModel.make(state: "idle", prompting: false, host: "", activity: "", lowTime: false, reason: "", ended: false)
+    let ran = MacBarModel.make(state: "idle", prompting: false, host: "Antigravity", activity: "", lowTime: false, reason: "", ended: true)
+    let all = [working, asking, stopped, readyBar, ran]
+    guard working.line1 == "Antigravity is working", working.line2 == "Clicking · 1 min left", working.slot == 1, working.hint,
+          asking.state == "asking", asking.line1 == "Waiting for your answer", asking.slot == 1,
+          stopped.line1 == "Stopped", stopped.line2 == "You pressed Stop", stopped.slot == 2, !stopped.hint,
+          readyBar.line1 == "Computer Use is ready", readyBar.slot == 2, ran.line1 == "Session ended", ran.state == "ended",
+          !all.contains(where: { m in ["pause", "resume", "re-arm"].contains(where: { (m.line1 + m.line2).lowercased().contains($0) }) }),
+          MacBarArt.stateColor("stopped") == MacDesign.rose, MacBarArt.stateColor("asking") == MacDesign.amber,
+          MacBarArt.width == 440, MacBarArt.height == 48, MacBarArt.stopRect == CGRect(x: 345, y: 2, width: 44, height: 44),
+          MacBarArt.modeRect == CGRect(x: 394, y: 2, width: 44, height: 44), MacMenuArt.width == 312, MacMenuArt.radius == 12,
+          MacBarModel.activityWords("drag") == "Dragging", MacBarModel.activityWords("observe") == "Reading the screen" else {
+        throw AxonError("contract_test_failed", "Mac bar words, states or geometry differ from Guardian.cs.")
     }
-    #else
-    guard materialBackend == "visual_effect_fallback" else { throw AxonError("contract_test_failed", "The older-SDK material fallback differs.") }
-    #endif
-    let pausedHud = MacVisuals.statePresentation(for: "paused", latched: false)
-    let stoppedHud = MacVisuals.statePresentation(for: "stopped", latched: false)
-    let latchedHud = MacVisuals.statePresentation(for: "active", latched: true)
-    guard activeHud.title == "Antigravity is working", !activeHud.isEmergency,
-          pausedHud.title.contains("Paused"), !pausedHud.isEmergency,
-          stoppedHud.title == "Stopped · task ended", stoppedHud.isEmergency, stoppedHud.contrastTarget >= 8.5,
-          ![activeHud, pausedHud, stoppedHud].contains(where: { $0.title.lowercased().contains("re-arm") || $0.title.lowercased().contains("resume") }),
-          latchedHud.resolvedState == "stopped", latchedHud.title == "Stopped · task ended", latchedHud.isEmergency else {
-        throw AxonError("contract_test_failed", "Mac HUD state presentation or emergency contrast target differs.")
+    var menuItems = [MacMenuItem(kind: "head"), MacMenuItem(id: 1), MacMenuItem(kind: "rule"), MacMenuItem(kind: "foot")]
+    let menuTall = MacMenuArt.layout(&menuItems)
+    let page = MacMenuArt.pageAt(MacDesign.normal), pageStart = MacMenuArt.pageAt(0)
+    guard menuTall == 6 + 30 + 44 + 13 + 58 + 6, menuItems[1].bounds == CGRect(x: 6, y: 36, width: 300, height: 44),
+          page.move == 1, page.gone == 0, page.come == 1, pageStart.move == 0, pageStart.gone == 1, pageStart.come == 0,
+          MacBarMotion.band(500, low: 0, high: 1000, margin: 12) == 500, MacBarMotion.band(-10_000, low: 0, high: 1000, margin: 12) >= 0,
+          MacBarMotion.band(2000, low: 0, high: 1000, margin: 12) <= 1000, (1...11).contains(MacBarMotion.band(-6, low: 0, high: 1000, margin: 12)) else {
+        throw AxonError("contract_test_failed", "Menu layout, page timing or the drag's rubber band differ.")
+    }
+    var spring = MacBarMotion.Spring(x: 0, y: 0, vx: 1500, vy: 0, to: CGPoint(x: 100, y: 0)), springTime = 0.0, overshoot: CGFloat = 0
+    while MacBarMotion.advance(&spring, elapsed: 1.0 / 60) && springTime < 3 { springTime += 1.0 / 60; overshoot = max(overshoot, spring.x - 100) }
+    guard springTime > 0.2, springTime < 1.0, overshoot > 0, overshoot < 40 else {
+        throw AxonError("contract_test_failed", "The bar's settling spring differs from 0.45 s with a gentle bounce.")
     }
     guard macRole("AXWebArea") == "Document",
           macRole("AXLink") == "Hyperlink",
@@ -809,6 +838,25 @@ func macContractTest() throws {
     let shortCard = MacPromptCardView(message: "Allow this application for this session?\n\nCalculator", fallback: "x")
     let longCard = MacPromptCardView(message: "Approve ONE sensitive operation?\n\n" + String(repeating: "A long request line that wraps.\n", count: 80), fallback: "x")
     let untitled = MacPromptCardView(message: String(repeating: "no newline ", count: 20), fallback: "Allow one sensitive action?")
+    // The approved window may be an app's own alert above layer 0 (found on
+    // Preview's "couldn't be opened" alert): it is the target, not a popup.
+    let at = CGPoint(x: 50, y: 50), box = CGRect(x: 0, y: 0, width: 100, height: 100)
+    let glowRow = MacStackRow(number: 1, owner: 9, ownerName: "Computer Use", layer: 25, alpha: 1, bounds: box, own: true)
+    let alertRow = MacStackRow(number: 2, owner: 7, ownerName: "Preview", layer: 8, alpha: 1, bounds: box, own: false)
+    let behind = MacStackRow(number: 3, owner: 5, ownerName: "Claude", layer: 0, alpha: 1, bounds: box, own: false)
+    let menuRow = MacStackRow(number: 4, owner: 7, ownerName: "Preview", layer: 101, alpha: 1, bounds: box, own: false)
+    let docWindow = MacStackRow(number: 5, owner: 7, ownerName: "Preview", layer: 0, alpha: 1, bounds: box, own: false)
+    guard macTopWindowVerdict([glowRow, alertRow, behind], point: at, expected: 2, pid: 7) == .target,
+          macTopWindowVerdict([menuRow, docWindow], point: at, expected: 5, pid: 7) == .target,
+          macTopWindowVerdict([behind, docWindow], point: at, expected: 5, pid: 7) == .covered,
+          macTopWindowVerdict([glowRow], point: at, expected: 5, pid: 7) == .none else {
+        throw AxonError("contract_test_failed", "Occlusion check refuses an app's own alert or lets a covering window through.")
+    }
+    let cardPanel = MacAccessPrompt.makePanel(NSRect(x: 0, y: 0, width: 100, height: 100))
+    guard !cardPanel.hidesOnDeactivate, cardPanel.sharingType == .none, cardPanel.level == .modalPanel,
+          cardPanel.collectionBehavior.contains(.canJoinAllSpaces), cardPanel.collectionBehavior.contains(.fullScreenAuxiliary) else {
+        throw AxonError("contract_test_failed", "The access card could hide while the helper is inactive, or be captured.")
+    }
     guard shortCard.title == "Allow this application for this session?", !shortCard.bodyScrolls, shortCard.body.string == "Calculator",
           longCard.bodyScrolls, longCard.scroll.frame.height == MacDesign.promptBodyMost, longCard.body.frame.height > MacDesign.promptBodyMost,
           longCard.body.string.components(separatedBy: "\n").count == 80,
@@ -826,6 +874,19 @@ func macContractTest() throws {
           MacGlowShape.distance(196, 146, glowWindow, 10) < -50,
           MacGlowShape.distance(36, 36, glowWindow, 10) > hypot(10, 10) else {
         throw AxonError("contract_test_failed", "Glow falloff or rounded-edge distance differs.")
+    }
+    // A full-screen window has no outside: its edges are lit inside, from the
+    // edge inward, and its middle stays clear.
+    let fullWindow = CGRect(x: 0, y: 0, width: 400, height: 300)
+    let allInside = MacGlowShape.inside(window: fullWindow, screen: fullWindow)
+    guard allInside == MacGlowShape.Inside(left: true, right: true, bottom: true, top: true),
+          MacGlowShape.inside(window: CGRect(x: 100, y: 100, width: 200, height: 100), screen: fullWindow) == MacGlowShape.Inside(),
+          let fullMask = MacGlowShape.mask(size: fullWindow.size, window: fullWindow, inside: allInside),
+          let fullData = fullMask.dataProvider?.data, let fullBytes = CFDataGetBytePtr(fullData),
+          fullBytes[150 * fullMask.bytesPerRow + 2] > 150, fullBytes[150 * fullMask.bytesPerRow + 200] == 0,
+          fullBytes[150 * fullMask.bytesPerRow + 30] < fullBytes[150 * fullMask.bytesPerRow + 2],
+          MacGlowShape.alpha(30, spread: 0.35) < MacGlowShape.alpha(30) else {
+        throw AxonError("contract_test_failed", "Full-screen edges are not lit inside, or the entrance band does not widen.")
     }
     guard let glowMask = MacGlowShape.mask(size: CGSize(width: 392, height: 292), window: glowWindow),
           let glowBytes = glowMask.dataProvider?.data as Data?, glowMask.width == 392, glowMask.height == 292 else {
@@ -864,34 +925,35 @@ func macContractTest() throws {
         throw AxonError("contract_test_failed", "Glow brightness levels differ.")
     }
     // Bar placement: docks, clamp, settle and avoidance (pure; AppKit coordinates).
-    let barWork = CGRect(x: 0, y: 0, width: 1440, height: 875), barSize = CGSize(width: 396, height: 44)
-    guard MacBarPlacement.dockOrigin("top-centre", size: barSize, work: barWork) == CGPoint(x: 522, y: 819),
-          MacBarPlacement.dockOrigin("bottom-left", size: barSize, work: barWork) == CGPoint(x: 12, y: 12),
-          MacBarPlacement.dockOrigin("top-right", size: barSize, work: barWork) == CGPoint(x: 1032, y: 819),
+    let barWork = CGRect(x: 0, y: 0, width: 1440, height: 875), barSize = MacVisuals.barSize
+    guard MacBarPlacement.dockOrigin("top-centre", size: barSize, work: barWork) == CGPoint(x: 500, y: 809),
+          MacBarPlacement.dockOrigin("bottom-left", size: barSize, work: barWork) == CGPoint(x: 12, y: 18),
+          MacBarPlacement.dockOrigin("top-right", size: barSize, work: barWork) == CGPoint(x: 988, y: 809),
           MacBarPlacement.dockOrigin("middle", size: barSize, work: barWork) == nil,
-          MacBarPlacement.clamp(CGPoint(x: -500, y: 5000), size: barSize, work: barWork) == CGPoint(x: 12, y: 819),
-          MacBarPlacement.settle(CGPoint(x: 530, y: 812), size: barSize, work: barWork).dock == "top-centre",
-          MacBarPlacement.settle(CGPoint(x: 530, y: 812), size: barSize, work: barWork).origin == CGPoint(x: 522, y: 819),
+          MacBarPlacement.clamp(CGPoint(x: -500, y: 5000), size: barSize, work: barWork) == CGPoint(x: 12, y: 815),
+          MacBarPlacement.settle(CGPoint(x: 510, y: 803), size: barSize, work: barWork).dock == "top-centre",
+          MacBarPlacement.settle(CGPoint(x: 510, y: 803), size: barSize, work: barWork).origin == CGPoint(x: 500, y: 809),
+          MacBarPlacement.settle(CGPoint(x: 530, y: 803), size: barSize, work: barWork).dock == "free",
           MacBarPlacement.settle(CGPoint(x: 700, y: 400), size: barSize, work: barWork).dock == "free" else {
         throw AxonError("contract_test_failed", "Bar docks, clamp or snapping differ.")
     }
     let freeLanding = MacBarPlacement.settle(CGPoint(x: 700, y: 400), size: barSize, work: barWork)
     let freeHome = MacBarPlacement.home(dock: "free", fraction: freeLanding.fraction, size: barSize, work: barWork)
     guard abs(freeHome.x - 700) < 0.5, abs(freeHome.y - 400) < 0.5,
-          MacBarPlacement.home(dock: "free", fraction: CGPoint(x: 9, y: -9), size: barSize, work: barWork) == CGPoint(x: 1032, y: 819),
-          MacBarPlacement.home(dock: "bottom-centre", fraction: .zero, size: barSize, work: barWork) == CGPoint(x: 522, y: 12) else {
+          MacBarPlacement.home(dock: "free", fraction: CGPoint(x: 9, y: -9), size: barSize, work: barWork) == CGPoint(x: 988, y: 815),
+          MacBarPlacement.home(dock: "bottom-centre", fraction: .zero, size: barSize, work: barWork) == CGPoint(x: 500, y: 18) else {
         throw AxonError("contract_test_failed", "Bar home from a free fraction differs.")
     }
-    let barAtTop = CGRect(origin: CGPoint(x: 522, y: 819), size: barSize)
+    let barAtTop = CGRect(origin: CGPoint(x: 500, y: 809), size: barSize)
     guard MacBarPlacement.avoid(hud: barAtTop, target: CGRect(x: 100, y: 100, width: 10, height: 10), work: barWork) == barAtTop,
-          MacBarPlacement.avoid(hud: barAtTop, target: CGRect(x: 700, y: 830, width: 4, height: 4), work: barWork)?.minY == 819,
+          MacBarPlacement.avoid(hud: barAtTop, target: CGRect(x: 700, y: 830, width: 4, height: 4), work: barWork)?.minY == 815,
           MacBarPlacement.avoid(hud: barAtTop, target: CGRect(x: 700, y: 830, width: 4, height: 4), work: barWork)?.minX == 12,
-          MacBarPlacement.avoid(hud: barAtTop, target: CGRect(x: 100, y: 830, width: 700, height: 4), work: barWork)?.minX == 1032,
+          MacBarPlacement.avoid(hud: barAtTop, target: CGRect(x: 100, y: 830, width: 700, height: 4), work: barWork)?.minX == 988,
           MacBarPlacement.avoid(hud: barAtTop, target: CGRect(x: 0, y: 0, width: 1440, height: 875), work: barWork) == nil,
           MacBarPlacement.avoid(hud: barAtTop, target: CGRect(x: 700, y: 830, width: 0, height: 4), work: barWork) == nil else {
         throw AxonError("contract_test_failed", "Bar avoidance differs from WindowGeometry.AvoidHud.")
     }
-    emit(["ok": true, "control_contract": 1, "checks": ["shared state codec", "own HUD chrome excluded from occlusion", "typed characters carry text without modifiers", "saved approvals expire and are capped", "malformed state refusal", "canonical approval fingerprint", "sensitive action classification", "kernel process birth identity", "native idle/paused/stopped/expired/session/monitor/Stop refusals", "empty cleanup and malformed input-journal refusal", "official Phosphor resource rendering", "SDK and runtime material selection", "capture visibility and dismissal lifecycle", "access tier enforcement for target and frontmost app", "conversation-scoped remembered approvals", "confirmed-only Stop clearing", "approval completion fenced by Stop and legacy pause", "shared motion curves", "access prompt layout and placement", "window glow falloff, mask, matching and levels", "bar docks, drag landing and avoidance"], "hud_icon_assets": iconAssets, "hud_material": materialBackend, "native_glass_compiled": MacVisuals.nativeGlassCompiled, "desktop_input_sent": false])
+    emit(["ok": true, "control_contract": 1, "checks": ["shared state codec", "own HUD chrome excluded from occlusion", "an app's own alert above layer 0 is a valid target", "typed characters carry text without modifiers", "saved approvals expire and are capped", "malformed state refusal", "canonical approval fingerprint", "sensitive action classification", "kernel process birth identity", "native idle/paused/stopped/expired/session/monitor/Stop refusals", "empty cleanup and malformed input-journal refusal", "official Phosphor resource rendering", "bar words, states and geometry; menu layout, page timing; drag band and spring", "capture visibility and dismissal lifecycle", "access tier enforcement for target and frontmost app", "conversation-scoped remembered approvals", "confirmed-only Stop clearing", "approval completion fenced by Stop and legacy pause", "shared motion curves", "access prompt layout and placement", "access card stays visible when the helper is inactive", "window glow falloff, mask, matching and levels", "glow lit inside on full-screen edges, entrance widens", "bar docks, drag landing and avoidance"], "hud_icon_assets": iconAssets, "hud_material": "ink_surface", "desktop_input_sent": false])
 }
 
 func macMoveCursor(_ point: CGPoint, _ args: [String: Any]) throws -> [String: Any] {

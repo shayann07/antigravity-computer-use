@@ -23,28 +23,18 @@ struct MacHudVisibility {
     }
 }
 
-struct MacHudStatePresentation: Equatable {
-    let resolvedState: String
-    let title: String
-    // There is no toggle: no Pause, no Resume and no Re-arm. Stop and the
-    // settings menu are the bar's only controls.
-    let stopTitle: String
-    let stopSymbol: String
-    let stopAccessibilityLabel: String
-    let isEmergency: Bool
-    let contrastTarget: Double // A design target; not measured composited contrast.
-}
-
 // Where the bar lives (docs/internal/HUD-REDESIGN.md, section 8): six docks
 // per screen (top and bottom by left, centre, right) or a free place saved as a
 // fraction of the work area. Pure geometry in AppKit coordinates.
 enum MacBarPlacement {
     static let docks = ["top-left", "top-centre", "top-right", "bottom-left", "bottom-centre", "bottom-right"]
-    static let margin: CGFloat = 12, snap: CGFloat = 12, threshold: CGFloat = 4
+    // margin: the inset at the sides and the drag's rubber band; edge: a
+    // dock's distance from the top or bottom (Guardian.cs HomeFor).
+    static let margin: CGFloat = 12, edge: CGFloat = 18, snap: CGFloat = 12, threshold: CGFloat = 4
     static func dockOrigin(_ name: String, size: CGSize, work: CGRect) -> CGPoint? {
         guard docks.contains(name) else { return nil }
         let x = name.hasSuffix("left") ? work.minX + margin : name.hasSuffix("right") ? work.maxX - margin - size.width : work.midX - size.width / 2
-        let y = name.hasPrefix("top") ? work.maxY - margin - size.height : work.minY + margin
+        let y = name.hasPrefix("top") ? work.maxY - edge - size.height : work.minY + edge
         return CGPoint(x: x.rounded(), y: y.rounded())
     }
     static func clamp(_ origin: CGPoint, size: CGSize, work: CGRect) -> CGPoint {
@@ -58,12 +48,13 @@ enum MacBarPlacement {
         let rangeX = max(0, work.width - 2 * margin - size.width), rangeY = max(0, work.height - 2 * margin - size.height)
         return clamp(CGPoint(x: work.minX + margin + fx * rangeX, y: work.maxY - margin - size.height - fy * rangeY), size: size, work: work)
     }
-    // Within snap distance of a dock the bar lands on it; elsewhere it stays.
+    // Within snap distance of a dock on both axes the bar lands on it;
+    // elsewhere it stays.
     static func settle(_ origin: CGPoint, size: CGSize, work: CGRect) -> (dock: String, fraction: CGPoint, origin: CGPoint) {
         let placed = clamp(origin, size: size, work: work)
         for name in docks {
-            if let dock = dockOrigin(name, size: size, work: work), hypot(dock.x - placed.x, dock.y - placed.y) <= snap {
-                return (name, .zero, clamp(dock, size: size, work: work))
+            if let dock = dockOrigin(name, size: size, work: work), abs(dock.x - placed.x) <= snap, abs(dock.y - placed.y) <= snap {
+                return (name, .zero, dock)
             }
         }
         let rangeX = max(1, work.width - 2 * margin - size.width), rangeY = max(1, work.height - 2 * margin - size.height)
@@ -91,7 +82,6 @@ enum MacBarPlacement {
 }
 
 final class MacControlPanel: NSPanel {
-    var onEscape: (() -> Void)?
     // Physical pointer drags on the bar's body (never on a button, never an
     // event the agent posted). Returns true when the event was a drag.
     var onDrag: ((NSEvent) -> Bool)?
@@ -101,196 +91,52 @@ final class MacControlPanel: NSPanel {
            onDrag?(event) == true { return }
         super.sendEvent(event)
     }
-    override var canBecomeKey: Bool { true }
+    // The bar never takes keyboard focus; Esc is read by the watchdog.
+    override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
-    override func cancelOperation(_ sender: Any?) { onEscape?() }
-    override func keyDown(with event: NSEvent) {
-        if event.keyCode == 53 { onEscape?(); return }
-        super.keyDown(with: event)
-    }
-}
-
-final class MacHudButton: NSButton {
-    var isEmergencyAction = false
-    var hudTitle: String = "" { didSet { needsDisplay = true } }
-    var hudIcon: MacPhosphorIcon = .slidersHorizontalFill { didSet { needsDisplay = true } }
-    var onEscape: (() -> Void)?
-    override var acceptsFirstResponder: Bool { true }
-    override var focusRingMaskBounds: NSRect { bounds.insetBy(dx: 1, dy: 1) }
-    override func drawFocusRingMask() {
-        let r = focusRingMaskBounds
-        NSBezierPath(roundedRect: r, xRadius: r.height / 2, yRadius: r.height / 2).fill()
-    }
-    override func keyDown(with event: NSEvent) {
-        if event.keyCode == 53 { onEscape?(); return }
-        if event.keyCode == 36 || event.keyCode == 49 {
-            performClick(self)
-            return
-        }
-        super.keyDown(with: event)
-    }
-    override func becomeFirstResponder() -> Bool {
-        let ok = super.becomeFirstResponder()
-        needsDisplay = true
-        return ok
-    }
-    override func resignFirstResponder() -> Bool {
-        let ok = super.resignFirstResponder()
-        needsDisplay = true
-        return ok
-    }
-    override func draw(_ dirtyRect: NSRect) {
-        let pillRect = bounds.insetBy(dx: 1, dy: 1)
-        let pill = NSBezierPath(roundedRect: pillRect, xRadius: pillRect.height / 2, yRadius: pillRect.height / 2)
-        if isHighlighted {
-            if isEmergencyAction { NSColor(calibratedRed: 0.48, green: 0.16, blue: 0.22, alpha: 0.55).setFill() }
-            else { NSColor(calibratedWhite: 1.0, alpha: 0.16).setFill() }
-            pill.fill()
-        }
-
-        let fg = NSColor(calibratedWhite: 0.99, alpha: 1.0)
-        if hudTitle.isEmpty {
-            let iconSize: CGFloat = 15
-            let iconRect = NSRect(x: (bounds.width - iconSize) / 2, y: (bounds.height - iconSize) / 2, width: iconSize, height: iconSize)
-            if !hudIcon.drawFilled(in: iconRect) { drawFallbackLabel(in: bounds) }
-        } else {
-            let attrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 12.5, weight: .semibold),
-                .foregroundColor: fg
-            ]
-            let attrTitle = NSAttributedString(string: hudTitle, attributes: attrs)
-            let textSize = attrTitle.size()
-            let iconSize: CGFloat = 12.5
-            let gap: CGFloat = 6
-            let totalWidth = iconSize + gap + textSize.width
-            let startX = (bounds.width - totalWidth) / 2
-            let iconRect = NSRect(x: startX, y: (bounds.height - iconSize) / 2, width: iconSize, height: iconSize)
-            _ = hudIcon.drawFilled(in: iconRect)
-            attrTitle.draw(at: NSPoint(x: startX + iconSize + gap, y: (bounds.height - textSize.height) / 2))
-        }
-    }
-    private func drawFallbackLabel(in rect: NSRect) {
-        let text = NSAttributedString(string: hudIcon.fallbackLabel, attributes: [.font: NSFont.systemFont(ofSize: 10), .foregroundColor: NSColor.white])
-        let size = text.size()
-        text.draw(at: NSPoint(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2))
-    }
 }
 
 final class MacVisuals: NSObject {
-    var onStop: (() -> Void)?, onEnd: (() -> Void)?
+    var onStop: (() -> Void)?
     var panel: MacControlPanel?
-    var rootView: NSView?
-    var contentContainer: NSView?
-    var label = NSTextField(labelWithString: "")
-    var stop = MacHudButton(), more = MacHudButton()
-    // The light around the window in use replaced the old screen-edge rings.
+    var barView: MacBarView?
+    let menu = MacBarMenu()
+    // The light around the window in use.
     let windowGlow = MacWindowGlow()
-    private var glowLevelLoaded = false
+    private var preferencesLoaded = false
     var pointer: NSPanel?
     var hiddenDisplays: [CGDirectDisplayID] = []
     var state = "idle"
+    // What line 2 says: the reason for a Stop, the last action's words, and
+    // whether the session ran out. prompting: an access card is open.
+    var reason = "", ended = false, prompting = false, deadlineMs: Int64 = 0
+    private var activityText = "", activityAt = Date.distantPast
+    var hostName = "Antigravity"
+    private var hostPath = ""
+    // "Show bar and glow in recordings": off by default. The runtime's own
+    // screenshots hide everything regardless; the access card is always excluded.
+    private(set) var recordVisuals = false
     private var visibility = MacHudVisibility()
     var captureHidden: Bool { visibility.captureHidden }
     var hoverChecked = Date.distantPast
-    let origin = ProcessInfo.processInfo.systemUptime
     var visible: Bool { panel?.isVisible == true }
     // The bar's home: a dock or a free fraction, saved in control-preferences.json.
     var dock = "top-centre", dockFraction = CGPoint(x: 0.5, y: 0)
     var displaced = false, displacedAt = Date.distantPast
     private var dragArmed = false, dragging = false, dragGrab = CGPoint.zero, dragStart = CGPoint.zero
+    private var dragTrail: [(Double, CGPoint)] = []
+    private var spring: MacBarMotion.Spring?, springTick = 0.0, springHeld = false, motionTimer: Timer?
+    private var slide: (from: CGPoint, to: CGPoint, at: Double, span: Double)?
     var cursorApplied: Bool { !hiddenDisplays.isEmpty }
-
-    static var nativeGlassCompiled: Bool {
-        #if AGCU_MACOS26_SDK
-        return true
-        #else
-        return false
-        #endif
-    }
-    static func makeMaterial(frame: NSRect, content: NSView) -> NSView {
-        #if AGCU_MACOS26_SDK
-        if #available(macOS 26.0, *) {
-            let glass = NSGlassEffectView(frame: frame)
-            glass.style = .regular
-            glass.cornerRadius = frame.height / 2
-            glass.contentView = content
-            glass.appearance = NSAppearance(named: .darkAqua)
-            glass.wantsLayer = true
-            return glass
-        }
-        #endif
-        let effect = NSVisualEffectView(frame: frame)
-        effect.material = .hudWindow; effect.blendingMode = .behindWindow; effect.state = .active
-        effect.wantsLayer = true; effect.layer?.cornerRadius = frame.height / 2; effect.layer?.masksToBounds = true
-        effect.appearance = NSAppearance(named: .darkAqua)
-        effect.addSubview(content)
-        return effect
-    }
-    static func materialBackend(for view: NSView?) -> String {
-        guard let view = view else { return "not_created" }
-        #if AGCU_MACOS26_SDK
-        if #available(macOS 26.0, *), view is NSGlassEffectView { return "native_liquid_glass" }
-        #endif
-        return view is NSVisualEffectView ? "visual_effect_fallback" : "unknown"
-    }
-
-    static func statePresentation(for requested: String, latched: Bool = false) -> MacHudStatePresentation {
-        let effective = MacFence.resolvedState(requested, latched: latched)
-        switch effective {
-        case "active":
-            return MacHudStatePresentation(
-                resolvedState: "active",
-                title: "Antigravity is working",
-                stopTitle: "Stop",
-                stopSymbol: MacPhosphorIcon.stopFill.rawValue,
-                stopAccessibilityLabel: "Stop computer use immediately",
-                isEmergency: false,
-                contrastTarget: 8.5
-            )
-        case "paused":
-            return MacHudStatePresentation(
-                resolvedState: "paused",
-                title: "Paused · no control",
-                stopTitle: "Stop",
-                stopSymbol: MacPhosphorIcon.stopFill.rawValue,
-                stopAccessibilityLabel: "Stop computer use immediately",
-                isEmergency: false,
-                contrastTarget: 8.5
-            )
-        case "stopped":
-            return MacHudStatePresentation(
-                resolvedState: "stopped",
-                title: "Stopped · task ended",
-                stopTitle: "Hide",
-                stopSymbol: MacPhosphorIcon.xFill.rawValue,
-                stopAccessibilityLabel: "Dismiss stopped controls",
-                isEmergency: true,
-                contrastTarget: 9.2
-            )
-        default:
-            return MacHudStatePresentation(
-                resolvedState: "idle",
-                title: "Antigravity is ready",
-                stopTitle: "Stop",
-                stopSymbol: MacPhosphorIcon.stopFill.rawValue,
-                stopAccessibilityLabel: "Stop computer use immediately",
-                isEmergency: false,
-                contrastTarget: 8.5
-            )
-        }
-    }
+    static let barSize = CGSize(width: MacBarArt.width, height: MacBarArt.height)
 
     func makePanel(_ frame: NSRect, clickThrough: Bool) -> NSPanel {
-        let p: NSPanel
-        if clickThrough {
-            p = NSPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-        } else {
-            let cp = MacControlPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-            cp.onEscape = { [weak self] in self?.stopControl() }
-            p = cp
-        }
-        p.isOpaque = false; p.backgroundColor = .clear; p.hasShadow = !clickThrough
+        let p: NSPanel = clickThrough ? NSPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+            : MacControlPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        p.isOpaque = false; p.backgroundColor = .clear; p.hasShadow = false
         p.level = .statusBar; p.hidesOnDeactivate = false; p.ignoresMouseEvents = clickThrough
+        // Stop on the bar must work while an access card is modal.
+        p.worksWhenModal = true
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         p.sharingType = .none; p.isReleasedWhenClosed = false
         return p
@@ -301,121 +147,66 @@ final class MacVisuals: NSObject {
             try? bytes.write(to: URL(fileURLWithPath: MacFence.file + ".hud"), options: [.atomic]); chmod(MacFence.file + ".hud", 0o600)
         }
     }
+    func loadPreferences() {
+        guard !preferencesLoaded, let dir = preferenceDirectory else { return }
+        preferencesLoaded = true
+        windowGlow.level = MacGlowLevel.saved(in: dir)
+        loadPlacement()
+        let value = (try? Data(contentsOf: dir.appendingPathComponent("control-preferences.json"))).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+        recordVisuals = (value?["record_visuals"] as? Bool) == true
+    }
     func build() {
         guard panel == nil else { return }
-        let barWidth: CGFloat = 396, barHeight: CGFloat = 44
         let screen = NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) }) ?? NSScreen.main!
-        loadPlacement()
-        let origin = MacBarPlacement.home(dock: dock, fraction: dockFraction, size: CGSize(width: barWidth, height: barHeight), work: screen.visibleFrame)
-        let p = makePanel(NSRect(origin: origin, size: CGSize(width: barWidth, height: barHeight)), clickThrough: false) as! MacControlPanel
+        loadPreferences()
+        let origin = MacBarPlacement.home(dock: dock, fraction: dockFraction, size: Self.barSize, work: screen.visibleFrame)
+        let p = makePanel(NSRect(origin: origin, size: Self.barSize), clickThrough: false) as! MacControlPanel
         p.onDrag = { [weak self] event in self?.drag(event) ?? false }
-        p.title = "Antigravity Computer Use"
-        p.setAccessibilityRole(.toolbar)
-        p.setAccessibilityLabel("Antigravity Computer Use Controls")
-
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: barWidth, height: barHeight))
-        container.autoresizingMask = [.width, .height]
-
-        // NSGlassEffectView is AppKit's public macOS 26 material. The SDK gate
-        // keeps source builds working with older SDKs; runtime availability
-        // preserves the macOS 14 deployment target of prebuilt bundles.
-        let hostRoot = Self.makeMaterial(frame: NSRect(x: 0, y: 0, width: barWidth, height: barHeight), content: container)
-
-        label.frame = NSRect(x: 18, y: 12, width: 206, height: 20)
-        label.font = .systemFont(ofSize: 13, weight: .semibold)
-        label.textColor = NSColor(calibratedWhite: 0.99, alpha: 1)
-        label.lineBreakMode = .byTruncatingTail
-        label.setAccessibilityIdentifier("hud-status-label")
-        container.addSubview(label)
-
-        for (button, id, action) in [(more, "hud-more", #selector(menu)), (stop, "hud-stop", #selector(stopControl))] {
-            button.target = self; button.action = action; button.isBordered = false
-            button.title = ""; button.image = nil
-            button.focusRingType = .exterior; button.refusesFirstResponder = false
-            button.setAccessibilityIdentifier(id)
-            button.onEscape = { [weak self] in self?.stopControl() }
-            container.addSubview(button)
-        }
-        stop.isEmergencyAction = true
-        stop.toolTip = "Stop immediately · Esc or Control+Option+F12"
-        more.hudIcon = .slidersHorizontalFill
-        more.hudTitle = ""
-        more.setAccessibilityLabel("Control settings")
-        more.toolTip = "Settings: glow brightness and End"
-        more.nextKeyView = stop; stop.nextKeyView = more
-        p.initialFirstResponder = stop
-        p.contentView = hostRoot; panel = p; rootView = hostRoot; contentContainer = container
-
-        if !glowLevelLoaded, !MacFence.file.isEmpty {
-            windowGlow.level = MacGlowLevel.saved(in: URL(fileURLWithPath: MacFence.file).deletingLastPathComponent()); glowLevelLoaded = true
-        }
+        p.title = "Computer Use"
+        p.setAccessibilityRole(.toolbar); p.setAccessibilityLabel("Computer Use controls")
+        let view = MacBarView(frame: NSRect(origin: .zero, size: Self.barSize))
+        view.onStop = { [weak self] in self?.stopControl() }
+        view.onSettings = { [weak self] in self?.openMenu() }
+        p.contentView = view; panel = p; barView = view
+        menu.onChoose = { [weak self] id in self?.menuChosen(id) }
         let cursor = makePanel(NSRect(x: 0, y: 0, width: 40, height: 40), clickThrough: true)
         cursor.contentView = MacPointerView(frame: NSRect(x: 0, y: 0, width: 40, height: 40)); pointer = cursor
+        applyRecordingPreference()
         writeHudBounds(p.frame)
     }
-    func layoutControls(for presentation: MacHudStatePresentation) {
-        #if AGCU_MACOS26_SDK
-        if #available(macOS 26.0, *), let glass = rootView as? NSGlassEffectView {
-            // Regular glass supplies adaptive contrast; avoid painting an
-            // opaque slab over the native material. Colour reinforces state.
-            glass.tintColor = presentation.isEmergency ? NSColor.systemRed.withAlphaComponent(0.18) : .clear
-        }
-        #endif
-        if let glass = rootView as? NSVisualEffectView {
-            if presentation.isEmergency {
-                glass.layer?.backgroundColor = NSColor(calibratedRed: 0.42, green: 0.06, blue: 0.08, alpha: 0.88).cgColor
-            } else if presentation.resolvedState == "paused" {
-                glass.layer?.backgroundColor = NSColor(calibratedRed: 0.14, green: 0.10, blue: 0.04, alpha: 0.50).cgColor
-            } else {
-                glass.layer?.backgroundColor = NSColor(calibratedRed: 0.05, green: 0.07, blue: 0.11, alpha: 0.44).cgColor
-            }
-        }
-        label.stringValue = presentation.title
-        label.textColor = .white
-        stop.hudTitle = presentation.stopTitle
-        stop.hudIcon = MacPhosphorIcon(rawValue: presentation.stopSymbol) ?? .stopFill
-        stop.setAccessibilityLabel(presentation.stopAccessibilityLabel)
-        stop.isEmergencyAction = !presentation.isEmergency
-        // Keep the controls under the human's hand in the same positions in
-        // every state. The native material carries the bar, without nested pills.
-        label.frame = NSRect(x: 18, y: 12, width: 246, height: 20)
-        more.frame = NSRect(x: 272, y: 6, width: 32, height: 32)
-        stop.frame = NSRect(x: 310, y: 6, width: 78, height: 32)
-        stop.needsDisplay = true; more.needsDisplay = true
+    var lowTime: Bool { state == "active" && deadlineMs > 0 && deadlineMs - Int64(Date().timeIntervalSince1970 * 1000) < 60_000 }
+    func refreshBar() {
+        guard let view = barView else { return }
+        if !activityText.isEmpty && Date().timeIntervalSince(activityAt) > 1.2 { activityText = "" }
+        var next = MacBarModel.make(state: state, prompting: prompting, host: hostName, activity: activityText, lowTime: lowTime, reason: reason, ended: ended)
+        let current = view.model
+        next.stopHover = current.stopHover; next.modeHover = current.modeHover; next.stopPress = current.stopPress
+        next.modePress = current.modePress; next.pressed = current.pressed; next.contrast = MacDesign.increaseContrast
+        view.model = next
     }
     func show(_ next: String) {
         build()
         let latched = !MacFence.latch.isEmpty && MacFence.latchBlocks(MacFence.latch)
-        let presentation = MacVisuals.statePresentation(for: next, latched: latched)
-        let animateEntrance = visibility.requestShow()
-        state = presentation.resolvedState
-        layoutControls(for: presentation)
+        let resolved = MacFence.resolvedState(next, latched: latched)
+        // There is no paused presentation: a legacy paused record is no control.
+        state = resolved == "paused" ? "idle" : resolved
+        if state != "idle" { ended = false }
+        let entrance = visibility.requestShow()
+        refreshBar()
         if state != "active" { releaseCursor(); windowGlow.hide(); pointer?.orderOut(nil) }
         if !captureHidden, let p = panel {
             writeHudBounds(p.frame)
-            if animateEntrance {
-                // Appear: opacity and a scale from menuFrom over Normal, easing
-                // out. Reduce Motion keeps a short fade and drops the scale.
-                let reduceMotion = MacDesign.reduceMotion
-                p.alphaValue = 0.0
-                if let layer = rootView?.layer {
-                    layer.transform = reduceMotion ? CATransform3DIdentity : CATransform3DMakeScale(MacDesign.menuFrom, MacDesign.menuFrom, 1.0)
-                }
-                p.orderFrontRegardless()
+            if entrance {
+                // bar.enter: opacity over Normal, easing out; a short fade with Reduce Motion.
+                p.alphaValue = 0; p.orderFrontRegardless()
                 NSAnimationContext.runAnimationGroup { context in
-                    context.duration = reduceMotion ? MacDesign.fast : MacDesign.normal
+                    context.duration = MacDesign.reduceMotion ? MacDesign.fast : MacDesign.normal
                     context.timingFunction = MacDesign.easeOut
-                    context.allowsImplicitAnimation = true
-                    p.animator().alphaValue = 1.0
-                    rootView?.layer?.transform = CATransform3DIdentity
+                    p.animator().alphaValue = 1
                 }
-            } else {
-                p.alphaValue = 1.0
-                rootView?.layer?.transform = CATransform3DIdentity
-                p.orderFrontRegardless()
-            }
+            } else { p.alphaValue = 1; p.orderFrontRegardless() }
         }
-        if state == "active" && !captureHidden { applyCursor(); animate() }
+        if state == "active" && !captureHidden && !prompting { applyCursor(); animate() }
     }
     func applyCursor() {
         if cursorApplied { return }
@@ -431,8 +222,10 @@ final class MacVisuals: NSObject {
     func hide() {
         visibility.requestHide()
         releaseCursor()
-        panel?.alphaValue = 1.0
-        rootView?.layer?.transform = CATransform3DIdentity
+        menu.dismiss(atOnce: true)
+        stopMotion()
+        barView?.resetPointerState()
+        panel?.alphaValue = 1
         panel?.orderOut(nil)
         windowGlow.hide(immediately: true)
         pointer?.orderOut(nil)
@@ -443,17 +236,36 @@ final class MacVisuals: NSObject {
         if !MacFence.file.isEmpty { _ = unlink(MacFence.file + ".hud") }
     }
     func hideForCapture() {
-        visibility.beginCapture(); panel?.orderOut(nil); windowGlow.panel?.orderOut(nil); pointer?.orderOut(nil)
+        visibility.beginCapture(); menu.dismiss(atOnce: true); panel?.orderOut(nil); windowGlow.panel?.orderOut(nil); pointer?.orderOut(nil)
         clearHudBounds() // Hidden controls must not suppress real takeover input.
     }
+    // Restores the bar the human had before a capture, in whatever state it
+    // is now. An explicit Hide or End during the capture keeps it hidden.
     func finishCapture(_ state: String) {
-        let restore = visibility.endCapture()
-        if restore && (state == "active" || state == "paused" || state == "stopped") { show(state) }
-        else { hide() }
+        if visibility.endCapture() { show(state) } else { hide() }
         // The glow marks the window in use whether or not the bar is shown.
         if state == "active" && windowGlow.shown { windowGlow.panel?.orderFrontRegardless() }
     }
-    func activity(_ action: String) { /* The persistent state label stays calm between actions. */ }
+    // An access card is open: the bar says so and keeps Stop under the
+    // human's hand; the agent's pointer is put away so the OS cursor shows.
+    func beginPrompt() {
+        prompting = true; menu.dismiss(atOnce: true); releaseCursor(); pointer?.orderOut(nil); refreshBar()
+    }
+    func endPrompt() {
+        prompting = false; refreshBar()
+        if state == "active" && visible && !captureHidden { applyCursor() }
+    }
+    func activity(_ action: String) { activityText = MacBarModel.activityWords(action); activityAt = Date(); refreshBar() }
+    // The runtime names its host. The icon is decorative and read from the
+    // host's own app bundle; a name over 40 characters is ignored.
+    func setHost(name: String?, path: String?) {
+        if let name = name, !name.isEmpty, name.count <= 40, name != hostName { hostName = name; refreshBar() }
+        guard let path = path, path != hostPath, path.utf8.count <= 1024 else { return }
+        hostPath = path
+        var bundle = URL(fileURLWithPath: path)
+        while bundle.path != "/" && bundle.pathExtension != "app" { bundle.deleteLastPathComponent() }
+        barView?.icon = bundle.pathExtension == "app" && FileManager.default.fileExists(atPath: bundle.path) ? NSWorkspace.shared.icon(forFile: bundle.path) : nil
+    }
     // Lights the window of an approved app that received an action. The
     // guardian has already checked the grant; pid and rect come from the
     // worker's window identity (top-left global points).
@@ -466,16 +278,7 @@ final class MacVisuals: NSObject {
     }
     func animate() {
         if captureHidden || state != "active" { return }
-        let reduce = MacDesign.reduceMotion
-        let ui = MacContract.value["ui"] as? [String: Any] ?? [:]
-        let configuredSeconds = ui["breath_seconds"] as? Double ?? 4.0
-        let configuredBase = ui["breath_base"] as? Double ?? 0.82
-        let configuredAmplitude = ui["breath_amplitude"] as? Double ?? 0.18
-        let seconds = configuredSeconds.isFinite && (1.0...30.0).contains(configuredSeconds) ? configuredSeconds : 4.0
-        let base = configuredBase.isFinite && (0.0...1.0).contains(configuredBase) ? configuredBase : 0.82
-        let amplitude = configuredAmplitude.isFinite && (0.0...1.0).contains(configuredAmplitude) ? configuredAmplitude : 0.18
-        let alpha = reduce ? 0.94 : max(0, min(1, base + amplitude * sin((ProcessInfo.processInfo.systemUptime - origin) * .pi * 2 / seconds)))
-        _ = alpha
+        refreshBar()
         windowGlow.follow()
         returnHomeIfDue()
         if cursorApplied {
@@ -499,31 +302,53 @@ final class MacVisuals: NSObject {
             }
         }
     }
-    @objc func stopControl() { if state == "stopped" { hide() } else { onStop?() } }
-    @objc func endControl() { onEnd?() }
-    @objc func menu() {
-        let menu = NSMenu()
-        // Human input never pauses the agent; there is no takeover mode.
-        let heading = NSMenuItem(title: "Glow brightness", action: nil, keyEquivalent: ""); heading.isEnabled = false; menu.addItem(heading)
-        for level in MacGlowLevel.allCases {
-            let item = NSMenuItem(title: level.title, action: #selector(changeGlow(_:)), keyEquivalent: "")
-            item.target = self; item.representedObject = level.rawValue; item.state = windowGlow.level == level ? .on : .off; menu.addItem(item)
+    // The stop slot: Stop while working or asking, Hide when stopped or ready.
+    func stopControl() { if barView?.model.slot == 2 { hide() } else { onStop?() } }
+
+    // ---- The Settings menu (Guardian.cs MainMenu, DockMenu, MenuChosen).
+    func openMenu() {
+        guard let p = panel, visible else { return }
+        if menu.isOpen { menu.dismiss(atOnce: false); return }
+        menu.recordable = recordVisuals
+        menu.open(mainMenu(), from: p)
+    }
+    static func dockLabel(_ name: String) -> String {
+        switch name {
+        case "top-left": return "Top left"; case "top-right": return "Top right"; case "bottom-left": return "Bottom left"
+        case "bottom-centre": return "Bottom centre"; case "bottom-right": return "Bottom right"; case "free": return "Where you put it"
+        default: return "Top centre"
         }
-        menu.addItem(.separator())
-        let move = NSMenuItem(title: "Move bar", action: nil, keyEquivalent: ""), docks = NSMenu()
-        for name in MacBarPlacement.docks {
-            let item = NSMenuItem(title: name.replacingOccurrences(of: "-", with: " ").capitalized, action: #selector(moveToDock(_:)), keyEquivalent: "")
-            item.target = self; item.representedObject = name; item.state = dock == name ? .on : .off; docks.addItem(item)
+    }
+    func mainMenu() -> [MacMenuItem] {
+        [MacMenuItem(kind: "head", text: "Computer Use"),
+         MacMenuItem(id: 1, text: "Show bar and glow in recordings", ticks: true, checked: recordVisuals),
+         MacMenuItem(id: 2, text: "Move bar", note: Self.dockLabel(dock), chevron: true),
+         // One press steps to the next level; the glow changes at once.
+         MacMenuItem(id: 3, text: "Glow brightness", note: windowGlow.level.title),
+         MacMenuItem(kind: "rule"), MacMenuItem(kind: "foot")]
+    }
+    func dockMenu() -> [MacMenuItem] {
+        [MacMenuItem(kind: "head", text: "Move bar")]
+            + MacBarPlacement.docks.enumerated().map { MacMenuItem(id: 10 + $0.offset, text: Self.dockLabel($0.element), ticks: true, checked: dock == $0.element) }
+            + [MacMenuItem(kind: "rule"), MacMenuItem(id: 20, text: "Reset", ticks: true)]
+    }
+    func menuChosen(_ id: Int) {
+        switch id {
+        case 1: recordVisuals.toggle(); applyRecordingPreference(); savePreference("record_visuals", recordVisuals); menu.refresh(mainMenu())
+        case 2: menu.swap(dockMenu())
+        case 3:
+            windowGlow.level = windowGlow.level == .soft ? .medium : windowGlow.level == .medium ? .bright : .soft
+            if let dir = preferenceDirectory { windowGlow.level.save(in: dir) }
+            menu.refresh(mainMenu())
+        case 10..<(10 + MacBarPlacement.docks.count): menu.dismiss(atOnce: false); moveToDock(MacBarPlacement.docks[id - 10])
+        case 20: menu.dismiss(atOnce: false); moveToDock("top-centre")
+        default: break
         }
-        docks.addItem(.separator())
-        let reset = NSMenuItem(title: "Reset", action: #selector(moveToDock(_:)), keyEquivalent: ""); reset.target = self; reset.representedObject = "top-centre"; docks.addItem(reset)
-        move.submenu = docks; menu.addItem(move)
-        menu.addItem(.separator())
-        let hint = NSMenuItem(title: "Esc always stops immediately", action: nil, keyEquivalent: "")
-        hint.isEnabled = false; menu.addItem(hint)
-        let end = NSMenuItem(title: "End session and hide", action: #selector(endControl), keyEquivalent: "")
-        end.target = self; menu.addItem(end)
-        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: 0), in: more)
+    }
+    func applyRecordingPreference() {
+        let sharing: NSWindow.SharingType = recordVisuals ? .readOnly : .none
+        panel?.sharingType = sharing; pointer?.sharingType = sharing
+        menu.recordable = recordVisuals; windowGlow.recordable = recordVisuals
     }
     var preferenceDirectory: URL? { MacFence.file.isEmpty ? nil : URL(fileURLWithPath: MacFence.file).deletingLastPathComponent() }
     func loadPlacement() {
@@ -533,56 +358,117 @@ final class MacVisuals: NSObject {
         else if value["bar_dock"] as? String == "free", let x = (value["bar_x"] as? NSNumber)?.doubleValue, let y = (value["bar_y"] as? NSNumber)?.doubleValue,
                 (0...1).contains(x), (0...1).contains(y) { dock = "free"; dockFraction = CGPoint(x: x, y: y) }
     }
-    func savePlacement() {
+    private func updatePreferences(_ change: (inout [String: Any]) -> Void) {
         guard let dir = preferenceDirectory else { return }
         let path = dir.appendingPathComponent("control-preferences.json")
         var value = (try? Data(contentsOf: path)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
-        value["bar_dock"] = dock
-        if dock == "free" { value["bar_x"] = Double(dockFraction.x); value["bar_y"] = Double(dockFraction.y) } else { value.removeValue(forKey: "bar_x"); value.removeValue(forKey: "bar_y") }
+        change(&value)
         if let bytes = try? JSONSerialization.data(withJSONObject: value) { try? bytes.write(to: path, options: [.atomic]); chmod(path.path, 0o600) }
     }
+    func savePreference(_ key: String, _ value: Any) { updatePreferences { $0[key] = value } }
+    func savePlacement() {
+        updatePreferences { value in
+            value["bar_dock"] = dock
+            if dock == "free" { value["bar_x"] = Double(dockFraction.x); value["bar_y"] = Double(dockFraction.y) } else { value.removeValue(forKey: "bar_x"); value.removeValue(forKey: "bar_y") }
+        }
+    }
     var workArea: CGRect { (panel?.screen ?? NSScreen.main)?.visibleFrame ?? .zero }
-    // Drag: 4 pt before it starts, 1:1 from the grab point, clamped inside the
-    // work area, landing on a dock within 12 pt. Dragging never changes state,
-    // access or visibility, and a press on a button is never a drag.
+
+    // ---- bar.drag and bar.settle. 4 pt before a drag starts, then 1:1 from
+    // the grab point with a rubber band past the inset; on release it lands
+    // on a dock within 12 pt and springs there from the speed it was let go
+    // at. Dragging never changes state, access or visibility, and a press on
+    // a button is never a drag.
     func drag(_ event: NSEvent) -> Bool {
-        guard let p = panel else { return false }
+        guard let p = panel, let view = barView else { return false }
         switch event.type {
         case .leftMouseDown:
-            if [more, stop].contains(where: { $0.convert($0.bounds, to: nil).contains(event.locationInWindow) }) { return false }
+            if view.buttonAt(window: event.locationInWindow) != 0 { return false }
             dragArmed = true; dragging = false; dragGrab = NSEvent.mouseLocation; dragStart = p.frame.origin
+            // A new grab holds a settling bar where it is.
+            if spring != nil { spring = nil; springHeld = true }
+            slide = nil
             return true
         case .leftMouseDragged:
             guard dragArmed else { return false }
             let now = NSEvent.mouseLocation, dx = now.x - dragGrab.x, dy = now.y - dragGrab.y
-            if !dragging && hypot(dx, dy) < MacBarPlacement.threshold { return true }
-            dragging = true
-            let screen = NSScreen.screens.first(where: { $0.frame.contains(now) })?.visibleFrame ?? workArea
-            p.setFrameOrigin(MacBarPlacement.clamp(CGPoint(x: dragStart.x + dx, y: dragStart.y + dy), size: p.frame.size, work: screen))
-            writeHudBounds(p.frame)
+            if !dragging && abs(dx) < MacBarPlacement.threshold && abs(dy) < MacBarPlacement.threshold { return true }
+            if !dragging { dragging = true; springHeld = false; dragTrail.removeAll(); menu.dismiss(atOnce: true) }
+            let work = NSScreen.screens.first(where: { $0.frame.contains(now) })?.visibleFrame ?? workArea, m = MacBarPlacement.margin
+            let origin = CGPoint(x: MacBarMotion.band(dragStart.x + dx, low: work.minX, high: work.maxX - p.frame.width, margin: m),
+                                 y: MacBarMotion.band(dragStart.y + dy, low: work.minY, high: work.maxY - p.frame.height, margin: m))
+            p.setFrameOrigin(origin); writeHudBounds(p.frame)
+            let t = CACurrentMediaTime(); dragTrail.append((t, origin))
+            while dragTrail.count > 2 && t - dragTrail[0].0 > MacBarMotion.trail { dragTrail.removeFirst() }
             return true
         case .leftMouseUp:
             guard dragArmed else { return false }
             dragArmed = false
-            guard dragging else { return true }
-            dragging = false
-            let landing = MacBarPlacement.settle(p.frame.origin, size: p.frame.size, work: workArea)
-            dock = landing.dock; dockFraction = landing.fraction; displaced = false
-            moveBar(to: landing.origin, duration: MacDesign.normal)
-            savePlacement()
+            if dragging { dragging = false; settle() }
+            // A grab that never became a drag lets the spring carry on.
+            else if springHeld, let target = heldTarget { springHeld = false; springTo(target, speed: .zero) }
             return true
         default: return false
         }
     }
+    private var heldTarget: CGPoint? { panel.map { MacBarPlacement.home(dock: dock, fraction: dockFraction, size: $0.frame.size, work: workArea) } }
+    // The speed the bar was let go at, from the last moments of the drag.
+    private func releaseSpeed() -> CGPoint {
+        let now = CACurrentMediaTime(), recent = dragTrail.filter { now - $0.0 <= MacBarMotion.trail }; dragTrail.removeAll()
+        guard let a = recent.first, let b = recent.last, b.0 > a.0 else { return .zero }
+        return CGPoint(x: (b.1.x - a.1.x) / (b.0 - a.0), y: (b.1.y - a.1.y) / (b.0 - a.0))
+    }
+    private func settle() {
+        guard let p = panel else { return }
+        let speed = releaseSpeed()
+        let landing = MacBarPlacement.settle(p.frame.origin, size: p.frame.size, work: workArea)
+        dock = landing.dock; dockFraction = landing.fraction; displaced = false
+        springTo(landing.origin, speed: speed)
+        savePlacement()
+    }
+    private func springTo(_ target: CGPoint, speed: CGPoint) {
+        guard let p = panel else { return }
+        slide = nil; springHeld = false; writeHudBounds(NSRect(origin: target, size: p.frame.size))
+        // Reduce Motion: the bar is simply there.
+        if MacDesign.reduceMotion { spring = nil; p.setFrameOrigin(target); return }
+        spring = MacBarMotion.Spring(x: p.frame.minX, y: p.frame.minY, vx: speed.x, vy: speed.y, to: target)
+        springTick = CACurrentMediaTime(); startMotion()
+    }
+    // Moving to a dock from the menu or back home eases in and out.
     func moveBar(to origin: CGPoint, duration: TimeInterval) {
         guard let p = panel else { return }
-        let target = NSRect(origin: origin, size: p.frame.size)
-        writeHudBounds(target)
-        if duration <= 0 || MacDesign.reduceMotion { p.setFrame(target, display: true); return }
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = duration; context.timingFunction = MacDesign.easeInOut
-            p.animator().setFrame(target, display: true)
+        spring = nil; springHeld = false
+        writeHudBounds(NSRect(origin: origin, size: p.frame.size))
+        if duration <= 0 || MacDesign.reduceMotion || p.frame.origin == origin { slide = nil; p.setFrameOrigin(origin); return }
+        slide = (p.frame.origin, origin, CACurrentMediaTime(), duration); startMotion()
+    }
+    private func startMotion() {
+        guard motionTimer == nil else { return }
+        let t = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in self?.motionStep() }
+        RunLoop.main.add(t, forMode: .common); motionTimer = t
+    }
+    private func stopMotion() { motionTimer?.invalidate(); motionTimer = nil; spring = nil; slide = nil }
+    private func motionStep() {
+        guard let p = panel else { stopMotion(); return }
+        let now = CACurrentMediaTime(); var busy = false
+        if var s = spring {
+            let elapsed = now - springTick; springTick = now
+            if MacBarMotion.advance(&s, elapsed: elapsed) {
+                let work = workArea, m = MacBarPlacement.margin
+                p.setFrameOrigin(CGPoint(x: MacBarMotion.band(s.x, low: work.minX, high: work.maxX - p.frame.width, margin: m),
+                                         y: MacBarMotion.band(s.y, low: work.minY, high: work.maxY - p.frame.height, margin: m)))
+                spring = s; busy = true
+            } else { spring = nil; p.setFrameOrigin(s.to) }
         }
+        if let s = slide {
+            let t = (now - s.at) / s.span
+            if t >= 1 { slide = nil; p.setFrameOrigin(s.to) }
+            else {
+                let e = CGFloat(MacDesign.easeInOut(t))
+                p.setFrameOrigin(CGPoint(x: (s.from.x + (s.to.x - s.from.x) * e).rounded(), y: (s.from.y + (s.to.y - s.from.y) * e).rounded())); busy = true
+            }
+        }
+        if !busy { motionTimer?.invalidate(); motionTimer = nil }
     }
     // avoid_input: step aside from a target (AppKit global rect). A jump, so
     // the reply reports the final place. Never changes Stop, state or access.
@@ -590,25 +476,21 @@ final class MacVisuals: NSObject {
         guard let p = panel, visible else { return (true, false) }
         guard let placement = MacBarPlacement.avoid(hud: p.frame, target: target, work: workArea) else { return (false, false) }
         if placement == p.frame { return (true, false) }
+        stopMotion(); menu.dismiss(atOnce: true)
         p.setFrameOrigin(placement.origin); writeHudBounds(placement); displaced = true; displacedAt = Date()
         return (true, true)
     }
     // After the click that needed the space, the bar returns home.
     func returnHomeIfDue() {
-        guard displaced, !dragging, Date().timeIntervalSince(displacedAt) > 1.5, let p = panel else { return }
+        guard displaced, !dragging, Date().timeIntervalSince(displacedAt) > 1.5, let target = heldTarget else { return }
         displaced = false
-        moveBar(to: MacBarPlacement.home(dock: dock, fraction: dockFraction, size: p.frame.size, work: workArea), duration: MacDesign.slow)
+        moveBar(to: target, duration: MacDesign.slow)
     }
-    @objc func moveToDock(_ item: NSMenuItem) {
-        guard let name = item.representedObject as? String, let p = panel else { return }
-        dock = MacBarPlacement.docks.contains(name) ? name : "top-centre"; displaced = false
-        moveBar(to: MacBarPlacement.home(dock: dock, fraction: dockFraction, size: p.frame.size, work: workArea), duration: MacDesign.slow)
+    func moveToDock(_ name: String) {
+        guard let target = { () -> CGPoint? in dock = MacBarPlacement.docks.contains(name) ? name : "top-centre"; return heldTarget }() else { return }
+        displaced = false
+        moveBar(to: target, duration: MacDesign.slow)
         savePlacement()
-    }
-    @objc func changeGlow(_ item: NSMenuItem) {
-        guard let raw = item.representedObject as? String, let level = MacGlowLevel(rawValue: raw) else { return }
-        windowGlow.level = level
-        if !MacFence.file.isEmpty { level.save(in: URL(fileURLWithPath: MacFence.file).deletingLastPathComponent()) }
     }
     deinit { releaseCursor() }
 }
