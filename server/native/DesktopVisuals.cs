@@ -251,13 +251,55 @@ namespace Axon {
             Raised(g,panel,18,PromptSurface(contrast));
             using(GraphicsPath shape=Overlay.RoundRect(panel,18))using(Pen edge=new Pen(contrast?SystemColors.WindowText:Color.FromArgb(41,255,255,255),contrast?2:1))g.DrawPath(edge,shape);
         }
+        // One approved-app row: who is asked for, what the tier allows, and
+        // the tier's tag. The tag is a word plus a two-step mark, so the tier
+        // never rests on colour.
+        internal const int PromptSub=18,PromptRow=56;
+        internal sealed class PromptApp {
+            internal string Name="",Sentence="",Tag="",Sub="";internal int Level;   // bars lit in the tag: 1 click only, 2 full control
+            // Only the tiers native controls enforce have a row; anything else keeps the text card.
+            internal static PromptApp For(string tier,string name,bool conversation) {
+                PromptApp app=new PromptApp();app.Name=name;app.Sub=conversation?"Until you start a new conversation":"For this task";
+                if(tier=="full"){app.Tag="Full control";app.Sentence="Can see, click and type";app.Level=2;}
+                else if(tier=="click"){app.Tag="Click only";app.Sentence="Can see and click. Cannot type";app.Level=1;}
+                else return null;
+                return String.IsNullOrEmpty(name)?null:app;
+            }
+        }
+        // Where the request text starts: under the title, or under the row.
+        internal static float PromptTop(bool row) {return PromptPad+PromptTitle+8+(row?PromptSub+PromptRow+10:0);}
+        static void PromptAppRow(Graphics g,float width,PromptApp app,bool contrast) {
+            Color strong=contrast?SystemColors.WindowText:PaperText,soft=contrast?SystemColors.WindowText:Mist;
+            using(Font small=Face(12,false))using(Font name=Face(13,true))using(Font word=Face(12,true)) {
+                Text(g,app.Sub,small,soft,new RectangleF(PromptPad,PromptPad+PromptTitle,width-2*PromptPad,PromptSub));
+                RectangleF row=new RectangleF(PromptPad,PromptPad+PromptTitle+PromptSub+6,width-2*PromptPad,PromptRow);
+                using(GraphicsPath shape=Overlay.RoundRect(row,12)) {
+                    if(contrast)using(Pen pen=new Pen(strong,1))g.DrawPath(pen,shape);
+                    else using(SolidBrush plate=new SolidBrush(Color.FromArgb(16,255,255,255)))g.FillPath(plate,shape);
+                }
+                float tagWide=TextWidth(g,app.Tag,word)+10+14+10,tagHigh=24;
+                RectangleF tag=new RectangleF(row.Right-12-tagWide,row.Y+(row.Height-tagHigh)/2,tagWide,tagHigh);
+                using(GraphicsPath shape=Overlay.RoundRect(new RectangleF(tag.X+.5f,tag.Y+.5f,tag.Width-1,tag.Height-1),7))using(Pen pen=new Pen(contrast?strong:Color.FromArgb(102,255,255,255),1))g.DrawPath(pen,shape);
+                for(int bar=0;bar<2;bar++) {
+                    float high=bar==0?6:10;RectangleF mark=new RectangleF(tag.X+10+bar*6,tag.Y+tag.Height-7-high,4,high);
+                    bool lit=bar<app.Level;
+                    if(lit)using(SolidBrush brush=new SolidBrush(strong))g.FillRectangle(brush,mark);
+                    else using(Pen pen=new Pen(contrast?strong:Color.FromArgb(120,255,255,255),1))g.DrawRectangle(pen,mark.X+.5f,mark.Y+.5f,mark.Width-1,mark.Height-1);
+                }
+                Text(g,app.Tag,word,strong,new RectangleF(tag.X+10+14,tag.Y,tag.Width-24,tag.Height));
+                float text=tag.X-12-(row.X+14);
+                Text(g,app.Name,name,strong,new RectangleF(row.X+14,row.Y+9,text,20));
+                Text(g,app.Sentence,small,soft,new RectangleF(row.X+14,row.Y+29,text,18));
+            }
+        }
         // The dialog's own drawing: the title, the rule over the buttons, and the note beside them.
-        internal static void PromptFace(Graphics g,float width,string title,float rule,float noteWidth,bool contrast) {
+        internal static void PromptFace(Graphics g,float width,string title,float rule,float noteWidth,bool contrast,PromptApp app=null) {
             g.SmoothingMode=SmoothingMode.AntiAlias;g.PixelOffsetMode=PixelOffsetMode.HighQuality;g.TextRenderingHint=System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
             using(Font head=Face(16,true))using(Font small=Face(12,false)) {
                 Text(g,title,head,contrast?SystemColors.WindowText:PaperText,new RectangleF(PromptPad,PromptPad,width-2*PromptPad,PromptTitle));
                 using(Pen line=new Pen(contrast?SystemColors.WindowText:Color.FromArgb(26,255,255,255),1))g.DrawLine(line,PromptPad,rule+.5f,width-PromptPad,rule+.5f);
                 Text(g,PromptNote,small,contrast?SystemColors.WindowText:Mist,new RectangleF(PromptPad,rule+12,noteWidth,PromptButtonHeight));
+                if(app!=null)PromptAppRow(g,width,app,contrast);
             }
         }
         // Allow is filled and Deny is outlined. Hover lifts the plate, a press
@@ -563,6 +605,8 @@ namespace Axon {
                 var shots=new System.Collections.Generic.List<Bitmap>();
                 try {
                     for(int i=0;i<8;i++)using(Guardian.AccessPrompt prompt=new Guardian.AccessPrompt(PromptSamples[i<3?i:i<7?2:1],2,i==7,Rectangle.Empty))shots.Add(prompt.Picture(i==3?1:i==5?2:0,i==4?1:i==6?2:0,i>=3&&i<7?(i<5?1:2):i==7?2:0));
+                    // The app row: full control for the conversation, click only for one task, and the contrast theme.
+                    for(int i=0;i<3;i++)using(Guardian.AccessPrompt prompt=Guardian.AccessPrompt.SampleRow(i==1,2,i==2,Rectangle.Empty))shots.Add(prompt.Picture(0,0,2));
                     int wide=0,tall=0;foreach(Bitmap shot in shots){wide+=shot.Width;tall=Math.Max(tall,shot.Height);}
                     using(Bitmap sheet=new Bitmap(wide,tall,PixelFormat.Format32bppArgb)) {
                         using(Graphics g=Graphics.FromImage(sheet)){g.Clear(Color.FromArgb(31,33,40));int x=0;foreach(Bitmap shot in shots){g.DrawImage(shot,new Rectangle(x,0,shot.Width,shot.Height));x+=shot.Width;}}

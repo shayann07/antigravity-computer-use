@@ -508,7 +508,7 @@ namespace Axon {
                 DismissControls();
                 initialized=true;
                 Emit(new {ev="settings",takeover_mode=takeover.Mode,record_visuals=recordVisuals});
-                Emit(new { ev="ready", pid=Process.GetCurrentProcess().Id, hotkey=true, presence=true,desktop_context=DesktopContext.Inspect(),clear_stop=true,session_reason=true,remembered_approvals=true,access_tiers=true });
+                Emit(new { ev="ready", pid=Process.GetCurrentProcess().Id, hotkey=true, presence=true,desktop_context=DesktopContext.Inspect(),clear_stop=true,session_reason=true,remembered_approvals=true,access_tiers=true,prompt_card=true });
                 Thread reader = new Thread(Read); reader.IsBackground = true; reader.Start();
                 return true;
         }
@@ -1024,34 +1024,39 @@ namespace Axon {
         internal sealed class AccessPrompt : Form {
             [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h,IntPtr after,int x,int y,int cx,int cy,uint flags);
             [DllImport("uxtheme.dll",CharSet=CharSet.Unicode)] static extern int SetWindowTheme(IntPtr h,string app,string ids);
-            readonly float zoom;readonly bool contrast;readonly Rectangle anchor;readonly string title;
+            readonly float zoom;readonly bool contrast;readonly Rectangle anchor;readonly string title;readonly DesktopVisuals.PromptApp app;
             readonly TextBox body=new TextBox();readonly PromptButton allow,deny;readonly Font face;readonly float rule;
             Shade shade;
             internal bool Unmarked;   // the bench's trial stays visible to screenshots
             int Px(float logical) {return (int)Math.Round(logical*zoom);}
             // bar: the control bar's bounds when it is on screen, or empty.
-            internal AccessPrompt(string message,float scale,bool highContrast,Rectangle bar) {
-                zoom=scale;contrast=highContrast;anchor=bar;
+            // forApp: the app this asks for, drawn as a row under the heading; the
+            // message is then the detail text. Without it the first line of the
+            // message is the heading.
+            internal AccessPrompt(string message,float scale,bool highContrast,Rectangle bar,DesktopVisuals.PromptApp forApp=null,string heading=null) {
+                zoom=scale;contrast=highContrast;anchor=bar;app=forApp;
                 AutoScaleMode=AutoScaleMode.None;FormBorderStyle=FormBorderStyle.None;ShowInTaskbar=false;StartPosition=FormStartPosition.Manual;
                 MaximizeBox=false;MinimizeBox=false;   // a double-click or a drag to the screen edge must not resize it
                 BackColor=DesktopVisuals.PromptSurface(contrast);
                 SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer,true);
                 // The first line is the question. Anything else is shown whole.
                 string text=(message??"").Replace("\r\n","\n").Trim();int cut=text.IndexOf('\n');
-                if(cut>0&&cut<=64){title=text.Substring(0,cut).Trim();text=text.Substring(cut).Trim();}
+                if(app!=null&&!String.IsNullOrEmpty(heading))title=heading;
+                else if(cut>0&&cut<=64){title=text.Substring(0,cut).Trim();text=text.Substring(cut).Trim();}
                 else title="Computer Use needs your answer";
                 AccessibleName=title;AccessibleRole=AccessibleRole.Dialog;
+                if(app!=null)AccessibleDescription=app.Name+". "+app.Tag+". "+app.Sentence+". "+app.Sub+".";
                 int pad=Px(DesktopVisuals.PromptPad),wide=Px(DesktopVisuals.PromptWidth-2*DesktopVisuals.PromptInset),most=Px(DesktopVisuals.PromptBodyMost);
                 face=DesktopVisuals.PromptFont(zoom);
                 body.Multiline=true;body.ReadOnly=true;body.BorderStyle=BorderStyle.None;body.Font=face;body.TabIndex=2;
                 body.BackColor=BackColor;body.ForeColor=DesktopVisuals.PromptInk(contrast);body.AccessibleName="Request";
-                body.Text=text.Replace("\n","\r\n");body.SetBounds(pad-Px(3),Px(DesktopVisuals.PromptPad+DesktopVisuals.PromptTitle+8),wide-2*pad+Px(3),most);   // the box insets its own text by 3
+                body.Text=text.Replace("\n","\r\n");body.SetBounds(pad-Px(3),Px(DesktopVisuals.PromptTop(app!=null)),wide-2*pad+Px(3),most);   // the box insets its own text by 3
                 body.HandleCreated+=delegate {if(!contrast)try {SetWindowTheme(body.Handle,"DarkMode_Explorer",null);}catch {}};
                 // As tall as its text, up to the limit; past that it scrolls, and nothing is cut.
                 int tall=Fill();
                 if(tall>most){body.ScrollBars=ScrollBars.Vertical;tall=most;}
                 body.Height=tall;body.Select(0,0);Controls.Add(body);
-                rule=DesktopVisuals.PromptPad+DesktopVisuals.PromptTitle+8+tall/zoom+12;
+                rule=DesktopVisuals.PromptTop(app!=null)+tall/zoom+12;
                 int ring=Px(DesktopVisuals.PromptRing),across=Px(DesktopVisuals.PromptButtonWidth)+2*ring,down=Px(DesktopVisuals.PromptButtonHeight)+2*ring,row=Px(rule+12)-ring;
                 deny=new PromptButton(this,"Deny",false);allow=new PromptButton(this,"Allow",true);
                 deny.SetBounds(wide-pad-across+ring,row,across,down);allow.SetBounds(deny.Left-Px(8)+2*ring-across,row,across,down);
@@ -1061,6 +1066,14 @@ namespace Axon {
                 CancelButton=deny;AcceptButton=deny;ActiveControl=deny;
                 ClientSize=new Size(wide,Px(rule+12+DesktopVisuals.PromptButtonHeight+DesktopVisuals.PromptPad));
                 Place();
+            }
+            // The bench's app request, as the guardian composes it for a row.
+            internal static AccessPrompt SampleRow(bool click,float scale,bool highContrast,Rectangle bar) {
+                string detail=click
+                    ?"C:\\Program Files\\WindowsApps\\Microsoft.WindowsTerminal_8wekyb3d8bbwe\\WindowsTerminal.exe\r\nPID 9120\r\n\r\nTask: Read the build output and press the Run button."
+                    :"C:\\Windows\\System32\\notepad.exe\r\nPID 18244\r\n\r\nTask: Type the meeting notes into Notepad and save them.";
+                detail+="\r\n\r\nIts screenshots and accessibility text go to Antigravity's configured model. Ordinary actions run autonomously. Consequential effects need a separate confirmation. Your real mouse/keyboard will be used. Esc or Ctrl+Alt+F12 stops. Use a disposable account/VM for important data.";
+                return new AccessPrompt(detail,scale,highContrast,bar,DesktopVisuals.PromptApp.For(click?"click":"full",click?"Windows Terminal":"Notepad",!click),"Allow Antigravity to use this app?");
             }
             // The text's height at the box's width, as the box itself wraps it.
             int Fill() {
@@ -1087,7 +1100,7 @@ namespace Axon {
             float NoteWidth {get {return (allow.Left+Px(DesktopVisuals.PromptRing))/zoom-DesktopVisuals.PromptPad-12;}}
             protected override void OnPaint(PaintEventArgs e) {
                 e.Graphics.Clear(BackColor);e.Graphics.ScaleTransform(zoom,zoom);
-                DesktopVisuals.PromptFace(e.Graphics,Width/zoom,title,rule,NoteWidth,contrast);
+                DesktopVisuals.PromptFace(e.Graphics,Width/zoom,title,rule,NoteWidth,contrast,app);
             }
             protected override void OnLoad(EventArgs e) {base.OnLoad(e);shade=new Shade();shade.Lay(Bounds,zoom,contrast);}
             protected override void OnShown(EventArgs e) {
@@ -1128,7 +1141,7 @@ namespace Axon {
                             f.Clear(BackColor);
                             TextRenderer.DrawText(f,body.Text,face,body.Bounds,body.ForeColor,BackColor,TextFormatFlags.WordBreak|TextFormatFlags.TextBoxControl|TextFormatFlags.NoPrefix);
                             f.ScaleTransform(zoom,zoom);
-                            DesktopVisuals.PromptFace(f,Width/zoom,title,rule,NoteWidth,contrast);
+                            DesktopVisuals.PromptFace(f,Width/zoom,title,rule,NoteWidth,contrast,app);
                             foreach(PromptButton button in new PromptButton[]{allow,deny}) {
                                 int which=button==allow?1:2;
                                 DesktopVisuals.PromptButton(f,new RectangleF((button.Left+ring)/zoom,(button.Top+ring)/zoom,DesktopVisuals.PromptButtonWidth,DesktopVisuals.PromptButtonHeight),button.Text,button==allow,hover==which,press==which,focus==which,contrast);
@@ -1199,7 +1212,8 @@ namespace Axon {
             if(bar=="top")dock=new Rectangle(new Point(work.Left+(work.Width-pill.Width)/2,work.Top+inset),pill);
             else if(bar=="bottom")dock=new Rectangle(new Point(work.Left+(work.Width-pill.Width)/2,work.Bottom-inset-pill.Height),pill);
             else if(bar=="corner")dock=new Rectangle(new Point(work.Right-inset-pill.Width,work.Bottom-inset-pill.Height),pill);
-            using(AccessPrompt prompt=new AccessPrompt(DesktopVisuals.PromptSamples[Math.Max(0,Math.Min(2,kind))],scale,SystemInformation.HighContrast,dock)) {
+            // kind 3 and 4 are the app row at full control and click only.
+            using(AccessPrompt prompt=kind>=3?AccessPrompt.SampleRow(kind==4,scale,SystemInformation.HighContrast,dock):new AccessPrompt(DesktopVisuals.PromptSamples[Math.Max(0,Math.Min(2,kind))],scale,SystemInformation.HighContrast,dock)) {
                 prompt.Unmarked=true;prompt.Text="Computer Use — prompt trial";prompt.TopMost=true;
                 System.Windows.Forms.Timer end=new System.Windows.Forms.Timer();end.Interval=Math.Max(1,seconds)*1000;
                 end.Tick+=delegate {end.Stop();prompt.Close();};end.Start();
@@ -1482,7 +1496,22 @@ namespace Axon {
             bool allowed=hostManaged||known; bool timedOut=false;
             if(!allowed) {
             prompting=true; Overlay.HideAll();
-            using (Form dialog = new AccessPrompt(Convert.ToString(m["message"]),visualScale,SystemInformation.HighContrast,BarShown?Bounds:Rectangle.Empty)) {
+            // An app request that carries card:1 is shown as a row: the name
+            // and path come from this process's own look at the window, and the
+            // tag from the same tier that is granted below. Anything else,
+            // or a tier with no row, keeps the text card.
+            DesktopVisuals.PromptApp row=null;string heading=null,request=Convert.ToString(m["message"]);
+            if(kind=="app"&&executable!=null&&m.ContainsKey("card")&&Convert.ToString(m["card"])=="1") {
+                try {
+                    Dictionary<string,object> seen=ControlFence.Identity(Convert.ToInt64(m["hwnd"]));string file=Convert.ToString(seen["path"]);
+                    row=DesktopVisuals.PromptApp.For(m.ContainsKey("tier")?Convert.ToString(m["tier"]):"full",AppName(file),handle!=null);
+                    if(row!=null) {
+                        heading="Allow "+(hostName.Length>0?hostName:"the agent")+" to use this app?";
+                        request=file+"\r\nPID "+Convert.ToString(seen["pid"])+PromptLine(m,"task","\r\n\r\nTask: ")+PromptLine(m,"notice","\r\n\r\n");
+                    }
+                } catch {row=null;heading=null;request=Convert.ToString(m["message"]);}
+            }
+            using (Form dialog = new AccessPrompt(request,visualScale,SystemInformation.HighContrast,BarShown?Bounds:Rectangle.Empty,row,heading)) {
                 activePrompt=dialog;
                 dialog.Text="Computer Use — local permission"; dialog.TopMost=true;
                 System.Windows.Forms.Timer expiry=new System.Windows.Forms.Timer(); expiry.Interval=90000;
@@ -1517,6 +1546,22 @@ namespace Axon {
             int host;
             if (allowed && m.ContainsKey("host_pid") && Int32.TryParse(Convert.ToString(m["host_pid"]),out host)) AllowSetForegroundWindow(host);
             Emit(new { id=id, allowed=allowed, state=state, permit=permit, decision=allowed?(hostManaged?"host-authorized":known?"remembered":"allowed"):(state=="stopped"?"stopped":(timedOut?"timeout":"denied")) });
+        }
+        // The app's own description of itself, or its file name. Never blank.
+        static string AppName(string file) {
+            string name="";
+            try {name=(FileVersionInfo.GetVersionInfo(file).FileDescription??"").Trim();} catch {}
+            if(name.Length==0||name.Length>48)try {name=Path.GetFileNameWithoutExtension(file);} catch {}
+            if(String.IsNullOrEmpty(name))name=Path.GetFileName(file);
+            return name;
+        }
+        // One optional text field of a prompt request, bounded, behind its lead.
+        static string PromptLine(Dictionary<string,object> m,string field,string lead) {
+            if(!m.ContainsKey(field)||m[field]==null)return "";
+            string text=Convert.ToString(m[field]).Trim();
+            if(text.Length==0)return "";
+            if(text.Length>2000)text=text.Substring(0,2000)+"…";
+            return lead+text.Replace("\r\n","\n").Replace("\n","\r\n");
         }
         string FingerprintFor(Dictionary<string,object> m, Dictionary<string,object> a) {
             return ControlFence.Fingerprint(Convert.ToString(m["action_op"]),a,Convert.ToString(m["label"]));

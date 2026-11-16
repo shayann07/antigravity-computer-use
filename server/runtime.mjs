@@ -104,6 +104,8 @@ export function imagePoint(image,x,y){
 // guardian ends the session at its deadline by terminating the worker, so a
 // stroke that cannot finish first must not start.
 const HOP_MS=16,MAX_STROKE_HOPS=1500;
+// What an app approval lets the agent do, shown on every app prompt.
+const APP_NOTICE="Its screenshots and accessibility text go to Antigravity's configured model. Ordinary actions run autonomously. Consequential effects need a separate confirmation. Your real mouse/keyboard will be used. Esc or Ctrl+Alt+F12 stops. Use a disposable account/VM for important data.";
 // The screen point a native action reports having used, or null. Only two
 // whole numbers in a sane range are passed on to native controls.
 export function actionPoint(result){
@@ -458,7 +460,11 @@ export class Runtime {
     // (see CLAUDE-STYLE-CONTROL.md) restore the grant without a new dialog.
     const remembered=!!this.sessionHandle&&this.conversationGrants?.get(this.sessionHandle)?.has(executableKey(w.path))===true;
     const answer=await this.guardian.prompt({kind:'app',hwnd:Number(hwnd),app_pid:w.pid,host_pid:this.driver.info?.pid,tier,...(this.sessionHandle?{session_handle:this.sessionHandle}:{}),...(remembered?{remembered:true}:{}),
-      message:`Allow this application for this session?\r\n\r\n${w.title}\r\n${w.path}\r\nPID ${w.pid}\r\n${tierText}\r\n\r\nTask: ${purpose}\r\n\r\nIts screenshots and accessibility text go to Antigravity's configured model. Ordinary actions run autonomously. Consequential effects need a separate confirmation. Your real mouse/keyboard will be used. Esc or Ctrl+Alt+F12 stops. Use a disposable account/VM for important data.`});
+      // card:1 asks native controls for the app row (name and tier tag from
+      // their own look at the window); task and notice are its detail text.
+      // message stays for controls that only show text.
+      card:1,task:String(purpose).slice(0,500),notice:APP_NOTICE,
+      message:`Allow this application for this session?\r\n\r\n${w.title}\r\n${w.path}\r\nPID ${w.pid}\r\n${tierText}\r\n\r\nTask: ${purpose}\r\n\r\n${APP_NOTICE}`});
     if(!answer.allowed)fail(answer.decision==='timeout'?'approval_timeout':'permission_denied',answer.decision==='timeout'?'Local application approval timed out.':'The human denied this application.');
     this.guardian.send({op:'attach',pid:this.driver.info?.pid});
     const current=await this.app(hwnd);if(appKey(current)!==key)fail('identity_changed','Application restarted during approval.');
