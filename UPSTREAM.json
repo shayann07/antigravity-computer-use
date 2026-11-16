@@ -304,7 +304,7 @@
     },
     {
       "path": "scripts/desktop.mjs",
-      "sha256": "5f538cada08d6a5b277242bfb69ab9f645b379b770810403eddce7609ec9aad6"
+      "sha256": "42aaa7be5149249944ac86ea65110c0462ac21dd2d00b2de533075df73996032"
     },
     {
       "path": "server/version.mjs",
@@ -872,7 +872,7 @@
     },
     {
       "path": "tests/brief-reply.test.mjs",
-      "sha256": "9f2b3a109d96b186184f37d4dbdcd42f0abf5b891afccc06729067d4d9f359c2"
+      "sha256": "d5bf5e7b04ba5d3610a384ed348668cbbf8a787a1a20a6900a09e8bd897d1098"
     },
     {
       "path": "tests/stop-latch.test.mjs",
