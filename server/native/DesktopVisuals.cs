@@ -26,6 +26,13 @@ namespace Axon {
         // (seconds); at rest within SpringNear px moving under SpringSlow px a
         // second; let go at the speed of the drag's last SpringTrail ms.
         internal const double SpringStep=.001,SpringLongest=.064,SpringNear=.5,SpringSlow=20;internal const int SpringTrail=80;
+        // bar.throw: a release faster than ThrowSpeed (DIP a second) carries
+        // on. It aims where ThrowGlide seconds of its speed would take it,
+        // lands on the nearest dock with the snappy spring (ThrowBounce), and
+        // squashes against a screen edge it meets: SquashWide and SquashTall
+        // of its width and height for each DIP it presses in, at most SquashMost.
+        internal const double ThrowSpeed=900,ThrowGlide=.3,ThrowBounce=.3;
+        internal const float SquashWide=.004f,SquashTall=.015f,SquashMost=.18f;
         // The glow's slow life, in seconds: one lap of colour, one swell of
         // the band, one wander of the colours. And its frame times, in
         // milliseconds: in a transition, at rest, and for the deep wash.
@@ -353,6 +360,13 @@ namespace Axon {
             internal float TickLevel=-1;
             internal float Tick {get {return TickLevel<0?(Checked?1:0):TickLevel;}}
         }
+        // bar.squash: the bar pressed flat by a share of its width (x) and
+        // height (y), held on the side of the edge it met (-1 or 1; 0 = none).
+        internal static void Squash(Graphics g,float x,float y,int sideX,int sideY) {
+            if(x<=0&&y<=0)return;
+            float ax=sideX>0?HudWidth:0,ay=sideY>0?HudHeight:0;
+            g.TranslateTransform(ax,ay);g.ScaleTransform(1-Math.Max(0,x),1-Math.Max(0,y));g.TranslateTransform(-ax,-ay);
+        }
         // menu.tick: a tick slides its row's text over Normal, easing in and
         // out; instant with reduced motion.
         internal static float TickAt(double ms,float from,float to) {
@@ -567,6 +581,19 @@ namespace Axon {
                     }
                 }
                 sheet.Save(Path.Combine(directory,"hud-states.png"),ImageFormat.Png);
+            }
+            // bar.squash at rest, half and fully pressed: against the right edge, then the top.
+            using(Bitmap sheet=new Bitmap((HudWidth+40)*2,(HudHeight+24)*6*2,PixelFormat.Format32bppArgb)) {
+                using(Graphics g=Graphics.FromImage(sheet)) {
+                    g.Clear(Color.FromArgb(60,64,72));g.ScaleTransform(2,2);
+                    for(int i=0;i<6;i++) {
+                        HudModel model=new HudModel();model.State="active";model.Line1="Antigravity is working";model.Line2="Drawing in Paint";model.Slot=1;
+                        float press=SquashMost*(i%3)/2f;var saved=g.Save();g.TranslateTransform(20,12+(HudHeight+24)*i);
+                        if(i<3)Squash(g,press,0,1,0);else Squash(g,0,press,0,-1);
+                        Hud(g,model);g.Restore(saved);
+                    }
+                }
+                sheet.Save(Path.Combine(directory,"bar-squash.png"),ImageFormat.Png);
             }
             {
                 var items=new System.Collections.Generic.List<MenuItem>();

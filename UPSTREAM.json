@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "8b19f4d9496e03c99672735a98e851cb04a40ca197965a26db2ee0bfe2da797e"
+      "sha256": "2c4b6af21789cde9aac9c5e1dd8ada071ca0ba205181cdb8f6c16863e93a879a"
     },
     {
       "path": "server/mcp.mjs",
@@ -268,7 +268,7 @@
     },
     {
       "path": "server/native/Guardian.cs",
-      "sha256": "522f90f98b74aecd810c056e38b3f8633babb5d95d36af519345502a59b06374"
+      "sha256": "1e6066f4854e864b07f4139bf2184a1c6e69d49021b30811cbed7bcc55ca52e3"
     },
     {
       "path": "server/native/CursorSafety.cs",
@@ -276,7 +276,7 @@
     },
     {
       "path": "server/native/DesktopVisuals.cs",
-      "sha256": "281bbf1e6bade0197fb5950a93c9abb449032df85e4a60ea326426cd01935962"
+      "sha256": "8217a8d837b91d2bc6b07fc7632d7bb935deab16290617de1d36add848eab205"
     },
     {
       "path": "server/native/Glow.cs",
@@ -348,7 +348,7 @@
     },
     {
       "path": "tests/launch-observe.test.mjs",
-      "sha256": "128312e05025a1bec477bcf690a6df0abfff466884e089f57d069dc4c5beb00d"
+      "sha256": "75265436383dd69ffda189ca21de83abc598671a4aafc4e7f41c85780cd19128"
     },
     {
       "path": "scripts/install.mjs",

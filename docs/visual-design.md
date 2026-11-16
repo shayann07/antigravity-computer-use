@@ -14,7 +14,9 @@ Every colour, size and duration lives in `server/native/DesktopVisuals.cs`. The 
 | `FastLeave`, `NormalLeave` | 67 ms, 133 ms | leaving; Stop uses the fast one |
 | `Press`, `PressScale` | 160 ms, 0.97 | a press landing |
 | `EaseOut`, `EaseInOut` | cubic-bezier(.23,1,.32,1), (.77,0,.175,1) | entering and leaving; moving |
-| `SpringSeconds`, `SpringBounce` | 0.45 s, 0.15 | the bar settling after a drag |
+| `SpringSeconds`, `SpringBounce` | 0.45 s, 0.15 | the gentle spring |
+| `ThrowSpeed`, `ThrowGlide`, `ThrowBounce` | 900 DIP/s, 0.3 s, 0.3 | a thrown bar: how fast counts as a throw, how far its momentum aims, the snappy spring it lands with |
+| `SquashWide`, `SquashTall`, `SquashMost` | 0.004 and 0.015 per DIP, at most 0.18 | the bar pressed flat against a screen edge |
 
 When Windows' animation preference is off, movement becomes an instant change or a short fade. The feedback itself stays.
 
@@ -33,7 +35,7 @@ The glow marks the window the agent is working in. It is drawn by `Glow.cs` as s
 
 ## Control bar
 
-A 440 by 48 pill on the ink surface, always dark. Two lines of text: the first says the state and takes the state's colour, the second gives the reason or the hint. There are no state dots. Stop and Settings are real buttons, 44 by 44, with names and tooltips for screen readers, and each has hover and pressed states. The bar never takes keyboard focus. It can be dragged; it resists at the screen edge and settles to its dock with the spring.
+A 440 by 48 pill on the ink surface, always dark. Two lines of text: the first says the state and takes the state's colour, the second gives the reason or the hint. There are no state dots. Stop and Settings are real buttons, 44 by 44, with names and tooltips for screen readers, and each has hover and pressed states. The bar never takes keyboard focus. It can be dragged and it resists at the screen edge. Put down slowly, it stays where it is, lands on a dock within 12 px of one, and eases back inside if it was dropped past the edge. Thrown, it carries on to the dock nearest where its momentum points, springs in from the speed it was let go at, and squashes flat against the screen edge it meets before springing back to its shape.
 
 ## Settings menu
 

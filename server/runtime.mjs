@@ -23,6 +23,8 @@ const input=new Set(['move','click','type','set_value','key','scroll','drag','fo
 const fail=(code,message)=>{throw new HostError(code,message,null);};
 // Post-launch observation settles on the app's main window (#72).
 const LAUNCH_SETTLE_MS=1200,LAUNCH_SETTLE_LIMIT_MS=5000,SMALL_WINDOW=[480,320];
+// After a launched window is brought forward: still for this long, waiting at most the limit.
+const FOCUS_SETTLE_MS=300,FOCUS_SETTLE_LIMIT_MS=1500;
 const UNTIL_GONE_GRACE_MS=3000;
 // A task with no held resources and no activity for this long is reported as orphaned (a coordination hint, not authentication).
 export const TASK_IDLE_MS=10*60*1000;
@@ -927,6 +929,15 @@ export class Runtime {
           if((now-stableSince>=LAUNCH_SETTLE_MS&&!(small&&now<settleEnd))||now>=settleEnd){
             if(!chosen)return {...result,input_completed:true,observe_pending:true,observation_hint:'Several matching windows opened. Discover apps and select the intended window; do not relaunch.'};
             this.check();if(generation!==this.generation)fail('control_changed','Control changed after launch.');
+            // The new app comes to the front before the first look, so the
+            // person sees what the agent will work on, and a window that
+            // resizes as it activates settles before the first frame. This
+            // is the same app approval observe asks for; a refused focus
+            // still observes.
+            try{
+              await this.action('focus',{hwnd:Number(chosen.hwnd),reason:args.reason,risk:'routine'});
+              await Runtime.prototype.settleWindow.call(this,Number(chosen.hwnd),generation);
+            }catch(error){if(['control_stopped','control_changed','session_limit','recovered_task_requires_end'].includes(error.code))throw error;}
             const observed=await this.observe({hwnd:Number(chosen.hwnd),reason:args.reason});
             return {...observed,result,input_completed:true};
           }
@@ -942,6 +953,20 @@ export class Runtime {
       this.check();
       return {...result,input_completed:true,observe_pending:true,observation_hint:'No unambiguous visible window matched the launched PID and executable within8seconds. Discover apps; do not relaunch.'};
     }catch(error){return {...result,input_completed:true,observe_before_continuing:true,verification_error:{code:error.code||'observation_failed',message:error.message}};}
+  }
+  // Waits until a window's rectangle has held still for FOCUS_SETTLE_MS, at
+  // most FOCUS_SETTLE_LIMIT_MS, so a frame is not taken mid-resize.
+  async settleWindow(hwnd,generation){
+    const until=performance.now()+FOCUS_SETTLE_LIMIT_MS;let last=null,since=performance.now();
+    while(performance.now()<until){
+      this.check();if(generation!==this.generation)fail('control_changed','Control changed after launch.');
+      const w=(await this.driver.call('list_apps',{})).result.windows.find(v=>Number(v.hwnd)===hwnd);
+      if(!w)return;
+      const key=(w.rect||[]).join(',');
+      if(key!==last){last=key;since=performance.now();}
+      else if(performance.now()-since>=FOCUS_SETTLE_MS)return;
+      await new Promise(resolve=>setTimeout(resolve,100));
+    }
   }
   async stop(){
     this.callerHost=null;

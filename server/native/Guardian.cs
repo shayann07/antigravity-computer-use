@@ -410,7 +410,10 @@ namespace Axon {
         void ApplyGlowLevel() {Overlay.GlowBrightness(glowLevel=="bright"?1f:glowLevel=="medium"?.75f:.55f);}
         bool dragging,dragArmed,displaced,sliding,entering,leaving,quitting;Point dragGrab,dragStart,slideFrom,slideTo;DateTime displacedAt,slideAt,enterAt,leaveAt;int slideMs;float enterFrom,leaveFrom;
         // bar.settle: the spring's place and speed on each axis (pixels, pixels a second), its rest point and the work area it stays in.
-        bool springing,springHeld;double springX,springY,springVX,springVY;Point springTo;Rectangle springWork;long springTick;
+        bool springing,springHeld;double springX,springY,springVX,springVY,springBounce=DesktopVisuals.SpringBounce;Point springTo;Rectangle springWork;long springTick;
+        // bar.squash: how far the bar is pressed flat against a screen edge on
+        // each axis (a share of its size), and which side that edge is on (-1 or 1).
+        float squashX,squashY;int squashSideX,squashSideY;
         // The last moments of a drag, for the speed the bar is let go at.
         readonly Queue<KeyValuePair<long,Point>> dragTrail=new Queue<KeyValuePair<long,Point>>();
         // A bar that is fading out is already gone to everything that asks.
@@ -549,7 +552,12 @@ namespace Axon {
             if(!IsHandleCreated||Width<=0||Height<=0)return;
             try {
                 using(Bitmap surface=new Bitmap(Width,Height,System.Drawing.Imaging.PixelFormat.Format32bppPArgb)) {
-                    using(Graphics g=Graphics.FromImage(surface)) {g.Clear(Color.Transparent);g.ScaleTransform(visualScale,visualScale);DesktopVisuals.Hud(g,Model());}
+                    using(Graphics g=Graphics.FromImage(surface)) {
+                        g.Clear(Color.Transparent);g.ScaleTransform(visualScale,visualScale);
+                        // bar.squash: pressed flat against the edge it met, held on that side.
+                        DesktopVisuals.Squash(g,squashX,squashY,squashSideX,squashSideY);
+                        DesktopVisuals.Hud(g,Model());
+                    }
                     Overlay.Present(Handle,surface,Left,Top,(byte)Math.Max(0,Math.Min(255,(int)Math.Round(255*barAlpha))));
                 }
             } catch {}
@@ -689,7 +697,7 @@ namespace Axon {
             if(e.Button==MouseButtons.Left&&physical&&!leaving) {
                 dragArmed=true;dragStart=Cursor.Position;dragGrab=new Point(Cursor.Position.X-Left,Cursor.Position.Y-Top);
                 // A new grab holds a settling bar where it is.
-                if(springing){springing=false;springHeld=true;}
+                if(springing){springing=false;springHeld=true;if(squashX>0||squashY>0){squashX=squashY=0;Present();}}
             }
             base.OnMouseDown(e);
         }
@@ -737,14 +745,24 @@ namespace Axon {
             if(seconds<=0)return PointF.Empty;
             return new PointF((float)((b.Value.X-a.Value.X)/seconds),(float)((b.Value.Y-a.Value.Y)/seconds));
         }
-        // bar.settle: land on a dock when dropped within 12 px of one, and
-        // remember the place. The bar springs there from the speed it was let go at.
+        // bar.throw: let go fast, the bar carries on to the dock nearest where
+        // its momentum points and springs in from that speed, squashing against
+        // the screen edge it meets. bar.settle: put down slowly, it stays,
+        // landing on a dock within 12 px of one; a drop past the inset eases
+        // back inside. Either way the place is remembered.
         void Settle() {
             PointF speed=ReleaseSpeed();
             Screen screen=Screen.FromRectangle(Bounds);float scale=Overlay.ScreenScale(screen);Rectangle work=screen.WorkingArea;
             if(scale!=visualScale) {
                 Point dropped=Location;ApplyScale(scale,screen);
                 try {Location=WindowGeometry.Fit(new Rectangle(dropped,Size),work).Location;}catch {}
+            }
+            double thrown=Math.Sqrt(speed.X*speed.X+speed.Y*speed.Y)/visualScale;
+            if(thrown>=DesktopVisuals.ThrowSpeed&&DesktopVisuals.MotionEnabled) {
+                double aimX=Left+speed.X*DesktopVisuals.ThrowGlide,aimY=Top+speed.Y*DesktopVisuals.ThrowGlide,nearest=Double.MaxValue;string best=dock;
+                foreach(string name in Docks){Point home=HomeFor(name,work);double d=(home.X-aimX)*(home.X-aimX)+(home.Y-aimY)*(home.Y-aimY);if(d<nearest){nearest=d;best=name;}}
+                dock=best;displaced=false;SpringTo(Home(work),work,speed,DesktopVisuals.ThrowBounce);SavePreferences();
+                return;
             }
             // A bar let go in the rubber band comes back to the inset.
             int margin=(int)Math.Ceiling(12*visualScale);
@@ -753,13 +771,13 @@ namespace Axon {
             foreach(string name in Docks){Point home=HomeFor(name,work);if(Math.Abs(home.X-rest.X)<=snap&&Math.Abs(home.Y-rest.Y)<=snap){near=name;break;}}
             dock=near;
             if(near=="free"){dockX=work.Width>Width?(rest.X-work.Left)/(double)(work.Width-Width):0;dockY=work.Height>Height?(rest.Y-work.Top)/(double)(work.Height-Height):0;}
-            displaced=false;SpringTo(Home(work),work,speed);SavePreferences();
+            displaced=false;SlideTo(Home(work),DesktopVisuals.Normal);SavePreferences();
         }
-        void SpringTo(Point target,Rectangle work,PointF speed) {
-            sliding=springHeld=false;
+        void SpringTo(Point target,Rectangle work,PointF speed,double bounce) {
+            sliding=springHeld=false;squashX=squashY=0;
             // Reduced motion: the bar is simply there.
-            if(!DesktopVisuals.MotionEnabled){springing=false;Location=target;return;}
-            springX=Left;springY=Top;springVX=speed.X;springVY=speed.Y;springTo=target;springWork=work;
+            if(!DesktopVisuals.MotionEnabled){springing=false;Location=target;Present();return;}
+            springX=Left;springY=Top;springVX=speed.X;springVY=speed.Y;springTo=target;springWork=work;springBounce=bounce;
             springTick=Stopwatch.GetTimestamp();springing=true;motion.Start();
         }
         // bar.settle: an Apple-style spring with mass 1, its stiffness and
@@ -768,17 +786,30 @@ namespace Axon {
         bool Spring() {
             long now=Stopwatch.GetTimestamp();
             double elapsed=Math.Min(DesktopVisuals.SpringLongest,(now-springTick)/(double)Stopwatch.Frequency);springTick=now;
-            double turn=2*Math.PI/DesktopVisuals.SpringSeconds,stiffness=turn*turn,damping=4*Math.PI*(1-DesktopVisuals.SpringBounce)/DesktopVisuals.SpringSeconds;
+            double turn=2*Math.PI/DesktopVisuals.SpringSeconds,stiffness=turn*turn,damping=4*Math.PI*(1-springBounce)/DesktopVisuals.SpringSeconds;
             int steps=Math.Max(1,(int)Math.Ceiling(elapsed/DesktopVisuals.SpringStep));double dt=elapsed/steps;
             for(int i=0;i<steps;i++) {
                 springVX+=(-stiffness*(springX-springTo.X)-damping*springVX)*dt;springX+=springVX*dt;
                 springVY+=(-stiffness*(springY-springTo.Y)-damping*springVY)*dt;springY+=springVY*dt;
             }
             if(Math.Abs(springX-springTo.X)<DesktopVisuals.SpringNear&&Math.Abs(springY-springTo.Y)<DesktopVisuals.SpringNear&&Math.Abs(springVX)<DesktopVisuals.SpringSlow&&Math.Abs(springVY)<DesktopVisuals.SpringSlow) {
-                springing=false;Location=springTo;return false;
+                springing=false;Location=springTo;
+                if(squashX>0||squashY>0){squashX=squashY=0;Present();}
+                return false;
             }
             int margin=(int)Math.Ceiling(12*visualScale);
-            Location=new Point(Band(springX,springWork.Left,springWork.Right-Width,margin),Band(springY,springWork.Top,springWork.Bottom-Height,margin));
+            // bar.squash: a dock beside a screen edge is where the bar meets
+            // that edge. Swinging past it, the bar stays at the dock and is
+            // pressed flat instead, then springs back out to its shape.
+            int left=HomeFor("top-left",springWork).X,right=HomeFor("top-right",springWork).X,up=HomeFor("top-left",springWork).Y,down=HomeFor("bottom-left",springWork).Y;
+            squashSideX=springTo.X<=left?-1:springTo.X>=right?1:0;squashSideY=springTo.Y<=up?-1:springTo.Y>=down?1:0;
+            double pressX=squashSideX==0?0:Math.Max(0,(springX-springTo.X)*squashSideX),pressY=squashSideY==0?0:Math.Max(0,(springY-springTo.Y)*squashSideY);
+            bool wasSquashed=squashX>0||squashY>0;
+            squashX=(float)Math.Min(DesktopVisuals.SquashMost,pressX/visualScale*DesktopVisuals.SquashWide);
+            squashY=(float)Math.Min(DesktopVisuals.SquashMost,pressY/visualScale*DesktopVisuals.SquashTall);
+            int x=pressX>0?springTo.X:Band(springX,springWork.Left,springWork.Right-Width,margin),y=pressY>0?springTo.Y:Band(springY,springWork.Top,springWork.Bottom-Height,margin);
+            Location=new Point(x,y);
+            if(wasSquashed||squashX>0||squashY>0)Present();
             return true;
         }
         void MoveToDock(string name) {
