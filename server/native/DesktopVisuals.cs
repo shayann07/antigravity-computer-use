@@ -347,6 +347,16 @@ namespace Axon {
             internal int Id;internal string Kind="row";   // head, row, rule, foot
             internal string Text="",Note="";internal bool Ticks,Checked,Chevron;
             internal RectangleF Bounds;
+            // How far the tick is in, 0..1; below 0 means settled (in when
+            // checked). A ticking row's text sits at the left with no tick and
+            // slides right as the tick appears (menu.tick).
+            internal float TickLevel=-1;
+            internal float Tick {get {return TickLevel<0?(Checked?1:0):TickLevel;}}
+        }
+        // menu.tick: a tick slides its row's text over Normal, easing in and
+        // out; instant with reduced motion.
+        internal static float TickAt(double ms,float from,float to) {
+            double t=ms/Normal;return t>=1?to:from+(to-from)*EaseInOut((float)Math.Max(0,t));
         }
         // Places the items; returns the panel's height.
         internal static float MenuLayout(System.Collections.Generic.List<MenuItem> items) {
@@ -441,7 +451,8 @@ namespace Axon {
                     if(item.Id==pressed||item.Id==hover)
                         using(GraphicsPath plate=Overlay.RoundRect(box,8))using(SolidBrush fill=new SolidBrush(Color.FromArgb(item.Id==pressed?36:22,255,255,255)))g.FillPath(fill,plate);
                     float left=box.X+12;
-                    if(item.Ticks){if(item.Checked)Icon(g,"check",left,box.Y+12,Violet);left+=30;}
+                    float tick=item.Ticks?Math.Max(0,Math.Min(1,item.Tick)):0;
+                    if(tick>0){Icon(g,"check",left,box.Y+12,Color.FromArgb((int)Math.Round(Violet.A*tick),Violet));left+=30*tick;}
                     float right=box.Right-12;
                     if(item.Chevron){Icon(g,"chevron",right-18,box.Y+12,Rest);right-=22;}
                     if(item.Note.Length>0){float note=TextWidth(g,item.Note,small);Text(g,item.Note,small,Mist,new RectangleF(right-note-2,box.Y,note+4,box.Height));right-=note+10;}
@@ -580,6 +591,15 @@ namespace Axon {
                 using(Bitmap image=new Bitmap((MenuWidth+2*MenuMargin)*2,(int)((dockTall+2*MenuMargin)*2),PixelFormat.Format32bppArgb)) {
                     using(Graphics g=Graphics.FromImage(image)){g.Clear(Color.FromArgb(31,33,40));g.ScaleTransform(2,2);Menu(g,docks,dockTall,12,0);}
                     image.Save(Path.Combine(directory,"menu-dock.png"),ImageFormat.Png);
+                }
+                // menu.tick: the recording row's tick sliding out, five frames 50 ms apart.
+                using(Bitmap sheet=new Bitmap((MenuWidth+2*MenuMargin)*2*5,(int)((tall+2*MenuMargin)*2),PixelFormat.Format32bppArgb)) {
+                    using(Graphics g=Graphics.FromImage(sheet)) {
+                        g.Clear(Color.FromArgb(31,33,40));g.ScaleTransform(2,2);
+                        for(int i=0;i<5;i++){record.TickLevel=TickAt(i*Normal/4.0,1,0);var saved=g.Save();g.TranslateTransform(i*(MenuWidth+2*MenuMargin),0);Menu(g,items,tall,0,0);g.Restore(saved);}
+                        record.TickLevel=-1;
+                    }
+                    sheet.Save(Path.Combine(directory,"menu-tick.png"),ImageFormat.Png);
                 }
                 // menu.page, as the product draws it: five frames 50 ms apart
                 // from the main page to the Move bar page, hanging below the bar.

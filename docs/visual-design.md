@@ -37,7 +37,7 @@ A 440 by 48 pill on the ink surface, always dark. Two lines of text: the first s
 
 ## Settings menu
 
-A raised panel 312 wide with a 12 radius, one neutral drop shadow and a hairline edge. It hangs 8 px under the bar, or above it when the bar is docked low. Rows are 44 high with a hover and a pressed plate. It opens with opacity and a scale from 0.96 at the Settings corner, closes in reverse, and a page change moves the height while the rows cross-fade. The footer repeats how to stop.
+A raised panel 312 wide with a 12 radius, one neutral drop shadow and a hairline edge. It hangs 8 px under the bar, or above it when the bar is docked low. Rows are 44 high with a hover and a pressed plate. It opens with opacity and a scale from 0.96 at the Settings corner, closes in reverse, and a page change moves the height while the rows cross-fade. A row that can carry a tick keeps its text at the left when unticked; when its tick changes, the tick fades and the text slides 30 px over 200 ms, easing in and out (instant with reduced motion), as on macOS. The footer repeats how to stop.
 
 ## Access prompt
 

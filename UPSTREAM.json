@@ -268,7 +268,7 @@
     },
     {
       "path": "server/native/Guardian.cs",
-      "sha256": "116eb9c532c1c8680640e498c7954845f1d6024369d5dd337e2778db1aad8e70"
+      "sha256": "522f90f98b74aecd810c056e38b3f8633babb5d95d36af519345502a59b06374"
     },
     {
       "path": "server/native/CursorSafety.cs",
@@ -276,7 +276,7 @@
     },
     {
       "path": "server/native/DesktopVisuals.cs",
-      "sha256": "c8ea96b68a59cf2b78e0b533625697fb9ca4744f7eca464d19abc25e9e758516"
+      "sha256": "281bbf1e6bade0197fb5950a93c9abb449032df85e4a60ea326426cd01935962"
     },
     {
       "path": "server/native/Glow.cs",
@@ -552,7 +552,7 @@
     },
     {
       "path": "server/control-contract.json",
-      "sha256": "ce4cf250263913abf4702a70723bf5b624b7df150bc6f5e4e5f6a64ad6d85091"
+      "sha256": "4b56fe5054959286b25895a5b8e93b73a0ddff563eaebbcda5ea77d2b092002a"
     },
     {
       "path": "server/macos-build.mjs",

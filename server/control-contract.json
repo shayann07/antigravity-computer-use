@@ -29,5 +29,5 @@
   "ambiguous_target_operations": ["click", "drag"],
   "sensitive_label_pattern": "send|submit|pay|purchase|buy|delete|remove|install|upload|share|password|permission|transfer|sign.in",
   "sensitive_process_pattern": "^(windowsterminal|regedit|systemsettings|system settings|control|code|visual studio code|idea64|rider64|terminal|iterm2?|alacritty|kitty|hyper)$",
-  "sensitive_key_pattern": "enter|return|delete|alt\\+|option\\+|win|meta|super|(?:ctrl|cmd|command)\\+[svx]"
+  "sensitive_key_pattern": "enter|return|delete|alt\\+|option\\+|win|meta|super|(?:ctrl|cmd|command)\\+(?:(?:shift|alt|option)\\+)*[svx](?![a-z0-9])"
 }
