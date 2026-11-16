@@ -764,7 +764,7 @@
     },
     {
       "path": "docs/MACOS-QUALIFICATION.md",
-      "sha256": "7ca91365dcb60e94e3a15478b447d6d4aedc12eb2c7dad672e1bc8b87fa04937"
+      "sha256": "8a949de72897c669e3b9739a62e5d3c8865eb4773f15cafca61a7ad3b7909641"
     },
     {
       "path": "tests/MacStorageMarkerWriter.swift",

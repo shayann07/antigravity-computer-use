@@ -34,6 +34,8 @@ pressed yet.
 | Full suite | `2d9b0c7` | 695 tests, 653 pass, 0 fail, 42 skipped | local log |
 | Native check, provenance, bundle, install check | `1002b5a` + docs (parity, recovery) | pass | local logs |
 | Full suite | `1002b5a` | 709 tests, 667 pass, 0 fail, 42 skipped (Windows-only) | local log |
+| Native check, provenance, bundle, install check | `be70509` (merged with `feat/final-native` `886f3a4`) | pass | local logs |
+| Full suite | `be70509` | 709 tests, 666 pass, 0 fail, 43 skipped (Windows-only) | local log |
 | Native contract: tiers (target and frontmost), remembered approvals, confirmed-only Stop clearing, approval fenced by Pause/Stop, easing, prompt layout, glow maths | branch head | pass | `macos-native-check` |
 | Real guardian binary, headless: `clear_stop` clears only a confirmed Stop; unconfirmed, companion, invalid, directory and recovered-task markers stay; Smart preference rewritten | branch head | pass | `tests/macos-guardian-control.test.mjs` |
 | Access prompt drawing (short, long scrolling, launch, hover/press/focus) | branch head | inspected offscreen | `--prompt-preview` pictures, kept local |
