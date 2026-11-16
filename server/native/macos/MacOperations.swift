@@ -702,7 +702,38 @@ func macContractTest() throws {
     try Data("invalid journal".utf8).write(to:URL(fileURLWithPath:MacInputLedger.path))
     guard !MacInputLedger.recover() else { throw AxonError("contract_test_failed","Malformed input journal was accepted.") }
     try MacInputLedger.save(["keys":[Int](),"buttons":[Int]()])
-    emit(["ok": true, "control_contract": 1, "checks": ["shared state codec", "malformed state refusal", "canonical approval fingerprint", "sensitive action classification", "kernel process birth identity", "native idle/paused/stopped/expired/session/monitor/Stop refusals", "empty cleanup and malformed input-journal refusal", "official Phosphor resource rendering", "SDK and runtime material selection", "capture visibility and dismissal lifecycle", "access tier enforcement for target and frontmost app", "conversation-scoped remembered approvals", "confirmed-only Stop clearing", "approval completion fenced by Pause and Stop"], "hud_icon_assets": iconAssets, "hud_material": materialBackend, "native_glass_compiled": MacVisuals.nativeGlassCompiled, "desktop_input_sent": false])
+    // Shared motion curves and the access prompt's layout (pure; no window).
+    guard MacDesign.easeOut(0) == 0, MacDesign.easeOut(1) == 1, abs(MacDesign.easeOut(0.5) - 0.966) < 0.005,
+          MacDesign.easeInOut(0) == 0, MacDesign.easeInOut(1) == 1, abs(MacDesign.easeInOut(0.5) - 0.596) < 0.005,
+          MacDesign.easeInOut(0.25) < 0.1, MacDesign.easeOut(.nan) == 0,
+          stride(from: 0.0, through: 1.0, by: 0.05).allSatisfy({ MacDesign.easeOut($0) <= MacDesign.easeOut(min(1, $0 + 0.05)) + 1e-9 }) else {
+        throw AxonError("contract_test_failed", "Shared easing curves differ.")
+    }
+    let promptScreen = NSRect(x: 0, y: 0, width: 1440, height: 900), promptCard = NSSize(width: 496, height: 200)
+    let barHigh = NSRect(x: 520, y: 840, width: 400, height: 44), barLow = NSRect(x: 520, y: 40, width: 400, height: 44)
+    let under = MacPromptCardView.placement(card: promptCard, bar: barHigh, screen: promptScreen)
+    let over = MacPromptCardView.placement(card: promptCard, bar: barLow, screen: promptScreen)
+    let middle = MacPromptCardView.placement(card: promptCard, bar: nil, screen: promptScreen)
+    let corner = MacPromptCardView.placement(card: promptCard, bar: NSRect(x: 1400, y: 850, width: 40, height: 44), screen: promptScreen)
+    guard under.maxY == barHigh.minY - 8, under.midX == barHigh.midX,
+          over.minY == barLow.maxY + 8, over.midX == barLow.midX,
+          middle.midX == promptScreen.midX, middle.midY == promptScreen.midY,
+          corner.maxX == promptScreen.maxX - 12, promptScreen.insetBy(dx: 12, dy: 12).contains(corner) else {
+        throw AxonError("contract_test_failed", "Access prompt placement differs.")
+    }
+    let shortCard = MacPromptCardView(message: "Allow this application for this session?\n\nCalculator", fallback: "x")
+    let longCard = MacPromptCardView(message: "Approve ONE sensitive operation?\n\n" + String(repeating: "A long request line that wraps.\n", count: 80), fallback: "x")
+    let untitled = MacPromptCardView(message: String(repeating: "no newline ", count: 20), fallback: "Allow one sensitive action?")
+    guard shortCard.title == "Allow this application for this session?", !shortCard.bodyScrolls, shortCard.body.string == "Calculator",
+          longCard.bodyScrolls, longCard.scroll.frame.height == MacDesign.promptBodyMost, longCard.body.frame.height > MacDesign.promptBodyMost,
+          longCard.body.string.components(separatedBy: "\n").count == 80,
+          untitled.title == "Allow one sensitive action?", untitled.body.string.hasPrefix("no newline"),
+          shortCard.card.width == MacDesign.promptWidth, shortCard.deny.keyEquivalent.isEmpty,
+          shortCard.deny.nextKeyView === shortCard.allow,
+          shortCard.allow.frame.maxX + MacDesign.promptButtonGap - 2 * MacDesign.promptRing <= shortCard.deny.frame.minX + 0.001 else {
+        throw AxonError("contract_test_failed", "Access prompt content or layout differs.")
+    }
+    emit(["ok": true, "control_contract": 1, "checks": ["shared state codec", "malformed state refusal", "canonical approval fingerprint", "sensitive action classification", "kernel process birth identity", "native idle/paused/stopped/expired/session/monitor/Stop refusals", "empty cleanup and malformed input-journal refusal", "official Phosphor resource rendering", "SDK and runtime material selection", "capture visibility and dismissal lifecycle", "access tier enforcement for target and frontmost app", "conversation-scoped remembered approvals", "confirmed-only Stop clearing", "approval completion fenced by Pause and Stop", "shared motion curves", "access prompt layout and placement"], "hud_icon_assets": iconAssets, "hud_material": materialBackend, "native_glass_compiled": MacVisuals.nativeGlassCompiled, "desktop_input_sent": false])
 }
 
 func macMoveCursor(_ point: CGPoint, _ args: [String: Any]) throws -> [String: Any] {

@@ -201,7 +201,7 @@ final class MacGuardian: NSObject {
     var watchdog: Process?
     var timer: Timer?
     var visuals = MacVisuals()
-    var prompt: NSAlert?
+    var prompt: NSPanel?
     var controlsUntil = Date.distantFuture
     // Set while a previous task's input cleanup is unverified: the bar is
     // visible and Stop works, but clear_stop, resume and activation refuse.
@@ -416,18 +416,21 @@ final class MacGuardian: NSObject {
                     MacGuardian.rememberedAllows(remembered, handle: handle, executable: executable)
                 var allowed = hostManaged || known, timedOut = false
                 if !allowed {
+                    // The prompt hangs from the bar where it was before capture hiding.
+                    let bar = visuals.visible ? visuals.panel?.frame : nil
                     visuals.hideForCapture()
                     // Capture hiding removes our pointer window; the human
                     // needs the normal OS cursor throughout a modal decision.
                     visuals.releaseCursor()
-                    let alert = NSAlert(); alert.messageText = kind == "app" ? "Allow this app for this session?" : "Allow one sensitive action?"
-                    alert.informativeText = String((identity?["path"] as? String ?? "") + "\n\n" + (str(message["message"]) ?? "").prefix(6000))
-                    alert.addButton(withTitle: "Deny"); alert.addButton(withTitle: "Allow")
-                    prompt = alert
-                    let expiry = Timer(timeInterval: 90, repeats: false) { _ in timedOut = true; NSApp.abortModal() }
-                    RunLoop.main.add(expiry, forMode: .common); RunLoop.main.add(expiry, forMode: .modalPanel)
-                    allowed = alert.runModal() == .alertSecondButtonReturn
-                    expiry.invalidate(); prompt = nil
+                    var request = String((str(message["message"]) ?? "").prefix(6000))
+                    if let path = identity?["path"] as? String, !request.contains(path) {
+                        // Keep the native identity in view when the request omits it.
+                        let parts = MacPromptCardView.split(request, fallback: "")
+                        request = (parts.title.isEmpty ? "" : parts.title + "\n\n") + path + "\n\n" + parts.body
+                    }
+                    allowed = MacAccessPrompt.run(message: request,
+                                                  fallback: kind == "app" ? "Allow this app for this session?" : "Allow one sensitive action?",
+                                                  bar: bar, onPanel: { [weak self] in self?.prompt = $0 }, timedOut: &timedOut)
                     tick() // Resolve takeover, Stop and expiry before restoring control visuals.
                     visuals.finishCapture(state)
                 }

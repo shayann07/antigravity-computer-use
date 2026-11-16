@@ -348,16 +348,19 @@ final class MacVisuals: NSObject {
         if state != "active" { releaseCursor(); rings.forEach { $0.orderOut(nil) }; pointer?.orderOut(nil) }
         if !captureHidden, let p = panel {
             writeHudBounds(p.frame)
-            let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-            if animateEntrance && !reduceMotion {
+            if animateEntrance {
+                // Appear: opacity and a scale from menuFrom over Normal, easing
+                // out. Reduce Motion keeps a short fade and drops the scale.
+                let reduceMotion = MacDesign.reduceMotion
                 p.alphaValue = 0.0
                 if let layer = rootView?.layer {
-                    layer.transform = CATransform3DMakeScale(0.96, 0.96, 1.0)
+                    layer.transform = reduceMotion ? CATransform3DIdentity : CATransform3DMakeScale(MacDesign.menuFrom, MacDesign.menuFrom, 1.0)
                 }
                 p.orderFrontRegardless()
                 NSAnimationContext.runAnimationGroup { context in
-                    context.duration = 0.16
-                    context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                    context.duration = reduceMotion ? MacDesign.fast : MacDesign.normal
+                    context.timingFunction = MacDesign.easeOut
+                    context.allowsImplicitAnimation = true
                     p.animator().alphaValue = 1.0
                     rootView?.layer?.transform = CATransform3DIdentity
                 }
@@ -406,7 +409,7 @@ final class MacVisuals: NSObject {
     func activity(_ action: String) { /* The persistent state label stays calm between actions. */ }
     func animate() {
         if captureHidden || state != "active" { return }
-        let reduce = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let reduce = MacDesign.reduceMotion
         let ui = MacContract.value["ui"] as? [String: Any] ?? [:]
         let configuredSeconds = ui["breath_seconds"] as? Double ?? 4.0
         let configuredBase = ui["breath_base"] as? Double ?? 0.82

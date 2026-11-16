@@ -1479,6 +1479,12 @@ func readLoop() {
             if args.contains("--warmup") { emit(["event": "warm"]); return }
             if args.contains("--setup") { macSetup(); return }
             if args.contains("--contract-test") { try macContractTest(); return }
+            // Offscreen pictures of the access prompt for review. No window is
+            // shown, no permission is requested and no input is sent.
+            if let at = args.firstIndex(of: "--prompt-preview"), args.count > at + 1 {
+                try? MacContract.load(); _ = NSApplication.shared
+                emit(["written": try MacAccessPrompt.preview(to: args[at + 1]), "desktop_input_sent": false]); return
+            }
             if args.contains("--contract-lock-holder") {
                 try MacFence.initialize(requireDirectParent: false)
                 try MacInputLedger.withLock { emit(["lock_held": true]); _ = readLine() }
