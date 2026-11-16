@@ -580,7 +580,7 @@
     },
     {
       "path": "server/native/macos/MacVisuals.swift",
-      "sha256": "9199a9becd42c24f268ec817814b640357dc1f845ee105061013e37e4a8e4692"
+      "sha256": "3de88682a1785d1edf83b27c26df92081ba9e47587eac73343c1bdc0fc1ff122"
     },
     {
       "path": "server/native/macos/PrivateStorage.swift",
@@ -764,7 +764,7 @@
     },
     {
       "path": "docs/MACOS-QUALIFICATION.md",
-      "sha256": "9d6f8ee050de9e34c134e72594d0907ac19f79dc6eed313361607566e24a2cb6"
+      "sha256": "c846229606ec0a8ff6b9c80394246b91e8d01ab6fdefb75deef2ea25c25f4529"
     },
     {
       "path": "tests/MacStorageMarkerWriter.swift",

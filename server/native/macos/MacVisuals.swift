@@ -209,11 +209,9 @@ final class MacVisuals: NSObject {
         if state == "active" && !captureHidden && !prompting { applyCursor(); animate() }
     }
     func applyCursor() {
-        if cursorApplied { return }
-        var displays = [CGDirectDisplayID](repeating: 0, count: 32); var count: UInt32 = 0
-        guard CGGetActiveDisplayList(32, &displays, &count) == .success else { return }
-        for display in displays.prefix(Int(count)) where CGDisplayHideCursor(display) == .success { hiddenDisplays.append(display) }
-        if !hiddenDisplays.isEmpty { pointer?.orderFrontRegardless() }
+        // No drawn pointer, as on Windows: the real cursor moves for every
+        // physical action. A background helper cannot reliably hide the OS
+        // cursor, so a drawn one showed as a second, lagging arrow.
     }
     func releaseCursor() {
         for display in hiddenDisplays { CGDisplayShowCursor(display) }

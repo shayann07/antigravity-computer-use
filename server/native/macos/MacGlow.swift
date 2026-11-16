@@ -235,7 +235,10 @@ final class MacWindowGlow {
     private func relayout(_ window: CGRect, widening: Bool = false) {
         guard let panel = panel else { return }
         let outer = window.insetBy(dx: -MacGlowShape.reach, dy: -MacGlowShape.reach)
-        let screen = (NSScreen.screens.first { $0.frame.contains(CGPoint(x: window.midX, y: window.midY)) } ?? NSScreen.main)?.frame ?? outer
+        // Room is measured against the visible area: the menu bar and the Dock
+        // cover anything drawn under them, so an edge close to either (or to
+        // the screen's edge) is lit inside instead.
+        let screen = (NSScreen.screens.first { $0.frame.contains(CGPoint(x: window.midX, y: window.midY)) } ?? NSScreen.main)?.visibleFrame ?? outer
         let sides = MacGlowShape.inside(window: window, screen: screen)
         frame = window
         CATransaction.begin(); CATransaction.setDisableActions(true)

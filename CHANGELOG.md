@@ -11,6 +11,8 @@
 - macOS: the access card is shown even when the helper is not the active app; before, it could exist without being visible. The bar stays, reading "Waiting for your answer", while a card waits (#99).
 - macOS: a Stop left stuck after the guardian was killed mid-task now settles once every recorded helper is gone and the input ledger is empty (#99).
 - macOS: clicks on an app's own alert or sheet are no longer refused as covered (#99).
+- macOS: Esc shows "You pressed Esc" on the bar; the glow stays on its own window (behind windows that cover it, lit inside at screen edges and under the menu bar); no second, drawn cursor (#99).
+- macOS: a Stop left when quitting the host app ended the service and its guardian together now settles on the next `ready` (#99).
 - macOS: after a helper update, turn Screen Recording on again in System Settings; Accessibility and Input Monitoring are kept. Helpers are signed with the project's own certificate, not an Apple Developer ID (#99).
 - The installed bundle now includes `conversation-approvals.mjs`; without it the installed service could not start (#99).
 - A refusal raised before any input (`target_not_observed`, `no_image`, a bad point) no longer spends the observation, so the next call can reuse its `observation_id` (#49).

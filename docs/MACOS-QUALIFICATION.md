@@ -116,8 +116,8 @@ pattern for `ctrl+shift+…`.
 
 #### Not checked
 
-- The installed build is C6 (`bdc5b91`, CDHash `e59e2436…`); Screen Recording was
-  turned on again after it, and Accessibility and Input Monitoring were kept.
+- The installed build is C6 (`bdc5b91`, CDHash `e59e2436…`). The visible-area glow
+  and the removed drawn pointer (next commit) are not installed or seen yet.
 - The alert-click fix on a visible alert; the tick slide installed on screen.
 - Recovery condition "never resumes" is tested at helper level and seen once
   physically; there is no Runtime-level test yet.
@@ -200,6 +200,8 @@ is not verified here. Apple Silicon is unverified.
 | A live Esc was labelled as a persisted Stop, so the bar said "The task was ended" | fixed in `d685fe0`; physically re-run, the bar says "You pressed Esc or ⌃⌥F12" |
 | The glow was at status-bar level and drew over windows covering its target | fixed in `d685fe0` (normal level, just above the target); the human's screenshot shows it around the front window; the covered case still to be looked at |
 | With the glow at normal level, AppKit moved its panel out from under the menu bar, so for a window at the top of the screen the band slid 46 pt down (none on top, double at the bottom); seen by the human on Preview | fixed: the glow panel is never constrained (`MacGlowPanel`), with a contract check that fails without the fix; re-measured on build C6: Preview at (4, 34) 708×965, glow panel at (−42, −12) 800×1057, 46 pt on every side, ordered directly above Preview |
+| The glow lit an edge from inside only for full-screen windows; for a window against the screen edge or under the menu bar, the band fell off-screen or under the menu bar and only one side showed (human's screenshot) | fixed after C6: room is measured against the visible area (menu bar and Dock excluded), so those edges are lit inside; not yet seen on screen |
+| Double cursor: the Mac drew its own arrow that followed the mouse on a timer while asking macOS to hide the real cursor, which a background helper cannot reliably do (human's screenshot) | fixed after C6: no drawn pointer, the real cursor moves, as on Windows; not yet seen on screen |
 | Quitting Antigravity ends the service and its guardian together; the Stop then goes unacknowledged and is recorded as unconfirmed, with no open task naming the guard, so nothing could settle it and the installer refused | fixed in `c47ff83` (Mac only, same evidence as the `active` rule: no task open, not the current guard, no cleanup pending, every recorded actor gone, empty ledger); physically re-run, `ready` settled it and started fresh |
 | Clicks on an app's own alert (Preview, layer 8) were refused as covered | fixed (`macTopWindowVerdict`); not yet re-run on a visible alert |
 | A service started from a shell without Accessibility (for example an agent's terminal) gets `accessibility_denied` though setup reports access, because macOS checks the app that launched it | by design of macOS; documented. Start the service from Antigravity or the human starter |
