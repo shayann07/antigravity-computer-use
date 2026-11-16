@@ -114,8 +114,12 @@ macOS may require new permission approval after an ad-hoc-signed update.
   invalidates the native fence. Workers observe revocation and exit themselves;
   the watchdog waits for their recorded identities and attempts to release
   journaled automation-held input. An unresponsive worker leaves cleanup
-  unconfirmed and Stop latched. Stop persists across
-  restart; only the local human Re-arm control clears it. Prior macOS task
+  unconfirmed and Stop fenced. Stop ends the task; there is no human re-arm.
+  The agent's next `ready` clears a confirmed Stop through the guardian's
+  `clear_stop` operation once workers have exited and the input ledger is
+  empty. An unconfirmed (`unconfirmed:` marker or `.unconfirmed` companion),
+  unreadable, linked or directory marker is never cleared and survives
+  restart. Prior macOS task
   recovery verifies that parent, worker and watchdog PIDs have exited and the
   JSON `.inputs` ledger (`{"buttons":[],"keys":[]}`) is empty before closing a
   recovered task.
@@ -123,18 +127,45 @@ macOS may require new permission approval after an ad-hoc-signed update.
   events. Errors attempt journaled input cleanup and preserve unknown delivery;
   detected cleanup failure latches Stop. Native headless refusal tests do not
   prove physical Esc or successful release at a target application.
-- Manual takeover is the default. Optional Smart mode ignores small motion and
-  yields on deliberate input. Resume requires fresh observations.
+- Per-app access, as on Windows: each app needs the human's Allow in the local
+  prompt. Approvals last for the agent's conversation: `ready` returns a
+  `session_handle`, and the guardian restores an app approved under that handle
+  (matched by handle and executable path) without a prompt, across Stop, End
+  and session expiry. A missing or unknown handle, a controller restart or a
+  new app asks again. The handle is never an approval by itself.
+- Access tiers: terminals and IDEs (Terminal, iTerm2, Warp, Ghostty, Xcode,
+  VS Code, Cursor, Zed, Sublime Text, Nova and the JetBrains IDEs) are
+  click-only: left click, pointer moves, scrolling, focus and window sizing.
+  Typing, keys, right/middle/modified clicks, drags, pastes, value writes,
+  file pickers and opens are refused with `app_tier_click`, both for the target
+  and whenever a click-only app is frontmost, and again at dispatch.
+  Everything else, browsers included, is full.
+- Human mouse and keyboard input never pauses or yields control; Smart takeover
+  is gone and a saved `smart` preference is rewritten to manual. Only Esc,
+  Control+Option+F12 or the bar's Stop end the task. Pause and Resume remain as
+  explicit requests from the agent or the bar, as on Windows.
 - AppKit renders the HIG-aligned Liquid Glass control bar (`396×44` rounded
   capsule using Apple's native `NSGlassEffectView` on macOS 26+ with
   `NSVisualEffectView` fallback on macOS 14/15, pure filled Phosphor Icons
   without status dots or strokes, and clear state labels for
-  `Working · Esc to stop`, `Paused · Resume or Esc`, and
-  `Stopped · Re-arm required`), breathing screen edges and original arrow/text
-  pointer. Emergency Stop uses a high-opacity crimson glass tint (`alpha = 0.88`,
+  `Antigravity is working`, `Paused · you have control` and
+  `Stopped · task ended`), breathing screen edges and original arrow/text
+  pointer. The bar's toggle is Pause/Resume only and is hidden while idle or
+  stopped; there is no Re-arm control. Emergency Stop uses a high-opacity crimson glass tint (`alpha = 0.88`,
   `>= 8.5:1` contrast) so translucent material never obscures the stopped state.
-  Transitions use `0.16s` fade/scale motion and respect
-  `accessibilityDisplayShouldReduceMotion`. Controls support keyboard focus
+  Motion and colour come from one file, `server/native/macos/MacDesign.swift`,
+  with the same values as Windows' `DesktopVisuals.cs` (a test keeps them
+  equal). The bar enters over `normal` (200 ms) easing out from 0.96; Reduce
+  Motion keeps a short fade without the scale.
+- The access prompt is a card on the bar's dark surface, matching the Windows
+  design (`docs/visual-design.md`): 496 wide, 18 radius, one soft shadow and a
+  hairline; the first line is the title and the rest scrolls past 300 pt;
+  filled Allow and outlined Deny with hover, pressed and focus states; the note
+  that 90 s without an answer counts as Deny. It hangs 8 pt under the bar,
+  above a bar docked low, or in the middle of the screen. Its behaviour is
+  unchanged: modal, Deny holds the focus, Return and Esc deny, the timeout
+  denies, it is excluded from capture and the normal OS cursor is shown.
+  `AxonHost --prompt-preview <dir>` renders it offscreen for review. Controls support keyboard focus
   (`Tab` loop, native focus ring mask, `Space`/`Return` activation and `Esc`
   emergency Stop), while areas outside the control bar remain click-through.
   End/Pause/Stop release the cursor, remove `.hud` bounds and hide active
@@ -167,9 +198,11 @@ On an actual Mac, still verify:
 3. Multiple approved applications and owned dialogs without repeated ordinary
    prompts; no clicks into covering apps or other Spaces.
 4. Physical Esc during held input and queued actions, no subsequent input,
-   independent cleanup, human re-arm and a second task without host restart.
-5. Pause/authorized resume, incidental input in manual mode and deliberate input
-   in Smart mode; cursor/glow cleanup after completion and helper crashes.
+   independent cleanup, and a second task (same `session_handle`, no prompt)
+   without host restart.
+5. Click tier in a terminal or IDE and full tier in a browser and TextEdit;
+   human input during a task never pauses it; explicit Pause/Resume;
+   cursor/glow cleanup after completion and helper crashes.
 6. Retina/mixed-scale multiple monitors, negative origins, gaps and display changes.
 7. Actual Sidecar startup while idle, permission revocation, sleep/wake and app
    restart, retaining Stop and existing host configuration.

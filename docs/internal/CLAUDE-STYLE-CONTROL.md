@@ -161,15 +161,35 @@ marked; the rest is open.
 - **CursorSafety watchdog** reads the marker (`CursorSafety.cs` around line
   206); keep it consistent with the per-task Stop record.
 
-macOS, NOT STARTED; not read in detail for this change, the same list applies:
+macOS (branch `mac/umbrella-x86_64`, issue #99). Source done and covered by
+headless checks; interactive qualification on a Mac is still pending:
 
-- `MacOperations.swift` and `MacGuardian.swift`: the latch read and write
-  (`LatchBlocks`/`LatchStop` equivalents, 38 and 20 references), the re-arm
-  handler, the stopped-to-idle transition, the resume rule and the watchdog
-  marker rewrite.
-- `MacControl.swift` and `MacVisuals.swift`: the bar's Re-arm button and
-  tooltip, the Smart takeover menu item, and the access approval list dialog.
-- The remembered-approval prompt and the host-managed decision, as on Windows.
+- **Stop model. DONE (clear_stop).** `MacGuardian.clearStop` mirrors the
+  Windows op: it refuses a recovered task, requires `macWaitForWorkers()` and
+  an empty input ledger, and `MacFence.clearConfirmedLatch` removes only an
+  exact owned `stopped` regular file with no `.unconfirmed` companion (links,
+  directories, uncertain or invalid markers are refused, never recursively
+  removed). If the fence file is replaced while clearing, Stop is latched
+  again (`stopped_again`). A real-binary test drives this headless.
+- **`set`. DONE.** Only `clear_stop` leaves `stopped`; Pause and Resume cannot.
+- **Bar. DONE.** No Re-arm; the toggle is Pause/Resume only and is hidden
+  while idle or stopped; the Smart takeover menu items are gone.
+- **Resume. DONE.** Standalone resume of an agent or bar Pause under the same
+  cleanup checks.
+- **Takeover. DONE.** The watchdog never pauses on human input; the consent
+  exemption machinery is deleted; a saved `smart` preference is rewritten to
+  `manual`.
+- **Tier enforcement in native. DONE.** Click-tier grants are a seventh fence
+  field; workers refuse non-click input for the target and when a click-only
+  app is frontmost, in `check()` and again at dispatch.
+- **Remembered approvals. DONE.** Per handle and executable path, kept across
+  Stop, End and expiry, bounded to 64 handles.
+- **Session expiry. DONE (`session_expired`).**
+- **Access dialog.** Restyled as the Windows card (`MacAccessPrompt.swift`);
+  still one app per prompt, as on Windows.
+- The ready event advertises `clear_stop`, `session_reason`,
+  `remembered_approvals` and `access_tiers`, so the runtime uses the native
+  path and not the close-and-clear fallback.
 
 ## Migration of existing marker files on upgrade
 

@@ -1,5 +1,14 @@
 # Native confirmation and Smart takeover
 
+> **Superseded (November 2026).** Smart takeover is removed on macOS: human
+> mouse and keyboard input never pauses or yields control, so a click on the
+> local Allow/Deny prompt can no longer be mistaken for a takeover and the
+> consent-dialog exemption below (`localConsentInteraction`,
+> `consentPointVisible`, `pauseForTakeover`) was deleted. Identity, permission
+> and Stop checks are unchanged, and approval completion is still fenced
+> against a Pause or Stop published while the prompt was open. See
+> `docs/MACOS.md` and issue #99. The record below is kept for history.
+
 Issue [#43](https://github.com/shayann07/antigravity-computer-use/issues/43)
 is a source-observed regression. Standalone confirmation hides the HUD, while
 the independent monitor exempted only its old rectangle. A real Allow/Deny
