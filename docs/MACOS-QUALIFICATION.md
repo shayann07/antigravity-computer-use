@@ -28,6 +28,8 @@ evidence only, labelled as such.
 | Full suite | `76ea55a` (baseline) | 665 tests, 624 pass, 0 fail, 41 skipped (Windows-only) | local log |
 | Native check, provenance, bundle, install check | `8369686` | pass | local logs |
 | Full suite | `8369686` | 694 tests, 652 pass, 0 fail, 42 skipped | local log |
+| Native check, provenance, bundle, install check | `7808f4f` (Pause removed, glow) | pass | local logs |
+| Full suite | `7808f4f` | 695 tests, 653 pass, 0 fail, 42 skipped | local log |
 | Native contract: tiers (target and frontmost), remembered approvals, confirmed-only Stop clearing, approval fenced by Pause/Stop, easing, prompt layout, glow maths | branch head | pass | `macos-native-check` |
 | Real guardian binary, headless: `clear_stop` clears only a confirmed Stop; unconfirmed, companion, invalid, directory and recovered-task markers stay; Smart preference rewritten | branch head | pass | `tests/macos-guardian-control.test.mjs` |
 | Access prompt drawing (short, long scrolling, launch, hover/press/focus) | branch head | inspected offscreen | `--prompt-preview` pictures, kept local |
