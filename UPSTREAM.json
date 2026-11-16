@@ -66,7 +66,7 @@
     {
       "path": "server/native/AxonHost.swift",
       "upstream_sha256": "b50c68feff8bd783ba2f92580358c69491c0ffee31f6182b76543f3aba9f962f",
-      "local_sha256": "cb43c9c175df31d05e1a5ab1718a3306a40d0044834457c0e9b8e7d4ac6031d7",
+      "local_sha256": "8129d4a41b1aeee7dac79d321a881f58eb284e3d814cf37d25e06283028b95f1",
       "modified": true
     },
     {
@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "a2e577dd8ffa4175694e7167d72db882d22f4f073152d2ea11a160ac0beeeed6"
+      "sha256": "eded430f622422aefa8b9d020c79f0c963ef16fa52066bb13e430f995da289e9"
     },
     {
       "path": "server/mcp.mjs",
@@ -352,7 +352,7 @@
     },
     {
       "path": "scripts/install.mjs",
-      "sha256": "37d7817a912e16e61164548d4c5824f0f8699a4ee9c0ad041a8ca0960fe71ceb"
+      "sha256": "60690fed6ac47059b8bcb50e38e5043a8b19b783916986262231cc7a894cb064"
     },
     {
       "path": "scripts/rollback.mjs",
@@ -568,15 +568,15 @@
     },
     {
       "path": "server/native/macos/MacControl.swift",
-      "sha256": "9587347d29fb9abeb2e32449fcb45049d52e051b5316f7a7f143458ff2303ccb"
+      "sha256": "2ea5f2da64a820e76aa4acfa6ad899f1d1205f000ee6ec1411d8cfedb6f87d86"
     },
     {
       "path": "server/native/macos/MacGuardian.swift",
-      "sha256": "8868ca0d3ddcb9054ff803d732d417073614e64bb0db4df7a2789919464591ca"
+      "sha256": "e2a48b90d4e9c7aaa9f18376fc53aa8f9ebe14db689783248651093b1d122d50"
     },
     {
       "path": "server/native/macos/MacOperations.swift",
-      "sha256": "dcedceda379c15dbbfd6ee28740c8fe725d464dbdd031a0bcbc60cb860d8f0bc"
+      "sha256": "bfdd76498809c25bb58cc8e82e77970a243c9caebe4c292adaa0717971f58d89"
     },
     {
       "path": "server/native/macos/MacVisuals.swift",
@@ -636,11 +636,11 @@
     },
     {
       "path": "tests/recovery-update.test.mjs",
-      "sha256": "87a108db6a23fabfe9063c1a0e0c16e0d4e1b18fd4bff2681dc211b7850034c2"
+      "sha256": "1211aa35592ce31deee543449fe7b73207ed8580dee5b6c1e10d6f825b928354"
     },
     {
       "path": "tests/update-transaction.test.mjs",
-      "sha256": "f0bd7455be13554e95fa01b722b347f32d9635bca00c0ac8d8898a018005cc22"
+      "sha256": "35280e396cf7298a27cfb43296b3ae74def1a867bfec7068e2c80da2454a3122"
     },
     {
       "path": "docs/RELIABILITY-IMPLEMENTATION.md",
@@ -712,7 +712,7 @@
     },
     {
       "path": "server/recovery.mjs",
-      "sha256": "507042bc51c784b459821f641c3275336c698245b6b75e4c98861a326d6f5eda"
+      "sha256": "3946576b50045ec1f47fd270d398a1a0aa0f8a650047cc1742a1bc23c1c68bfc"
     },
     {
       "path": "scripts/qualify-guardian-desktop.mjs",
@@ -900,7 +900,7 @@
     },
     {
       "path": "tests/stop-context.test.mjs",
-      "sha256": "b348a25783f1bf27666a83f7f263335e90859b9f2c8c03f3d3a536fdf51b5537"
+      "sha256": "70e04a80896046026b91d7e860db754f990b8edd1b18f872c3d6f9808a3d70cc"
     },
     {
       "path": "server/task-coordinator.mjs",
