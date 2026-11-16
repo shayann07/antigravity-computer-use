@@ -582,13 +582,13 @@ namespace Axon {
                 }
                 sheet.Save(Path.Combine(directory,"hud-states.png"),ImageFormat.Png);
             }
-            // bar.throw: a throw along the top edge into the top-right dock,
+            // bar.throw: a hard throw along the top edge into the right side,
             // as BarBody moves it. One row every 50 ms; the line is the screen's right edge.
             {
-                BarBody body=new BarBody(HudWidth,HudHeight,1);double x=900,y=42,step=1/120.0;
-                body.Grab(x,y);for(int i=0;i<24;i++){x+=3000*step;body.Hold(x,y,step);body.Advance(step);}
+                BarBody body=new BarBody(HudWidth,HudHeight,1);double x=700,y=42,step=1/120.0;
+                body.Grab(x,y);for(int i=0;i<24;i++){x+=4000*step;body.Hold(x,y,step);body.Advance(step);}
                 const int right=1920,rows=14,panel=760;double dock=right-12-HudWidth/2.0;
-                body.Release(dock,y,1,right,-1,0);
+                body.Release(true,12+HudWidth/2.0,dock,12,18+HudHeight/2.0,1040-18-HudHeight/2.0,18,null,null,12);
                 HudModel model=new HudModel();model.State="active";model.Line1="Antigravity is working";model.Line2="Drawing in Paint";model.Slot=1;
                 using(Bitmap sheet=new Bitmap(panel*2,(HudHeight+30)*rows*2,PixelFormat.Format32bppArgb)) {
                     using(Graphics g=Graphics.FromImage(sheet)) {

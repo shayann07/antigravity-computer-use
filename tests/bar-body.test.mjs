@@ -4,6 +4,6 @@ test('native bar body: throws land on their dock, squash against the edge, stay 
  const dir=testDirectory('bar-body-tests');fs.mkdirSync(dir,{recursive:true});const exe=path.join(dir,'BarBodyTests.exe');
  const compiler=path.join(process.env.WINDIR||'C:\Windows','Microsoft.NET','Framework64','v4.0.30319','csc.exe');
  const built=spawnSync(compiler,['-nologo','-out:'+exe,path.resolve('server/native/BarBody.cs'),path.resolve('tests/BarBodyTests.cs')],{windowsHide:true,encoding:'utf8'});assert.equal(built.status,0,built.stdout+built.stderr);
- const run=spawnSync(exe,[],{windowsHide:true,encoding:'utf8'});assert.equal(run.status,0,run.stdout+run.stderr);assert.match(run.stdout,/TOTAL 29/);
+ const run=spawnSync(exe,[],{windowsHide:true,encoding:'utf8'});assert.equal(run.status,0,run.stdout+run.stderr);assert.match(run.stdout,/TOTAL 57/);
  fs.writeFileSync(path.join(dir,'result.txt'),run.stdout);
 });
