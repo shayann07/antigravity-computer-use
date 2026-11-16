@@ -239,7 +239,6 @@ export function recoveryAdvice(result,operation){
  if(['another_session_busy','cleanup_in_progress','task_owned'].includes(code))return {...extra,next_action:'wait_for_controller_then_observe',replay_allowed:false};
  if(code==='session_limit')return {...extra,next_action:'renew_task_and_continue',replay_allowed:false};
  if(code==='native_latch_still_enforced')return {...extra,next_action:'native_update_required',replay_allowed:false};
- if(['resume_refused','not_paused'].includes(code))return {...extra,next_action:'ask_human_before_resume',replay_allowed:false};
  if(['recovered_cleanup_unverified','input_lease_stale'].includes(code))return {...extra,next_action:'inspect_prior_input_cleanup',replay_allowed:false};
  if(['stop_persistence_failed','guard_persistence_failed'].includes(code))return {...extra,next_action:'inspect_stop_persistence_without_restart',replay_allowed:false};
  if(['permission_denied','approval_timeout','confirmation_required'].includes(code))return {...extra,next_action:'await_user_decision',replay_allowed:false};

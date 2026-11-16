@@ -1,5 +1,5 @@
 import {randomBytes,timingSafeEqual} from 'node:crypto';
-const readOnly=new Set(['computer_status','computer_apps','computer_stop','computer_pause','computer_controls','computer_prepare_update']);
+const readOnly=new Set(['computer_status','computer_apps','computer_stop','computer_controls','computer_prepare_update']);
 const denied=(code,message)=>{throw Object.assign(Error(message),{code});};
 // A bearer capability coordinates cooperating clients; it is not proof of a
 // host conversation identity and cannot isolate hostile same-account processes.

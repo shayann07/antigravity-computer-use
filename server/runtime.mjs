@@ -927,20 +927,6 @@ export class Runtime {
       return {...result,input_completed:true,observe_pending:true,observation_hint:'No unambiguous visible window matched the launched PID and executable within8seconds. Discover apps; do not relaunch.'};
     }catch(error){return {...result,input_completed:true,observe_before_continuing:true,verification_error:{code:error.code||'observation_failed',message:error.message}};}
   }
-  async pause(){this.generation++;this.frames.clear();this.state='paused';this.lastControlReason='requested_pause';this.guardian.send({op:'pause'});await this.driver.abort?.();return {paused:true,resume_when:'the human says to continue'};}
-  async resume(){
-    if(this.state==='stopped')fail('control_stopped','The human stopped this task. Report and wait; a later ready starts a fresh task. Resume does not apply to Stop.');
-    if(this.state!=='paused')fail('not_paused',`Control is ${this.state}, not paused. Nothing to resume.`);
-    this.generation++;this.frames.clear();const generation=this.generation;
-    await this.driver.abort?.();
-    if(this.state!=='paused'||generation!==this.generation)fail('control_changed','Control changed before Resume completed. Inspect status.');
-    const result=await this.guardian.request({op:'resume'});
-    // Current native controls accept a chat Resume only in host-managed mode;
-    // standalone resume needs the native change in CLAUDE-STYLE-CONTROL.md.
-    if(!result.allowed||result.state!=='active'||generation!==this.generation||this.state==='stopped')fail('resume_refused',this.state==='stopped'?'Stop won the race; the task ended. Report and wait.':this.permissionMode==='host-managed'?'Native controls refused Resume because input cleanup is incomplete. Inspect status; do not replay.':'These native controls only resume from the bar in standalone mode until the native update ships. Ask the human to press Resume on the bar, or start a fresh task with ready.');
-    this.state='active';this.check();this.lastControlReason='host_authorized_resume';this.deadline=Date.now()+contract.session_ms;
-    return {resumed:true,fresh_observation_required:true,replayed_actions:0};
-  }
   async stop(){
     this.callerHost=null;
     if(this.stopping)return this.stopping;

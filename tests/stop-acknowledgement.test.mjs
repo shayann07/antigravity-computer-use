@@ -64,7 +64,7 @@ test('fresh receipt waits for independent driver cleanup, coalesces Stop and kee
  assert(readStopLatch(f.file).unconfirmed);assert.equal(calls,1);assert.equal(aborts,1);
  release();const [first,second]=await Promise.all([a,b]);assert(first.native_stop_confirmed);assert.deepEqual(first,second);
  assert.equal(fs.readFileSync(f.file,'utf8'),'stopped');assert(!fs.existsSync(f.file+'.unconfirmed'));assert.equal(f.r.status().state,'stopped');
- await assert.rejects(f.r.resume(),e=>e.code==='control_stopped');
+ assert.equal(f.r.resume,undefined,'there is no Resume');
 });
 
 test('old uncertainty, held inputs and failed driver cleanup cannot be settled by a new receipt',async t=>{

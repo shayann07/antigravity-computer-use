@@ -13,7 +13,7 @@ test('flag, policy, update, busy and unlock refusals name who acts and the comma
   ['bad_selector', 'fix_arguments_and_retry', 'agent', true], ['text_limit', 'fix_arguments_and_retry', 'agent', true], ['no_steps', 'fix_arguments_and_retry', 'agent', true],
   ['protected_app', 'choose_permitted_target', 'agent', false], ['app_blocked', 'choose_permitted_target', 'agent', false], ['key_blocked', 'choose_permitted_target', 'agent', false],
   ['needs_confirmation', 'await_user_decision', 'human', false], ['model_approval_forbidden', 'await_user_decision', 'human', false],
-  ['resume_refused', 'ask_human_before_resume', 'human', false], ['control_stopped', 'report_and_wait_for_human', 'human', false], ['session_limit', 'renew_task_and_continue', 'agent', false], ['app_tier_click', 'choose_permitted_target', 'agent', false], ['desktop_locked', 'await_human_unlock', 'human', false],
+  ['control_stopped', 'report_and_wait_for_human', 'human', false], ['session_limit', 'renew_task_and_continue', 'agent', false], ['app_tier_click', 'choose_permitted_target', 'agent', false], ['desktop_locked', 'await_human_unlock', 'human', false],
   ['update_in_progress', 'wait_for_update', 'agent', false], ['operation_pending', 'wait_for_pending_operation', 'agent', false],
   ['session_unavailable', 'human_restart_controller', 'human', false], ['launch_failed', 'fix_app_path', 'agent', false],
   ['launch_timeout', 'discover_apps_then_observe', 'agent', false], ['index_out_of_range', 'observe_again', 'agent', false],

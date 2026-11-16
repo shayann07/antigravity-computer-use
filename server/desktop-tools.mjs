@@ -35,8 +35,6 @@ export const TOOLS=[
  tool('computer_end','Finish normally; no Antigravity restart needed.'),
  tool('computer_controls','Explicitly show local controls so the human has Stop. Showing controls never grants an app or sends input.'),
  tool('computer_ready','Start a task: check readiness and reveal local controls once. Pass the session_handle from your previous ready in this conversation so approved apps are not asked again; omit it in a new conversation. Follow next_action.',{session_handle:{type:'string',maxLength:64}}),
- tool('computer_pause','Pause when the human asks. Do not replay interrupted input.'),
- tool('computer_resume','Resume a soft pause ONLY after the user explicitly says to continue under the host permission policy. Clears observations; never clears emergency Stop.'),
  tool('computer_stop','Stop: halt input at once, release inputs, end the task and revoke app approvals. Report and wait for the human; never retry immediately.'),
  tool('computer_status','Read status without permission prompts or screenshots.')
 ];
@@ -90,8 +88,6 @@ export async function call(r,name,a){
  if(name==='computer_feedback')return r.feedback(a);
  if(name==='computer_end')return r.finish();
  if(name==='computer_stop')return r.stop();
- if(name==='computer_pause')return r.pause();
- if(name==='computer_resume')return r.resume();
  if(name==='computer_launch')return r.launch(a);
  if(name==='computer_run'){
   // Validate the whole plan before sending the first input. A typo in step8

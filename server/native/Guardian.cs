@@ -583,7 +583,6 @@ namespace Axon {
                 if(lowTime)m.Line2+=" · 1 min left";
                 m.Hint=true;m.Slot=1;
             }
-            else if(state=="paused") {m.Line1="Paused";m.Line2="Waiting to continue";m.Hint=true;m.Slot=1;}
             else if(state=="stopped") {m.Line1="Stopped";m.Line2=releasing?"Still releasing a key or button":StopReason(lastReason);m.Slot=releasing?0:2;}
             else if(ended) {m.Line1="Session ended";m.Line2="The time limit ran out";m.Slot=2;}
             else {m.Line1=host+" is ready";m.Line2="Not controlling anything";m.Slot=2;}
@@ -1398,16 +1397,6 @@ namespace Axon {
                 } catch { }
                 return;
             }
-            if (op == "resume") {
-                // Resumes a pause that the agent or the bar's Pause requested,
-                // under the same cleanup checks as the bar. It never applies to
-                // Stop, which ends the task.
-                try {ControlFence.Recover();}catch {}
-                bool resumeAllowed=!rearmLocked && state=="paused" && !InputLedger.HasHeld() && WorkersExited(0);
-                if(resumeAllowed) {deadline=DateTime.UtcNow.AddMinutes(10).Ticks;bootDeadline=NativeDeadline.Create(deadline,DateTime.UtcNow.Ticks,NativeDeadline.GetTickCount64(),ControlContract.Number("session_ms",600000));if(bootDeadline==0)resumeAllowed=false;else {SetState("active","host_authorized_resume");resumeAllowed=state=="active";if(resumeAllowed)Emit(new {ev="host_resume",state=state});}}
-                Emit(new {id=id,allowed=resumeAllowed,state=state});return;
-            }
-            if (op == "pause") { SetState("paused","requested_pause"); return; }
             if (op == "clear_stop") {
                 // A confirmed Stop ended the previous task. The next task
                 // clears it here, with no human gate, once cleanup is proven:

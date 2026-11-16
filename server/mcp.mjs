@@ -20,7 +20,7 @@ export function serve(r=new Runtime()){
   if(m.method==='ping'){reply({});return;}
   if(m.method==='tools/list'){reply({tools:TOOLS});return;}
   if(m.method!=='tools/call'){if(m.id!=null)send({jsonrpc:'2.0',id:m.id,error:{code:-32601,message:'Unknown method'}});return;}
-  const {name,arguments:a={}}=m.params||{};const control=['computer_stop','computer_pause','computer_status'].includes(name);
+  const {name,arguments:a={}}=m.params||{};const control=['computer_stop','computer_status'].includes(name);
   if(busy&&!control){reply({isError:true,content:[{type:'text',text:'A desktop operation is pending. Use sequential calls.'}]});return;}
   if(!control){busy=true;activeRequests.add(m.id);}
   try{reply({content:content(await call(r,name,a))});}catch(e){reply({isError:true,content:[{type:'text',text:`${e.code||'refused'}: ${e.message}${e.hint?' Guidance: '+e.hint:''}`}]});}finally{if(!control){busy=false;activeRequests.delete(m.id);}}

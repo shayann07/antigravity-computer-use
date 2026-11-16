@@ -115,7 +115,7 @@ export async function serveDesktop({directory=dataDir(),runtime,idlePolicy='shut
         if(!closing)try{ownership.assertHeld();}catch{ownershipLost=true;}
         if(ownershipLost&&!['computer_status','computer_stop','computer_end','computer_shutdown'].includes(name))throw Object.assign(Error('Controller ownership was lost. Control is stopped; do not send or replay input.'),{code:'service_ownership_lost',hint:'End/shutdown for cleanup, then restart the App sidecar. Do not repeat the interrupted action.'});
         if(closing&&!['computer_status','computer_stop','computer_shutdown'].includes(name))throw Error('Desktop service is shutting down; no more actions are accepted.');
-        if(humanEnding&&!['computer_status','computer_stop','computer_pause'].includes(name))throw Object.assign(Error('Local End is confirming cleanup. Wait for its result.'),{code:'cleanup_in_progress'});
+        if(humanEnding&&!['computer_status','computer_stop'].includes(name))throw Object.assign(Error('Local End is confirming cleanup. Wait for its result.'),{code:'cleanup_in_progress'});
         const versionMismatch=request.expected_build_id!==BUILD_ID;
         const policyMismatch=['standalone','host-managed'].includes(runtime.permissionMode)&&request.expected_permission_mode!==runtime.permissionMode;
         let foreignShutdown=false;
@@ -123,9 +123,9 @@ export async function serveDesktop({directory=dataDir(),runtime,idlePolicy='shut
           let state;try{state=runtime.status();}catch{}
           foreignShutdown=busy||state?.task_open!==false||!['idle','stopped'].includes(state?.state);
         }
-        if(versionMismatch&&(!['computer_status','computer_stop','computer_pause','computer_shutdown'].includes(name)||foreignShutdown))
+        if(versionMismatch&&(!['computer_status','computer_stop','computer_shutdown'].includes(name)||foreignShutdown))
           throw Object.assign(Error('This command belongs to a different build. Use the running release; do not silently mix runtime versions.'),{code:'version_mismatch'});
-        if(policyMismatch&&(!['computer_status','computer_stop','computer_pause','computer_shutdown'].includes(name)||foreignShutdown))
+        if(policyMismatch&&(!['computer_status','computer_stop','computer_shutdown'].includes(name)||foreignShutdown))
           throw Object.assign(Error('This client and live service use different permission policies. Finish the owning task and shutdown before starting the intended policy.'),{code:'deployment_policy_mismatch'});
         if(name==='computer_prepare_update'){
           const state=runtime.status();
@@ -154,7 +154,7 @@ export async function serveDesktop({directory=dataDir(),runtime,idlePolicy='shut
           taskOwnership.authorize(name,request.task_token,state);
           if(name==='computer_shutdown'&&(busy||state.task_open!==false))throw Object.assign(Error('End the owned task and await cleanup before shutdown.'),{code:'task_requires_end'});
         }
-        const control=['computer_status','computer_stop','computer_pause','computer_shutdown'].includes(name);
+        const control=['computer_status','computer_stop','computer_shutdown'].includes(name);
         if(busy&&!control)throw Object.assign(Error('Desktop operation pending; send one action at a time.'),{code:'operation_pending'});
         if(name==='computer_shutdown'){
           // Do not acknowledge a closed service before native cleanup succeeds.
@@ -164,8 +164,8 @@ export async function serveDesktop({directory=dataDir(),runtime,idlePolicy='shut
         }
         if(!control){busy=true;executing=true;}
         try{
-          if(coordinator&&!['computer_status','computer_apps','computer_stop','computer_pause','computer_controls','computer_end'].includes(name))await coordinator.ensure();
-          if(!['computer_status','computer_apps','computer_controls','computer_stop','computer_pause'].includes(name))runtime.markActivity?.();
+          if(coordinator&&!['computer_status','computer_apps','computer_stop','computer_controls','computer_end'].includes(name))await coordinator.ensure();
+          if(!['computer_status','computer_apps','computer_controls','computer_stop'].includes(name))runtime.markActivity?.();
           if(name==='computer_ready')await runtime.redeemCaller?.(request.caller_nonce);
           const raw=await call(runtime,name,request.args||{});
           if(coordinator&&name==='computer_end'&&raw.ended===true)await coordinator.release();
