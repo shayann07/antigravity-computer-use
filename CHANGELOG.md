@@ -5,6 +5,8 @@
 - Pause and Resume are removed. The tools `computer_pause` and `computer_resume` no longer exist; Esc or the bar's Stop ends the task and the next `ready` starts a fresh one.
 - A request to use an app shows the app's name, what its access tier allows and a tier tag ("Full control" or "Click only"), with how long the approval lasts.
 - Windows keeps the apps you approved across a guardian restart or an update, per conversation, for up to 24 hours without use. A click-only approval never covers full control.
+- Ctrl+Shift and Cmd+Shift shortcuts other than S, V and X no longer ask for approval. The key rule matched the "s" of "shift", so every such chord was treated as Save, Paste or Cut.
+- In the Settings menu, unticked rows sit at the left and a tick slides in and out, matching macOS.
 - The glow's bright part now also moves to actions that do not move the real pointer, such as background clicks.
 - A refusal raised before any input (`target_not_observed`, `no_image`, a bad point) no longer spends the observation, so the next call can reuse its `observation_id` (#49).
 - The skill's command table now lists `key` (`--keys`), `key` accepts `--text` as an alias, a repeated array flag explains the accepted `X,Y` or JSON form, range errors name the range, and `no_image` says how to get a screenshot (#46, #48, #53).

@@ -67,7 +67,7 @@ namespace Axon {
             if (ControlContract.AmbiguousOperation(op) && String.IsNullOrWhiteSpace(label)) return true;
             if(op=="key") {
                 string key=Convert.ToString(a["keys"]).ToLowerInvariant();
-                if(ControlContract.Pattern("sensitive_key_pattern","enter|return|delete|alt\\+|win|meta|super|ctrl\\+[svx]",key)) return true;
+                if(ControlContract.Pattern("sensitive_key_pattern","enter|return|delete|alt\\+|option\\+|win|meta|super|(?:ctrl|cmd|command)\\+(?:(?:shift|alt|option)\\+)*[svx](?![a-z0-9])",key)) return true;
             }
             if(a.ContainsKey("hwnd")) {
                 string name=Path.GetFileNameWithoutExtension(Convert.ToString(ControlFence.Identity(Convert.ToInt64(a["hwnd"]))["path"])).ToLowerInvariant();
@@ -887,7 +887,7 @@ namespace Axon {
             int Inset {get {return (int)Math.Round(DesktopVisuals.MenuMargin*Zoom);}}
             // Opens the menu, or turns a closing one round from where it is.
             internal void Open(List<DesktopVisuals.MenuItem> list) {
-                EndSwap();items=list;tall=DesktopVisuals.MenuLayout(items);hover=pressed=0;
+                EndSwap();ticking.Clear();items=list;tall=DesktopVisuals.MenuLayout(items);hover=pressed=0;
                 Place(tall);Render();
                 if(!Visible) {
                     level=levelFrom=0;levelAt=DateTime.UtcNow;closing=false;Show();
@@ -897,17 +897,46 @@ namespace Axon {
                 else if(closing){closing=false;levelFrom=level;levelAt=DateTime.UtcNow;}
                 Present();
             }
-            // A change on the same page is drawn at once.
+            // A change on the same page is drawn at once, except a tick, which
+            // slides its row's text (menu.tick; instant with reduced motion).
+            readonly Dictionary<int,float[]> ticking=new Dictionary<int,float[]>();DateTime tickAt;
             internal void Refresh(List<DesktopVisuals.MenuItem> list) {
                 if(closing)return;
-                EndSwap();items=list;tall=DesktopVisuals.MenuLayout(items);Place(tall);Render();Present();
+                EndSwap();
+                var before=new Dictionary<int,DesktopVisuals.MenuItem>();
+                foreach(DesktopVisuals.MenuItem item in items)if(item.Kind=="row"&&!before.ContainsKey(item.Id))before[item.Id]=item;
+                DateTime now=DateTime.UtcNow;bool motion=DesktopVisuals.MotionEnabled;
+                var next=new Dictionary<int,float[]>();
+                foreach(DesktopVisuals.MenuItem item in list) {
+                    DesktopVisuals.MenuItem old;float to=item.Checked?1:0;
+                    if(!item.Ticks||item.Kind!="row"||!before.TryGetValue(item.Id,out old)||!old.Ticks)continue;
+                    float from=CurrentTick(item.Id,old,now);
+                    if(motion&&from!=to){item.TickLevel=from;next[item.Id]=new float[]{from,to};}
+                }
+                ticking.Clear();foreach(var run in next)ticking[run.Key]=run.Value;tickAt=now;
+                items=list;tall=DesktopVisuals.MenuLayout(items);Place(tall);Render();Present();
+            }
+            // Where a row's tick is now, mid-slide or settled.
+            float CurrentTick(int id,DesktopVisuals.MenuItem item,DateTime now) {
+                float[] run;
+                return ticking.TryGetValue(id,out run)?DesktopVisuals.TickAt((now-tickAt).TotalMilliseconds,run[0],run[1]):item.Tick;
+            }
+            bool StepTicks(DateTime now) {
+                if(ticking.Count==0)return false;
+                double ms=(now-tickAt).TotalMilliseconds;
+                foreach(DesktopVisuals.MenuItem item in items) {
+                    float[] run;if(!ticking.TryGetValue(item.Id,out run))continue;
+                    item.TickLevel=ms>=DesktopVisuals.Normal?-1:DesktopVisuals.TickAt(ms,run[0],run[1]);
+                }
+                if(ms>=DesktopVisuals.Normal)ticking.Clear();
+                Render();return true;
             }
             // menu.page: a new page. The panel's height moves while the old rows
             // leave and the new ones arrive (timing in DesktopVisuals.MenuPageAt).
             internal void Swap(List<DesktopVisuals.MenuItem> list) {
                 if(closing)return;
                 if(!DesktopVisuals.MotionEnabled){hover=pressed=0;Refresh(list);return;}
-                EndSwap();
+                EndSwap();ticking.Clear();
                 beforeTall=tall;beforeRows=DesktopVisuals.MenuPage(items,tall,Zoom,hover,0);
                 items=list;tall=DesktopVisuals.MenuLayout(items);hover=pressed=0;
                 afterRows=DesktopVisuals.MenuPage(items,tall,Zoom,0,0);
@@ -992,6 +1021,7 @@ namespace Axon {
                     level=t>=1?1:closing?levelFrom*(1-e):levelFrom+(1-levelFrom)*e;redraw=true;
                 }
                 if(swapping){if((now-swapAt).TotalMilliseconds>=DesktopVisuals.Normal)EndSwap();redraw=true;}
+                if(StepTicks(now))redraw=true;
                 if(redraw)Present();
                 if(closing)return;
                 // A press anywhere else closes the menu.
