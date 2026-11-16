@@ -409,11 +409,6 @@ namespace Axon {
         string glowLevel="soft";
         void ApplyGlowLevel() {Overlay.GlowBrightness(glowLevel=="bright"?1f:glowLevel=="medium"?.75f:.55f);}
         bool dragging,dragArmed,displaced,sliding,entering,leaving,quitting;Point dragGrab,dragStart,slideFrom,slideTo;DateTime displacedAt,slideAt,enterAt,leaveAt;int slideMs;float enterFrom,leaveFrom;
-        // bar.settle: the spring's place and speed on each axis (pixels, pixels a second), its rest point and the work area it stays in.
-        bool springing,springHeld;double springX,springY,springVX,springVY,springBounce=DesktopVisuals.SpringBounce;Point springTo;Rectangle springWork;long springTick;
-        // bar.squash: how far the bar is pressed flat against a screen edge on
-        // each axis (a share of its size), and which side that edge is on (-1 or 1).
-        float squashX,squashY;int squashSideX,squashSideY;
         // The last moments of a drag, for the speed the bar is let go at.
         readonly Queue<KeyValuePair<long,Point>> dragTrail=new Queue<KeyValuePair<long,Point>>();
         // A bar that is fading out is already gone to everything that asks.
@@ -532,11 +527,11 @@ namespace Axon {
             else if(Visible&&!leaving) {
                 CloseMenu(true);
                 if(captureHidden||quitting||!DesktopVisuals.MotionEnabled)HideNow();
-                else {entering=false;leaving=true;leaveFrom=barAlpha;leaveAt=DateTime.UtcNow;motion.Start();}
+                else {CancelBody();entering=false;leaving=true;leaveFrom=barAlpha;leaveAt=DateTime.UtcNow;motion.Start();}
             }
             else if(leaving&&captureHidden)HideNow();
         }
-        void HideNow() {entering=leaving=false;barAlpha=1;Hide();}
+        void HideNow() {CancelBody();entering=leaving=false;barAlpha=1;Hide();}
         bool captureReturn;
         void ShowControls(int milliseconds) {Interlocked.Increment(ref visibilityEpoch);controlsRequested=true;controlsUntil=milliseconds>0?DateTime.UtcNow.AddMilliseconds(milliseconds):DateTime.MaxValue;SyncVisibility();}
         void DismissControls() {Interlocked.Increment(ref visibilityEpoch);controlsRequested=false;SyncVisibility();}
@@ -554,18 +549,17 @@ namespace Axon {
                 using(Bitmap surface=new Bitmap(Width,Height,System.Drawing.Imaging.PixelFormat.Format32bppPArgb)) {
                     using(Graphics g=Graphics.FromImage(surface)) {
                         g.Clear(Color.Transparent);g.ScaleTransform(visualScale,visualScale);
-                        // bar.squash: pressed flat against the edge it met, held on that side.
-                        DesktopVisuals.Squash(g,squashX,squashY,squashSideX,squashSideY);
                         DesktopVisuals.Hud(g,Model());
                     }
-                    Overlay.Present(Handle,surface,Left,Top,(byte)Math.Max(0,Math.Min(255,(int)Math.Round(255*barAlpha))));
+                    // While the ghost draws it, the bar stays hit-testable at alpha 1.
+                    Overlay.Present(Handle,surface,Left,Top,Ghosting?(byte)1:(byte)Math.Max(0,Math.Min(255,(int)Math.Round(255*barAlpha))));
                 }
             } catch {}
         }
         protected override void OnVisibleChanged(EventArgs e) {base.OnVisibleChanged(e);if(Visible)Present();}
         // Size, shape and place for one monitor's scale.
         void ApplyScale(float scale,Screen screen) {
-            visualScale=scale;
+            CancelBody();visualScale=scale;
             ClientSize=new Size((int)Math.Round(DesktopVisuals.HudWidth*scale),(int)Math.Round(DesktopVisuals.HudHeight*scale));
             stopButton.Place();modeButton.Place();
             Location=Home(screen.WorkingArea);Present();
@@ -676,7 +670,12 @@ namespace Axon {
                 double t=(now-leaveAt).TotalMilliseconds/DesktopVisuals.NormalLeave;
                 if(t>=1)HideNow();else {barAlpha=leaveFrom*(1-DesktopVisuals.EaseOut((float)t));busy=true;Present();}
             }
-            if(springing&&Spring())busy=true;
+            if(body!=null&&!body.Done) {
+                long tick=Stopwatch.GetTimestamp();double seconds=(tick-bodyTick)/(double)Stopwatch.Frequency;bodyTick=tick;
+                body.Advance(seconds);
+                if(!body.Held)Location=new Point((int)Math.Round(body.CentreX-Width/2.0),(int)Math.Round(body.CentreY-Height/2.0));
+                if(body.Done)EndBody();else {PresentGhost();busy=true;}
+            }
             if(sliding) {
                 double t=(now-slideAt).TotalMilliseconds/slideMs;
                 if(t>=1||!DesktopVisuals.MotionEnabled){sliding=false;Location=slideTo;}
@@ -685,9 +684,50 @@ namespace Axon {
             if(!busy)motion.Stop();
         }
         void SlideTo(Point target,int milliseconds) {
-            springing=springHeld=false;
+            CancelBody();
             if(target==Location){sliding=false;return;}
             slideFrom=Location;slideTo=target;slideAt=DateTime.UtcNow;slideMs=milliseconds;sliding=true;motion.Start();
+        }
+        // bar.throw and bar.squash: while the person holds or throws the bar,
+        // BarBody moves it and the ghost draws it in its stretched or squashed
+        // shape, in a larger click-through window. The bar itself stays in
+        // place for input, drawn almost transparent (alpha 1, still hit-testable).
+        BarBody body;BarGhost ghost;long bodyTick,lastHoldTick;
+        bool Ghosting {get {return ghost!=null&&ghost.Visible;}}
+        void StartBody() {
+            if(!DesktopVisuals.MotionEnabled)return;
+            if(body==null||body.Done)body=new BarBody(Width,Height,visualScale);
+            body.Grab(Left+Width/2.0,Top+Height/2.0);bodyTick=lastHoldTick=Stopwatch.GetTimestamp();
+            if(ghost==null||ghost.IsDisposed)ghost=new BarGhost();
+            ghost.Recordable(recordVisuals);
+            PresentGhost();Present();motion.Start();
+        }
+        void PresentGhost() {
+            if(body==null||ghost==null||ghost.IsDisposed)return;
+            double a,b,c,d;body.Shape(out a,out b,out c,out d);
+            double hw=Width/2.0,hh=Height/2.0,ex=Math.Abs(a)*hw+Math.Abs(b)*hh,ey=Math.Abs(c)*hw+Math.Abs(d)*hh;
+            int w=(int)Math.Ceiling(2*ex)+8,h=(int)Math.Ceiling(2*ey)+8;
+            try {
+                using(Bitmap surface=new Bitmap(w,h,System.Drawing.Imaging.PixelFormat.Format32bppPArgb)) {
+                    using(Graphics g=Graphics.FromImage(surface)) {
+                        g.Clear(Color.Transparent);g.SmoothingMode=SmoothingMode.AntiAlias;g.PixelOffsetMode=PixelOffsetMode.HighQuality;
+                        g.TranslateTransform(w/2f,h/2f);g.ScaleTransform(visualScale,visualScale);
+                        DesktopVisuals.BodyHud(g,Model(),a,b,c,d,0,0);
+                    }
+                    double x=body.Held?Left+Width/2.0:body.CentreX,y=body.Held?Top+Height/2.0:body.CentreY;
+                    ghost.Show(surface,(int)Math.Round(x-w/2.0),(int)Math.Round(y-h/2.0),(byte)Math.Max(0,Math.Min(255,(int)Math.Round(255*barAlpha))));
+                }
+            } catch {}
+        }
+        // The body comes to rest, or is cut short: the bar is drawn again and the ghost goes.
+        void EndBody() {
+            bool was=Ghosting;
+            if(ghost!=null&&!ghost.IsDisposed)ghost.Conceal();
+            if(was)Present();
+        }
+        void CancelBody() {
+            if(body!=null&&!body.Done)body.Snap(Left+Width/2.0,Top+Height/2.0);
+            EndBody();
         }
         // Drag and reposition. The handle is everything that is not a button:
         // the buttons are separate controls, so a press on one never arrives here.
@@ -696,15 +736,15 @@ namespace Axon {
             bool physical=(DateTime.UtcNow.Ticks-Presence.LastUserClickTicks)<TimeSpan.TicksPerSecond;
             if(e.Button==MouseButtons.Left&&physical&&!leaving) {
                 dragArmed=true;dragStart=Cursor.Position;dragGrab=new Point(Cursor.Position.X-Left,Cursor.Position.Y-Top);
-                // A new grab holds a settling bar where it is.
-                if(springing){springing=false;springHeld=true;if(squashX>0||squashY>0){squashX=squashY=0;Present();}}
+                // A grab catches a bar in flight where it is.
+                if(body!=null&&!body.Done&&!body.Held){body.Grab(Left+Width/2.0,Top+Height/2.0);lastHoldTick=Stopwatch.GetTimestamp();}
             }
             base.OnMouseDown(e);
         }
         protected override void OnMouseMove(MouseEventArgs e) {
             if(dragArmed) {
                 Point p=Cursor.Position;
-                if(!dragging&&(Math.Abs(p.X-dragStart.X)>=4||Math.Abs(p.Y-dragStart.Y)>=4)){dragging=true;sliding=springHeld=false;dragTrail.Clear();}
+                if(!dragging&&(Math.Abs(p.X-dragStart.X)>=4||Math.Abs(p.Y-dragStart.Y)>=4)){dragging=true;sliding=false;dragTrail.Clear();if(body==null||body.Done||!body.Held)StartBody();}
                 if(dragging) {
                     // bar.drag: 1:1 from the grab point. Past the inset the bar
                     // resists, and it never leaves the work area.
@@ -712,15 +752,14 @@ namespace Axon {
                     Location=new Point(Band(p.X-dragGrab.X,work.Left,work.Right-Width,margin),Band(p.Y-dragGrab.Y,work.Top,work.Bottom-Height,margin));
                     long now=Stopwatch.GetTimestamp();dragTrail.Enqueue(new KeyValuePair<long,Point>(now,Location));
                     while(dragTrail.Count>2&&now-dragTrail.Peek().Key>Stopwatch.Frequency*DesktopVisuals.SpringTrail/1000)dragTrail.Dequeue();
+                    if(body!=null&&body.Held){body.Hold(Left+Width/2.0,Top+Height/2.0,(now-lastHoldTick)/(double)Stopwatch.Frequency);lastHoldTick=now;PresentGhost();}
                 }
             }
             base.OnMouseMove(e);
         }
         protected override void OnMouseUp(MouseEventArgs e) {
-            bool settle=dragging;dragArmed=dragging=false;
+            bool settle=dragging||body!=null&&!body.Done&&body.Held;dragArmed=dragging=false;
             if(settle)Settle();
-            // A grab that never became a drag lets the spring carry on.
-            else if(springHeld){springHeld=false;springing=true;springTick=Stopwatch.GetTimestamp();motion.Start();}
             base.OnMouseUp(e);
         }
         // bar.drag: the rubber band. Inside the inset the bar follows exactly;
@@ -745,23 +784,29 @@ namespace Axon {
             if(seconds<=0)return PointF.Empty;
             return new PointF((float)((b.Value.X-a.Value.X)/seconds),(float)((b.Value.Y-a.Value.Y)/seconds));
         }
-        // bar.throw: let go fast, the bar carries on to the dock nearest where
-        // its momentum points and springs in from that speed, squashing against
-        // the screen edge it meets. bar.settle: put down slowly, it stays,
-        // landing on a dock within 12 px of one; a drop past the inset eases
-        // back inside. Either way the place is remembered.
+        // bar.throw: let go at FlingSpeed or faster, the bar carries on to the
+        // dock nearest where ThrowGlide seconds of its speed would take it. It
+        // keeps its own speed, lands with a critical spring, and squashes
+        // against the screen edge it flies into (BarBody). bar.settle: put down
+        // slower, it stays, landing on a dock within 12 px of one; a drop past
+        // the inset comes back inside. Either way the place is remembered.
         void Settle() {
-            PointF speed=ReleaseSpeed();
+            bool moving=body!=null&&!body.Done&&body.Held;
+            PointF speed=moving?new PointF((float)body.FingerVX,(float)body.FingerVY):ReleaseSpeed();dragTrail.Clear();
             Screen screen=Screen.FromRectangle(Bounds);float scale=Overlay.ScreenScale(screen);Rectangle work=screen.WorkingArea;
             if(scale!=visualScale) {
+                CancelBody();moving=false;
                 Point dropped=Location;ApplyScale(scale,screen);
                 try {Location=WindowGeometry.Fit(new Rectangle(dropped,Size),work).Location;}catch {}
             }
             double thrown=Math.Sqrt(speed.X*speed.X+speed.Y*speed.Y)/visualScale;
-            if(thrown>=DesktopVisuals.ThrowSpeed&&DesktopVisuals.MotionEnabled) {
+            if(moving&&thrown>=BarBody.FlingSpeed) {
                 double aimX=Left+speed.X*DesktopVisuals.ThrowGlide,aimY=Top+speed.Y*DesktopVisuals.ThrowGlide,nearest=Double.MaxValue;string best=dock;
                 foreach(string name in Docks){Point home=HomeFor(name,work);double d=(home.X-aimX)*(home.X-aimX)+(home.Y-aimY)*(home.Y-aimY);if(d<nearest){nearest=d;best=name;}}
-                dock=best;displaced=false;SpringTo(Home(work),work,speed,DesktopVisuals.ThrowBounce);SavePreferences();
+                dock=best;displaced=false;SavePreferences();
+                Point to=Home(work);int sideX=best.EndsWith("left")?-1:best.EndsWith("right")?1:0,sideY=best.StartsWith("top")?-1:1;
+                body.Release(to.X+Width/2.0,to.Y+Height/2.0,sideX,sideX<0?work.Left:work.Right,sideY,sideY<0?work.Top:work.Bottom);
+                bodyTick=Stopwatch.GetTimestamp();motion.Start();
                 return;
             }
             // A bar let go in the rubber band comes back to the inset.
@@ -771,46 +816,12 @@ namespace Axon {
             foreach(string name in Docks){Point home=HomeFor(name,work);if(Math.Abs(home.X-rest.X)<=snap&&Math.Abs(home.Y-rest.Y)<=snap){near=name;break;}}
             dock=near;
             if(near=="free"){dockX=work.Width>Width?(rest.X-work.Left)/(double)(work.Width-Width):0;dockY=work.Height>Height?(rest.Y-work.Top)/(double)(work.Height-Height):0;}
-            displaced=false;SlideTo(Home(work),DesktopVisuals.Normal);SavePreferences();
-        }
-        void SpringTo(Point target,Rectangle work,PointF speed,double bounce) {
-            sliding=springHeld=false;squashX=squashY=0;
-            // Reduced motion: the bar is simply there.
-            if(!DesktopVisuals.MotionEnabled){springing=false;Location=target;Present();return;}
-            springX=Left;springY=Top;springVX=speed.X;springVY=speed.Y;springTo=target;springWork=work;springBounce=bounce;
-            springTick=Stopwatch.GetTimestamp();springing=true;motion.Start();
-        }
-        // bar.settle: an Apple-style spring with mass 1, its stiffness and
-        // damping from SpringSeconds and SpringBounce, solved in fixed steps.
-        // x and y move on their own; the rubber band holds it in the work area.
-        bool Spring() {
-            long now=Stopwatch.GetTimestamp();
-            double elapsed=Math.Min(DesktopVisuals.SpringLongest,(now-springTick)/(double)Stopwatch.Frequency);springTick=now;
-            double turn=2*Math.PI/DesktopVisuals.SpringSeconds,stiffness=turn*turn,damping=4*Math.PI*(1-springBounce)/DesktopVisuals.SpringSeconds;
-            int steps=Math.Max(1,(int)Math.Ceiling(elapsed/DesktopVisuals.SpringStep));double dt=elapsed/steps;
-            for(int i=0;i<steps;i++) {
-                springVX+=(-stiffness*(springX-springTo.X)-damping*springVX)*dt;springX+=springVX*dt;
-                springVY+=(-stiffness*(springY-springTo.Y)-damping*springVY)*dt;springY+=springVY*dt;
-            }
-            if(Math.Abs(springX-springTo.X)<DesktopVisuals.SpringNear&&Math.Abs(springY-springTo.Y)<DesktopVisuals.SpringNear&&Math.Abs(springVX)<DesktopVisuals.SpringSlow&&Math.Abs(springVY)<DesktopVisuals.SpringSlow) {
-                springing=false;Location=springTo;
-                if(squashX>0||squashY>0){squashX=squashY=0;Present();}
-                return false;
-            }
-            int margin=(int)Math.Ceiling(12*visualScale);
-            // bar.squash: a dock beside a screen edge is where the bar meets
-            // that edge. Swinging past it, the bar stays at the dock and is
-            // pressed flat instead, then springs back out to its shape.
-            int left=HomeFor("top-left",springWork).X,right=HomeFor("top-right",springWork).X,up=HomeFor("top-left",springWork).Y,down=HomeFor("bottom-left",springWork).Y;
-            squashSideX=springTo.X<=left?-1:springTo.X>=right?1:0;squashSideY=springTo.Y<=up?-1:springTo.Y>=down?1:0;
-            double pressX=squashSideX==0?0:Math.Max(0,(springX-springTo.X)*squashSideX),pressY=squashSideY==0?0:Math.Max(0,(springY-springTo.Y)*squashSideY);
-            bool wasSquashed=squashX>0||squashY>0;
-            squashX=(float)Math.Min(DesktopVisuals.SquashMost,pressX/visualScale*DesktopVisuals.SquashWide);
-            squashY=(float)Math.Min(DesktopVisuals.SquashMost,pressY/visualScale*DesktopVisuals.SquashTall);
-            int x=pressX>0?springTo.X:Band(springX,springWork.Left,springWork.Right-Width,margin),y=pressY>0?springTo.Y:Band(springY,springWork.Top,springWork.Bottom-Height,margin);
-            Location=new Point(x,y);
-            if(wasSquashed||squashX>0||squashY>0)Present();
-            return true;
+            displaced=false;SavePreferences();
+            Point home2=Home(work);
+            // Put down: the body lets go where it is, its stretch relaxing, and
+            // eases onto the rest point if that differs.
+            if(moving){body.Release(home2.X+Width/2.0,home2.Y+Height/2.0,0,0,0,0);bodyTick=Stopwatch.GetTimestamp();motion.Start();}
+            else SlideTo(home2,DesktopVisuals.Normal);
         }
         void MoveToDock(string name) {
             dock=name;displaced=false;SlideTo(Home(Screen.FromRectangle(Bounds).WorkingArea),DesktopVisuals.Slow);SavePreferences();
@@ -851,7 +862,7 @@ namespace Axon {
             if(recordVisuals)SetWindowDisplayAffinity(Handle,0);
         }
         void ChangeRecordingPreference() {
-            recordVisuals=!recordVisuals;ApplyRecordingPreference();Overlay.RecordVisuals(recordVisuals);SavePreferences();
+            recordVisuals=!recordVisuals;ApplyRecordingPreference();Overlay.RecordVisuals(recordVisuals);if(ghost!=null&&!ghost.IsDisposed)ghost.Recordable(recordVisuals);SavePreferences();
             Emit(new {ev="settings",takeover_mode=takeover.Mode,record_visuals=recordVisuals});
         }
         // The Settings menu. It opens from the Settings button, belongs to
@@ -892,6 +903,30 @@ namespace Axon {
             else if(id==3){glowLevel=glowLevel=="soft"?"medium":glowLevel=="medium"?"bright":"soft";ApplyGlowLevel();SavePreferences();if(MenuOpen)menu.Refresh(MainMenu());}
             else if(id>=10&&id<10+Docks.Length){CloseMenu();MoveToDock(Docks[id-10]);}
             else if(id==20){CloseMenu();MoveToDock("top-centre");}
+        }
+        // bar.throw: the bar in its moving shape, in a click-through layered
+        // window sized to that shape. Shown only while the body moves.
+        sealed class BarGhost : Form {
+            internal BarGhost() {
+                FormBorderStyle=FormBorderStyle.None;ShowInTaskbar=false;TopMost=true;StartPosition=FormStartPosition.Manual;
+                SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.Opaque,true);
+            }
+            protected override bool ShowWithoutActivation {get {return true;}}
+            // Tool window, no activation, layered, and transparent to input.
+            protected override CreateParams CreateParams {get {CreateParams p=base.CreateParams;p.ExStyle|=0x08000080|0x00080000|0x20;return p;}}
+            protected override void OnPaint(PaintEventArgs e) {}
+            protected override void OnPaintBackground(PaintEventArgs e) {}
+            bool record;
+            internal void Recordable(bool on) {record=on;if(IsHandleCreated)SetWindowDisplayAffinity(Handle,on?0u:0x11u);}
+            internal void Show(Bitmap surface,int x,int y,byte alpha) {
+                if(IsDisposed)return;
+                if(!Visible) {
+                    Bounds=new Rectangle(x,y,surface.Width,surface.Height);Show();
+                    SetPropW(Handle,"ComputerUseOverlayWindow",new IntPtr(1));SetWindowDisplayAffinity(Handle,record?0u:0x11u);
+                }
+                Overlay.Present(Handle,surface,x,y,alpha);
+            }
+            internal void Conceal() {if(!IsDisposed&&Visible)Hide();}
         }
         sealed class BarMenu : Form {
             readonly Guardian owner;List<DesktopVisuals.MenuItem> items=new List<DesktopVisuals.MenuItem>();
@@ -1432,7 +1467,7 @@ namespace Axon {
                         Rectangle placement;
                         canAvoid=WindowGeometry.AvoidHud(Bounds,new Rectangle(rect[0],rect[1],rect[2],rect[3]),Screen.FromRectangle(Bounds).WorkingArea,(int)Math.Ceiling(12*visualScale),out placement);
                         // bar.stepAside is a jump, so the reply always reports the final place.
-                        if(canAvoid&&placement!=Bounds){sliding=springing=springHeld=false;Location=placement.Location;moved=true;displaced=true;displacedAt=DateTime.UtcNow;}
+                        if(canAvoid&&placement!=Bounds){sliding=false;CancelBody();Location=placement.Location;moved=true;displaced=true;displacedAt=DateTime.UtcNow;}
                     }
                 }catch{canAvoid=false;}
                 // This operation never changes Stop, state, grants or visibility.

@@ -5,7 +5,7 @@
     {
       "path": "server/build.mjs",
       "upstream_sha256": "81260b378fffb46573cfe475a3a336930113c8abc465d3d278bbb0851d8a4377",
-      "local_sha256": "c49375facae9429e1b7e1a4a1ed46c66b0f09390c4255fcb882b91a3cbb67ce7",
+      "local_sha256": "465f2a2dd8fd4c03651c7b93fdffd8d59f10341f8086e5471a06d5ebabb0b875",
       "modified": true
     },
     {
@@ -268,7 +268,7 @@
     },
     {
       "path": "server/native/Guardian.cs",
-      "sha256": "1e6066f4854e864b07f4139bf2184a1c6e69d49021b30811cbed7bcc55ca52e3"
+      "sha256": "df84cdca9dfda96b77d80d9a220f1757c267f656ac71022ad2f2754c340311f6"
     },
     {
       "path": "server/native/CursorSafety.cs",
@@ -276,7 +276,7 @@
     },
     {
       "path": "server/native/DesktopVisuals.cs",
-      "sha256": "8217a8d837b91d2bc6b07fc7632d7bb935deab16290617de1d36add848eab205"
+      "sha256": "8ab9e628c4a074ba733c0004081d8cc5b0b063324b180bae959abd9be4f76f6a"
     },
     {
       "path": "server/native/Glow.cs",

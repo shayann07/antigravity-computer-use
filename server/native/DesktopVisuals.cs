@@ -26,13 +26,9 @@ namespace Axon {
         // (seconds); at rest within SpringNear px moving under SpringSlow px a
         // second; let go at the speed of the drag's last SpringTrail ms.
         internal const double SpringStep=.001,SpringLongest=.064,SpringNear=.5,SpringSlow=20;internal const int SpringTrail=80;
-        // bar.throw: a release faster than ThrowSpeed (DIP a second) carries
-        // on. It aims where ThrowGlide seconds of its speed would take it,
-        // lands on the nearest dock with the snappy spring (ThrowBounce), and
-        // squashes against a screen edge it meets: SquashWide and SquashTall
-        // of its width and height for each DIP it presses in, at most SquashMost.
-        internal const double ThrowSpeed=900,ThrowGlide=.3,ThrowBounce=.3;
-        internal const float SquashWide=.004f,SquashTall=.015f,SquashMost=.18f;
+        // bar.throw: where a throw aims, ThrowGlide seconds of its release speed
+        // ahead. The rest of its physics is in BarBody.
+        internal const double ThrowGlide=.3;
         // The glow's slow life, in seconds: one lap of colour, one swell of
         // the band, one wander of the colours. And its frame times, in
         // milliseconds: in a transition, at rest, and for the deep wash.
@@ -362,10 +358,14 @@ namespace Axon {
         }
         // bar.squash: the bar pressed flat by a share of its width (x) and
         // height (y), held on the side of the edge it met (-1 or 1; 0 = none).
-        internal static void Squash(Graphics g,float x,float y,int sideX,int sideY) {
-            if(x<=0&&y<=0)return;
-            float ax=sideX>0?HudWidth:0,ay=sideY>0?HudHeight:0;
-            g.TranslateTransform(ax,ay);g.ScaleTransform(1-Math.Max(0,x),1-Math.Max(0,y));g.TranslateTransform(-ax,-ay);
+        // The bar drawn in its moving body's shape: the 2 x 2 matrix from
+        // BarBody.Shape about its centre, which sits at (x, y) in DIP.
+        internal static void BodyHud(Graphics g,HudModel model,double a,double b,double c,double d,float x,float y) {
+            var saved=g.Save();
+            g.TranslateTransform(x,y);
+            using(Matrix shape=new Matrix((float)a,(float)c,(float)b,(float)d,0,0))g.MultiplyTransform(shape);
+            g.TranslateTransform(-HudWidth/2f,-HudHeight/2f);
+            Hud(g,model);g.Restore(saved);
         }
         // menu.tick: a tick slides its row's text over Normal, easing in and
         // out; instant with reduced motion.
@@ -582,18 +582,28 @@ namespace Axon {
                 }
                 sheet.Save(Path.Combine(directory,"hud-states.png"),ImageFormat.Png);
             }
-            // bar.squash at rest, half and fully pressed: against the right edge, then the top.
-            using(Bitmap sheet=new Bitmap((HudWidth+40)*2,(HudHeight+24)*6*2,PixelFormat.Format32bppArgb)) {
-                using(Graphics g=Graphics.FromImage(sheet)) {
-                    g.Clear(Color.FromArgb(60,64,72));g.ScaleTransform(2,2);
-                    for(int i=0;i<6;i++) {
-                        HudModel model=new HudModel();model.State="active";model.Line1="Antigravity is working";model.Line2="Drawing in Paint";model.Slot=1;
-                        float press=SquashMost*(i%3)/2f;var saved=g.Save();g.TranslateTransform(20,12+(HudHeight+24)*i);
-                        if(i<3)Squash(g,press,0,1,0);else Squash(g,0,press,0,-1);
-                        Hud(g,model);g.Restore(saved);
+            // bar.throw: a throw along the top edge into the top-right dock,
+            // as BarBody moves it. One row every 50 ms; the line is the screen's right edge.
+            {
+                BarBody body=new BarBody(HudWidth,HudHeight,1);double x=900,y=42,step=1/120.0;
+                body.Grab(x,y);for(int i=0;i<24;i++){x+=3000*step;body.Hold(x,y,step);body.Advance(step);}
+                const int right=1920,rows=14,panel=760;double dock=right-12-HudWidth/2.0;
+                body.Release(dock,y,1,right,-1,0);
+                HudModel model=new HudModel();model.State="active";model.Line1="Antigravity is working";model.Line2="Drawing in Paint";model.Slot=1;
+                using(Bitmap sheet=new Bitmap(panel*2,(HudHeight+30)*rows*2,PixelFormat.Format32bppArgb)) {
+                    using(Graphics g=Graphics.FromImage(sheet)) {
+                        g.Clear(Color.FromArgb(60,64,72));g.ScaleTransform(2,2);g.SmoothingMode=SmoothingMode.AntiAlias;
+                        float edge=panel-40;double left=right-(edge-0);
+                        for(int i=0;i<rows;i++) {
+                            float top=(HudHeight+30)*i+15;
+                            using(Pen wall=new Pen(Color.FromArgb(160,255,120,120),1))g.DrawLine(wall,edge,top-6,edge,top+HudHeight+6);
+                            double a,b,c,d;body.Shape(out a,out b,out c,out d);
+                            BodyHud(g,model,a,b,c,d,(float)(body.CentreX-left),top+HudHeight/2f);
+                            body.Advance(.05);
+                        }
                     }
+                    sheet.Save(Path.Combine(directory,"bar-throw.png"),ImageFormat.Png);
                 }
-                sheet.Save(Path.Combine(directory,"bar-squash.png"),ImageFormat.Png);
             }
             {
                 var items=new System.Collections.Generic.List<MenuItem>();
