@@ -61,6 +61,44 @@ evidence only, labelled as such.
 | 17 Install lifecycle | pass (fake home) | `macos-install-check`; real install on this Mac unrun |
 | 18 Both architectures | Apple Silicon unrun | no Apple Silicon Mac available; CI covers compile and headless contracts only |
 
+### Signed helper: do users keep Mac permissions across an update? (Intel, macOS 26.6)
+
+Physically observed, with the human granting in System Settings. The helper
+was signed with a throwaway test certificate made by
+`scripts/make-mac-signing-cert.mjs` (the owner's real certificate lives only
+in the protected release environment). Build A and build B had different
+binaries (CDHash `b7d0bf28…` and `8f81106b…`) and the same designated
+requirement (`identifier "io.github.shayann07.antigravity-computer-use" and
+certificate leaf = H"867af550…"`). The human granted A once; B was installed
+over it with no change in System Settings. `AxonHost --setup`, cancelled so
+that nothing was requested, reported for B:
+
+| Permission | Kept by B without a prompt |
+| --- | --- |
+| Accessibility | yes |
+| Input Monitoring | yes |
+| Posting input | yes |
+| Screen Recording | **no**: the switch still showed on, but macOS no longer applied it |
+
+So the owner certificate removes two of the three re-grants per helper
+update. Screen Recording still needs a re-grant after each helper update with
+a self-signed certificate on macOS 26.6; whether an Apple Developer ID keeps it
+is not verified here. Apple Silicon is unverified.
+
+### Defects found in physical testing (Intel)
+
+| Defect | Status |
+| --- | --- |
+| `type` delivered no characters after an earlier modifier chord (events inherited Command) | fixed in 1ee1541, contract check; not yet re-run physically |
+| Frontmost app checked once before a >1 s typing loop; a human switching apps could receive the rest | fixed in 1ee1541 (checked before every character); not yet re-run physically |
+| The guardian's own window glow made every real-pointer click on the target `obscured` | fixed in b1b0af5; physically re-run, click delivered |
+| Launch and sensitive-action timeouts were reported as human denial | fixed in bc94383; physically re-run, `approval_timeout` |
+| CLI `ready` dropped `session_handle`, so every task re-asked every app | fixed in efa2758 |
+| Conversation approvals live only in controller memory: any controller restart, update or idle shutdown re-asks every app | open, blocks release |
+| Switching a Mac permission, or a second AxonHost instance exiting, can end the guardian; the live controller cannot settle the resulting unconfirmed Stop, and recovery needed a controller restart | open, blocks release |
+| After an unanswered card the bar disappeared until the next `ready`; on build B the access card window existed (modal-panel level, alpha 1) but was not visible to the human, three times | open, blocks release; cause not found |
+| Pixel clicks on an unnamed target need a sensitive-action card (by contract); agents must prefer `--index` | by design, documented here |
+
 ### Changes in this branch
 
 See PR #105: unlatched control model in the Mac guardian (clear_stop,
