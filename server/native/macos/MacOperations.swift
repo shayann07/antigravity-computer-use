@@ -129,6 +129,16 @@ func macDisplayRects() -> [CGRect] {
     guard CGGetActiveDisplayList(32, &displays, &count) == .success else { return [] }
     return displays.prefix(Int(count)).map { CGDisplayBounds($0) }
 }
+func macExecutablePath(_ pid: pid_t) -> String? {
+    guard pid > 0 else { return nil }
+    var buffer = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
+    guard proc_pidpath(pid, &buffer, UInt32(buffer.count)) > 0 else { return nil }
+    return String(cString: buffer)
+}
+func macIsOwnChrome(ownerPath: String?, selfPath: String?) -> Bool {
+    guard let ownerPath, let selfPath, selfPath.hasSuffix("/Contents/MacOS/AxonHost") else { return false }
+    return ownerPath == selfPath
+}
 func macCheckPoint(_ point: CGPoint) throws {
     guard point.x.isFinite, point.y.isFinite, macDisplayRects().contains(where: { $0.contains(point) }) else {
         throw AxonError("point_off_desktop", "Point is outside the active displays. No input was sent.")
@@ -145,9 +155,16 @@ func macCheckTargetPoint(_ point: CGPoint, _ args: [String: Any]) throws {
     let guardianRecord = (try? String(contentsOfFile: MacFence.file + ".guardian", encoding: .utf8).split(separator:"|")) ?? []
     let guardian = guardianRecord.count == 2 ? Int32(guardianRecord[0]) : nil
     let guardianAlive = guardian != nil && (try? macProcessStart(guardian!)) == String(guardianRecord.last ?? "")
+    let ownExecutable = macExecutablePath(getpid())
+    var chrome: [Int32: Bool] = [:]
     for candidate in windows {
         let owner = (candidate[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value ?? -1
         if guardianAlive && owner == guardian { continue } // only this runtime's native click-through chrome
+        // The bar, glow and access card are drawn by this same AxonHost
+        // executable. They are this runtime's own chrome, never the human's
+        // window, even when the guardian record cannot be verified.
+        if let cached = chrome[owner] { if cached { continue } }
+        else { let own = macIsOwnChrome(ownerPath: macExecutablePath(owner), selfPath: ownExecutable); chrome[owner] = own; if own { continue } }
         let ownerName = candidate[kCGWindowOwnerName as String] as? String ?? ""
         if ownerName == "Dock" || ownerName == "Window Server" { continue }
         let layer = (candidate[kCGWindowLayer as String] as? NSNumber)?.int32Value ?? 0
@@ -236,6 +253,13 @@ func macSetup() {
 
 func macContractTest() throws {
     try MacContract.load()
+    guard macIsOwnChrome(ownerPath: "/A/AxonHost.app/Contents/MacOS/AxonHost", selfPath: "/A/AxonHost.app/Contents/MacOS/AxonHost"),
+          !macIsOwnChrome(ownerPath: "/B/AxonHost.app/Contents/MacOS/AxonHost", selfPath: "/A/AxonHost.app/Contents/MacOS/AxonHost"),
+          !macIsOwnChrome(ownerPath: "/System/Applications/TextEdit.app/Contents/MacOS/TextEdit", selfPath: "/A/AxonHost.app/Contents/MacOS/AxonHost"),
+          !macIsOwnChrome(ownerPath: nil, selfPath: "/A/AxonHost.app/Contents/MacOS/AxonHost"),
+          !macIsOwnChrome(ownerPath: "/usr/bin/x", selfPath: "/usr/bin/x") else {
+        throw AxonError("contract_test_failed", "Own HUD chrome classification differs.")
+    }
     guard macStopNonceValid(String(repeating:"a",count:32)),
           !macStopNonceValid(String(repeating:"a",count:32)+"\n"),
           !macStopNonceValid(String(repeating:"a",count:31)),
@@ -808,7 +832,7 @@ func macContractTest() throws {
           MacBarPlacement.avoid(hud: barAtTop, target: CGRect(x: 700, y: 830, width: 0, height: 4), work: barWork) == nil else {
         throw AxonError("contract_test_failed", "Bar avoidance differs from WindowGeometry.AvoidHud.")
     }
-    emit(["ok": true, "control_contract": 1, "checks": ["shared state codec", "malformed state refusal", "canonical approval fingerprint", "sensitive action classification", "kernel process birth identity", "native idle/paused/stopped/expired/session/monitor/Stop refusals", "empty cleanup and malformed input-journal refusal", "official Phosphor resource rendering", "SDK and runtime material selection", "capture visibility and dismissal lifecycle", "access tier enforcement for target and frontmost app", "conversation-scoped remembered approvals", "confirmed-only Stop clearing", "approval completion fenced by Stop and legacy pause", "shared motion curves", "access prompt layout and placement", "window glow falloff, mask, matching and levels", "bar docks, drag landing and avoidance"], "hud_icon_assets": iconAssets, "hud_material": materialBackend, "native_glass_compiled": MacVisuals.nativeGlassCompiled, "desktop_input_sent": false])
+    emit(["ok": true, "control_contract": 1, "checks": ["shared state codec", "own HUD chrome excluded from occlusion", "malformed state refusal", "canonical approval fingerprint", "sensitive action classification", "kernel process birth identity", "native idle/paused/stopped/expired/session/monitor/Stop refusals", "empty cleanup and malformed input-journal refusal", "official Phosphor resource rendering", "SDK and runtime material selection", "capture visibility and dismissal lifecycle", "access tier enforcement for target and frontmost app", "conversation-scoped remembered approvals", "confirmed-only Stop clearing", "approval completion fenced by Stop and legacy pause", "shared motion curves", "access prompt layout and placement", "window glow falloff, mask, matching and levels", "bar docks, drag landing and avoidance"], "hud_icon_assets": iconAssets, "hud_material": materialBackend, "native_glass_compiled": MacVisuals.nativeGlassCompiled, "desktop_input_sent": false])
 }
 
 func macMoveCursor(_ point: CGPoint, _ args: [String: Any]) throws -> [String: Any] {
