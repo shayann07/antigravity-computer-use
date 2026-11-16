@@ -66,7 +66,7 @@
     {
       "path": "server/native/AxonHost.swift",
       "upstream_sha256": "b50c68feff8bd783ba2f92580358c69491c0ffee31f6182b76543f3aba9f962f",
-      "local_sha256": "7c463c67e9ff50a89ff3f6c5ba7bd2c3690700c12723d2362af6c67fc15461f1",
+      "local_sha256": "42e518fd17e810eac07a075f01c958c641d044a19b408104316a310ff319a04e",
       "modified": true
     },
     {
@@ -480,7 +480,7 @@
     },
     {
       "path": "skills/computer-use/references/recovery.md",
-      "sha256": "978557f9a93f03eadd6ef857275d960b8079e034640063670739767541710bcd"
+      "sha256": "aa4bbfe77cced9570f8f3de6d619a8f6d6d2d50b842d7d9aa31cfa7936227ce9"
     },
     {
       "path": "scripts/measure-run.mjs",
@@ -576,7 +576,7 @@
     },
     {
       "path": "server/native/macos/MacOperations.swift",
-      "sha256": "e949d2b731a6e0a16a8918d225dadf11dc3af0b9847781a4553df82662f828b3"
+      "sha256": "ec5f14f5579ef753a9e26c894c96a67ae28ed5062eb5d0d5202cb285881a7f73"
     },
     {
       "path": "server/native/macos/MacVisuals.swift",

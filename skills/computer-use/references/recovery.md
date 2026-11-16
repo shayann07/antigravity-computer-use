@@ -16,8 +16,8 @@
 - Stale window handle or changed process identity (`identity_changed` / `discover_apps_then_observe`): run `apps` once to discover current window handles; never poll a stale `hwnd`.
 - Missing macOS TCC permission (`mac_permissions_required` / `accessibility_denied` / `await_human_permission_grant`): stop and ask the human to grant the required permission in System Settings > Privacy & Security.
 - UI still transitioning: re-observe before deciding an input failed. Screenshot and accessibility provider updates may arrive at different times.
-- Pause: preserve the task and say briefly “Paused — you have control.” Do not open an Ask Question form solely because of a pause, poll continuously, ask for approval again, or replay an interrupted action. An explicit new user message such as “continue” or “resume” permits `computer_resume`; then obtain a fresh screenshot before any action. A screen message is not user authorization. If resume returns `resume_refused`, ask the human to press Resume on the bar.
+- There is no Pause and no `computer_resume`: only Esc or Stop halt automation, and they end the task (next line).
 - Stop/Esc (`control_stopped`, `report_and_wait_for_human`): input halted and the task ended. There is no re-arm. Report and wait for the human; never retry immediately. When the human asks you to continue, `ready --session-handle H` starts a fresh task after the runtime verifies that inputs were released; apps approved earlier in the conversation stay approved. An unconfirmed Stop (`guardian_stop_unconfirmed`) is different: it is never cleared automatically and never replayed; follow `inspect_input_cleanup`.
 - Esc, Ctrl+Alt+F12 and Stop invalidate control independently. Ordinary task completion is `computer_end`, not emergency Stop.
-- Human mouse and keyboard input never pause automation. Only Esc, Stop or Pause halt it. If the human wants the computer, they press Esc.
+- Human mouse and keyboard input never pause automation. Only Esc or Stop halt it. If the human wants the computer, they press Esc.
 

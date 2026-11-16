@@ -1028,25 +1028,18 @@ func opType(_ a: [String: Any]) throws -> [String: Any] {
     }
     try checkStop()
     let text = str(a["text"]) ?? ""
+    let (_, typingPid, _, _) = try resolveWindow(a)
     let src = CGEventSource(stateID: .hidSystemState)
     for ch in text.unicodeScalars {
-        // A newline or a tab is a key, not a character: apps act on the key.
-        if ch == "\n" || ch == "\t" {
-            let code: CGKeyCode = ch == "\n" ? 36 : 48
-            try post(CGEvent(keyboardEventSource: src, virtualKey: code, keyDown: true))
-            try post(CGEvent(keyboardEventSource: src, virtualKey: code, keyDown: false))
-            continue
-        }
         if ch == "\r" { continue }
-        var utf16 = Array(String(ch).utf16)
-        if let down = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: true) {
-            down.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: &utf16)
-            try post(down)
+        // Human input never pauses automation, so the human can bring another
+        // app forward while this loop runs. Check before every character, so a
+        // switch stops typing instead of sending the rest into the wrong app.
+        guard macFrontmostPid() == typingPid else {
+            throw AxonError("focus_changed", "Another app came to the front while typing, so typing stopped and the rest was not sent.",
+                            "Observe, bring the approved window forward, and type only the missing part.")
         }
-        if let up = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: false) {
-            up.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: &utf16)
-            try post(up)
-        }
+        for event in macTypingEvents(source: src, scalar: ch) { try post(event) }
     }
     res["typed"] = text.count
     return res

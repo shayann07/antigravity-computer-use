@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Imports the Mac helper signing certificate into a separate, temporary
-// keychain file for one build, without touching the login keychain or the
-// keychain search list.
+// keychain file for one build, without touching the login keychain. This
+// script does not change the keychain search list; codesign only finds
+// identities on that list, so the release workflow adds the temporary keychain
+// to it on its throwaway runner.
 //
 //   node scripts/macos-signing-keychain.mjs create <keychain> <p12-file> <expected-sha1>
 //     reads the PKCS#12 password from AGCU_MAC_HELPER_P12_PASSWORD

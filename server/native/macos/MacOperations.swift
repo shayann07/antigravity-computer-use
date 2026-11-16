@@ -129,6 +129,36 @@ func macDisplayRects() -> [CGRect] {
     guard CGGetActiveDisplayList(32, &displays, &count) == .success else { return [] }
     return displays.prefix(Int(count)).map { CGDisplayBounds($0) }
 }
+// The events that type one character. Flags are set explicitly: an event
+// created from the HID system state otherwise inherits whatever modifiers that
+// state last saw (for example Command from an earlier cmd+down chord), and the
+// app then runs shortcuts instead of receiving text.
+func macTypingEvents(source: CGEventSource?, scalar: Unicode.Scalar) -> [CGEvent] {
+    if scalar == "\n" || scalar == "\t" {
+        let code: CGKeyCode = scalar == "\n" ? 36 : 48
+        return [true, false].compactMap { down in
+            let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: down); event?.flags = []; return event
+        }
+    }
+    var utf16 = Array(String(scalar).utf16)
+    return [true, false].compactMap { down in
+        guard let event = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: down) else { return nil }
+        event.flags = []
+        event.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: &utf16)
+        return event
+    }
+}
+// The app that receives keystrokes right now, asked live from the
+// accessibility server rather than from a cached workspace notification.
+func macFrontmostPid() -> pid_t {
+    var value: CFTypeRef?
+    if AXUIElementCopyAttributeValue(AXUIElementCreateSystemWide(), kAXFocusedApplicationAttribute as CFString, &value) == .success,
+       let value, CFGetTypeID(value) == AXUIElementGetTypeID() {
+        var pid: pid_t = 0
+        if AXUIElementGetPid(value as! AXUIElement, &pid) == .success { return pid }
+    }
+    return NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0
+}
 func macExecutablePath(_ pid: pid_t) -> String? {
     guard pid > 0 else { return nil }
     var buffer = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
@@ -253,6 +283,16 @@ func macSetup() {
 
 func macContractTest() throws {
     try MacContract.load()
+    let typingSource = CGEventSource(stateID: .privateState)
+    let typed = macTypingEvents(source: typingSource, scalar: "ہ"), newline = macTypingEvents(source: typingSource, scalar: "\n")
+    guard typed.count == 2, newline.count == 2, (typed + newline).allSatisfy({ $0.flags.intersection([.maskCommand, .maskControl, .maskAlternate, .maskShift]).isEmpty }),
+          typed.allSatisfy({ event in
+              var length = 0; var units = [UniChar](repeating: 0, count: 4)
+              event.keyboardGetUnicodeString(maxStringLength: 4, actualStringLength: &length, unicodeString: &units)
+              return String(utf16CodeUnits: units, count: length) == "ہ" }),
+          newline.first?.getIntegerValueField(.keyboardEventKeycode) == 36 else {
+        throw AxonError("contract_test_failed", "Typed characters must carry their text and no modifier flags.")
+    }
     guard macIsOwnChrome(ownerPath: "/A/AxonHost.app/Contents/MacOS/AxonHost", selfPath: "/A/AxonHost.app/Contents/MacOS/AxonHost"),
           !macIsOwnChrome(ownerPath: "/B/AxonHost.app/Contents/MacOS/AxonHost", selfPath: "/A/AxonHost.app/Contents/MacOS/AxonHost"),
           !macIsOwnChrome(ownerPath: "/System/Applications/TextEdit.app/Contents/MacOS/TextEdit", selfPath: "/A/AxonHost.app/Contents/MacOS/AxonHost"),
@@ -832,7 +872,7 @@ func macContractTest() throws {
           MacBarPlacement.avoid(hud: barAtTop, target: CGRect(x: 700, y: 830, width: 0, height: 4), work: barWork) == nil else {
         throw AxonError("contract_test_failed", "Bar avoidance differs from WindowGeometry.AvoidHud.")
     }
-    emit(["ok": true, "control_contract": 1, "checks": ["shared state codec", "own HUD chrome excluded from occlusion", "malformed state refusal", "canonical approval fingerprint", "sensitive action classification", "kernel process birth identity", "native idle/paused/stopped/expired/session/monitor/Stop refusals", "empty cleanup and malformed input-journal refusal", "official Phosphor resource rendering", "SDK and runtime material selection", "capture visibility and dismissal lifecycle", "access tier enforcement for target and frontmost app", "conversation-scoped remembered approvals", "confirmed-only Stop clearing", "approval completion fenced by Stop and legacy pause", "shared motion curves", "access prompt layout and placement", "window glow falloff, mask, matching and levels", "bar docks, drag landing and avoidance"], "hud_icon_assets": iconAssets, "hud_material": materialBackend, "native_glass_compiled": MacVisuals.nativeGlassCompiled, "desktop_input_sent": false])
+    emit(["ok": true, "control_contract": 1, "checks": ["shared state codec", "own HUD chrome excluded from occlusion", "typed characters carry text without modifiers", "malformed state refusal", "canonical approval fingerprint", "sensitive action classification", "kernel process birth identity", "native idle/paused/stopped/expired/session/monitor/Stop refusals", "empty cleanup and malformed input-journal refusal", "official Phosphor resource rendering", "SDK and runtime material selection", "capture visibility and dismissal lifecycle", "access tier enforcement for target and frontmost app", "conversation-scoped remembered approvals", "confirmed-only Stop clearing", "approval completion fenced by Stop and legacy pause", "shared motion curves", "access prompt layout and placement", "window glow falloff, mask, matching and levels", "bar docks, drag landing and avoidance"], "hud_icon_assets": iconAssets, "hud_material": materialBackend, "native_glass_compiled": MacVisuals.nativeGlassCompiled, "desktop_input_sent": false])
 }
 
 func macMoveCursor(_ point: CGPoint, _ args: [String: Any]) throws -> [String: Any] {
