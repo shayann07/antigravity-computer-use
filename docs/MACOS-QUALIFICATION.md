@@ -116,7 +116,7 @@ pattern for `ctrl+shift+…`.
 
 #### Not checked
 
-- The installed build is C5 (`d685fe0`, CDHash `e6402e3f…`); Screen Recording was
+- The installed build is C6 (`bdc5b91`, CDHash `e59e2436…`); Screen Recording was
   turned on again after it, and Accessibility and Input Monitoring were kept.
 - The alert-click fix on a visible alert; the tick slide installed on screen.
 - Recovery condition "never resumes" is tested at helper level and seen once
@@ -199,7 +199,7 @@ is not verified here. Apple Silicon is unverified.
 | After an unanswered card the bar disappeared until the next `ready`; on build B the access card window existed (modal-panel level, alpha 1) but was not visible to the human, three times | fixed: the card panel hid itself when the helper was not the active app (`hidesOnDeactivate`), and the bar is restored after every capture; physically re-run twice, both cards visible with the amber "Waiting for your answer" bar |
 | A live Esc was labelled as a persisted Stop, so the bar said "The task was ended" | fixed in `d685fe0`; physically re-run, the bar says "You pressed Esc or ⌃⌥F12" |
 | The glow was at status-bar level and drew over windows covering its target | fixed in `d685fe0` (normal level, just above the target); the human's screenshot shows it around the front window; the covered case still to be looked at |
-| With the glow at normal level, AppKit moved its panel out from under the menu bar, so for a window at the top of the screen the band slid 46 pt down (none on top, double at the bottom); seen by the human on Preview | fixed: the glow panel is never constrained (`MacGlowPanel`), with a contract check that fails without the fix; to be re-seen on screen |
+| With the glow at normal level, AppKit moved its panel out from under the menu bar, so for a window at the top of the screen the band slid 46 pt down (none on top, double at the bottom); seen by the human on Preview | fixed: the glow panel is never constrained (`MacGlowPanel`), with a contract check that fails without the fix; re-measured on build C6: Preview at (4, 34) 708×965, glow panel at (−42, −12) 800×1057, 46 pt on every side, ordered directly above Preview |
 | Quitting Antigravity ends the service and its guardian together; the Stop then goes unacknowledged and is recorded as unconfirmed, with no open task naming the guard, so nothing could settle it and the installer refused | fixed in `c47ff83` (Mac only, same evidence as the `active` rule: no task open, not the current guard, no cleanup pending, every recorded actor gone, empty ledger); physically re-run, `ready` settled it and started fresh |
 | Clicks on an app's own alert (Preview, layer 8) were refused as covered | fixed (`macTopWindowVerdict`); not yet re-run on a visible alert |
 | A service started from a shell without Accessibility (for example an agent's terminal) gets `accessibility_denied` though setup reports access, because macOS checks the app that launched it | by design of macOS; documented. Start the service from Antigravity or the human starter |
