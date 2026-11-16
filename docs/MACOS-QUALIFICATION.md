@@ -114,6 +114,37 @@ Also seen: `cmd+shift+a` (Markup's shortcut) is sensitive because
 `(?:ctrl|cmd|command)\+[svx]` matches the `s` of `shift`; Windows has the same
 pattern for `ctrl+shift+…`.
 
+**Update after the owner's answers (head f516b34, build C7).** The owner
+decided on #105 not to exempt unnamed targets. Done in code, not yet run on
+the desk:
+- A pixel click's label is now the name of the element under the point,
+  hit-tested through the target app with the snapshot's name rule (title,
+  description, placeholder; no role). An empty name still asks. Drags carry
+  no point and stay unnamed, so every stroke still asks.
+- `drag --points` is accepted on the Mac: the host draws one stroke with the
+  Windows hop rule. The `points_unsupported` refusal in `runtime.mjs` is
+  removed (approved by the human, to be reviewed from the Windows side).
+- The key rule is the shared contract (338d9e7); `cmd+shift+a` no longer asks.
+  The Swift contract check runs the shared cases through ICU.
+
+Still to run on the desk with C7: the Preview drawing test with `points`
+(one card per stroke), whether Preview's canvas comes back unnamed after the
+hit-test, the real duration of a capped 400-point stroke next to
+`dragBudgetMs()`, and physical Esc during a long stroke (button released,
+ledger empty, Stop confirmed).
+
+**Stuck-Stop proof tightened (owner's conditions).** `macStopSettles` in
+`server/recovery.mjs` is the one proof for a recovered task, an orphan Stop
+and the installer. Every recorded actor, the controller and task children
+included, is checked by pid and recorded start time; the controller writes
+`guard-….state.controller` for that. An actor with no recorded start time
+counts as gone only when no process holds its pid. Physically on C7:
+quitting Antigravity while the C6 service ran left an unconfirmed Stop with no
+task open; installing C7 directly, with no `ready` or `end` first, settled it
+to a confirmed `stopped` and removed the `.unconfirmed` companion.
+`ready` reports a settled orphan Stop as stopped; the following `ready`
+clears it as any confirmed Stop.
+
 #### Not checked
 
 - The installed build is C6 (`bdc5b91`, CDHash `e59e2436…`). The visible-area glow
