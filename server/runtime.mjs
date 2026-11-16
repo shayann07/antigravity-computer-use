@@ -706,7 +706,7 @@ export class Runtime {
       // Where the action landed, in screen pixels, so the glow's bright part
       // can ease towards it even when the real pointer did not move.
       const landed=actionPoint(result);
-      if(landed&&w)this.guardian.send({op:'activity',action:op,hwnd:Number(w.hwnd),point:landed});
+      if(landed&&w)this.guardian.send({op:'activity',action:op,hwnd:Number(w.hwnd),point:landed,...Runtime.prototype.glowTarget.call(this,w)});
       if(op==='click'&&payload.physical)this.guardian.send({op:'activity',action:op,click_feedback:true,...(w?{hwnd:Number(w.hwnd)}:{})});
       return result;
     });
