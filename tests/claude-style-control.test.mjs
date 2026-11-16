@@ -174,3 +174,14 @@ test('a refused second copy opens no task and is asked again on the next ready',
   held=false;const ready=await r.ready();assert.equal(ready.ready,true);assert.equal(ready.task_started,true);
  }finally{fs.unlinkSync(r.guardFile);}
 });
+
+test('on macOS the activity message names the approved window by process and frame for the glow',()=>{
+ const descriptor=Object.getOwnPropertyDescriptor(process,'platform');
+ try{
+  Object.defineProperty(process,'platform',{value:'darwin'});
+  assert.deepEqual(Runtime.prototype.glowTarget.call({},{pid:42,rect:[1,2,300,200]}),{pid:42,rect:[1,2,300,200]});
+  for(const w of [null,{pid:42},{pid:'42',rect:[1,2,3,4]},{pid:42,rect:[1,2,3]}])assert.deepEqual(Runtime.prototype.glowTarget.call({},w),{});
+  Object.defineProperty(process,'platform',{value:'win32'});
+  assert.deepEqual(Runtime.prototype.glowTarget.call({},{pid:42,rect:[1,2,300,200]}),{});
+ }finally{Object.defineProperty(process,'platform',descriptor);}
+});

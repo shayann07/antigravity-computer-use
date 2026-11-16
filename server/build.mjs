@@ -35,7 +35,7 @@ const WIN_SOURCES = [
   path.join(HERE, 'native', 'WindowGeometry.cs'),
   path.join(HERE, 'native', 'CallerGate.cs'),
 ];
-const MAC_SOURCES = [path.join(HERE, 'native', 'AxonHost.swift'), ...['PrivateStorage.swift','MacControl.swift','MacDesign.swift','MacAccessPrompt.swift','MacGuardian.swift','MacVisuals.swift','MacPhosphorIcons.swift','MacOperations.swift'].map(name=>path.join(HERE,'native','macos',name))];
+const MAC_SOURCES = [path.join(HERE, 'native', 'AxonHost.swift'), ...['PrivateStorage.swift','MacControl.swift','MacDesign.swift','MacAccessPrompt.swift','MacGlow.swift','MacGuardian.swift','MacVisuals.swift','MacPhosphorIcons.swift','MacOperations.swift'].map(name=>path.join(HERE,'native','macos',name))];
 
 export const SOURCES = process.platform === 'darwin' ? MAC_SOURCES : WIN_SOURCES;
 export const SOURCE = SOURCES[0];

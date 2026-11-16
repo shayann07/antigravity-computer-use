@@ -123,7 +123,9 @@ final class MacVisuals: NSObject {
     var contentContainer: NSView?
     var label = NSTextField(labelWithString: "")
     var toggle = MacHudButton(), stop = MacHudButton(), more = MacHudButton()
-    var rings: [NSPanel] = []
+    // The light around the window in use replaced the old screen-edge rings.
+    let windowGlow = MacWindowGlow()
+    private var glowLevelLoaded = false
     var pointer: NSPanel?
     var hiddenDisplays: [CGDirectDisplayID] = []
     var state = "idle"
@@ -288,15 +290,13 @@ final class MacVisuals: NSObject {
         more.hudIcon = .slidersHorizontalFill
         more.hudTitle = ""
         more.setAccessibilityLabel("Control settings")
-        more.toolTip = "Takeover and interruption settings"
+        more.toolTip = "Settings: glow brightness and End"
         more.nextKeyView = toggle; toggle.nextKeyView = stop; stop.nextKeyView = more
         p.initialFirstResponder = toggle
         p.contentView = hostRoot; panel = p; rootView = hostRoot; contentContainer = container
 
-        for screen in NSScreen.screens {
-            let ring = makePanel(screen.frame, clickThrough: true)
-            ring.contentView = MacGlowView(frame: NSRect(origin: .zero, size: screen.frame.size))
-            rings.append(ring)
+        if !glowLevelLoaded, !MacFence.file.isEmpty {
+            windowGlow.level = MacGlowLevel.saved(in: URL(fileURLWithPath: MacFence.file).deletingLastPathComponent()); glowLevelLoaded = true
         }
         let cursor = makePanel(NSRect(x: 0, y: 0, width: 40, height: 40), clickThrough: true)
         cursor.contentView = MacPointerView(frame: NSRect(x: 0, y: 0, width: 40, height: 40)); pointer = cursor
@@ -345,7 +345,7 @@ final class MacVisuals: NSObject {
         let animateEntrance = visibility.requestShow()
         state = presentation.resolvedState
         layoutControls(for: presentation)
-        if state != "active" { releaseCursor(); rings.forEach { $0.orderOut(nil) }; pointer?.orderOut(nil) }
+        if state != "active" { releaseCursor(); windowGlow.hide(); pointer?.orderOut(nil) }
         if !captureHidden, let p = panel {
             writeHudBounds(p.frame)
             if animateEntrance {
@@ -370,7 +370,7 @@ final class MacVisuals: NSObject {
                 p.orderFrontRegardless()
             }
         }
-        if state == "active" && !captureHidden { applyCursor(); rings.forEach { $0.orderFrontRegardless() }; animate() }
+        if state == "active" && !captureHidden { applyCursor(); animate() }
     }
     func applyCursor() {
         if cursorApplied { return }
@@ -389,7 +389,7 @@ final class MacVisuals: NSObject {
         panel?.alphaValue = 1.0
         rootView?.layer?.transform = CATransform3DIdentity
         panel?.orderOut(nil)
-        rings.forEach { $0.orderOut(nil) }
+        windowGlow.hide(immediately: true)
         pointer?.orderOut(nil)
         clearHudBounds()
     }
@@ -398,15 +398,27 @@ final class MacVisuals: NSObject {
         if !MacFence.file.isEmpty { _ = unlink(MacFence.file + ".hud") }
     }
     func hideForCapture() {
-        visibility.beginCapture(); panel?.orderOut(nil); rings.forEach { $0.orderOut(nil) }; pointer?.orderOut(nil)
+        visibility.beginCapture(); panel?.orderOut(nil); windowGlow.panel?.orderOut(nil); pointer?.orderOut(nil)
         clearHudBounds() // Hidden controls must not suppress real takeover input.
     }
     func finishCapture(_ state: String) {
         let restore = visibility.endCapture()
         if restore && (state == "active" || state == "paused" || state == "stopped") { show(state) }
         else { hide() }
+        // The glow marks the window in use whether or not the bar is shown.
+        if state == "active" && windowGlow.shown { windowGlow.panel?.orderFrontRegardless() }
     }
     func activity(_ action: String) { /* The persistent state label stays calm between actions. */ }
+    // Lights the window of an approved app that received an action. The
+    // guardian has already checked the grant; pid and rect come from the
+    // worker's window identity (top-left global points).
+    func glow(action: String, pid: pid_t, rect: CGRect) {
+        guard state == "active", !captureHidden,
+              let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]],
+              let (id, bounds) = MacWindowGlow.matchWindow(pid: pid, rect: rect, list: list) else { return }
+        let pointed = ["click", "move", "drag", "scroll"].contains(action)
+        windowGlow.show(windowID: id, frame: MacWindowGlow.appKit(bounds), point: pointed ? NSEvent.mouseLocation : nil, pulse: action != "observe")
+    }
     func animate() {
         if captureHidden || state != "active" { return }
         let reduce = MacDesign.reduceMotion
@@ -418,7 +430,8 @@ final class MacVisuals: NSObject {
         let base = configuredBase.isFinite && (0.0...1.0).contains(configuredBase) ? configuredBase : 0.82
         let amplitude = configuredAmplitude.isFinite && (0.0...1.0).contains(configuredAmplitude) ? configuredAmplitude : 0.18
         let alpha = reduce ? 0.94 : max(0, min(1, base + amplitude * sin((ProcessInfo.processInfo.systemUptime - origin) * .pi * 2 / seconds)))
-        rings.forEach { $0.alphaValue = alpha; if !$0.isVisible { $0.orderFrontRegardless() } }
+        _ = alpha
+        windowGlow.follow()
         if cursorApplied {
             let point = NSEvent.mouseLocation
             pointer?.setFrameOrigin(NSPoint(x: point.x - 4, y: point.y - 38))
@@ -446,11 +459,22 @@ final class MacVisuals: NSObject {
     @objc func menu() {
         let menu = NSMenu()
         // Human input never pauses the agent; there is no takeover mode.
+        let heading = NSMenuItem(title: "Glow brightness", action: nil, keyEquivalent: ""); heading.isEnabled = false; menu.addItem(heading)
+        for level in MacGlowLevel.allCases {
+            let item = NSMenuItem(title: level.title, action: #selector(changeGlow(_:)), keyEquivalent: "")
+            item.target = self; item.representedObject = level.rawValue; item.state = windowGlow.level == level ? .on : .off; menu.addItem(item)
+        }
+        menu.addItem(.separator())
         let hint = NSMenuItem(title: "Esc always stops immediately", action: nil, keyEquivalent: "")
         hint.isEnabled = false; menu.addItem(hint)
         let end = NSMenuItem(title: "End session and hide", action: #selector(endControl), keyEquivalent: "")
         end.target = self; menu.addItem(end)
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: 0), in: more)
+    }
+    @objc func changeGlow(_ item: NSMenuItem) {
+        guard let raw = item.representedObject as? String, let level = MacGlowLevel(rawValue: raw) else { return }
+        windowGlow.level = level
+        if !MacFence.file.isEmpty { level.save(in: URL(fileURLWithPath: MacFence.file).deletingLastPathComponent()) }
     }
     deinit { releaseCursor() }
 }
@@ -474,29 +498,3 @@ final class MacPointerView: NSView {
     }
 }
 
-final class MacGlowView: NSView {
-    var image: NSImage?
-    override init(frame: NSRect) { super.init(frame: frame); buildGlow() }
-    required init?(coder: NSCoder) { super.init(coder: coder); buildGlow() }
-    func buildGlow() {
-        let w = max(1, Int(bounds.width)), h = max(1, Int(bounds.height))
-        guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: w, pixelsHigh: h, bitsPerSample: 8,
-                                           samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
-                                           bytesPerRow: w * 4, bitsPerPixel: 32), let bytes = bitmap.bitmapData else { return }
-        let ui = MacContract.value["ui"] as? [String: Any] ?? [:]
-        let sigma = ui["edge_sigma"] as? Double ?? 27, depth = ui["edge_depth"] as? Int ?? 82
-        let core = ui["edge_core"] as? Double ?? 5, amplitude = ui["edge_alpha"] as? Double ?? 154
-        let coreAmplitude = ui["edge_core_alpha"] as? Double ?? 20
-        let horizontal = (0..<w).map { x -> Double in let d = Double(min(x, w - 1 - x)); return exp(-d * d / (2 * sigma * sigma)) }
-        let vertical = (0..<h).map { y -> Double in let d = Double(min(y, h - 1 - y)); return exp(-d * d / (2 * sigma * sigma)) }
-        for y in 0..<h { for x in 0..<w {
-            let i = (y * w + x) * 4
-            if x > depth && x < w - depth && y > depth && y < h - depth { bytes[i+3] = 0; continue }
-            let dx = Double(min(x, w - 1 - x)), dy = Double(min(y, h - 1 - y))
-            let alpha = amplitude * (1 - (1 - horizontal[x]) * (1 - vertical[y])) + coreAmplitude * (1 - (1 - exp(-dx*dx/(2*core*core))) * (1 - exp(-dy*dy/(2*core*core))))
-            bytes[i] = 155; bytes[i+1] = 205; bytes[i+2] = 235; bytes[i+3] = UInt8(min(255, max(0, alpha)))
-        } }
-        let output = NSImage(size: bounds.size); output.addRepresentation(bitmap); image = output
-    }
-    override func draw(_ dirtyRect: NSRect) { image?.draw(in: bounds) }
-}

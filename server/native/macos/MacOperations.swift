@@ -733,7 +733,48 @@ func macContractTest() throws {
           shortCard.allow.frame.maxX + MacDesign.promptButtonGap - 2 * MacDesign.promptRing <= shortCard.deny.frame.minX + 0.001 else {
         throw AxonError("contract_test_failed", "Access prompt content or layout differs.")
     }
-    emit(["ok": true, "control_contract": 1, "checks": ["shared state codec", "malformed state refusal", "canonical approval fingerprint", "sensitive action classification", "kernel process birth identity", "native idle/paused/stopped/expired/session/monitor/Stop refusals", "empty cleanup and malformed input-journal refusal", "official Phosphor resource rendering", "SDK and runtime material selection", "capture visibility and dismissal lifecycle", "access tier enforcement for target and frontmost app", "conversation-scoped remembered approvals", "confirmed-only Stop clearing", "approval completion fenced by Pause and Stop", "shared motion curves", "access prompt layout and placement"], "hud_icon_assets": iconAssets, "hud_material": materialBackend, "native_glass_compiled": MacVisuals.nativeGlassCompiled, "desktop_input_sent": false])
+    // The window glow's maths (pure; nothing is shown).
+    let glowWindow = CGRect(x: 46, y: 46, width: 300, height: 200)
+    guard MacGlowShape.alpha(0) > 0.8, MacGlowShape.alpha(MacGlowShape.reach) == 0, MacGlowShape.alpha(-MacGlowShape.lip * 1.6) == 0, MacGlowShape.alpha(-MacGlowShape.lip) < 0.05,
+          MacGlowShape.alpha(10) < MacGlowShape.alpha(5), MacGlowShape.alpha(5) < MacGlowShape.alpha(0),
+          abs(MacGlowShape.distance(46, 146, glowWindow, 10)) < 0.001, MacGlowShape.distance(0, 146, glowWindow, 10) == 46,
+          MacGlowShape.distance(196, 146, glowWindow, 10) < -50,
+          MacGlowShape.distance(36, 36, glowWindow, 10) > hypot(10, 10) else {
+        throw AxonError("contract_test_failed", "Glow falloff or rounded-edge distance differs.")
+    }
+    guard let glowMask = MacGlowShape.mask(size: CGSize(width: 392, height: 292), window: glowWindow),
+          let glowBytes = glowMask.dataProvider?.data as Data?, glowMask.width == 392, glowMask.height == 292 else {
+        throw AxonError("contract_test_failed", "Glow mask was not produced.")
+    }
+    func glowAlpha(_ x: Int, _ y: Int) -> UInt8 { glowBytes[(glowMask.height - 1 - y) * glowMask.bytesPerRow + x] }
+    // Transparent centre and outer corner, a lit edge, and no hard step outward.
+    guard glowAlpha(196, 146) == 0, glowAlpha(0, 0) <= 1, glowAlpha(46, 146) > 180,
+          // Outward from the edge (the peak sits on the window's edge) it only falls.
+          (1..<40).allSatisfy({ Int(glowAlpha(46 - $0, 146)) >= Int(glowAlpha(45 - $0, 146)) - 1 }), glowAlpha(0, 146) == 0, glowAlpha(2, 146) <= 1,
+          (0..<40).allSatisfy({ abs(Int(glowAlpha(45 - $0, 146)) - Int(glowAlpha(46 - $0, 146))) <= 24 }) else {
+        throw AxonError("contract_test_failed", "Glow mask has a hard edge, a lit centre or a visible rectangle.")
+    }
+    let glowList: [[String: Any]] = [
+        [kCGWindowOwnerPID as String: NSNumber(value: 70), kCGWindowLayer as String: NSNumber(value: 0), kCGWindowNumber as String: NSNumber(value: 11),
+         kCGWindowBounds as String: ["X": 100, "Y": 100, "Width": 800, "Height": 600]],
+        [kCGWindowOwnerPID as String: NSNumber(value: 70), kCGWindowLayer as String: NSNumber(value: 0), kCGWindowNumber as String: NSNumber(value: 12),
+         kCGWindowBounds as String: ["X": 300, "Y": 200, "Width": 400, "Height": 300]],
+        [kCGWindowOwnerPID as String: NSNumber(value: 71), kCGWindowLayer as String: NSNumber(value: 0), kCGWindowNumber as String: NSNumber(value: 13),
+         kCGWindowBounds as String: ["X": 100, "Y": 100, "Width": 800, "Height": 600]],
+        [kCGWindowOwnerPID as String: NSNumber(value: 70), kCGWindowLayer as String: NSNumber(value: 25), kCGWindowNumber as String: NSNumber(value: 14),
+         kCGWindowBounds as String: ["X": 300, "Y": 200, "Width": 400, "Height": 300]],
+    ]
+    guard MacWindowGlow.matchWindow(pid: 70, rect: CGRect(x: 301, y: 199, width: 400, height: 301), list: glowList)?.0 == 12,
+          MacWindowGlow.matchWindow(pid: 70, rect: CGRect(x: 100, y: 100, width: 800, height: 600), list: glowList)?.0 == 11,
+          MacWindowGlow.matchWindow(pid: 72, rect: CGRect(x: 100, y: 100, width: 800, height: 600), list: glowList) == nil,
+          MacWindowGlow.matchWindow(pid: 70, rect: CGRect(x: 600, y: 600, width: 100, height: 100), list: glowList) == nil else {
+        throw AxonError("contract_test_failed", "Glow window matching differs.")
+    }
+    guard MacGlowLevel.soft.gain < MacGlowLevel.medium.gain, MacGlowLevel.medium.gain < MacGlowLevel.bright.gain,
+          MacGlowLevel(rawValue: "soft") == .soft, MacGlowLevel(rawValue: "loud") == nil else {
+        throw AxonError("contract_test_failed", "Glow brightness levels differ.")
+    }
+    emit(["ok": true, "control_contract": 1, "checks": ["shared state codec", "malformed state refusal", "canonical approval fingerprint", "sensitive action classification", "kernel process birth identity", "native idle/paused/stopped/expired/session/monitor/Stop refusals", "empty cleanup and malformed input-journal refusal", "official Phosphor resource rendering", "SDK and runtime material selection", "capture visibility and dismissal lifecycle", "access tier enforcement for target and frontmost app", "conversation-scoped remembered approvals", "confirmed-only Stop clearing", "approval completion fenced by Pause and Stop", "shared motion curves", "access prompt layout and placement", "window glow falloff, mask, matching and levels"], "hud_icon_assets": iconAssets, "hud_material": materialBackend, "native_glass_compiled": MacVisuals.nativeGlassCompiled, "desktop_input_sent": false])
 }
 
 func macMoveCursor(_ point: CGPoint, _ args: [String: Any]) throws -> [String: Any] {

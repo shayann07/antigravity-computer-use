@@ -1481,6 +1481,47 @@ func readLoop() {
             if args.contains("--contract-test") { try macContractTest(); return }
             // Offscreen pictures of the access prompt for review. No window is
             // shown, no permission is requested and no input is sent.
+            if let at = args.firstIndex(of: "--glow-preview"), args.count > at + 1 {
+                try? MacContract.load(); _ = NSApplication.shared
+                let dir = args[at + 1]
+                try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+                var written: [String] = []
+                for (name, size, background) in [("dark-window", CGSize(width: 640, height: 420), NSColor(white: 0.12, alpha: 1)),
+                                                 ("light-window", CGSize(width: 640, height: 420), NSColor(white: 0.93, alpha: 1)),
+                                                 ("small-window", CGSize(width: 220, height: 160), NSColor(white: 0.12, alpha: 1))] {
+                    let path = (dir as NSString).appendingPathComponent("glow-\(name).png")
+                    try MacWindowGlow.preview(window: size, to: path, background: background); written.append(path)
+                }
+                emit(["written": written, "desktop_input_sent": false]); return
+            }
+            // Lights one on-screen window for a few seconds and reports the
+            // process's CPU share at rest. Shows light only; sends no input.
+            if let at = args.firstIndex(of: "--glow-trial"), args.count > at + 1, let seconds = Double(args[at + 1]), seconds > 0, seconds <= 60 {
+                try? MacContract.load(); _ = NSApplication.shared; NSApp.setActivationPolicy(.accessory)
+                let mine = getpid()
+                guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]],
+                      let row = list.first(where: { ($0[kCGWindowLayer as String] as? NSNumber)?.intValue == 0 && ($0[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value != mine
+                          && (CGRect(dictionaryRepresentation: ($0[kCGWindowBounds as String] as? [String: Any] ?? [:]) as CFDictionary)?.width ?? 0) >= 200 }),
+                      let id = (row[kCGWindowNumber as String] as? NSNumber)?.uint32Value,
+                      let bounds = CGRect(dictionaryRepresentation: (row[kCGWindowBounds as String] as? [String: Any] ?? [:]) as CFDictionary) else {
+                    throw AxonError("no_window", "No on-screen window to light.")
+                }
+                let glow = MacWindowGlow()
+                if let level = args.firstIndex(of: "--level").flatMap({ args.count > $0 + 1 ? MacGlowLevel(rawValue: args[$0 + 1]) : nil }) { glow.level = level }
+                glow.show(windowID: id, frame: MacWindowGlow.appKit(bounds), point: nil, pulse: false)
+                let tick = Timer(timeInterval: 0.07, repeats: true) { _ in glow.follow() }
+                RunLoop.main.add(tick, forMode: .common)
+                func cpu() -> Double { var u = rusage(); getrusage(RUSAGE_SELF, &u)
+                    return Double(u.ru_utime.tv_sec + u.ru_stime.tv_sec) + Double(u.ru_utime.tv_usec + u.ru_stime.tv_usec) / 1_000_000 }
+                RunLoop.main.run(until: Date().addingTimeInterval(1.5))   // past the entrance
+                let startCPU = cpu(), startWall = Date()
+                RunLoop.main.run(until: Date().addingTimeInterval(seconds))
+                let used = cpu() - startCPU, wall = Date().timeIntervalSince(startWall)
+                glow.hide(immediately: true); tick.invalidate()
+                emit(["window_size": [bounds.width, bounds.height], "seconds": wall, "cpu_seconds": used,
+                      "cpu_percent_of_one_core": wall > 0 ? used / wall * 100 : 0, "reduce_motion": MacDesign.reduceMotion,
+                      "level": glow.level.rawValue, "desktop_input_sent": false]); return
+            }
             if let at = args.firstIndex(of: "--prompt-preview"), args.count > at + 1 {
                 try? MacContract.load(); _ = NSApplication.shared
                 emit(["written": try MacAccessPrompt.preview(to: args[at + 1]), "desktop_input_sent": false]); return

@@ -397,7 +397,17 @@ final class MacGuardian: NSObject {
                 } else { reply(["controls_visible": visuals.visible]) }
             case "capture": visuals.hideForCapture(); reply(["allowed": true])
             case "capture_end": visuals.finishCapture(state)
-            case "activity": visuals.activity(str(message["action"]) ?? "Checking")
+            case "activity":
+                let action = str(message["action"]) ?? "Checking"
+                visuals.activity(action)
+                // The glow follows the last window that received an action. Only
+                // a window of an app approved for this task is accepted.
+                if state == "active", let pid = (message["pid"] as? NSNumber)?.int32Value, pid > 0,
+                   let rect = message["rect"] as? [NSNumber], rect.count == 4,
+                   rect.allSatisfy({ $0.doubleValue.isFinite && abs($0.doubleValue) < 100_000 }),
+                   let key = (try? macIdentity(pid))?["key"] as? String, grants.contains(key) {
+                    visuals.glow(action: action, pid: pid, rect: CGRect(x: rect[0].doubleValue, y: rect[1].doubleValue, width: rect[2].doubleValue, height: rect[3].doubleValue))
+                }
             case "shutdown": if state != "idle" { stop("shutdown") }; visuals.hide(); watchdog?.terminate(); exit(0)
             case "prompt":
                 guard state != "stopped", state != "paused" else { reply(["allowed": false]); return }
