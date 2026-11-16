@@ -95,6 +95,9 @@ struct MacFenceState {
     let bootUntil: UInt64
     let cleanupPending: Bool
     let grants: Set<String>
+    // App keys granted at the click tier (terminals and IDEs). Optional
+    // seventh field; older six-field records carry no click grants.
+    let clickGrants: Set<String>
     init(_ text: String) throws {
         let parts = text.components(separatedBy: "|")
         guard parts.count >= 3, ["idle", "active", "paused", "stopped"].contains(parts[0]), let ticks = Int64(parts[2]) else {
@@ -115,8 +118,51 @@ struct MacFenceState {
         if parts.count > 3, let bytes = Data(base64Encoded: parts[3]), let text = String(data: bytes, encoding: .utf8) {
             grants = Set(text.components(separatedBy: "\n").filter { !$0.isEmpty })
         } else { grants = [] }
+        if parts.count > 6, !parts[6].isEmpty {
+            guard let bytes = Data(base64Encoded: parts[6]), let text = String(data: bytes, encoding: .utf8) else {
+                throw AxonError("control_stopped", "Native access tier state is invalid.")
+            }
+            clickGrants = Set(text.components(separatedBy: "\n").filter { !$0.isEmpty })
+        } else { clickGrants = [] }
     }
     static var now: Int64 { Int64(Date().timeIntervalSince1970 * 10_000_000) + 621355968000000000 }
+}
+
+// Access tiers. A click-only app (terminal or IDE) accepts a plain left
+// click, pointer moves, scrolling, focus and window sizing. Everything else is
+// refused, both for the target and whenever such an app is frontmost, so a
+// terminal that comes forward between check and dispatch cannot receive
+// typing meant for another app. Mirrors Guardian.cs ClickTierAllows/CheckTier.
+enum MacTier {
+    static let inputOperations: Set<String> = ["move", "click", "drag", "type", "key", "set_value", "scroll", "focus",
+        "fit_window", "resize_window", "close_window", "clipboard", "paste", "paste_files", "file_dialog", "open", "launch"]
+    static func clickAllows(_ op: String, _ args: [String: Any]) -> Bool {
+        if ["focus", "move", "scroll", "fit_window", "resize_window"].contains(op) { return true }
+        guard op == "click" else { return false }
+        if let button = args["button"], !(button is NSNull) {
+            guard let text = button as? String, text.isEmpty || text == "left" else { return false }
+        }
+        if let modifiers = args["modifiers"], !(modifiers is NSNull) {
+            if let list = modifiers as? [Any] { if !list.isEmpty { return false } }
+            else if let text = modifiers as? String { if !text.isEmpty { return false } }
+            else { return false }
+        }
+        return true
+    }
+    static func check(_ op: String, _ args: [String: Any], appKey: String?, clickGrants: Set<String>, frontmostKey: () -> String?) throws {
+        guard inputOperations.contains(op), !clickGrants.isEmpty, !clickAllows(op, args) else { return }
+        if let key = appKey, clickGrants.contains(key) {
+            throw AxonError("app_tier_click", "This app is click only (terminal or IDE). The input was refused and nothing was sent. Use your own shell tool, or ask the human to do this step.")
+        }
+        if let front = frontmostKey(), clickGrants.contains(front) {
+            throw AxonError("app_tier_click", "A click-only app (terminal or IDE) is in front, so this input was refused and nothing was sent. Bring the target app to the front, observe again, then retry.")
+        }
+    }
+    static func frontmostKey() -> String? {
+        guard let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier,
+              let identity = try? macIdentity(pid) else { return nil }
+        return identity["key"] as? String
+    }
 }
 
 enum MacFence {
@@ -169,12 +215,12 @@ enum MacFence {
     }
     static func check() throws {
         if latchBlocks(latch) {
-            throw AxonError("control_stopped", "Emergency Stop is latched; local human re-arm is required.")
+            throw AxonError("control_stopped", "The human stopped this task. No input was sent. Report and wait for the human; the next ready starts a fresh task.")
         }
         let state = try read()
         guard state.state == "active", state.token == str(current["__session"]), state.until > MacFenceState.now,
               MacDeadline.valid(state.bootUntil, now: MacDeadline.now) else {
-            throw AxonError("control_stopped", "Control is paused, stopped or expired. Observe again after authorized resume.")
+            throw AxonError("control_stopped", "Control is paused, stopped or expired. No input was sent; ask the human before continuing.")
         }
         MacWorkerLifetime.markActive()
         let parent = pid_t(ProcessInfo.processInfo.environment["AGCU_PARENT_PID"] ?? "0") ?? 0
@@ -187,6 +233,7 @@ enum MacFence {
               guardian.count == 2, let pid = pid_t(guardian[0]), try macProcessStart(pid) == String(guardian[1]) else {
             throw AxonError("control_stopped", "Native permission authority is unavailable.")
         }
+        var targetKey: String?
         if current["hwnd"] != nil {
             let (_, pid, _, _) = try resolveWindow(current)
             let identity = try macIdentity(pid)
@@ -194,6 +241,11 @@ enum MacFence {
                   str(current["__started"]) == identity["started"] as? String else {
                 throw AxonError("identity_changed", "The native app grant or process identity no longer matches.")
             }
+            targetKey = identity["key"] as? String
+        }
+        // Checked again at dispatch (dispatched() re-runs check()).
+        try MacTier.check(operation, current, appKey: targetKey, clickGrants: state.clickGrants, frontmostKey: MacTier.frontmostKey)
+        if current["hwnd"] != nil {
             if keyboardPID != 0 && NSWorkspace.shared.frontmostApplication?.processIdentifier != keyboardPID {
                 throw AxonError("focus_changed", "Keyboard focus left the approved application. No further input was sent.")
             }
@@ -282,8 +334,8 @@ enum MacFence {
               current.grants == expected.grants, !current.cleanupPending, !expected.cleanupPending else { return false }
         return current.state == "idle" || (current.until > wallNow && MacDeadline.valid(current.bootUntil, now: bootNow))
     }
-    // Keep this lock separate from the held-input lock: takeover must revoke
-    // an in-progress drag before waiting for that worker to release input.
+    // Keep this lock separate from the held-input lock: a state change must
+    // revoke an in-progress drag before waiting for that worker to release input.
     static func withTransitionLock<T>(_ body: () throws -> T) throws -> T {
         let path = file + ".transitions", fd = open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
         guard fd >= 0 else { throw AxonError("control_stopped", "Cannot open the native transition lock.") }
@@ -311,30 +363,44 @@ enum MacFence {
         }
         return try body()
     }
-    // Serialize approval publication with deliberate takeover.
+    // Serialize approval publication with Stop, Pause and expiry.
     // This accepts only a native state captured before the local dialog; there
     // is no new approval/resume field in the desktop action protocol.
     static func withApprovalFence<T>(_ expected: MacFenceState, _ body: () throws -> T) throws -> T {
         try withTransitionLock {
             guard approvalStateMatches(expected, try read(), latched: latchBlocks(latch),
                                        wallNow: MacFenceState.now, bootNow: MacDeadline.now) else {
-                throw AxonError("approval_changed", "Control changed during confirmation. No approval was published; observe after authorized resume.")
+                throw AxonError("approval_changed", "Control changed during confirmation. No approval was published; observe again before continuing.")
             }
             let result = try body()
             guard !latchBlocks(latch) else { throw AxonError("control_stopped", "Stop interrupted confirmation. No action is authorized.") }
             return result
         }
     }
-    static func pauseForTakeover(_ observed: MacFenceState) throws -> Bool {
-        try withTransitionLock {
-            let current = try read()
-            guard current.state == "active", current.token == observed.token,
-                  current.until == observed.until, current.bootUntil == observed.bootUntil,
-                  !latchBlocks(latch) else { return false }
-            let encoded = Data(current.grants.sorted().joined(separator: "\n").utf8).base64EncodedString()
-            try write("paused|\(current.token)|\(current.until)|\(encoded)|0|1")
-            return true
+    enum LatchClear: Equatable { case cleared, refused(String) }
+    // Removes only an exact confirmed Stop marker ("stopped", regular file,
+    // owned, no .unconfirmed companion), never a directory, link or uncertain
+    // marker, and never recursively. Only confirmed absence counts as cleared.
+    static func clearConfirmedLatch(_ path: String) -> LatchClear {
+        guard !path.isEmpty, path.hasPrefix("/") else { return .refused("stop_persistence_failed") }
+        if latchEntryBlocks(path + ".unconfirmed") { return .refused("guardian_stop_unconfirmed") }
+        var info = stat()
+        if lstat(path, &info) != 0 { return errno == ENOENT ? .cleared : .refused("stop_persistence_failed") }
+        guard info.st_mode & S_IFMT == S_IFREG, info.st_uid == getuid(), info.st_nlink == 1, info.st_size <= 64 else {
+            return .refused("stop_persistence_failed")
         }
+        let fd = open(path, O_RDONLY | O_NOFOLLOW)
+        guard fd >= 0 else { return .refused("stop_persistence_failed") }
+        var bytes = [UInt8](repeating: 0, count: 65)
+        let count = Darwin.read(fd, &bytes, 65); var opened = stat()
+        let same = fstat(fd, &opened) == 0 && opened.st_dev == info.st_dev && opened.st_ino == info.st_ino
+        close(fd)
+        guard same, count >= 0, count <= 64, let text = String(bytes: bytes[0..<count], encoding: .utf8) else { return .refused("stop_persistence_failed") }
+        if text.hasPrefix("unconfirmed:") { return .refused("guardian_stop_unconfirmed") }
+        guard text == "stopped" else { return .refused("stop_persistence_failed") }
+        guard unlink(path) == 0 else { return .refused("stop_persistence_failed") }
+        if latchBlocks(path) { return .refused("stopped_again") }
+        return .cleared
     }
     static func write(_ text: String) throws {
         try Data(text.utf8).write(to: URL(fileURLWithPath: file), options: [.atomic])
@@ -423,7 +489,7 @@ enum MacInputLedger {
         guard let value = try JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: path))) as? [String: Any],
               let keys = value["keys"] as? [Int], let buttons = value["buttons"] as? [Int],
               keys.allSatisfy({ $0 >= 0 && $0 < 256 }), buttons.allSatisfy({ $0 >= 0 && $0 <= 2 }) else {
-            throw AxonError("input_cleanup_failed", "The input ledger is invalid; re-arm is refused.")
+            throw AxonError("input_cleanup_failed", "The input ledger is invalid; cleanup cannot be confirmed.")
         }
         return value
     }

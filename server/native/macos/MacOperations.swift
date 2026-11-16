@@ -351,8 +351,10 @@ func macContractTest() throws {
     let latchedHud = MacVisuals.statePresentation(for: "active", latched: true)
     guard activeHud.title == "Antigravity is working", !activeHud.isEmergency,
           pausedHud.title.contains("Paused"), !pausedHud.isEmergency,
-          stoppedHud.title == "Stopped · re-arm to begin", stoppedHud.toggleTitle.isEmpty, stoppedHud.isEmergency, stoppedHud.contrastTarget >= 8.5,
-          latchedHud.resolvedState == "stopped", latchedHud.title == "Stopped · re-arm to begin", latchedHud.isEmergency else {
+          stoppedHud.title == "Stopped · task ended", stoppedHud.toggleTitle.isEmpty, !stoppedHud.toggleVisible, stoppedHud.isEmergency, stoppedHud.contrastTarget >= 8.5,
+          activeHud.toggleVisible, pausedHud.toggleVisible, !MacVisuals.statePresentation(for: "idle").toggleVisible,
+          ![activeHud, pausedHud, stoppedHud].contains(where: { $0.title.lowercased().contains("re-arm") || $0.toggleAccessibilityLabel.lowercased().contains("re-arm") }),
+          latchedHud.resolvedState == "stopped", latchedHud.title == "Stopped · task ended", latchedHud.isEmergency else {
         throw AxonError("contract_test_failed", "Mac HUD state presentation or emergency contrast target differs.")
     }
     guard macRole("AXWebArea") == "Document",
@@ -464,21 +466,60 @@ func macContractTest() throws {
             throw AxonError("contract_test_failed", "A changed native session could complete an old approval.")
         }
     }
-    let consentRect = CGRect(x: 40, y: 50, width: 300, height: 160), consentPoint = CGPoint(x: 80, y: 90)
-    func consentRow(_ owner: Int, _ rect: CGRect, _ alpha: Double = 1) -> [String: Any] {
-        [kCGWindowOwnerPID as String: NSNumber(value: owner), kCGWindowAlpha as String: NSNumber(value: alpha),
-         kCGWindowBounds as String: ["X":rect.minX,"Y":rect.minY,"Width":rect.width,"Height":rect.height]]
+    // Access tiers (pure): click-only apps accept a plain left click, moves,
+    // scrolling, focus and window sizing; everything else is refused for the
+    // target and whenever a click-only app is frontmost.
+    let tiered = try MacFenceState("active|tier|1000|\(Data("t:1:/a\nk:2:/b".utf8).base64EncodedString())|2000|0|\(Data("t:1:/a".utf8).base64EncodedString())")
+    guard tiered.clickGrants == ["t:1:/a"], tiered.grants.count == 2,
+          try MacFenceState("active|tier|1000||2000|0").clickGrants.isEmpty,
+          try MacFenceState("idle||0||0|0|").clickGrants.isEmpty else {
+        throw AxonError("contract_test_failed", "Access tier state decoding differs.")
     }
-    let ownModal = consentRow(777, consentRect), foreignCover = consentRow(888, consentRect)
-    guard MacPanicMonitor.consentPointVisible(consentPoint, modal: consentRect, guardian: 777, windows: [ownModal, foreignCover]),
-          !MacPanicMonitor.consentPointVisible(consentPoint, modal: consentRect, guardian: 777, windows: [foreignCover, ownModal]),
-          !MacPanicMonitor.consentPointVisible(consentPoint, modal: consentRect, guardian: 777, windows: [[:],ownModal]),
-          !MacPanicMonitor.consentPointVisible(consentPoint, modal: consentRect, guardian: 777, windows: [[kCGWindowAlpha as String:NSNumber(value:1)],ownModal]),
-          !MacPanicMonitor.consentPointVisible(consentPoint, modal: consentRect, guardian: 777, windows: []),
-          !MacPanicMonitor.consentPointVisible(CGPoint.zero, modal: consentRect, guardian: 777, windows: [ownModal]),
-          !MacPanicMonitor.consentPointVisible(consentPoint, modal: consentRect, guardian: 777, windows: [consentRow(777,consentRect.insetBy(dx: -10, dy: -10))]),
-          MacPanicMonitor.consentPointVisible(consentPoint, modal: consentRect, guardian: 777, windows: [consentRow(888,consentRect,0),ownModal]) else {
-        throw AxonError("contract_test_failed", "Native consent ownership or covering-window classification differs.")
+    do { _ = try MacFenceState("active|tier|1000||2000|0|%%%"); throw AxonError("contract_test_failed", "Malformed access tier state accepted.") }
+    catch let error as AxonError { if error.code == "contract_test_failed" { throw error } }
+    for (op, args) in [("click", [:]), ("click", ["button": "left"]), ("click", ["modifiers": [String]()]), ("click", ["button": NSNull()]),
+                       ("move", [:]), ("scroll", [:]), ("focus", [:]), ("fit_window", [:]), ("resize_window", [:])] as [(String, [String: Any])] {
+        guard MacTier.clickAllows(op, args) else { throw AxonError("contract_test_failed", "Click tier refused \(op).") }
+    }
+    for (op, args) in [("click", ["button": "right"]), ("click", ["button": "middle"]), ("click", ["modifiers": ["cmd"]]), ("click", ["modifiers": "shift"]),
+                       ("click", ["modifiers": 1]), ("type", [:]), ("key", [:]), ("drag", [:]), ("paste", [:]), ("paste_files", [:]), ("set_value", [:]),
+                       ("clipboard", [:]), ("open", [:]), ("launch", [:]), ("file_dialog", [:]), ("close_window", [:])] as [(String, [String: Any])] {
+        guard !MacTier.clickAllows(op, args) else { throw AxonError("contract_test_failed", "Click tier allowed \(op).") }
+    }
+    func tierCode(_ op: String, _ args: [String: Any], target: String?, front: String?, click: Set<String> = ["t:1:/a"]) -> String? {
+        do { try MacTier.check(op, args, appKey: target, clickGrants: click, frontmostKey: { front }); return nil }
+        catch let error as AxonError { return error.code } catch { return "other" }
+    }
+    guard tierCode("type", [:], target: "t:1:/a", front: nil) == "app_tier_click",
+          tierCode("click", ["button": "right"], target: "t:1:/a", front: nil) == "app_tier_click",
+          tierCode("click", [:], target: "t:1:/a", front: "t:1:/a") == nil,
+          tierCode("scroll", [:], target: "t:1:/a", front: nil) == nil,
+          tierCode("type", [:], target: "k:2:/b", front: "t:1:/a") == "app_tier_click",
+          tierCode("key", [:], target: nil, front: "t:1:/a") == "app_tier_click",
+          tierCode("type", [:], target: "k:2:/b", front: "k:2:/b") == nil,
+          tierCode("type", [:], target: "k:2:/b", front: nil) == nil,
+          tierCode("snapshot", [:], target: "t:1:/a", front: "t:1:/a") == nil,
+          tierCode("type", [:], target: "t:1:/a", front: "t:1:/a", click: []) == nil else {
+        throw AxonError("contract_test_failed", "Access tier enforcement for the target or the frontmost app differs.")
+    }
+    // Approvals last for the conversation: per handle and per executable.
+    var table: [String: Set<String>] = [:]
+    table = MacGuardian.remember(table, handle: "h1", executable: "/Applications/TextEdit.app/Contents/MacOS/TextEdit")
+    guard MacGuardian.rememberedAllows(table, handle: "h1", executable: "/Applications/TextEdit.app/Contents/MacOS/TextEdit"),
+          !MacGuardian.rememberedAllows(table, handle: "h2", executable: "/Applications/TextEdit.app/Contents/MacOS/TextEdit"),
+          !MacGuardian.rememberedAllows(table, handle: "h1", executable: "/System/Applications/Calculator.app/Contents/MacOS/Calculator"),
+          !MacGuardian.rememberedAllows(table, handle: nil, executable: "/Applications/TextEdit.app/Contents/MacOS/TextEdit"),
+          !MacGuardian.rememberedAllows(table, handle: "", executable: "/Applications/TextEdit.app/Contents/MacOS/TextEdit"),
+          !MacGuardian.rememberedAllows(table, handle: "h1", executable: nil),
+          MacGuardian.remember(table, handle: String(repeating: "x", count: 65), executable: "/x") == table,
+          MacGuardian.remember(table, handle: "h1", executable: "") == table else {
+        throw AxonError("contract_test_failed", "Remembered approval matching differs.")
+    }
+    var full: [String: Set<String>] = [:]
+    for index in 0..<64 { full = MacGuardian.remember(full, handle: "h\(index)", executable: "/x") }
+    guard full.count == 64, MacGuardian.remember(full, handle: "h65", executable: "/x").count == 1,
+          MacGuardian.remember(full, handle: "h3", executable: "/y").count == 64 else {
+        throw AxonError("contract_test_failed", "Remembered approval bound differs.")
     }
     do { _ = try MacFenceState("active|broken|NaN|"); throw AxonError("contract_test_failed", "Malformed state accepted.") }
     catch let error as AxonError { if error.code == "contract_test_failed" { throw error } }
@@ -500,17 +541,50 @@ func macContractTest() throws {
     // Refusals only: no fake live permission, application grant or input event.
     try MacFence.initialize()
     let pendingApproval = try MacFenceState("active|approval-fixture|\(MacFenceState.now + 100_000_000)||\(MacDeadline.now + 10_000)|0")
+    // An explicit Pause (or Stop) published while the local dialog was open
+    // must win: the old approval cannot complete. Human input never pauses.
     try MacFence.write("active|approval-fixture|\(pendingApproval.until)||\(pendingApproval.bootUntil)|0")
     try MacInputLedger.withLock {
-        guard try MacFence.pauseForTakeover(pendingApproval) else { throw AxonError("contract_test_failed", "Native takeover waited for held input instead of revoking it.") }
+        try MacFence.withTransitionLock { try MacFence.write("paused|approval-fixture|\(pendingApproval.until)||0|1") }
     }
     do {
-        try MacFence.withApprovalFence(pendingApproval) { throw AxonError("contract_test_failed", "An old approval overwrote takeover.") }
-        throw AxonError("contract_test_failed", "An old approval was accepted after takeover.")
+        try MacFence.withApprovalFence(pendingApproval) { throw AxonError("contract_test_failed", "An old approval overwrote a pause.") }
+        throw AxonError("contract_test_failed", "An old approval was accepted after a pause.")
     } catch let error as AxonError { if error.code != "approval_changed" { throw error } }
-    guard try MacFence.read().state == "paused", try MacFence.read().cleanupPending,
-          !(try MacFence.pauseForTakeover(pendingApproval)) else {
-        throw AxonError("contract_test_failed", "Approval completion lost native takeover/cleanup state.")
+    guard try MacFence.read().state == "paused", try MacFence.read().cleanupPending else {
+        throw AxonError("contract_test_failed", "Approval completion lost native pause/cleanup state.")
+    }
+    // clear_stop removes only an exact confirmed marker; uncertain, unreadable,
+    // linked or directory entries stay, and nothing is removed recursively.
+    let clearProbe = MacFence.file + ".clear-probe-" + UUID().uuidString
+    defer { try? FileManager.default.removeItem(atPath: clearProbe + ".unconfirmed"); unlink(clearProbe); rmdir(clearProbe) }
+    guard MacFence.clearConfirmedLatch(clearProbe) == .cleared,
+          MacFence.clearConfirmedLatch("") == .refused("stop_persistence_failed"),
+          MacFence.clearConfirmedLatch("relative/emergency.stop") == .refused("stop_persistence_failed"),
+          MacFence.latchStop(clearProbe), MacFence.clearConfirmedLatch(clearProbe) == .cleared, !MacFence.latchBlocks(clearProbe) else {
+        throw AxonError("contract_test_failed", "A confirmed Stop marker was not cleared exactly.")
+    }
+    for (contents, expected) in [("unconfirmed:abc", "guardian_stop_unconfirmed"), ("stoppedx", "stop_persistence_failed"), ("", "stop_persistence_failed")] {
+        try Data(contents.utf8).write(to: URL(fileURLWithPath: clearProbe))
+        guard MacFence.clearConfirmedLatch(clearProbe) == .refused(expected), MacFence.latchBlocks(clearProbe) else {
+            throw AxonError("contract_test_failed", "An uncertain or invalid Stop marker was cleared.")
+        }
+        unlink(clearProbe)
+    }
+    guard MacFence.latchStop(clearProbe) else { throw AxonError("contract_test_failed", "Cannot create the clear fixture.") }
+    try Data("unconfirmed:companion".utf8).write(to: URL(fileURLWithPath: clearProbe + ".unconfirmed"))
+    guard MacFence.clearConfirmedLatch(clearProbe) == .refused("guardian_stop_unconfirmed"), MacFence.latchBlocks(clearProbe) else {
+        throw AxonError("contract_test_failed", "A Stop with an unconfirmed companion was cleared.")
+    }
+    unlink(clearProbe + ".unconfirmed"); unlink(clearProbe)
+    guard symlink(clearProbe + ".target", clearProbe) == 0,
+          MacFence.clearConfirmedLatch(clearProbe) == .refused("stop_persistence_failed"), unlink(clearProbe) == 0,
+          mkdir(clearProbe, 0o700) == 0, MacFence.clearConfirmedLatch(clearProbe) == .refused("stop_persistence_failed") else {
+        throw AxonError("contract_test_failed", "A linked or directory Stop marker was cleared.")
+    }
+    var probeDirectory = ObjCBool(false)
+    guard FileManager.default.fileExists(atPath: clearProbe, isDirectory: &probeDirectory), probeDirectory.boolValue, rmdir(clearProbe) == 0 else {
+        throw AxonError("contract_test_failed", "Clearing a directory marker changed it.")
     }
     MacFence.current = ["__session": token]
     let live = "active|\(token)|\(MacFenceState.now + 10_000_000)||\(MacDeadline.now + 1000)"
@@ -628,7 +702,7 @@ func macContractTest() throws {
     try Data("invalid journal".utf8).write(to:URL(fileURLWithPath:MacInputLedger.path))
     guard !MacInputLedger.recover() else { throw AxonError("contract_test_failed","Malformed input journal was accepted.") }
     try MacInputLedger.save(["keys":[Int](),"buttons":[Int]()])
-    emit(["ok": true, "control_contract": 1, "checks": ["shared state codec", "malformed state refusal", "canonical approval fingerprint", "sensitive action classification", "kernel process birth identity", "native idle/paused/stopped/expired/session/monitor/Stop refusals", "empty cleanup and malformed input-journal refusal", "official Phosphor resource rendering", "SDK and runtime material selection", "capture visibility and dismissal lifecycle", "native consent ownership geometry", "approval completion and takeover fencing"], "hud_icon_assets": iconAssets, "hud_material": materialBackend, "native_glass_compiled": MacVisuals.nativeGlassCompiled, "desktop_input_sent": false])
+    emit(["ok": true, "control_contract": 1, "checks": ["shared state codec", "malformed state refusal", "canonical approval fingerprint", "sensitive action classification", "kernel process birth identity", "native idle/paused/stopped/expired/session/monitor/Stop refusals", "empty cleanup and malformed input-journal refusal", "official Phosphor resource rendering", "SDK and runtime material selection", "capture visibility and dismissal lifecycle", "access tier enforcement for target and frontmost app", "conversation-scoped remembered approvals", "confirmed-only Stop clearing", "approval completion fenced by Pause and Stop"], "hud_icon_assets": iconAssets, "hud_material": materialBackend, "native_glass_compiled": MacVisuals.nativeGlassCompiled, "desktop_input_sent": false])
 }
 
 func macMoveCursor(_ point: CGPoint, _ args: [String: Any]) throws -> [String: Any] {

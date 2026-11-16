@@ -27,6 +27,9 @@ struct MacHudStatePresentation: Equatable {
     let resolvedState: String
     let title: String
     let toggleTitle: String
+    // Pause/Resume only. Hidden while idle or stopped: there is no re-arm
+    // and no human start; the slot stays empty so positions never move.
+    let toggleVisible: Bool
     let toggleSymbol: String
     let toggleAccessibilityLabel: String
     let stopTitle: String
@@ -114,7 +117,7 @@ final class MacHudButton: NSButton {
 }
 
 final class MacVisuals: NSObject {
-    var onToggle: (() -> Void)?, onStop: (() -> Void)?, onEnd: (() -> Void)?, onMode: ((String) -> Void)?
+    var onToggle: (() -> Void)?, onStop: (() -> Void)?, onEnd: (() -> Void)?
     var panel: MacControlPanel?
     var rootView: NSView?
     var contentContainer: NSView?
@@ -173,6 +176,7 @@ final class MacVisuals: NSObject {
                 resolvedState: "active",
                 title: "Antigravity is working",
                 toggleTitle: "",
+                toggleVisible: true,
                 toggleSymbol: MacPhosphorIcon.pauseFill.rawValue,
                 toggleAccessibilityLabel: "Pause computer use",
                 stopTitle: "Stop",
@@ -186,6 +190,7 @@ final class MacVisuals: NSObject {
                 resolvedState: "paused",
                 title: "Paused · you have control",
                 toggleTitle: "",
+                toggleVisible: true,
                 toggleSymbol: MacPhosphorIcon.playFill.rawValue,
                 toggleAccessibilityLabel: "Resume computer use",
                 stopTitle: "Stop",
@@ -197,10 +202,11 @@ final class MacVisuals: NSObject {
         case "stopped":
             return MacHudStatePresentation(
                 resolvedState: "stopped",
-                title: "Stopped · re-arm to begin",
+                title: "Stopped · task ended",
                 toggleTitle: "",
+                toggleVisible: false,
                 toggleSymbol: MacPhosphorIcon.playFill.rawValue,
-                toggleAccessibilityLabel: "Re-arm computer use",
+                toggleAccessibilityLabel: "",
                 stopTitle: "Hide",
                 stopSymbol: MacPhosphorIcon.xFill.rawValue,
                 stopAccessibilityLabel: "Dismiss stopped controls",
@@ -212,8 +218,9 @@ final class MacVisuals: NSObject {
                 resolvedState: "idle",
                 title: "Antigravity is ready",
                 toggleTitle: "",
+                toggleVisible: false,
                 toggleSymbol: MacPhosphorIcon.playFill.rawValue,
-                toggleAccessibilityLabel: "Start or resume computer use",
+                toggleAccessibilityLabel: "",
                 stopTitle: "Stop",
                 stopSymbol: MacPhosphorIcon.stopFill.rawValue,
                 stopAccessibilityLabel: "Stop computer use immediately",
@@ -318,6 +325,7 @@ final class MacVisuals: NSObject {
         toggle.hudIcon = MacPhosphorIcon(rawValue: presentation.toggleSymbol) ?? .playFill
         toggle.setAccessibilityLabel(presentation.toggleAccessibilityLabel)
         toggle.toolTip = presentation.toggleAccessibilityLabel
+        toggle.isHidden = !presentation.toggleVisible
         stop.hudTitle = presentation.stopTitle
         stop.hudIcon = MacPhosphorIcon(rawValue: presentation.stopSymbol) ?? .stopFill
         stop.setAccessibilityLabel(presentation.stopAccessibilityLabel)
@@ -434,17 +442,13 @@ final class MacVisuals: NSObject {
     @objc func endControl() { onEnd?() }
     @objc func menu() {
         let menu = NSMenu()
-        for (title, value) in [("Keep working — Pause or Esc to interrupt", "manual"), ("Yield on deliberate input", "smart")] {
-            let item = NSMenuItem(title: title, action: #selector(changeMode(_:)), keyEquivalent: "")
-            item.target = self; item.representedObject = value; menu.addItem(item)
-        }
-        menu.addItem(.separator()); let hint = NSMenuItem(title: "Esc always stops immediately", action: nil, keyEquivalent: "")
+        // Human input never pauses the agent; there is no takeover mode.
+        let hint = NSMenuItem(title: "Esc always stops immediately", action: nil, keyEquivalent: "")
         hint.isEnabled = false; menu.addItem(hint)
         let end = NSMenuItem(title: "End session and hide", action: #selector(endControl), keyEquivalent: "")
         end.target = self; menu.addItem(end)
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: 0), in: more)
     }
-    @objc func changeMode(_ item: NSMenuItem) { if let mode = item.representedObject as? String { onMode?(mode) } }
     deinit { releaseCursor() }
 }
 

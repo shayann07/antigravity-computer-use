@@ -104,8 +104,14 @@ const SHELL_APPS = [
   'code', 'code - insiders', 'codium', 'devenv', 'idea64', 'pycharm64',
   'webstorm64', 'rider64', 'clion64', 'goland64', 'phpstorm64', 'rubymine64',
   'sublime_text', 'atom', 'cursor', 'windsurf', 'zed',
-  // macOS terminals and editors.
+  // macOS terminals and editors. The adapter reports the localized app name
+  // (process) and the bundle executable (path); either matching is enough.
   'terminal', 'iterm2', 'iterm', 'warp', 'ghostty', 'visual studio code', 'xcode',
+  'visual studio code - insiders', 'vscodium', 'sublime text', 'nova',
+  'intellij idea', 'intellij idea ce', 'intellij idea ultimate', 'idea',
+  'pycharm', 'pycharm ce', 'pycharm community edition', 'pycharm professional edition',
+  'webstorm', 'goland', 'clion', 'rider', 'phpstorm', 'rubymine', 'rustrover',
+  'datagrip', 'dataspell', 'fleet', 'android studio', 'studio', 'kiro', 'trae',
 ];
 
 // Interpreters, which host both consoles and ordinary GUI windows. Process

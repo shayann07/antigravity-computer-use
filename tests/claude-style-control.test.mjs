@@ -22,6 +22,18 @@ test('terminals and IDEs are click tier, browsers and other apps are full, prote
  assert.equal(accessTier({process:'consent',path:'C:/Windows/System32/consent.exe'}),null);
 });
 
+test('macOS terminals and IDEs are click tier by app name or bundle executable; Mac browsers and editors stay full',()=>{
+ for(const [process,exe] of [['Terminal','Terminal'],['iTerm2','iTerm2'],['Warp','stable'],['Ghostty','ghostty'],['Xcode','Xcode'],
+  ['Code','Electron'],['Visual Studio Code','Electron'],['Cursor','Cursor'],['Zed','zed'],['Sublime Text','sublime_text'],
+  ['IntelliJ IDEA','idea'],['IntelliJ IDEA CE','idea'],['PyCharm','pycharm'],['WebStorm','webstorm'],['Android Studio','studio'],
+  ['GoLand','goland'],['RustRover','rustrover'],['Nova','Nova']])
+  assert.equal(accessTier({process,path:`/Applications/${process}.app/Contents/MacOS/${exe}`}),ACCESS.CLICK,process);
+ for(const [process,exe] of [['Safari','Safari'],['Google Chrome','Google Chrome'],['Firefox','firefox'],['TextEdit','TextEdit'],
+  ['Calculator','Calculator'],['Preview','Preview'],['Pages','Pages'],['Notes','Notes']])
+  assert.equal(accessTier({process,path:`/Applications/${process}.app/Contents/MacOS/${exe}`}),ACCESS.FULL,process);
+ assert.equal(accessTier({process:'1Password',path:'/Applications/1Password.app/Contents/MacOS/1Password'}),null);
+});
+
 test('click tier allows only plain left clicks, moves, scrolls and focus; refusals name the tier',()=>{
  for(const op of ['click','move','scroll','focus','fit_window','resize_window'])assert.equal(accessRefusal(ACCESS.CLICK,op,{}),null,op);
  assert.equal(accessRefusal(ACCESS.CLICK,'click',{button:'left'}),null);
