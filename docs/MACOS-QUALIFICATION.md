@@ -58,7 +58,7 @@ beside them; that comparison is open.
 | 2 Menu: 312 wide, 12 radius, 44-pt rows, opacity and 0.96 scale, 200 ms in, 133 ms out | done | pictures `menu-main`, `menu-main-row-hover`/`-pressed`, `menu-move-bar`, `menu-page-change-33ms`…`150ms`, `menu-opening-25pct`/`50pct`, `menu-main-above-low-bar`, `menu-main-recording-on`; the human used the tick, Move bar and click-outside close |
 | 2 Menu tick slides; unticked rows left-aligned | done (Mac-only, asked for by the human) | picture `menu-main-tick-sliding-in-50pct`; differs from Windows |
 | 2 Prompt card: 496 wide, 18 radius, Allow and Deny 104×44, Deny focused, Return and Esc deny, 90 s note | done | pictures `prompt-app`, `prompt-action-long`, `prompt-launch`, `prompt-states-*`; two cards seen on screen by the human, Allow used |
-| 2 No Pause anywhere | done | the guardian refuses `pause`/`resume` with `pause_removed`; no Pause in the bar or menu. `runtime.mjs:930` and `:937` are left alone, as asked |
+| 2 No Pause anywhere | done | the guardian refuses `pause`/`resume` with `pause_removed`; no Pause in the bar or menu. The runtime part was removed on `feat/final-native` and is merged here |
 | 3 Glow: one palette, thick, never static, no rectangle or steps | done | pictures `glow-{dark,light}-{window,full-screen}-{soft,medium,bright}` (12); the human saw it around Preview's alert |
 | 3 Glow: Soft default, Medium, Bright; one 60 s lap; entrance fades while the band widens | done | pictures above and `glow-entrance-start`/`-end`; level is a menu row |
 | 3 Glow: 15 fps at rest | measured | 302 frames in 20 s, one every 66.0 ms, at each level |
@@ -80,6 +80,9 @@ beside them; that comparison is open.
 | Entrance frame time | not measured (render server) | about 19 ms |
 | WindowServer CPU without / with the glow | 28.4 % / 32.8–33.3 % (+4.4–4.9 points) | |
 | Idle service helpers, no glow | guardian 2.4 %, watchdog 1.7 % of one core | |
+
+The glow figures are the bare trial process. The real guardian idles at
+2.4 % without a glow, so it is not like-for-like with Windows' 0.8 %.
 | `snapshot` without / with picture | 0.59–0.65 s / 1.14–1.62 s | |
 | `apps`, `ready` | 0.27–0.76 s, 0.42 s | |
 | s per click, s per drag | not measured: every pixel click and drag on Preview needed a card (below) | about 1.04 s per drag |
@@ -96,11 +99,14 @@ drag on the Mac is sensitive: `MacFence.preview` gives pixel actions an empty
 label (`MacControl.swift:313-314`), and the shared contract makes a click or
 drag with an empty label sensitive (`ambiguous_target_operations`). Windows
 instead hit-tests the pixel and uses that control's name (`AxonHost.cs:634`),
-so the Mac asks where Windows may not. Preview's canvas image has no name
+so the Mac asks where Windows may not. Also, the Mac runtime refuses
+`drag --points` outright (`points_unsupported`, `runtime.mjs:644`): multi-point
+strokes are not implemented on the Mac yet, only from/to segments. Preview's
+canvas image has no name
 either way, so every stroke would need its own approval card. Markup's toolbar
 pen is not exposed to accessibility, so turning Markup on is also a pixel
 click. The human approved one card; the click was then refused as covered
-(Claude was in front), and the next card timed out at 90 s. Unblocking needs
+(another window covered it), and the next card timed out at 90 s. Unblocking needs
 an owner decision: hit-test pixels on the Mac as on Windows, and decide
 whether an unnamed canvas in a full-tier app may take routine drags.
 
@@ -110,6 +116,11 @@ pattern for `ctrl+shift+…`.
 
 #### Not checked
 
+- The installed build C2 is `1002b5a`. The base merge and the action-point fix
+  (`d732f64` and later) have not run on this Mac yet.
+- The alert-click fix on a visible alert; the tick slide installed on screen.
+- Recovery condition "never resumes" is tested at helper level and seen once
+  physically; there is no Runtime-level test yet.
 - Physical Esc and Control+Option+F12 during a task, with and without held
   input (#99 tests 4–6).
 - The drawing test (blocked, above); s per click and s per drag.

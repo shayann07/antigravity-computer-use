@@ -151,8 +151,9 @@ export function readRecoveryFile(file,limit,io=fs){
   }finally{io.closeSync(fd);}
 }
 // macOS only. A guardian killed mid-task leaves its state file reading
-// "active". That alone is not evidence of held input: the guardian writes the
-// input ledger before every press and clears it after every release. "active"
+// "active". That alone is not evidence of held input: the input worker records
+// each press in the ledger before posting it and clears it after the release
+// (AxonHost.swift, MacInputLedger.record). "active"
 // is accepted only when every actor the old task recorded is gone and the
 // ledger is a plain, single-link, readable file holding the empty ledger, which
 // is the evidence the Windows guardian relies on (no held input, all workers

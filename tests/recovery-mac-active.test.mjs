@@ -76,9 +76,9 @@ test('mac active state: the ledger must exist, be a plain readable file, and be 
   for(const held of ['{"keys":[42],"buttons":[]}','{"keys":[],"buttons":[0]}','','{"keys":[]}','garbage'])
   {fs.writeFileSync(ledger,held);assert.equal(ok(),false,kind+' ledger '+JSON.stringify(held));}reset();
   fs.writeFileSync(other,EMPTY);fs.rmSync(ledger);fs.linkSync(other,ledger);assert.equal(ok(),false,kind+' hard-linked ledger');fs.rmSync(other);reset();
-  fs.writeFileSync(other,EMPTY);fs.rmSync(ledger);fs.symlinkSync(other,ledger);assert.equal(ok(),false,kind+' symlinked ledger');fs.rmSync(ledger);fs.rmSync(other);reset();
+  if(process.platform!=='win32'){fs.writeFileSync(other,EMPTY);fs.rmSync(ledger);fs.symlinkSync(other,ledger);assert.equal(ok(),false,kind+' symlinked ledger');fs.rmSync(ledger);fs.rmSync(other);reset();}
   fs.rmSync(ledger);fs.mkdirSync(ledger);assert.equal(ok(),false,kind+' directory ledger');reset();
-  if(process.getuid?.()!==0){fs.chmodSync(ledger,0o000);assert.equal(ok(),false,kind+' unreadable ledger');fs.chmodSync(ledger,0o600);}
+  if(process.platform!=='win32'&&process.getuid?.()!==0){fs.chmodSync(ledger,0o000);assert.equal(ok(),false,kind+' unreadable ledger');fs.chmodSync(ledger,0o600);}
   assert.equal(ok(),true,kind+' restored');
  }}finally{fs.rmSync(dir,{recursive:true,force:true});}
 });

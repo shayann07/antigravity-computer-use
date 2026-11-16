@@ -712,7 +712,7 @@
     },
     {
       "path": "server/recovery.mjs",
-      "sha256": "0c5e7328c992ae5890830660c72629cc12663751cc462edea0cd7c1ba3fd488d"
+      "sha256": "5862ac7bf41494e58d0cfb9264873a63b05a4f72bd13451c79a0e4d8c2fcfe53"
     },
     {
       "path": "scripts/qualify-guardian-desktop.mjs",
@@ -764,7 +764,7 @@
     },
     {
       "path": "docs/MACOS-QUALIFICATION.md",
-      "sha256": "8a949de72897c669e3b9739a62e5d3c8865eb4773f15cafca61a7ad3b7909641"
+      "sha256": "652f503f7df78db9f38c087724c0aae6286b802db06c47bf5ddbc8f2bd1b07e5"
     },
     {
       "path": "tests/MacStorageMarkerWriter.swift",
