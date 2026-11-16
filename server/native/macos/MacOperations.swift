@@ -865,6 +865,29 @@ func macContractTest() throws {
     let shortCard = MacPromptCardView(message: "Allow this application for this session?\n\nCalculator", fallback: "x")
     let longCard = MacPromptCardView(message: "Approve ONE sensitive operation?\n\n" + String(repeating: "A long request line that wraps.\n", count: 80), fallback: "x")
     let untitled = MacPromptCardView(message: String(repeating: "no newline ", count: 20), fallback: "Allow one sensitive action?")
+    // App rows (card:1): only the enforced tiers have a row, the heading names
+    // the host, and long details scroll under the row instead of growing the card.
+    guard let fullRow = MacPromptApp.make(tier: "full", name: "TextEdit", conversation: true),
+          let clickRow = MacPromptApp.make(tier: "click", name: "Terminal", conversation: false),
+          fullRow.level == 2, fullRow.tag == "Full control", fullRow.sentence == "Can see, click and type", fullRow.sub == "Until you start a new conversation",
+          clickRow.level == 1, clickRow.tag == "Click only", clickRow.sentence == "Can see and click. Cannot type", clickRow.sub == "For this task",
+          MacPromptApp.make(tier: "routine", name: "TextEdit", conversation: true) == nil,
+          MacPromptApp.make(tier: "full", name: "", conversation: true) == nil,
+          MacPromptApp.appName("/System/Applications/TextEdit.app/Contents/MacOS/TextEdit") == "TextEdit",
+          MacPromptApp.appName("/usr/bin/some-tool") == "some-tool" else {
+        throw AxonError("contract_test_failed", "App row tiers, words or names differ from Windows.")
+    }
+    let rowCard = MacPromptCardView(app: fullRow, host: "Antigravity", details: "/Applications/X.app/Contents/MacOS/X\nPID 9\n\nTask: t")
+    let unnamedHost = MacPromptCardView(app: clickRow, host: "", details: "x")
+    let longRow = MacPromptCardView(app: fullRow, host: "Antigravity", details: String(repeating: "A long task line that wraps.\n", count: 80))
+    guard rowCard.title == "Allow Antigravity to use this app?", unnamedHost.title == "Allow the agent to use this app?",
+          let rowBody = rowCard.content as? MacPromptAppBody, let longBody = longRow.content as? MacPromptAppBody,
+          !rowCard.bodyScrolls, longRow.bodyScrolls,
+          rowBody.details.frame.minY == MacPromptAppBody.header, rowBody.tagRect.maxX <= rowBody.rowRect.maxX - 12,
+          longBody.frame.height == MacPromptAppBody.header + MacDesign.promptBodyMost, longBody.details.hasVerticalScroller,
+          rowCard.card.height > shortCard.card.height else {
+        throw AxonError("contract_test_failed", "App row card layout differs.")
+    }
     // The approved window may be an app's own alert above layer 0 (found on
     // Preview's "couldn't be opened" alert): it is the target, not a popup.
     let at = CGPoint(x: 50, y: 50), box = CGRect(x: 0, y: 0, width: 100, height: 100)
@@ -990,7 +1013,7 @@ func macContractTest() throws {
           MacBarPlacement.avoid(hud: barAtTop, target: CGRect(x: 700, y: 830, width: 0, height: 4), work: barWork) == nil else {
         throw AxonError("contract_test_failed", "Bar avoidance differs from WindowGeometry.AvoidHud.")
     }
-    emit(["ok": true, "control_contract": 1, "checks": ["shared state codec", "own HUD chrome excluded from occlusion", "an app's own alert above layer 0 is a valid target", "typed characters carry text without modifiers", "saved approvals expire and are capped", "malformed state refusal", "canonical approval fingerprint", "sensitive action classification", "kernel process birth identity", "native idle/paused/stopped/expired/session/monitor/Stop refusals", "empty cleanup and malformed input-journal refusal", "official Phosphor resource rendering", "bar words, states and geometry; menu layout, page timing; drag band and spring", "capture visibility and dismissal lifecycle", "access tier enforcement for target and frontmost app", "conversation-scoped remembered approvals", "confirmed-only Stop clearing", "approval completion fenced by Stop and legacy pause", "shared motion curves", "access prompt layout and placement", "access card stays visible when the helper is inactive", "window glow falloff, mask, matching and levels", "glow lit inside on full-screen edges, entrance widens, panel never moved under the menu bar", "bar docks, drag landing and avoidance", "shared Cmd/Ctrl key rule through ICU", "pixel drags and unreachable click targets stay unnamed", "polyline stroke hops match Windows"], "hud_icon_assets": iconAssets, "hud_material": "ink_surface", "desktop_input_sent": false])
+    emit(["ok": true, "control_contract": 1, "checks": ["shared state codec", "own HUD chrome excluded from occlusion", "an app's own alert above layer 0 is a valid target", "typed characters carry text without modifiers", "saved approvals expire and are capped", "malformed state refusal", "canonical approval fingerprint", "sensitive action classification", "kernel process birth identity", "native idle/paused/stopped/expired/session/monitor/Stop refusals", "empty cleanup and malformed input-journal refusal", "official Phosphor resource rendering", "bar words, states and geometry; menu layout, page timing; drag band and spring", "capture visibility and dismissal lifecycle", "access tier enforcement for target and frontmost app", "conversation-scoped remembered approvals", "confirmed-only Stop clearing", "approval completion fenced by Stop and legacy pause", "shared motion curves", "access prompt layout and placement", "access card stays visible when the helper is inactive", "window glow falloff, mask, matching and levels", "glow lit inside on full-screen edges, entrance widens, panel never moved under the menu bar", "bar docks, drag landing and avoidance", "shared Cmd/Ctrl key rule through ICU", "pixel drags and unreachable click targets stay unnamed", "polyline stroke hops match Windows", "app rows: tiers, words, heading and scrolling details"], "hud_icon_assets": iconAssets, "hud_material": "ink_surface", "desktop_input_sent": false])
 }
 
 func macMoveCursor(_ point: CGPoint, _ args: [String: Any]) throws -> [String: Any] {

@@ -14,7 +14,8 @@ test('saved conversation approvals round-trip, expire after a day idle and keep 
   for(let i=0;i<70;i++)sessions.set(handle(i),{seen:now-i*1000,apps:new Map([[`/Applications/A${i}.app/Contents/MacOS/A`,'full']])});
   sessions.set(handle(99),{seen:now-APPROVAL_IDLE_MS-1,apps:new Map([['/x','click']])});
   saveConversationApprovals(file,sessions,{now});
-  assert.equal(fs.statSync(file).mode&0o777,0o600);
+  // POSIX permission bits; Windows reports 0o666 for any writable file.
+  if(process.platform!=='win32')assert.equal(fs.statSync(file).mode&0o777,0o600);
   const loaded=loadConversationApprovals(file,{now});
   assert.equal(loaded.size,MAX_CONVERSATIONS);assert(loaded.has(handle(0)));assert(!loaded.has(handle(69)));assert(!loaded.has(handle(99)));
   assert.equal(loaded.get(handle(0)).apps.get('/Applications/A0.app/Contents/MacOS/A'),'full');

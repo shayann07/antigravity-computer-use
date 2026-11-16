@@ -226,7 +226,7 @@ final class MacGuardian: NSObject {
         try writeState(); visuals.hide()
         emit(["ev": "settings", "takeover_mode": "manual"])
         emit(["ev": "ready", "pid": Int(getpid()), "hotkey": false, "presence": false, "platform": "darwin",
-              "clear_stop": true, "session_reason": true, "remembered_approvals": true, "access_tiers": true])
+              "clear_stop": true, "session_reason": true, "remembered_approvals": true, "access_tiers": true, "prompt_card": true])
         timer = Timer(timeInterval: 0.07, repeats: true) { [weak self] _ in self?.tick() }
         RunLoop.main.add(timer!, forMode: .common); RunLoop.main.add(timer!, forMode: .modalPanel)
         Thread.detachNewThread { [weak self] in
@@ -463,9 +463,22 @@ final class MacGuardian: NSObject {
                         let parts = MacPromptCardView.split(request, fallback: "")
                         request = (parts.title.isEmpty ? "" : parts.title + "\n\n") + path + "\n\n" + parts.body
                     }
+                    // An app request with card:1 is shown as a row. Its name and
+                    // path come from this guardian's own identity of the process,
+                    // its tag from the same tier that is granted below. Any other
+                    // tier, or a failed identity lookup, keeps the text card.
+                    var card: MacPromptCardView?
+                    if kind == "app", int(message["card"], 0) == 1, let path = identity?["path"] as? String, let pid = identity?["pid"] as? Int,
+                       let app = MacPromptApp.make(tier: str(message["tier"]) ?? "full", name: MacPromptApp.appName(path), conversation: handle != nil) {
+                        let line: (String, String) -> String = { field, lead in
+                            let text = (str(message[field]) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                            return text.isEmpty ? "" : lead + String(text.prefix(2000))
+                        }
+                        card = MacPromptCardView(app: app, host: visuals.hostName, details: path + "\nPID \(pid)" + line("task", "\n\nTask: ") + line("notice", "\n\n"))
+                    }
                     allowed = MacAccessPrompt.run(message: request,
                                                   fallback: kind == "app" ? "Allow this app for this session?" : "Allow one sensitive action?",
-                                                  bar: bar, onPanel: { [weak self] in self?.prompt = $0 }, timedOut: &timedOut)
+                                                  bar: bar, onPanel: { [weak self] in self?.prompt = $0 }, timedOut: &timedOut, card: card)
                     tick() // Resolve Stop and expiry before restoring control visuals.
                     visuals.endPrompt()
                 }

@@ -75,6 +75,8 @@ enum MacDesign {
     static let promptPad: CGFloat = 16, promptTitle: CGFloat = 22, promptBodyMost: CGFloat = 300
     static let promptButtonWidth: CGFloat = 104, promptButtonHeight: CGFloat = 44, promptButtonRadius: CGFloat = 12
     static let promptRing: CGFloat = 3, promptButtonGap: CGFloat = 8, promptGap: CGFloat = 8
+    // The app row (card:1), as DesktopVisuals.cs PromptSub and PromptRow.
+    static let promptSub: CGFloat = 18, promptRow: CGFloat = 56
     static let promptTimeout: TimeInterval = 90
     static let promptNote = "No answer in 90 s counts as Deny"
     static let promptTitleFont = NSFont.systemFont(ofSize: 16, weight: .semibold)

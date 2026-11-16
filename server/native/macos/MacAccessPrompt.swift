@@ -89,8 +89,106 @@ final class MacPromptButton: NSButton {
 protocol MacPromptBody: NSView {
     // The height the body wants at the card's inner width, before the limit.
     var naturalHeight: CGFloat { get }
+    // The tallest the body may be; past that its text scrolls.
+    var mostHeight: CGFloat { get }
     // The view that takes Tab after Allow.
     var keyView: NSView { get }
+}
+extension MacPromptBody { var mostHeight: CGFloat { MacDesign.promptBodyMost } }
+
+// One app row for an app request that carries card:1 (DesktopVisuals.cs
+// PromptApp). Only the tiers native controls enforce have a row; any other
+// tier, or no name, keeps the text card.
+struct MacPromptApp: Equatable {
+    let name: String, sentence: String, tag: String, sub: String, level: Int   // bars lit: 1 click only, 2 full control
+    static func make(tier: String, name: String, conversation: Bool) -> MacPromptApp? {
+        let sub = conversation ? "Until you start a new conversation" : "For this task"
+        guard !name.isEmpty else { return nil }
+        switch tier {
+        case "full": return MacPromptApp(name: name, sentence: "Can see, click and type", tag: "Full control", sub: sub, level: 2)
+        case "click": return MacPromptApp(name: name, sentence: "Can see and click. Cannot type", tag: "Click only", sub: sub, level: 1)
+        default: return nil
+        }
+    }
+    // The app's own display name from its bundle, or its file name. Never blank.
+    static func appName(_ executable: String) -> String {
+        var url = URL(fileURLWithPath: executable)
+        while url.path != "/" && url.pathExtension != "app" { url.deleteLastPathComponent() }
+        if url.pathExtension == "app", let info = Bundle(url: url)?.infoDictionary {
+            for key in ["CFBundleDisplayName", "CFBundleName"] {
+                if let name = (info[key] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty, name.count <= 48 { return name }
+            }
+            let file = url.deletingPathExtension().lastPathComponent
+            if !file.isEmpty { return file }
+        }
+        let file = URL(fileURLWithPath: executable).lastPathComponent
+        return file.isEmpty ? executable : file
+    }
+}
+
+// The app row over the request text: the line under the heading, a plate with
+// the app's name, its sentence and the tier tag (a word plus the two-step
+// mark, so it never rests on colour), then path, PID, task and notice as text
+// that scrolls past promptBodyMost.
+final class MacPromptAppBody: NSView, MacPromptBody {
+    let app: MacPromptApp
+    let details: MacPromptTextBody
+    static let rowTop = MacDesign.promptSub + 4
+    static let header = rowTop + MacDesign.promptRow + 10
+    var naturalHeight: CGFloat { MacPromptAppBody.header + max(details.naturalHeight, 18) }
+    var mostHeight: CGFloat { MacPromptAppBody.header + MacDesign.promptBodyMost }
+    var keyView: NSView { details.text }
+    override var isFlipped: Bool { true }
+    init(_ app: MacPromptApp, details text: String, width: CGFloat) {
+        self.app = app
+        details = MacPromptTextBody(text, width: width)
+        super.init(frame: NSRect(x: 0, y: 0, width: width, height: 10))
+        addSubview(details)
+        setAccessibilityElement(true); setAccessibilityRole(.group)
+        setAccessibilityLabel("\(app.name), \(app.tag). \(app.sentence). \(app.sub).")
+    }
+    required init?(coder: NSCoder) { fatalError("unused") }
+    override func setFrameSize(_ size: NSSize) {
+        super.setFrameSize(size)
+        let room = max(18, size.height - MacPromptAppBody.header)
+        details.frame = NSRect(x: 0, y: MacPromptAppBody.header, width: size.width, height: room)
+        details.hasVerticalScroller = details.naturalHeight > room + 0.5
+    }
+    var rowRect: NSRect { NSRect(x: 0, y: MacPromptAppBody.rowTop, width: bounds.width, height: MacDesign.promptRow) }
+    var tagRect: NSRect {
+        let word = (app.tag as NSString).size(withAttributes: [.font: MacPromptAppBody.tagFont]).width
+        let wide = ceil(word) + 10 + 14 + 10, high: CGFloat = 24, row = rowRect
+        return NSRect(x: row.maxX - 12 - wide, y: row.minY + (row.height - high) / 2, width: wide, height: high)
+    }
+    static let tagFont = NSFont.systemFont(ofSize: 12, weight: .semibold)
+    static let nameFont = NSFont.systemFont(ofSize: 13, weight: .semibold)
+    override func draw(_ dirtyRect: NSRect) {
+        let contrast = MacDesign.increaseContrast
+        let strong = contrast ? NSColor.labelColor : MacDesign.paperText, soft = contrast ? NSColor.labelColor : MacDesign.mist
+        let line: (String, NSFont, NSColor, NSRect) -> Void = { text, font, color, box in
+            let style = NSMutableParagraphStyle(); style.lineBreakMode = .byTruncatingTail
+            NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: color, .paragraphStyle: style]).draw(in: box)
+        }
+        line(app.sub, MacDesign.promptNoteFont, soft, NSRect(x: 0, y: 0, width: bounds.width, height: MacDesign.promptSub))
+        let row = rowRect, plate = NSBezierPath(roundedRect: row, xRadius: 12, yRadius: 12)
+        if contrast { NSColor.labelColor.setStroke(); plate.lineWidth = 1; plate.stroke() }
+        else { NSColor(white: 1, alpha: 16.0 / 255).setFill(); plate.fill() }
+        let tag = tagRect
+        let outline = NSBezierPath(roundedRect: tag.insetBy(dx: 0.5, dy: 0.5), xRadius: 7, yRadius: 7)
+        (contrast ? strong : NSColor(white: 1, alpha: 102.0 / 255)).setStroke(); outline.lineWidth = 1; outline.stroke()
+        for bar in 0..<2 {
+            let high: CGFloat = bar == 0 ? 6 : 10
+            let mark = NSRect(x: tag.minX + 10 + CGFloat(bar) * 6, y: tag.maxY - 7 - high, width: 4, height: high)
+            if bar < app.level { strong.setFill(); mark.fill() }
+            else { (contrast ? strong : NSColor(white: 1, alpha: 120.0 / 255)).setStroke(); let box = NSBezierPath(rect: mark.insetBy(dx: 0.5, dy: 0.5)); box.lineWidth = 1; box.stroke() }
+        }
+        let word = NSAttributedString(string: app.tag, attributes: [.font: MacPromptAppBody.tagFont, .foregroundColor: strong])
+        let wordSize = word.size()
+        word.draw(at: NSPoint(x: tag.minX + 10 + 14, y: tag.midY - wordSize.height / 2))
+        let text = tag.minX - 12 - (row.minX + 14)
+        line(app.name, MacPromptAppBody.nameFont, strong, NSRect(x: row.minX + 14, y: row.minY + 9, width: text, height: 20))
+        line(app.sentence, MacDesign.promptNoteFont, soft, NSRect(x: row.minX + 14, y: row.minY + 29, width: text, height: 18))
+    }
 }
 
 // The request as text: shown whole, scrolling past promptBodyMost, never cut.
@@ -138,15 +236,15 @@ final class MacPromptCardView: NSView {
         }
         return (fallback, text)
     }
-    init(message: String, fallback: String, margin: CGFloat = 36, content replacement: MacPromptBody? = nil) {
+    init(message: String, fallback: String, margin: CGFloat = 36, content replacement: MacPromptBody? = nil, heading: String? = nil) {
         let parts = MacPromptCardView.split(message, fallback: fallback)
-        title = parts.title; self.margin = margin
+        title = heading ?? parts.title; self.margin = margin
         let pad = MacDesign.promptPad, width = MacDesign.promptWidth, inner = width - 2 * pad
         content = replacement ?? MacPromptTextBody(parts.body, width: inner)
         super.init(frame: .zero)
         // As tall as its content, up to the limit; past that it scrolls, and nothing is cut.
-        bodyScrolls = content.naturalHeight > MacDesign.promptBodyMost
-        let tall = min(max(content.naturalHeight, 18), MacDesign.promptBodyMost)
+        bodyScrolls = content.naturalHeight > content.mostHeight
+        let tall = min(max(content.naturalHeight, 18), content.mostHeight)
         (content as? NSScrollView)?.hasVerticalScroller = bodyScrolls
         let top = pad + MacDesign.promptTitle + 8
         card = NSRect(x: margin, y: margin, width: width, height: 0)
@@ -164,6 +262,14 @@ final class MacPromptCardView: NSView {
         setAccessibilityElement(true); setAccessibilityRole(.group); setAccessibilityLabel(title)
     }
     required init?(coder: NSCoder) { fatalError("unused") }
+    // The card for an app request with a row: the heading names the host,
+    // the row the app, and the text under it the identity, task and notice.
+    convenience init(app: MacPromptApp, host: String, details: String, margin: CGFloat = 36) {
+        let inner = MacDesign.promptWidth - 2 * MacDesign.promptPad
+        self.init(message: details, fallback: "", margin: margin,
+                  content: MacPromptAppBody(app, details: details, width: inner),
+                  heading: "Allow \(host.isEmpty ? "the agent" : host) to use this app?")
+    }
     var noteWidth: CGFloat { allow.frame.minX + MacDesign.promptRing - (margin + MacDesign.promptPad) - 12 }
     override func draw(_ dirtyRect: NSRect) {
         let contrast = MacDesign.increaseContrast
@@ -226,8 +332,8 @@ enum MacAccessPrompt {
     }
     // Runs the prompt modally. Returns true only for an explicit Allow.
     // onPanel lets the guardian abort it on Stop; the expiry denies.
-    static func run(message: String, fallback: String, bar: NSRect?, onPanel: (NSPanel?) -> Void, timedOut: inout Bool) -> Bool {
-        let view = MacPromptCardView(message: message, fallback: fallback)
+    static func run(message: String, fallback: String, bar: NSRect?, onPanel: (NSPanel?) -> Void, timedOut: inout Bool, card: MacPromptCardView? = nil) -> Bool {
+        let view = card ?? MacPromptCardView(message: message, fallback: fallback)
         let screen = (bar.flatMap { b in NSScreen.screens.first { $0.frame.intersects(b) } } ?? NSScreen.main ?? NSScreen.screens.first)?.visibleFrame
             ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
         let cardRect = MacPromptCardView.placement(card: view.card.size, bar: bar, screen: screen)
@@ -275,9 +381,19 @@ enum MacAccessPrompt {
         ]
         var written: [String] = []
         try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-        for (name, message, adjust) in samples {
-            let view = MacPromptCardView(message: message, fallback: "Computer Use needs your answer")
-            adjust(view)
+        let notice = "Its screenshots and accessibility text go to Antigravity's configured model. Ordinary actions run autonomously. Consequential effects need a separate confirmation. Your real mouse/keyboard will be used. Esc or Ctrl+Alt+F12 stops. Use a disposable account/VM for important data."
+        let rows: [(String, MacPromptCardView)] = [
+            ("row-full", MacPromptCardView(app: MacPromptApp.make(tier: "full", name: "TextEdit", conversation: true)!, host: "Antigravity",
+                details: "/System/Applications/TextEdit.app/Contents/MacOS/TextEdit\nPID 18244\n\nTask: Type the meeting notes into TextEdit and save them.\n\n" + notice)),
+            ("row-click", MacPromptCardView(app: MacPromptApp.make(tier: "click", name: "Terminal", conversation: false)!, host: "Antigravity",
+                details: "/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal\nPID 912\n\nTask: Read the build log.\n\n" + notice)),
+            ("row-long", MacPromptCardView(app: MacPromptApp.make(tier: "full", name: "A very long application display name that keeps going", conversation: true)!, host: "",
+                details: "/Applications/Long.app/Contents/MacOS/Long\nPID 4242\n\nTask: " + String(repeating: "Fill in every field of the long form and check each total. ", count: 9) + "\n\n" + notice)),
+        ]
+        let cards = samples.map { sample -> (String, MacPromptCardView) in
+            let view = MacPromptCardView(message: sample.1, fallback: "Computer Use needs your answer"); sample.2(view); return (sample.0, view)
+        } + rows
+        for (name, view) in cards {
             let sheet = NSView(frame: view.frame); sheet.wantsLayer = true
             sheet.layer?.backgroundColor = NSColor(srgbRed: 31 / 255, green: 33 / 255, blue: 40 / 255, alpha: 1).cgColor
             sheet.addSubview(view)
