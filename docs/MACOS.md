@@ -149,7 +149,7 @@ macOS may require new permission approval after an ad-hoc-signed update.
   `NSVisualEffectView` fallback on macOS 14/15, pure filled Phosphor Icons
   without status dots or strokes, and clear state labels for
   `Antigravity is working`, `Paused · you have control` and
-  `Stopped · task ended`), breathing screen edges and original arrow/text
+  `Stopped · task ended`), the window glow and an original arrow/text
   pointer. The bar's toggle is Pause/Resume only and is hidden while idle or
   stopped; there is no Re-arm control. Emergency Stop uses a high-opacity crimson glass tint (`alpha = 0.88`,
   `>= 8.5:1` contrast) so translucent material never obscures the stopped state.
@@ -157,6 +157,16 @@ macOS may require new permission approval after an ad-hoc-signed update.
   with the same values as Windows' `DesktopVisuals.cs` (a test keeps them
   equal). The bar enters over `normal` (200 ms) easing out from 0.96; Reduce
   Motion keeps a short fade without the scale.
+- The glow (`MacGlow.swift`) lights the window that last received an action,
+  as on Windows: a soft blue-to-violet band on the window's edge that tapers
+  to nothing (no rectangle, dithered so there are no steps), turning one lap
+  in 60 s and swelling slowly on a 15 fps clock at rest. Its bright part eases
+  toward the pointer after a click, move, drag or scroll. Brightness is a menu
+  setting: Soft (default), Medium, Bright. The runtime passes the window's pid
+  and frame; the guardian lights it only for a granted process. Measured at
+  rest on an Intel i7-9750H around a 1132x995 window: the process about 0.9 %
+  of one core and the window server about 6 points more than without it.
+  `AxonHost --glow-preview <dir>` and `--glow-trial <seconds>` review it.
 - The access prompt is a card on the bar's dark surface, matching the Windows
   design (`docs/visual-design.md`): 496 wide, 18 radius, one soft shadow and a
   hairline; the first line is the title and the rest scrolls past 300 pt;
