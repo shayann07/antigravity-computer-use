@@ -688,7 +688,8 @@ namespace Axon {
                 if(body.Held)body.Hold(Left+Width/2.0,Top+Height/2.0,seconds);
                 body.Advance(seconds);
                 if(!body.Held)Location=new Point((int)Math.Round(body.CentreX-Width/2.0),(int)Math.Round(body.CentreY-Height/2.0));
-                if(body.Done){EndBody();Landed();}else {PresentGhost();busy=true;}
+                // While held, a mouse move has usually drawn this frame already.
+                if(body.Done){EndBody();Landed();}else {if(!body.Held||Stopwatch.GetTimestamp()-lastGhostTick>Stopwatch.Frequency/100)PresentGhost();busy=true;}
             }
             if(sliding) {
                 double t=(now-slideAt).TotalMilliseconds/slideMs;
@@ -746,7 +747,9 @@ namespace Axon {
             using(Graphics g=Graphics.FromImage(next)){g.Clear(Color.Transparent);g.ScaleTransform(visualScale,visualScale);DesktopVisuals.Hud(g,Model());}
             Bitmap old=bodyPicture;bodyPicture=next;bodyPictureStale=false;if(old!=null)old.Dispose();
         }
+        long lastGhostTick;const int GhostGap=7;Bitmap ghostSurface;
         void PresentGhost() {
+            lastGhostTick=Stopwatch.GetTimestamp();
             if(body==null||ghost==null||ghost.IsDisposed||bodyPicture==null)return;
             if(bodyPictureStale)RenderBodyPicture();
             double a,b,c,d;body.Shape(out a,out b,out c,out d);
@@ -754,14 +757,16 @@ namespace Axon {
             // Whole pixels only: a picture drawn at sub-pixel offsets shimmers.
             int gx=(int)Math.Round(cx-ghostSize.Width/2.0),gy=(int)Math.Round(cy-ghostSize.Height/2.0);long began=Stopwatch.GetTimestamp();
             try {
-                using(Bitmap surface=new Bitmap(ghostSize.Width,ghostSize.Height,System.Drawing.Imaging.PixelFormat.Format32bppPArgb)) {
+                // One surface per gesture, cleared and reused for every frame.
+                if(ghostSurface==null||ghostSurface.Size!=ghostSize){if(ghostSurface!=null)ghostSurface.Dispose();ghostSurface=new Bitmap(ghostSize.Width,ghostSize.Height,System.Drawing.Imaging.PixelFormat.Format32bppPArgb);}
+                Bitmap surface=ghostSurface;{
                     using(Graphics g=Graphics.FromImage(surface)) {
                         g.Clear(Color.Transparent);
                         int left=(ghostSize.Width-Width)/2,top=(ghostSize.Height-Height)/2;
                         // At its own shape the picture is copied pixel for pixel, so the text holds still.
                         if(Math.Abs(a-1)<.002&&Math.Abs(d-1)<.002)g.DrawImageUnscaled(bodyPicture,left,top);
                         else {
-                            g.InterpolationMode=InterpolationMode.HighQualityBilinear;g.PixelOffsetMode=PixelOffsetMode.HighQuality;
+                            g.InterpolationMode=InterpolationMode.Bilinear;g.PixelOffsetMode=PixelOffsetMode.Half;
                             g.TranslateTransform(left+Width/2f,top+Height/2f);g.ScaleTransform((float)a,(float)d);
                             g.DrawImage(bodyPicture,new RectangleF(-Width/2f,-Height/2f,Width,Height));
                         }
@@ -816,6 +821,10 @@ namespace Axon {
                     Location=new Point(Band(p.X-dragGrab.X,work.Left,work.Right-Width,margin),Band(p.Y-dragGrab.Y,work.Top,work.Bottom-Height,margin));
                     long now=Stopwatch.GetTimestamp();dragTrail.Enqueue(new KeyValuePair<long,Point>(now,Location));
                     while(dragTrail.Count>2&&now-dragTrail.Peek().Key>Stopwatch.Frequency*DesktopVisuals.SpringTrail/1000)dragTrail.Dequeue();
+                    Trace("move",p.X,p.Y,Left,Top,0);
+                    // The drawn bar follows the pointer on the same event, not a frame later.
+                    // At most one frame every GhostGap ms: a mouse can report every 5 ms.
+                    if(body!=null&&ghostOwns&&body.Held&&Stopwatch.GetTimestamp()-lastGhostTick>=Stopwatch.Frequency*GhostGap/1000)PresentGhost();
                 }
             }
             base.OnMouseMove(e);
