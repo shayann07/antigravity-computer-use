@@ -351,9 +351,8 @@ func macContractTest() throws {
     let latchedHud = MacVisuals.statePresentation(for: "active", latched: true)
     guard activeHud.title == "Antigravity is working", !activeHud.isEmergency,
           pausedHud.title.contains("Paused"), !pausedHud.isEmergency,
-          stoppedHud.title == "Stopped · task ended", stoppedHud.toggleTitle.isEmpty, !stoppedHud.toggleVisible, stoppedHud.isEmergency, stoppedHud.contrastTarget >= 8.5,
-          activeHud.toggleVisible, pausedHud.toggleVisible, !MacVisuals.statePresentation(for: "idle").toggleVisible,
-          ![activeHud, pausedHud, stoppedHud].contains(where: { $0.title.lowercased().contains("re-arm") || $0.toggleAccessibilityLabel.lowercased().contains("re-arm") }),
+          stoppedHud.title == "Stopped · task ended", stoppedHud.isEmergency, stoppedHud.contrastTarget >= 8.5,
+          ![activeHud, pausedHud, stoppedHud].contains(where: { $0.title.lowercased().contains("re-arm") || $0.title.lowercased().contains("resume") }),
           latchedHud.resolvedState == "stopped", latchedHud.title == "Stopped · task ended", latchedHud.isEmergency else {
         throw AxonError("contract_test_failed", "Mac HUD state presentation or emergency contrast target differs.")
     }
@@ -541,18 +540,21 @@ func macContractTest() throws {
     // Refusals only: no fake live permission, application grant or input event.
     try MacFence.initialize()
     let pendingApproval = try MacFenceState("active|approval-fixture|\(MacFenceState.now + 100_000_000)||\(MacDeadline.now + 10_000)|0")
-    // An explicit Pause (or Stop) published while the local dialog was open
-    // must win: the old approval cannot complete. Human input never pauses.
+    // A Stop or expiry published while the local dialog was open must win:
+    // the old approval cannot complete. Human input never pauses. A legacy
+    // "paused" record is refused the same way.
+    for changed in ["stopped||0||0|1", "paused|approval-fixture|\(pendingApproval.until)||0|1"] {
     try MacFence.write("active|approval-fixture|\(pendingApproval.until)||\(pendingApproval.bootUntil)|0")
     try MacInputLedger.withLock {
-        try MacFence.withTransitionLock { try MacFence.write("paused|approval-fixture|\(pendingApproval.until)||0|1") }
+        try MacFence.withTransitionLock { try MacFence.write(changed) }
     }
     do {
         try MacFence.withApprovalFence(pendingApproval) { throw AxonError("contract_test_failed", "An old approval overwrote a pause.") }
         throw AxonError("contract_test_failed", "An old approval was accepted after a pause.")
     } catch let error as AxonError { if error.code != "approval_changed" { throw error } }
-    guard try MacFence.read().state == "paused", try MacFence.read().cleanupPending else {
-        throw AxonError("contract_test_failed", "Approval completion lost native pause/cleanup state.")
+    guard try MacFence.read().state == String(changed.prefix(while: { $0 != "|" })), try MacFence.read().cleanupPending else {
+        throw AxonError("contract_test_failed", "Approval completion lost native Stop/cleanup state.")
+    }
     }
     // clear_stop removes only an exact confirmed marker; uncertain, unreadable,
     // linked or directory entries stay, and nothing is removed recursively.
@@ -770,11 +772,15 @@ func macContractTest() throws {
           MacWindowGlow.matchWindow(pid: 70, rect: CGRect(x: 600, y: 600, width: 100, height: 100), list: glowList) == nil else {
         throw AxonError("contract_test_failed", "Glow window matching differs.")
     }
+    guard MacWindowGlow.appKit(CGPoint(x: 120, y: 100), primaryHeight: 900) == CGPoint(x: 120, y: 800),
+          MacWindowGlow.appKit(CGRect(x: 10, y: 20, width: 300, height: 200), primaryHeight: 900) == CGRect(x: 10, y: 680, width: 300, height: 200) else {
+        throw AxonError("contract_test_failed", "Glow coordinate conversion differs.")
+    }
     guard MacGlowLevel.soft.gain < MacGlowLevel.medium.gain, MacGlowLevel.medium.gain < MacGlowLevel.bright.gain,
           MacGlowLevel(rawValue: "soft") == .soft, MacGlowLevel(rawValue: "loud") == nil else {
         throw AxonError("contract_test_failed", "Glow brightness levels differ.")
     }
-    emit(["ok": true, "control_contract": 1, "checks": ["shared state codec", "malformed state refusal", "canonical approval fingerprint", "sensitive action classification", "kernel process birth identity", "native idle/paused/stopped/expired/session/monitor/Stop refusals", "empty cleanup and malformed input-journal refusal", "official Phosphor resource rendering", "SDK and runtime material selection", "capture visibility and dismissal lifecycle", "access tier enforcement for target and frontmost app", "conversation-scoped remembered approvals", "confirmed-only Stop clearing", "approval completion fenced by Pause and Stop", "shared motion curves", "access prompt layout and placement", "window glow falloff, mask, matching and levels"], "hud_icon_assets": iconAssets, "hud_material": materialBackend, "native_glass_compiled": MacVisuals.nativeGlassCompiled, "desktop_input_sent": false])
+    emit(["ok": true, "control_contract": 1, "checks": ["shared state codec", "malformed state refusal", "canonical approval fingerprint", "sensitive action classification", "kernel process birth identity", "native idle/paused/stopped/expired/session/monitor/Stop refusals", "empty cleanup and malformed input-journal refusal", "official Phosphor resource rendering", "SDK and runtime material selection", "capture visibility and dismissal lifecycle", "access tier enforcement for target and frontmost app", "conversation-scoped remembered approvals", "confirmed-only Stop clearing", "approval completion fenced by Stop and legacy pause", "shared motion curves", "access prompt layout and placement", "window glow falloff, mask, matching and levels"], "hud_icon_assets": iconAssets, "hud_material": materialBackend, "native_glass_compiled": MacVisuals.nativeGlassCompiled, "desktop_input_sent": false])
 }
 
 func macMoveCursor(_ point: CGPoint, _ args: [String: Any]) throws -> [String: Any] {

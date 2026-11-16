@@ -212,7 +212,6 @@ final class MacGuardian: NSObject {
         _ = NSApplication.shared; NSApp.setActivationPolicy(.accessory)
         try Data("\(getpid())|\(try macProcessStart(getpid()))".utf8).write(to: URL(fileURLWithPath: MacFence.file + ".guardian"), options: [.atomic])
         chmod(MacFence.file + ".guardian", 0o600)
-        visuals.onToggle = { [weak self] in self?.humanToggle() }
         visuals.onStop = { [weak self] in self?.stop("button") }
         visuals.onEnd = { [weak self] in guard let self = self else { return }; self.stop("human_end"); self.visuals.hide(); emit(["ev":"human_end","state":self.state]) }
         retireSmartMode()
@@ -291,23 +290,10 @@ final class MacGuardian: NSObject {
         emit(["ev": "state", "state": state, "reason": effectiveReason, "custom_cursor": visuals.cursorApplied])
     }
     func stop(_ reason: String) { MacFence.emergency(reason); set("stopped", reason: reason) }
-    // The bar's toggle is Pause/Resume only. Stop ends the task; there is no
-    // re-arm: the agent's next ready clears a confirmed Stop after cleanup proof.
-    func humanToggle() {
-        if state == "active" { set("paused", reason: "requested_pause"); return }
-        guard state == "paused" else { return }
-        if resumeFromPause(reason: "human_resume") { emit(["ev": "human_resume", "state": state]) }
-    }
-    func resumeFromPause(reason: String) -> Bool {
-        guard !rearmLocked, state == "paused", macWaitForWorkers(), MacInputLedger.recover() else { return false }
-        do { try ensureWatchdog() } catch { emit(["ev":"visual_warning", "message":String(describing:error)]); return false }
-        let session = MacContract.value["session_ms"] as? Int ?? 600_000
-        until = MacFenceState.now + Int64(session) * 10_000
-        bootUntil = MacDeadline.create(requested: until, wallNow: MacFenceState.now, bootNow: MacDeadline.now, maximumMs: session)
-        guard bootUntil > 0 else { return false }
-        set("active", reason: reason)
-        return state == "active"
-    }
+    // There is no Pause and no Resume (owner decision, #99): Esc, Control+
+    // Option+F12 or the bar's Stop end the task, and the agent's next ready
+    // clears a confirmed Stop after cleanup proof. A "paused" record left by an
+    // older build is still read as no-control, never resumed.
     // Moves a confirmed Stop to idle once cleanup is proven: keys and buttons
     // released, prior workers gone. An unconfirmed Stop or an unreadable
     // marker is never cleared. Mirrors Guardian.cs "clear_stop".
@@ -366,13 +352,9 @@ final class MacGuardian: NSObject {
                 guard !nextToken.isEmpty, nextBoot > 0 else { reply(["allowed": false]); return }
                 token = nextToken; until = requested; bootUntil = nextBoot
                 set("active"); reply(["allowed": state == "active"])
-            case "resume":
-                // Resumes a pause that the agent or the bar requested, under the
-                // same cleanup checks as the bar. It never applies to Stop.
-                let resumed = resumeFromPause(reason: "host_authorized_resume")
-                if resumed { emit(["ev": "host_resume", "state": state]) }
-                reply(["allowed": resumed])
-            case "pause": set("paused", reason: "requested_pause")
+            case "pause", "resume":
+                // Removed: nothing pauses or resumes control. Refused without effect.
+                reply(["allowed": false, "error": "pause_removed"])
             case "clear_stop": reply(clearStop())
             case "stop":
                 stop("request")
@@ -402,11 +384,18 @@ final class MacGuardian: NSObject {
                 visuals.activity(action)
                 // The glow follows the last window that received an action. Only
                 // a window of an app approved for this task is accepted.
+                // point: the action in global screen points, top-left origin
+                // (the same space as rect). Without it the pointer is used.
+                var at: CGPoint?
+                if let point = message["point"] as? [NSNumber], point.count == 2,
+                   point.allSatisfy({ $0.doubleValue.isFinite && abs($0.doubleValue) < 100_000 }) {
+                    at = MacWindowGlow.appKit(CGPoint(x: point[0].doubleValue, y: point[1].doubleValue))
+                }
                 if state == "active", let pid = (message["pid"] as? NSNumber)?.int32Value, pid > 0,
                    let rect = message["rect"] as? [NSNumber], rect.count == 4,
                    rect.allSatisfy({ $0.doubleValue.isFinite && abs($0.doubleValue) < 100_000 }),
                    let key = (try? macIdentity(pid))?["key"] as? String, grants.contains(key) {
-                    visuals.glow(action: action, pid: pid, rect: CGRect(x: rect[0].doubleValue, y: rect[1].doubleValue, width: rect[2].doubleValue, height: rect[3].doubleValue))
+                    visuals.glow(action: action, pid: pid, rect: CGRect(x: rect[0].doubleValue, y: rect[1].doubleValue, width: rect[2].doubleValue, height: rect[3].doubleValue), point: at)
                 }
             case "shutdown": if state != "idle" { stop("shutdown") }; visuals.hide(); watchdog?.terminate(); exit(0)
             case "prompt":

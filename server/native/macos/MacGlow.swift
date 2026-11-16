@@ -113,9 +113,13 @@ final class MacWindowGlow {
         return CGRect(dictionaryRepresentation: bounds as CFDictionary)
     }
     // CoreGraphics global (top-left origin) to AppKit global (bottom-left).
-    static func appKit(_ r: CGRect) -> CGRect {
-        let height = NSScreen.screens.first?.frame.height ?? 0
+    static func appKit(_ r: CGRect, primaryHeight: CGFloat? = nil) -> CGRect {
+        let height = primaryHeight ?? NSScreen.screens.first?.frame.height ?? 0
         return CGRect(x: r.minX, y: height - r.maxY, width: r.width, height: r.height)
+    }
+    static func appKit(_ p: CGPoint, primaryHeight: CGFloat? = nil) -> CGPoint {
+        let height = primaryHeight ?? NSScreen.screens.first?.frame.height ?? 0
+        return CGPoint(x: p.x, y: height - p.y)
     }
 
     private func build() {

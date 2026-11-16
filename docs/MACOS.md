@@ -142,16 +142,18 @@ macOS may require new permission approval after an ad-hoc-signed update.
   Everything else, browsers included, is full.
 - Human mouse and keyboard input never pauses or yields control; Smart takeover
   is gone and a saved `smart` preference is rewritten to manual. Only Esc,
-  Control+Option+F12 or the bar's Stop end the task. Pause and Resume remain as
-  explicit requests from the agent or the bar, as on Windows.
+  Control+Option+F12 or the bar's Stop end the task. There is no Pause and no
+  Resume (owner decision, #99): the guardian refuses both ops with
+  `pause_removed`, and a `paused` record from an older build is treated as no
+  control.
 - AppKit renders the HIG-aligned Liquid Glass control bar (`396×44` rounded
   capsule using Apple's native `NSGlassEffectView` on macOS 26+ with
   `NSVisualEffectView` fallback on macOS 14/15, pure filled Phosphor Icons
   without status dots or strokes, and clear state labels for
   `Antigravity is working`, `Paused · you have control` and
   `Stopped · task ended`), the window glow and an original arrow/text
-  pointer. The bar's toggle is Pause/Resume only and is hidden while idle or
-  stopped; there is no Re-arm control. Emergency Stop uses a high-opacity crimson glass tint (`alpha = 0.88`,
+  pointer. The bar has Stop and a settings menu only; there is no Pause, Resume
+  or Re-arm control. Emergency Stop uses a high-opacity crimson glass tint (`alpha = 0.88`,
   `>= 8.5:1` contrast) so translucent material never obscures the stopped state.
   Motion and colour come from one file, `server/native/macos/MacDesign.swift`,
   with the same values as Windows' `DesktopVisuals.cs` (a test keeps them
@@ -161,7 +163,9 @@ macOS may require new permission approval after an ad-hoc-signed update.
   as on Windows: a soft blue-to-violet band on the window's edge that tapers
   to nothing (no rectangle, dithered so there are no steps), turning one lap
   in 60 s and swelling slowly on a 15 fps clock at rest. Its bright part eases
-  toward the pointer after a click, move, drag or scroll. Brightness is a menu
+  toward the action's `point` when the runtime sends one (global points,
+  top-left origin), otherwise toward the pointer after a click, move, drag or
+  scroll. Brightness is a menu
   setting: Soft (default), Medium, Bright. The runtime passes the window's pid
   and frame; the guardian lights it only for a granted process. Measured at
   rest on an Intel i7-9750H around a 1132x995 window: the process about 0.9 %
@@ -211,7 +215,7 @@ On an actual Mac, still verify:
    independent cleanup, and a second task (same `session_handle`, no prompt)
    without host restart.
 5. Click tier in a terminal or IDE and full tier in a browser and TextEdit;
-   human input during a task never pauses it; explicit Pause/Resume;
+   human input during a task never pauses it;
    cursor/glow cleanup after completion and helper crashes.
 6. Retina/mixed-scale multiple monitors, negative origins, gaps and display changes.
 7. Actual Sidecar startup while idle, permission revocation, sleep/wake and app

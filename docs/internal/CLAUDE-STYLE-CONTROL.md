@@ -171,11 +171,12 @@ headless checks; interactive qualification on a Mac is still pending:
   directories, uncertain or invalid markers are refused, never recursively
   removed). If the fence file is replaced while clearing, Stop is latched
   again (`stopped_again`). A real-binary test drives this headless.
-- **`set`. DONE.** Only `clear_stop` leaves `stopped`; Pause and Resume cannot.
-- **Bar. DONE.** No Re-arm; the toggle is Pause/Resume only and is hidden
-  while idle or stopped; the Smart takeover menu items are gone.
-- **Resume. DONE.** Standalone resume of an agent or bar Pause under the same
-  cleanup checks.
+- **`set`. DONE.** Only `clear_stop` leaves `stopped`.
+- **Bar. DONE.** No Re-arm and no Pause/Resume toggle; Stop and the settings
+  menu (glow brightness, End) only. The Smart takeover items are gone.
+- **Pause and Resume. REMOVED** (owner decision, 16 Nov): the guardian refuses
+  both ops with `pause_removed`. The shared runtime's pause/resume tools are
+  being removed on #103.
 - **Takeover. DONE.** The watchdog never pauses on human input; the consent
   exemption machinery is deleted; a saved `smart` preference is rewritten to
   `manual`.

@@ -1,5 +1,70 @@
 # Intel Mac qualification: reported device results and review limits
 
+## 16 November 2026: issue #99 umbrella, Intel (in progress)
+
+Branch `mac/umbrella-x86_64` (draft PR #105), built on `feat/final-native`
+(#103) because the shared runtime for the new control model exists only there;
+`main` is an ancestor of that branch. Interactive acceptance has **not** been
+run yet: no permission was granted, no app approved, no desktop input sent and
+no physical Esc pressed. Results below are compile, headless and offscreen
+evidence only, labelled as such.
+
+### Identities
+
+- Hardware: Intel MacBook Pro, Core i7-9750H, native x86_64 (`uname -m`).
+- macOS 26.6.2, build 25G83. Xcode at `/Applications/Xcode.app`, SDK 26.4,
+  Swift 6.3.1, target `x86_64-apple-macosx26.0` (native Liquid Glass compiled).
+- Node v24.20.0 darwin-x64 (official tarball, SHASUMS verified by nvm).
+- Antigravity 2.29.0.
+- Baseline commit: `main` `76ea55ac91d3fca7eaec41681027d4dc19d70e5e`
+  (CI green: macos-15, macos-15-intel, macos-26, macos-26-intel, windows).
+- Base of the work: `feat/final-native` `258b00a` (CI green on the same jobs).
+
+### Results
+
+| Check | Commit | Result | Evidence |
+| --- | --- | --- | --- |
+| Native check, provenance, bundle, install check | `76ea55a` (baseline) | pass | local logs |
+| Full suite | `76ea55a` (baseline) | 665 tests, 624 pass, 0 fail, 41 skipped (Windows-only) | local log |
+| Native check, provenance, bundle, install check | `8369686` | pass | local logs |
+| Full suite | `8369686` | 694 tests, 652 pass, 0 fail, 42 skipped | local log |
+| Native contract: tiers (target and frontmost), remembered approvals, confirmed-only Stop clearing, approval fenced by Pause/Stop, easing, prompt layout, glow maths | branch head | pass | `macos-native-check` |
+| Real guardian binary, headless: `clear_stop` clears only a confirmed Stop; unconfirmed, companion, invalid, directory and recovered-task markers stay; Smart preference rewritten | branch head | pass | `tests/macos-guardian-control.test.mjs` |
+| Access prompt drawing (short, long scrolling, launch, hover/press/focus) | branch head | inspected offscreen | `--prompt-preview` pictures, kept local |
+| Glow drawing on dark and light, small window | branch head | inspected offscreen | `--glow-preview` pictures, kept local |
+| Glow cost at rest, 1132x995 window, Soft | branch head | process about 0.9 % of one core; window server 24.9 % idle vs about 31 % with the glow (two runs) | `--glow-trial 10`; physically observed on screen, not judged for feel |
+
+### Acceptance tests (#99 table)
+
+| # | Result on Intel | Reason |
+| --- | --- | --- |
+| 1 Baseline | pass | see Results |
+| 2 Allow / Deny / timeout | unrun | needs a human at the prompt |
+| 3 Tiers | unrun (source and headless contract pass) | needs approved Terminal/IDE and browser |
+| 4 Esc ends the task | unrun (`clear_stop` path passes headless) | needs physical Esc |
+| 5 Esc during held input | unrun | needs physical Esc and a disposable target |
+| 6 Human input does not pause | unrun (takeover and Pause code removed) | needs a human moving the mouse during a task |
+| 7 Dispatch race | partial | existing lock-holder and worker-exit fixtures pass; no new many-iteration harness yet |
+| 8 Stop latch robustness | pass (headless) | missing, dangling link, directory, companion, unreadable cases in the native contract |
+| 9 Watchdog | pass (headless, existing fixtures) | no change in this branch |
+| 10 Restart durability | pass (headless) | a fresh guardian starts stopped on an unconfirmed or companion marker and refuses to clear it |
+| 11 Clock | partial | monotonic deadline arithmetic passes; sleep/wake unrun |
+| 12 Unicode and file I/O | unrun | needs permissions |
+| 13 Real pointer vs semantic | unrun | needs permissions |
+| 14 Multi-app and dialogs | unrun | needs permissions |
+| 15 Permissions revoke/regrant | unrun | needs a human in System Settings |
+| 16 HUD | partial | prompt and glow drawing and glow cost recorded; live prompt focus, Return/Esc, VoiceOver, contrast, capture exclusion and motion feel unrun |
+| 17 Install lifecycle | pass (fake home) | `macos-install-check`; real install on this Mac unrun |
+| 18 Both architectures | Apple Silicon unrun | no Apple Silicon Mac available; CI covers compile and headless contracts only |
+
+### Changes in this branch
+
+See PR #105: unlatched control model in the Mac guardian (clear_stop,
+remembered approvals per `session_handle`, click tier enforced natively, no
+Smart takeover, no Re-arm), `MacDesign.swift` tokens equal to
+`DesktopVisuals.cs`, the access prompt card, and the window glow.
+
+
 Current material audit: see [Mac HUD material and icon correction](MACOS-GLASS-MATERIAL.md).
 The later fallback-only source did not use native macOS 26 glass, and its icons
 were approximations. Historical reports below retain their original context;

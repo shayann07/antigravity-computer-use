@@ -30,9 +30,9 @@ test('Mac guardian advertises the unlatched control model and clears only a conf
  try{
   assert.deepEqual(g.capabilities,{clear_stop:true,session_reason:true,remembered_approvals:true,access_tiers:true});
   assert.equal(fields(files.guard)[0],'stopped');
-  // Pause or resume cannot leave a confirmed Stop; only clear_stop can.
-  g.send({op:'pause'});
-  const resume=await g.request({op:'resume'});assert.equal(resume.allowed,false);assert.equal(resume.state,'stopped');
+  // There is no Pause or Resume: both are refused without effect, and only
+  // clear_stop leaves a confirmed Stop.
+  for(const op of ['pause','resume']){const r=await g.request({op});assert.equal(r.allowed,false,op);assert.equal(r.error,'pause_removed',op);assert.equal(r.state,'stopped',op);}
   const reply=await g.request({op:'clear_stop'});
   assert.equal(reply.cleared,true,JSON.stringify(reply));assert.equal(reply.state,'idle');
   assert.equal(reply.workers_stopped,true);assert.equal(reply.input_cleanup_confirmed,true);

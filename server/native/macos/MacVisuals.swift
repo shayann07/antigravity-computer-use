@@ -26,12 +26,8 @@ struct MacHudVisibility {
 struct MacHudStatePresentation: Equatable {
     let resolvedState: String
     let title: String
-    let toggleTitle: String
-    // Pause/Resume only. Hidden while idle or stopped: there is no re-arm
-    // and no human start; the slot stays empty so positions never move.
-    let toggleVisible: Bool
-    let toggleSymbol: String
-    let toggleAccessibilityLabel: String
+    // There is no toggle: no Pause, no Resume and no Re-arm. Stop and the
+    // settings menu are the bar's only controls.
     let stopTitle: String
     let stopSymbol: String
     let stopAccessibilityLabel: String
@@ -117,12 +113,12 @@ final class MacHudButton: NSButton {
 }
 
 final class MacVisuals: NSObject {
-    var onToggle: (() -> Void)?, onStop: (() -> Void)?, onEnd: (() -> Void)?
+    var onStop: (() -> Void)?, onEnd: (() -> Void)?
     var panel: MacControlPanel?
     var rootView: NSView?
     var contentContainer: NSView?
     var label = NSTextField(labelWithString: "")
-    var toggle = MacHudButton(), stop = MacHudButton(), more = MacHudButton()
+    var stop = MacHudButton(), more = MacHudButton()
     // The light around the window in use replaced the old screen-edge rings.
     let windowGlow = MacWindowGlow()
     private var glowLevelLoaded = false
@@ -177,10 +173,6 @@ final class MacVisuals: NSObject {
             return MacHudStatePresentation(
                 resolvedState: "active",
                 title: "Antigravity is working",
-                toggleTitle: "",
-                toggleVisible: true,
-                toggleSymbol: MacPhosphorIcon.pauseFill.rawValue,
-                toggleAccessibilityLabel: "Pause computer use",
                 stopTitle: "Stop",
                 stopSymbol: MacPhosphorIcon.stopFill.rawValue,
                 stopAccessibilityLabel: "Stop computer use immediately",
@@ -190,11 +182,7 @@ final class MacVisuals: NSObject {
         case "paused":
             return MacHudStatePresentation(
                 resolvedState: "paused",
-                title: "Paused · you have control",
-                toggleTitle: "",
-                toggleVisible: true,
-                toggleSymbol: MacPhosphorIcon.playFill.rawValue,
-                toggleAccessibilityLabel: "Resume computer use",
+                title: "Paused · no control",
                 stopTitle: "Stop",
                 stopSymbol: MacPhosphorIcon.stopFill.rawValue,
                 stopAccessibilityLabel: "Stop computer use immediately",
@@ -205,10 +193,6 @@ final class MacVisuals: NSObject {
             return MacHudStatePresentation(
                 resolvedState: "stopped",
                 title: "Stopped · task ended",
-                toggleTitle: "",
-                toggleVisible: false,
-                toggleSymbol: MacPhosphorIcon.playFill.rawValue,
-                toggleAccessibilityLabel: "",
                 stopTitle: "Hide",
                 stopSymbol: MacPhosphorIcon.xFill.rawValue,
                 stopAccessibilityLabel: "Dismiss stopped controls",
@@ -219,10 +203,6 @@ final class MacVisuals: NSObject {
             return MacHudStatePresentation(
                 resolvedState: "idle",
                 title: "Antigravity is ready",
-                toggleTitle: "",
-                toggleVisible: false,
-                toggleSymbol: MacPhosphorIcon.playFill.rawValue,
-                toggleAccessibilityLabel: "",
                 stopTitle: "Stop",
                 stopSymbol: MacPhosphorIcon.stopFill.rawValue,
                 stopAccessibilityLabel: "Stop computer use immediately",
@@ -277,7 +257,7 @@ final class MacVisuals: NSObject {
         label.setAccessibilityIdentifier("hud-status-label")
         container.addSubview(label)
 
-        for (button, id, action) in [(more, "hud-more", #selector(menu)), (toggle, "hud-toggle", #selector(toggleControl)), (stop, "hud-stop", #selector(stopControl))] {
+        for (button, id, action) in [(more, "hud-more", #selector(menu)), (stop, "hud-stop", #selector(stopControl))] {
             button.target = self; button.action = action; button.isBordered = false
             button.title = ""; button.image = nil
             button.focusRingType = .exterior; button.refusesFirstResponder = false
@@ -291,8 +271,8 @@ final class MacVisuals: NSObject {
         more.hudTitle = ""
         more.setAccessibilityLabel("Control settings")
         more.toolTip = "Settings: glow brightness and End"
-        more.nextKeyView = toggle; toggle.nextKeyView = stop; stop.nextKeyView = more
-        p.initialFirstResponder = toggle
+        more.nextKeyView = stop; stop.nextKeyView = more
+        p.initialFirstResponder = stop
         p.contentView = hostRoot; panel = p; rootView = hostRoot; contentContainer = container
 
         if !glowLevelLoaded, !MacFence.file.isEmpty {
@@ -321,22 +301,16 @@ final class MacVisuals: NSObject {
         }
         label.stringValue = presentation.title
         label.textColor = .white
-        toggle.hudTitle = presentation.toggleTitle
-        toggle.hudIcon = MacPhosphorIcon(rawValue: presentation.toggleSymbol) ?? .playFill
-        toggle.setAccessibilityLabel(presentation.toggleAccessibilityLabel)
-        toggle.toolTip = presentation.toggleAccessibilityLabel
-        toggle.isHidden = !presentation.toggleVisible
         stop.hudTitle = presentation.stopTitle
         stop.hudIcon = MacPhosphorIcon(rawValue: presentation.stopSymbol) ?? .stopFill
         stop.setAccessibilityLabel(presentation.stopAccessibilityLabel)
         stop.isEmergencyAction = !presentation.isEmergency
         // Keep the controls under the human's hand in the same positions in
         // every state. The native material carries the bar, without nested pills.
-        label.frame = NSRect(x: 18, y: 12, width: 210, height: 20)
-        more.frame = NSRect(x: 234, y: 6, width: 32, height: 32)
-        toggle.frame = NSRect(x: 272, y: 6, width: 32, height: 32)
+        label.frame = NSRect(x: 18, y: 12, width: 246, height: 20)
+        more.frame = NSRect(x: 272, y: 6, width: 32, height: 32)
         stop.frame = NSRect(x: 310, y: 6, width: 78, height: 32)
-        toggle.needsDisplay = true; stop.needsDisplay = true; more.needsDisplay = true
+        stop.needsDisplay = true; more.needsDisplay = true
     }
     func show(_ next: String) {
         build()
@@ -412,12 +386,12 @@ final class MacVisuals: NSObject {
     // Lights the window of an approved app that received an action. The
     // guardian has already checked the grant; pid and rect come from the
     // worker's window identity (top-left global points).
-    func glow(action: String, pid: pid_t, rect: CGRect) {
+    func glow(action: String, pid: pid_t, rect: CGRect, point: CGPoint? = nil) {
         guard state == "active", !captureHidden,
               let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]],
               let (id, bounds) = MacWindowGlow.matchWindow(pid: pid, rect: rect, list: list) else { return }
         let pointed = ["click", "move", "drag", "scroll"].contains(action)
-        windowGlow.show(windowID: id, frame: MacWindowGlow.appKit(bounds), point: pointed ? NSEvent.mouseLocation : nil, pulse: action != "observe")
+        windowGlow.show(windowID: id, frame: MacWindowGlow.appKit(bounds), point: point ?? (pointed ? NSEvent.mouseLocation : nil), pulse: action != "observe")
     }
     func animate() {
         if captureHidden || state != "active" { return }
@@ -453,7 +427,6 @@ final class MacVisuals: NSObject {
             }
         }
     }
-    @objc func toggleControl() { onToggle?() }
     @objc func stopControl() { if state == "stopped" { hide() } else { onStop?() } }
     @objc func endControl() { onEnd?() }
     @objc func menu() {
