@@ -16,7 +16,7 @@ import {storageOperation} from './storage.mjs';
 import {contract,nativePlatform,launchTarget,executableKey} from './platform.mjs';
 import {Incidents} from './incidents.mjs';
 import {updateNotice} from './update-notice.mjs';
-import {clearConfirmedStop,currentStopNonce,persistRecoveryStop,settlePriorStop,recoveryAdvice,priorWindowsCleanupVerified,priorMacCleanupVerified,priorUndispatchedCleanupVerified,readStopLatch,persistStopLatch,settleFreshStopLatch} from './recovery.mjs';
+import {settleOrphanMacStop,clearConfirmedStop,currentStopNonce,persistRecoveryStop,settlePriorStop,recoveryAdvice,priorWindowsCleanupVerified,priorMacCleanupVerified,priorUndispatchedCleanupVerified,readStopLatch,persistStopLatch,settleFreshStopLatch} from './recovery.mjs';
 import {writeAtomicJSON,readTaskRecord} from './atomic-json.mjs';
 import {loadConversationApprovals,saveConversationApprovals} from './conversation-approvals.mjs';
 
@@ -329,6 +329,11 @@ export class Runtime {
     // that inputs were released and workers are gone, so this ready starts
     // fresh. Uncertain delivery and storage failures are never cleared.
     // While local controls are failing, keep reporting that bounded failure.
+    // macOS: an unconfirmed Stop left by a controller that ended together
+    // with its guardian, with no task open, settles only on full evidence.
+    if(process.platform==='darwin'&&this.state==='stopped'&&this.lastControlReason==='guardian_stop_unconfirmed'&&!this.recoveredTask&&this.latchFile&&this.taskFile&&this.guardFile){
+      try{if(!readTaskRecord(this.taskFile).open){settleOrphanMacStop(this.latchFile,{currentGuard:path.basename(this.guardFile)});this.lastControlReason='prior_cleanup_verified';}}catch{}
+    }
     if(this.state==='stopped'&&this.lastControlReason!=='guardian_stop_unconfirmed'&&!persistenceFailure(this.lastControlReason)&&!this.recoveredTask&&!this.recoveryFailure){
       const cleared=await Runtime.prototype.clearStop.call(this);
       if(cleared)return cleared;

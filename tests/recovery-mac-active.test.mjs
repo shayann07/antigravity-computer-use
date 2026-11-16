@@ -122,3 +122,23 @@ test('mac process start time is read from the live process',{skip:process.platfo
  assert(Math.abs(start-expected)<=2,`${start} vs ${expected}`);
  assert.equal(macProcessStartSeconds(4294967295),null);
 });
+
+test('mac orphan Stop: a controller that ended with its guardian settles only on full evidence',async()=>{
+ const {settleOrphanMacStop}=await import('../server/recovery.mjs');
+ const {dir,state}=fixture('mac-orphan-'),file=path.join(dir,'emergency.stop'),current='guard-999-12345678-1234-1234-1234-123456789abc.state';
+ const options=(extra={})=>({currentGuard:current,platform:'darwin',probe:gone,startOf:noStart,...extra});
+ try{
+  fs.writeFileSync(state,'idle|t|9||9|0|');persistRecoveryStop(file,guard,{unconfirmed:true,nonce:'c'.repeat(32)});
+  assert.throws(()=>settleOrphanMacStop(file,options({platform:'win32'})));
+  assert.throws(()=>settleOrphanMacStop(file,options({currentGuard:guard})),/context/);
+  assert.throws(()=>settleOrphanMacStop(file,options({probe:liveOnly([101])})),/actors/);
+  assert.throws(()=>settleOrphanMacStop(file,options({probe:liveOnly([201]),startOf:()=>START.guardian})),/actors/);
+  fs.writeFileSync(state+'.inputs','{"keys":[42],"buttons":[]}');assert.throws(()=>settleOrphanMacStop(file,options()),/ledger/);fs.writeFileSync(state+'.inputs',EMPTY);
+  fs.writeFileSync(state,'idle|t|9||9|1|');assert.throws(()=>settleOrphanMacStop(file,options()),/state/);fs.writeFileSync(state,'idle|t|9||9|0|');
+  assert(readStopLatch(file).unconfirmed);
+  // A reused guardian pid (another start time) counts as gone.
+  const result=settleOrphanMacStop(file,options({probe:liveOnly([201]),startOf:()=>START.guardian+3600}));
+  assert.equal(result.prior_cleanup_verified,true);assert.equal(result.next_action,'report_and_wait_for_human');
+  assert.equal(readStopLatch(file).value,'stopped');assert.equal(fs.existsSync(file+'.unconfirmed'),false);
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});

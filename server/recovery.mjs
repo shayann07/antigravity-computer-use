@@ -208,6 +208,27 @@ function macActiveStateSettles(directory,record,fields,options){
  // Six or seven fields and no cleanup pending, as for idle or stopped.
  return fields[0]==='active'&&[6,7].includes(fields.length)&&fields[5]==='0'&&priorMacActiveActorsGone(directory,record,options);
 }
+// macOS only. A controller and its guardian ended together (for example the
+// host app quit) leave an unconfirmed Stop bound to a guard that no open task
+// names, so no recovered-task path can settle it. Settle it with the same
+// evidence as above: the old guard reads idle, stopped or active with no
+// cleanup pending, every actor it recorded is gone (by pid and recorded start
+// time), and its ledger is a plain file holding the empty ledger. Never the
+// current controller's own guard; settling writes an ordinary "stopped".
+export function settleOrphanMacStop(file,{currentGuard,platform=process.platform,probe=process.kill,startOf=macProcessStartSeconds,io=fs}={}){
+ if(platform!=='darwin')throw Error('Orphan Stop settlement is macOS only');
+ const directory=path.dirname(file),root=io.lstatSync(directory,{bigint:true});
+ const context=JSON.parse(readRecoveryFile(file+'.context.json',1024,io));
+ if(!context||context.schema!==1||!guardName.test(context.guard??'')||context.guard===currentGuard||Object.keys(context).sort().join(',')!=='guard,nonce,schema')throw Error('Prior Stop context is missing or differs');
+ const record={guard:context.guard,open:false,children:[],dispatched:false,watchdogs_complete:false};
+ const guard=path.join(directory,context.guard);
+ const fields=readRecoveryFile(guard,4096,io).split('|');
+ if(![6,7].includes(fields.length)||fields[5]!=='0'||!['idle','stopped','active'].includes(fields[0]))throw Error('Prior guard state is not settled');
+ if(!priorMacActiveActorsGone(directory,record,{probe,startOf,io}))throw Error('Prior actors remain');
+ const ledger=JSON.parse(readRecoveryFile(guard+'.inputs',65536,io));
+ if(!ledger||typeof ledger!=='object'||Array.isArray(ledger)||Object.keys(ledger).sort().join(',')!=='buttons,keys'||!Array.isArray(ledger.keys)||ledger.keys.length!==0||!Array.isArray(ledger.buttons)||ledger.buttons.length!==0)throw Error('Prior input ledger is not empty');
+ return {...settleFreshStopLatch(file,context.nonce,root,{io}),prior_cleanup_verified:true};
+}
 export function priorWindowsCleanupVerified(directory,record,{platform=process.platform,probe=process.kill,io=fs}={}){
  if(platform!=='win32'||record?.dispatched!==true||record.watchdogs_complete!==true||!Array.isArray(record.children)||record.children.length<3||typeof record.guard!=='string'||!/^guard-[1-9][0-9]{0,9}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.state$/.test(record.guard))return false;
  const read=(file,limit)=>readRecoveryFile(file,limit,io);

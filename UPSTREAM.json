@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "aea82176cd4d61e5bbfef891dd9823deaf5e18ec07dff66a6b93b1bffb3b133d"
+      "sha256": "a2e577dd8ffa4175694e7167d72db882d22f4f073152d2ea11a160ac0beeeed6"
     },
     {
       "path": "server/mcp.mjs",
@@ -712,7 +712,7 @@
     },
     {
       "path": "server/recovery.mjs",
-      "sha256": "5862ac7bf41494e58d0cfb9264873a63b05a4f72bd13451c79a0e4d8c2fcfe53"
+      "sha256": "507042bc51c784b459821f641c3275336c698245b6b75e4c98861a326d6f5eda"
     },
     {
       "path": "scripts/qualify-guardian-desktop.mjs",
