@@ -61,7 +61,7 @@ beside them; that comparison is open.
 | 3 Glow: Soft default, Medium, Bright; one 60 s lap; entrance fades while the band widens | done | pictures above and `glow-entrance-start`/`-end`; level is a menu row |
 | 3 Glow: 15 fps at rest | measured | 302 frames in 20 s, one every 66.0 ms, at each level |
 | 3 Glow: 16 ms frames in transitions | not measured | the entrance runs in the render server; only its in-process CPU is measured (below) |
-| 3 Glow eases toward the action point | done in code, not shown | `"point": [x, y]` is read when present; the runtime does not send it yet |
+| 3 Glow eases toward the action point | done in code, not shown | the runtime now sends each action's point (merged from `feat/final-native`); the point message now also carries the window's pid and frame, which the Mac guardian needs (`fc4fe37`) |
 | 3 Glow never takes a click; hidden from the runtime's own screenshots | done in code; physically the click-through was seen | the window ignores mouse events; capture excludes it unless "Show bar and glow in recordings" is on |
 | 3 Glow recording | not taken | needs the human's screen recording |
 | 4 Performance | measured | table below |
@@ -112,7 +112,10 @@ pattern for `ctrl+shift+…`.
   input (#99 tests 4–6).
 - The drawing test (blocked, above); s per click and s per drag.
 - Entrance frame time (16 ms target).
-- The glow easing toward an action point (the runtime does not send one yet).
+- The glow easing toward an action point, on screen.
+- App rows in the access card: the runtime asks for them (`card:1`) and Windows
+  draws them; the Mac still shows the text card, and the row view is to be
+  added as the card's body (`MacPromptBody`).
 - A screen recording of the bar, menu and glow, and full-screen windows on
   screen (only rendered offscreen).
 - Reduce Motion and Increase Contrast with the settings on.
