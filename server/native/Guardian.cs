@@ -435,7 +435,11 @@ namespace Axon {
         // Apps approved per agent conversation (session handle, executable).
         // An approval lasts the conversation: it survives End, session expiry
         // and Stop, so continuing after Esc shows no new approval prompt.
-        readonly Dictionary<string,HashSet<string>> remembered=new Dictionary<string,HashSet<string>>(StringComparer.Ordinal);
+        // Apps a person approved in this guardian's own prompts, per conversation.
+        // Loaded on first use and saved after each human Allow (ApprovalMemory.cs).
+        ApprovalMemory remembered;
+        string ApprovalFile {get {return Path.Combine(Path.GetDirectoryName(ControlFence.FileName),"guardian-approvals.json");}}
+        ApprovalMemory Approvals() {if(remembered==null)remembered=ApprovalMemory.Load(ApprovalFile,ApprovalMemory.Now());return remembered;}
         void ClearGrants() {grants.Clear();clickGrants.Clear();}
         Form activePrompt; bool captureHidden; bool captureExcluded; bool recordVisuals;
         bool controlsRequested, initialized; DateTime controlsUntil=DateTime.MaxValue;
@@ -1492,7 +1496,7 @@ namespace Axon {
             if(kind=="app")try {executable=Convert.ToString(ControlFence.Identity(Convert.ToInt64(m["hwnd"]))["path"]).ToLowerInvariant();}catch {}
             // Already approved in this conversation: restored without a prompt.
             bool known=kind=="app"&&handle!=null&&executable!=null&&m.ContainsKey("remembered")&&Convert.ToBoolean(m["remembered"])
-                &&remembered.ContainsKey(handle)&&remembered[handle].Contains(executable);
+                &&Approvals().Allows(handle,executable,m.ContainsKey("tier")&&Convert.ToString(m["tier"])=="click"?"click":"full",ApprovalMemory.Now());
             bool allowed=hostManaged||known; bool timedOut=false;
             if(!allowed) {
             prompting=true; Overlay.HideAll();
@@ -1529,9 +1533,11 @@ namespace Axon {
                 string appKey=Convert.ToString(ControlFence.Identity(Convert.ToInt64(m["hwnd"]))["key"]);
                 grants.Add(appKey);
                 if(m.ContainsKey("tier")&&Convert.ToString(m["tier"])=="click")clickGrants.Add(appKey);else clickGrants.Remove(appKey);
-                if(handle!=null&&executable!=null) {
-                    if(!remembered.ContainsKey(handle)) {if(remembered.Count>=64)remembered.Clear();remembered[handle]=new HashSet<string>();}
-                    remembered[handle].Add(executable);
+                // Only a person's own Allow is kept (a remembered one counts as
+                // use). A host-managed deployment never showed a prompt, so
+                // nothing it authorises is recorded as human-approved.
+                if(!hostManaged&&handle!=null&&executable!=null) {
+                    if(Approvals().Remember(handle,executable,clickGrants.Contains(appKey)?"click":"full",ApprovalMemory.Now()))Approvals().Save(ApprovalFile);
                 }
                 WriteState();
             }

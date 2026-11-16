@@ -77,9 +77,19 @@ or unknown handle starts a new conversation that asks again.
 
 The Windows guardian honours this: JS sends `remembered:true` and
 `session_handle` with the `prompt kind:'app'`, and the guardian adds the grant
-without a dialog for a handle and executable it has seen approved. The handle
-lives in the
-service process memory, so a controller restart also starts a new conversation.
+without a dialog for a handle and executable it has seen approved.
+
+The guardian keeps its own record of those approvals in
+`guardian-approvals.json` beside the guard files (`ApprovalMemory.cs`), so a
+guardian restart or an update does not ask again. Only a person's Allow in the
+guardian's own prompt is recorded, never a host-managed authorisation and never
+the runtime's claim. Each entry holds the executable and the tier that was
+shown; a click-only approval never covers full control. A conversation unused
+for 24 hours is dropped, at most 64 conversations of 64 apps are kept, and the
+one used longest ago makes room. A missing, linked, oversized or malformed file
+is an empty record. The runtime still has to send
+`remembered:true`; keeping its list across a controller restart arrives with
+the Mac branch (PR #105).
 The `plan` command's automatic renewal calls `ready` without a handle; passing
 it through is a follow-up.
 

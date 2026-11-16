@@ -26,7 +26,7 @@ The glow marks the window the agent is working in. It is drawn by `Glow.cs` as s
 - It is thick and never static. Thickness, spill and colour drift slowly along the edge from smooth noise, and the colours travel one lap in 60 seconds.
 - It fades to nothing with no visible rectangle or steps.
 - Brightness is a setting in the menu: Soft (the default), Medium or Bright.
-- The brightest part eases towards the point of the agent's last action. That is the only response to an action.
+- The brightest part eases towards the point of the agent's last action: the real pointer after a physical action, or the screen point the action reports (`point: [x, y]` in the activity message) when the pointer did not move. That is the only response to an action.
 - It enters by fading in while the band widens. It fades out and back in when the window jumps, is minimised or the target changes.
 - At rest it redraws 15 times a second. Transitions redraw every 16 ms.
 - It is hidden for the runtime's own screenshots and excluded from capture when Windows supports that, unless the owner turns on "Show bar and glow in recordings".
@@ -44,7 +44,9 @@ A raised panel 312 wide with a 12 radius, one neutral drop shadow and a hairline
 The prompt asks before the agent may use an application, perform a sensitive operation or launch a program.
 
 - It is a card on the bar's surface: 496 wide, 18 radius, the same shadow and hairline as the menu. It hangs 8 px under the bar and is centred on it, sits above a bar docked low, and is centred on the screen when the bar is not shown.
-- The first line of the request is the title. The rest is shown whole under it; when it is longer than 300 px it scrolls and nothing is cut.
+- A request to use an app shows a row: the app's name, one sentence on what the tier allows, and a tier tag ("Full control" or "Click only", a word plus a two-step mark so the tier does not rest on colour). The line under the heading says how long the approval lasts: "Until you start a new conversation", or "For this task" when the agent passed no conversation handle. The name and path come from the guardian's own look at the window and the tag from the tier it grants. The path, the process number, the task and the notice follow as text.
+- Every other request, and an app request without `card: 1` or with a tier that has no row, is a text card: the first line is the title and the rest is shown whole under it.
+- Text longer than 300 px scrolls and nothing is cut.
 - Allow is filled and Deny is outlined, both 104 by 44, with hover, pressed and focus states. The note beside them says that no answer in 90 seconds counts as Deny.
 - It is a modal dialog with a real text box and real buttons, so focus, the keyboard and screen readers work as in any dialog. Deny holds the focus when it opens, and Enter and Esc mean Deny.
 - The title strip drags it, so it can be moved off whatever it covers.
@@ -52,7 +54,7 @@ The prompt asks before the agent may use an application, perform a sensitive ope
 - It is always excluded from capture and marked as an overlay window, so the agent can neither see nor click it.
 - In a Windows contrast theme it uses the system colours.
 
-The specification's per-application rows and tier tags are not built. They need the request as structured data instead of one text message.
+The runtime approves one app per request, so a card has one row. The specification's list of several apps under one confirm is not built; it needs the agent to name its apps before it starts.
 
 ## Pointer
 
@@ -60,6 +62,6 @@ The agent's pointer carries a small glow that follows it, and a brief ripple mar
 
 ## Reviewing without a desktop session
 
-`--visual-preview <directory>` exports the same drawing code to pictures: the glow at several scales and on light and dark, the bar in every state, the menu and its page change, the access prompt, and the pointer. It also checks the glow's alpha and times one frame. `--glow-trial <hwnd> <seconds>` lights one real window and reports frame times and processor share. `--prompt-trial <seconds> <kind> [top|bottom|corner]` shows a sample prompt that screenshots can see, alone or against a bar docked there.
+`--visual-preview <directory>` exports the same drawing code to pictures: the glow at several scales and on light and dark, the bar in every state, the menu and its page change, the access prompt, and the pointer. It also checks the glow's alpha and times one frame. `--glow-trial <hwnd> <seconds>` lights one real window and reports frame times and processor share. `--prompt-trial <seconds> <kind> [top|bottom|corner]` shows a sample prompt that screenshots can see, alone or against a bar docked there; kinds 0 to 2 are the text cards and 3 and 4 are the app row at full control and click only.
 
 Pictures prove the drawing, not the feel. Motion, a second monitor, mixed scaling and a real Antigravity task each need a person at the machine.
