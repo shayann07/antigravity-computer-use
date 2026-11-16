@@ -43,7 +43,7 @@ evidence only, labelled as such.
 | # | Result on Intel | Reason |
 | --- | --- | --- |
 | 1 Baseline | pass | see Results |
-| 2 Allow / Deny / timeout | unrun | needs a human at the prompt |
+| 2 Allow / Deny / timeout | partial (physically observed: timeout) | installed 0.3.0-beta.7, standalone, permissions granted by the human. Three launch prompts for TextEdit went unanswered: the card was on screen for the whole wait (window-list sample: one 568×348 window at the modal-panel level, alpha 1) and closed at 90.2–90.4 s with no launch. The runtime reported that timeout as `permission_denied`; fixed in this branch to `approval_timeout` for launch and sensitive-action prompts, matching the app prompt. Allow and Deny clicks unrun: no human was at the screen |
 | 3 Tiers | unrun (source and headless contract pass) | needs approved Terminal/IDE and browser |
 | 4 Esc ends the task | unrun (`clear_stop` path passes headless) | needs physical Esc |
 | 5 Esc during held input | unrun | needs physical Esc and a disposable target |

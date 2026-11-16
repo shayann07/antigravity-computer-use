@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "03e1b4832bae9e6d2bfae55314e426f8ace9a45a2ddf81be1935cd8bee6fdcf8"
+      "sha256": "544d3c9a2bf333f44afde6da450529a2e51ec6f0e85df52f51eafaf2c6c7aee9"
     },
     {
       "path": "server/mcp.mjs",
@@ -348,7 +348,7 @@
     },
     {
       "path": "tests/launch-observe.test.mjs",
-      "sha256": "128312e05025a1bec477bcf690a6df0abfff466884e089f57d069dc4c5beb00d"
+      "sha256": "3355595df440b05b00c533aa7c3200b4039a801dcd483c2f5113b8f002c78997"
     },
     {
       "path": "scripts/install.mjs",
@@ -764,7 +764,7 @@
     },
     {
       "path": "docs/MACOS-QUALIFICATION.md",
-      "sha256": "28e72d8d3bb47d272bd161c0f7e5b2d7acccf721b97210d03db983610b87ae16"
+      "sha256": "35547b00945cddf1f4507b74aec5b9b0e647048908e63fef9972b48b215fb831"
     },
     {
       "path": "tests/MacStorageMarkerWriter.swift",

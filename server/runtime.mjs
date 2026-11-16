@@ -655,7 +655,7 @@ export class Runtime {
       const filenameClipboard=op==='file_dialog'&&args.entry_method==='clipboard'?'\r\nFilename entry explicitly uses the local clipboard temporarily and restores preservable formats.\r\n':'';
       const answer=await this.guardian.prompt({kind:'action',hwnd:w?.hwnd,host_pid:this.driver.info?.pid,action_op:op,args:payload,label:preview.label||'',
         message:`Approve ONE sensitive operation?\r\n\r\n${args.reason||'No effect explanation supplied — deny if unclear.'}\r\n${filenameClipboard}\r\nApplication: ${w?.path||'Clipboard / desktop'}\r\nControl: ${preview.label||'(pixel/keyboard operation)'}\r\n\r\n${JSON.stringify({operation:op,args},null,2)}\r\n\r\nCheck the actual target. Never let an agent approve this dialog. Deny if the result is unclear.`});
-      if(!answer.allowed)fail('permission_denied','Human denied the sensitive operation.');payload.__permit=answer.permit;
+      if(!answer.allowed)fail(answer.decision==='timeout'?'approval_timeout':'permission_denied',answer.decision==='timeout'?'Sensitive operation approval timed out.':'Human denied the sensitive operation.');payload.__permit=answer.permit;
     }
     this.check();if(generation!==this.generation)fail('control_changed','Control state changed; observe again.');
     if(w&&appKey(await this.app(w.hwnd))!==appKey(w))fail('identity_changed','Approved process identity changed.');
@@ -880,7 +880,7 @@ export class Runtime {
     this.guardian.send({op:'attach',pid:this.driver.info.pid});
     payload.__worker_epoch=this.driver.epoch;
     const a=await this.guardian.prompt({kind:'action',host_pid:this.driver.info.pid,action_op:'launch',args:payload,label:'',message:`Launch this application?\r\n\r\n${args.reason}\r\n\r\n${JSON.stringify({app,args:payload.args},null,2)}\r\n\r\nThis starts software with your account's privileges. No shell is used. Approve only if intended.`});
-    if(!a.allowed)fail('permission_denied','Human denied application launch.');
+    if(!a.allowed)fail(a.decision==='timeout'?'approval_timeout':'permission_denied',a.decision==='timeout'?'Application launch approval timed out.':'Human denied application launch.');
     this.check();const launchGeneration=this.generation;
     const result=await this.sessions.withInput('launch',{title:path.basename(app)},async()=>{
       this.check();if(launchGeneration!==this.generation)fail('control_changed','Cancelled before launch.');

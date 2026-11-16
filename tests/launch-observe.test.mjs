@@ -108,3 +108,9 @@ test('a clearly dominant window is chosen; comparable windows stay ambiguous',as
  const pending=await Runtime.prototype.launch.call(close.r,{app,observe:true,reason:'Two documents'});
  assert.equal(pending.observe_pending,true);assert.deepEqual(close.seen,[]);assert.equal(close.counts().launches,1);
 });
+test('an unanswered launch approval reports a timeout, not a human denial',async()=>{
+ for(const [decision,code] of [['timeout','approval_timeout'],['denied','permission_denied']]){
+  const {r,counts}=harness([]);r.guardian.prompt=async()=>({allowed:false,decision});
+  await assert.rejects(Runtime.prototype.launch.call(r,{app,reason:'test'}),e=>e.code===code,decision);assert.equal(counts().launches,0);
+ }
+});
