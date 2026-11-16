@@ -104,6 +104,12 @@ export function imagePoint(image,x,y){
 // guardian ends the session at its deadline by terminating the worker, so a
 // stroke that cannot finish first must not start.
 const HOP_MS=16,MAX_STROKE_HOPS=1500;
+// The screen point a native action reports having used, or null. Only two
+// whole numbers in a sane range are passed on to native controls.
+export function actionPoint(result){
+  const p=result?.point;
+  return Array.isArray(p)&&p.length===2&&p.every(v=>Number.isInteger(v)&&Math.abs(v)<10000000)?[p[0],p[1]]:null;
+}
 export function dragBudgetMs(payload){
   const path=Array.isArray(payload.points)?payload.points:[payload.from,payload.to];
   const clamp=(v,lo,hi,d)=>Number.isFinite(v)?Math.min(hi,Math.max(lo,Math.trunc(v))):d;
@@ -671,6 +677,10 @@ export class Runtime {
       // glow; native accepts it only for an approved app.
       this.guardian.send({op:'activity',action:op,...(w?{hwnd:Number(w.hwnd)}:{}),...Runtime.prototype.hostLabel.call(this)});
       const result=(await this.driver.call(op,payload)).result;
+      // Where the action landed, in screen pixels, so the glow's bright part
+      // can ease towards it even when the real pointer did not move.
+      const landed=actionPoint(result);
+      if(landed&&w)this.guardian.send({op:'activity',action:op,hwnd:Number(w.hwnd),point:landed});
       if(op==='click'&&payload.physical)this.guardian.send({op:'activity',action:op,click_feedback:true,...(w?{hwnd:Number(w.hwnd)}:{})});
       return result;
     });
