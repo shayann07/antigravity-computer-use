@@ -268,7 +268,7 @@
     },
     {
       "path": "server/native/Guardian.cs",
-      "sha256": "2422112a95117d2d43a263d79bd70bdb27b1d7068ed1f7888d4ded49a99a343b"
+      "sha256": "064fa776d8c9eda29bc30a212b808ca193430e803276b9ec9c7dc7b66e9a008b"
     },
     {
       "path": "server/native/CursorSafety.cs",

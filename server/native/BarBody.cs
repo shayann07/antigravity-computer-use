@@ -48,7 +48,10 @@ namespace Axon {
         // two); only reaching a screen edge still faster than ImpactSpeed of
         // its width a second starts the two-edge landing. Where it stops, it
         // snaps to a dock within the snap distance.
-        internal const double BodySlot=96,MaxStrain=.2,MinAlong=.6,FlingSpeed=900,Glide=.4,Remaining=3;
+        internal const double BodySlot=96,MaxStrain=.2,MinAlong=.6,FlingSpeed=900,Glide=.4,Remaining=3,LeanMost=24,ReleaseReference=10;
+        // Bench switch: keep a gliding bar stretched by its own speed (the
+        // library relaxes it at release; its hop is short, our glide is not).
+        internal static bool GlideStretch;
 
         enum Mode {Held,Glide,Land,Settle}
         sealed class Axis {
@@ -60,7 +63,7 @@ namespace Axon {
         }
         readonly double restW,restH,slot;
         readonly Axis x=new Axis(),y=new Axis();
-        BodySpring driveX,driveY,strainX,strainY;
+        BodySpring drive,strainU,strainV;double dirU=1,dirV;readonly double scale;
         double fingerVX,fingerVY,sinceSample,lastFingerX,lastFingerY,heldDirX,heldDirY,reversal=1,snap;
         double[] docksX=new double[0],docksY=new double[0];
         bool snapped;
@@ -70,7 +73,7 @@ namespace Axon {
         internal bool ImpactX,ImpactY;internal double PeakSpeed;
 
         // restW, restH and scale in device pixels for the bar's monitor.
-        internal BarBody(double restW,double restH,double scale) {this.restW=restW;this.restH=restH;slot=BodySlot*scale;x.Rest=restW;y.Rest=restH;}
+        internal BarBody(double restW,double restH,double scale) {this.restW=restW;this.restH=restH;slot=BodySlot*scale;this.scale=scale;x.Rest=restW;y.Rest=restH;}
         internal bool Held {get {return x.Mode==Mode.Held&&!Done;}}
         internal double CentreX {get {return x.Centre;}}
         internal double CentreY {get {return y.Centre;}}
@@ -78,7 +81,8 @@ namespace Axon {
         internal double VelocityY {get {return y.Velocity;}}
         internal double AlongX {get {return x.Along;}}
         internal double AlongY {get {return y.Along;}}
-        internal double Strain {get {return strainX.Value-strainY.Value;}}
+        // How stretched it is (ρ, the strain's magnitude).
+        internal double Strain {get {return Math.Sqrt(strainU.Value*strainU.Value+strainV.Value*strainV.Value);}}
         internal double FingerVX {get {return fingerVX;}}
         internal double FingerVY {get {return fingerVY;}}
 
@@ -92,14 +96,18 @@ namespace Axon {
         }
         // The person holds the bar: its centre follows the pointer exactly,
         // and the pointer's filtered speed drives the stretch.
-        internal void Hold(double px,double py,double dt) {
-            if(!Held){Grab(px,py);return;}
+        internal void Hold(double px,double py,double dt) {Hold(px,py,px,py,dt);}
+        // As Hold, with the speed measured from where the pointer itself is
+        // (handX, handY), not the bar the edge holds back: a flick into the
+        // edge is a throw even though the bar barely moved.
+        internal void Hold(double px,double py,double handX,double handY,double dt) {
+            if(!Held){Grab(px,py);lastFingerX=handX;lastFingerY=handY;return;}
             if(dt>0) {
                 double k=1-Math.Exp(-dt/FingerTau);
-                fingerVX+=((px-lastFingerX)/dt-fingerVX)*k;fingerVY+=((py-lastFingerY)/dt-fingerVY)*k;
+                fingerVX+=((handX-lastFingerX)/dt-fingerVX)*k;fingerVY+=((handY-lastFingerY)/dt-fingerVY)*k;
                 sinceSample=0;
             }
-            lastFingerX=px;lastFingerY=py;
+            lastFingerX=handX;lastFingerY=handY;
             x.C.Value=px;y.C.Value=py;x.C.Velocity=fingerVX;y.C.Velocity=fingerVY;
         }
         // Let go. The centre may rest between low and high on each axis
@@ -123,6 +131,12 @@ namespace Axon {
         void Let(Axis a,double v,double low,double high,double give) {
             a.Low=low;a.High=high;a.Give=give;a.Carried=false;
             double p=Math.Max(low,Math.Min(high,a.C.Value));
+            // Let go already past the rest line and flung at that edge: it
+            // presses into the edge from where it is.
+            if(p!=a.C.Value) {
+                int dir=a.C.Value>high?1:-1;
+                if(v*dir>ImpactSpeed*restW){StartLanding(a,p,dir,v);a.Lead.Value=a.C.Value+dir*a.Rest/2;a.Trail.Value=a.C.Value-dir*a.Rest/2;return;}
+            }
             if(v==0||p!=a.C.Value){a.Mode=Mode.Settle;a.C.Velocity=0;a.Target=p;return;}
             a.Mode=Mode.Glide;a.Start=a.C.Value;a.V0=v;a.T=0;
         }
@@ -130,7 +144,7 @@ namespace Axon {
         internal void Snap(double px,double py) {
             x.Mode=y.Mode=Mode.Settle;Done=true;
             x.C.Value=x.Target=px;y.C.Value=y.Target=py;x.C.Velocity=y.C.Velocity=fingerVX=fingerVY=0;
-            driveX=driveY=strainX=strainY=new BodySpring();
+            drive=strainU=strainV=new BodySpring();
         }
 
         internal void Advance(double seconds) {
@@ -157,10 +171,11 @@ namespace Axon {
                 sinceSample+=dt;
                 if(sinceSample>StopWindow){double k=Math.Exp(-dt/StopTau);fingerVX*=k;fingerVY*=k;x.C.Velocity=fingerVX;y.C.Velocity=fingerVY;}
             } else {StepAxis(x,dt);StepAxis(y,dt);}
-            // The stretch: area preserving, each axis driven by its own speed
-            // while held (widening along x, heightening along y), relaxing
-            // with a little wobble once let go.
-            double vx=Held?fingerVX:x.Velocity,vy=Held?fingerVY:y.Velocity,nx=Math.Abs(vx)/slot,ny=Math.Abs(vy)/slot,speed=Math.Sqrt(nx*nx+ny*ny);
+            // The stretch (bar.stretch): the library's area-preserving strain,
+            // in any direction. One drive from the total speed; two springing
+            // components, u = s(vx²-vy²)/|v|² and v = s·2vxvy/|v|², so the axis
+            // of the stretch turns smoothly with the travel and never flips.
+            double vx=Held?fingerVX:x.Velocity,vy=Held?fingerVY:y.Velocity,vv=vx*vx+vy*vy,speed2=vv/(slot*slot),speed=Math.Sqrt(speed2);
             // A scrub back and forth does not build the stretch: a reversal
             // within .28 s keeps .4 of it (.85 otherwise), and it rebuilds
             // over the next .25 s.
@@ -169,18 +184,22 @@ namespace Axon {
                 reversal+=dt;
                 if(speed>.1) {
                     double ux=vx/(speed*slot),uy=vy/(speed*slot);
-                    if((heldDirX!=0||heldDirY!=0)&&ux*heldDirX+uy*heldDirY<0) {
-                        double keep=reversal<.28?.4:.85;driveX.Value*=keep;driveY.Value*=keep;driveX.Velocity=driveY.Velocity=0;reversal=0;
-                    }
+                    if((heldDirX!=0||heldDirY!=0)&&ux*heldDirX+uy*heldDirY<0){drive.Value*=reversal<.28?.4:.85;drive.Velocity=0;reversal=0;}
                     heldDirX=ux;heldDirY=uy;
                 }
                 suppression=Math.Max(.15,Math.Min(1,reversal/.25));
             } else {heldDirX=heldDirY=0;reversal=1;}
-            double r2=HeldReference*HeldReference;
-            driveX.Step(Held?suppression*nx*nx/(r2+nx*nx):0,DriveOmega,1,dt);
-            driveY.Step(Held?suppression*ny*ny/(r2+ny*ny):0,DriveOmega,1,dt);
-            strainX.Step(Math.Max(0,Math.Min(MaxStrain,TravelStrain*driveX.Value)),ShapeOmega,ShapeZeta,dt);
-            strainY.Step(Math.Max(0,Math.Min(MaxStrain,TravelStrain*driveY.Value)),ShapeOmega,ShapeZeta,dt);
+            if(speed>.5){dirU=(vx*vx-vy*vy)/vv;dirV=2*vx*vy/vv;}
+            // Held, it is driven by the pointer's speed. Let go, it relaxes,
+            // as in the library, unless GlideStretch keeps a gliding bar
+            // stretched by its own speed (reference ReleaseReference).
+            bool gliding=x.Mode==Mode.Glide||y.Mode==Mode.Glide,landing=x.Mode==Mode.Land||y.Mode==Mode.Land;
+            double reference=Held?HeldReference:ReleaseReference,r2=reference*reference;
+            drive.Step(Held||GlideStretch&&gliding&&!landing?suppression*speed2/(r2+speed2):0,DriveOmega,1,dt);
+            double s=Math.Max(0,Math.Min(MaxStrain,TravelStrain*drive.Value));
+            // A wall flattens the lean.
+            strainU.Step(s*dirU,ShapeOmega,ShapeZeta,dt);
+            strainV.Step(landing?0:s*dirV,ShapeOmega,ShapeZeta,dt);
         }
         void StepAxis(Axis a,double dt) {
             if(a.Mode==Mode.Glide) {
@@ -234,22 +253,44 @@ namespace Axon {
             else if(length>l.Rest){l.Trail.Value=l.Lead.Value-l.Dir*l.Rest;if(l.Trail.Velocity*l.Dir<0)l.Trail.Velocity=0;}
         }
         bool Quiet() {
-            if(Math.Abs(strainX.Value)>.005||Math.Abs(strainY.Value)>.005||Math.Abs(strainX.Velocity)>.05||Math.Abs(strainY.Velocity)>.05||Math.Abs(driveX.Value)>.01||Math.Abs(driveY.Value)>.01)return false;
+            if(Math.Abs(strainU.Value)>.005||Math.Abs(strainV.Value)>.005||Math.Abs(strainU.Velocity)>.05||Math.Abs(strainV.Velocity)>.05||Math.Abs(drive.Value)>.01)return false;
             return Math.Abs(x.C.Value-x.Target)<.25&&Math.Abs(x.C.Velocity)<1.5&&Math.Abs(y.C.Value-y.Target)<.25&&Math.Abs(y.C.Velocity)<1.5;
         }
+        // How far the ends of the bar may rise or fall from a diagonal stretch, in pixels.
+        internal double LeanPx {get {return LeanMost*scale;}}
         // The body's shape as a 2 x 2 matrix about its centre (x' = a x + b y,
-        // y' = c x + d y): an area-preserving stretch with no shear, so the
-        // long bar never tilts. During a landing the edges are the drawn
-        // extent, as in the library, so the bar never reaches past them.
+        // y' = c x + d y): cosh ρ·I + (sinh ρ/ρ)·[[u, v], [v, -u]], ρ = hypot(u, v).
         internal void Shape(out double a,out double b,out double c,out double d) {
-            double u=strainX.Value-strainY.Value;
-            a=x.Mode==Mode.Land?AlongX:Fit(x,Math.Exp(u),restW);d=y.Mode==Mode.Land?AlongY:Fit(y,Math.Exp(-u),restH);b=c=0;
+            double u=strainU.Value,v=strainV.Value,rho=Math.Sqrt(u*u+v*v),k=rho<1e-9?1:Math.Sinh(rho)/rho;
+            // The lean: a diagonal stretch tilts a long bar; its ends move at most LeanMost DIP.
+            double most=LeanPx/(restW/2);
+            if(Math.Abs(k*v)>most){v=Math.Sign(v)*most/k;rho=Math.Sqrt(u*u+v*v);k=rho<1e-9?1:Math.Sinh(rho)/rho;}
+            double ch=Math.Cosh(rho);
+            a=ch+k*u;d=ch-k*u;b=c=k*v;
+            // During a landing the edges are the drawn extent, as in the
+            // library, and the bar swells on the other axis (bar.squash): by
+            // the inverse square root of the squash, at most e^MaxStrain.
+            double most2=Math.Exp(MaxStrain);
+            if(x.Mode==Mode.Land){a=AlongX;b=c=0;if(y.Mode!=Mode.Land)d=Math.Min(most2,d/Math.Sqrt(AlongX));}
+            if(y.Mode==Mode.Land){d=AlongY;b=c=0;if(x.Mode!=Mode.Land)a=Math.Min(most2,a/Math.Sqrt(AlongY));}
+            if(!haveLimits)return;
+            // Never drawn past the screen's edge: a landing axis keeps its
+            // edges and the other is held to its room; otherwise the whole
+            // shape is eased towards rest until it fits.
+            double roomX=Room(x,restW),roomY=Room(y,restH);
+            if(x.Mode==Mode.Land||y.Mode==Mode.Land) {
+                if(x.Mode!=Mode.Land)a=Math.Min(a,Math.Max(1,roomX/(restW/2)));
+                if(y.Mode!=Mode.Land)d=Math.Min(d,Math.Max(1,roomY/(restH/2)));
+                return;
+            }
+            if(Fits(a,b,c,d,roomX,roomY))return;
+            double lo=0,hi=1;
+            for(int i=0;i<12;i++){double m=(lo+hi)/2;if(Fits(1+m*(a-1),m*b,m*c,1+m*(d-1),roomX,roomY))lo=m;else hi=m;}
+            a=1+lo*(a-1);b*=lo;c*=lo;d=1+lo*(d-1);
         }
-        // A stretch on an axis is held to what fits between the centre and the screen's edge.
-        double Fit(Axis a,double scale,double rest) {
-            if(!haveLimits||scale<=1)return scale;
-            double room=Math.Min(a.High+rest/2+a.Give-a.Centre,a.Centre-(a.Low-rest/2-a.Give));
-            return Math.Max(1,Math.Min(scale,room/(rest/2)));
+        double Room(Axis a,double rest) {return Math.Min(a.High+rest/2+a.Give-a.Centre,a.Centre-(a.Low-rest/2-a.Give));}
+        bool Fits(double a,double b,double c,double d,double roomX,double roomY) {
+            return Math.Abs(a)*restW/2+Math.Abs(b)*restH/2<=Math.Max(roomX,restW/2)+.01&&Math.Abs(c)*restW/2+Math.Abs(d)*restH/2<=Math.Max(roomY,restH/2)+.01;
         }
     }
 }

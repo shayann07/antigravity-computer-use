@@ -682,10 +682,10 @@ namespace Axon {
                     Rectangle dw=Screen.FromRectangle(Bounds).WorkingArea;int dm=(int)Math.Ceiling(12*visualScale);
                     demoX+=demoVX*seconds;demoY+=demoVY*seconds;
                     Location=new Point(Band(demoX,dw.Left,dw.Right-Width,dm),Band(demoY,dw.Top,dw.Bottom-Height,dm));
-                    if(tick>=demoUntil){demo=false;body.Hold(Left+Width/2.0,Top+Height/2.0,seconds);bodyTick=tick;Settle();busy=true;return;}
+                    if(tick>=demoUntil){body.Hold(Left+Width/2.0,Top+Height/2.0,demoX+Width/2.0,demoY+Height/2.0,seconds);bodyTick=tick;Settle();demo=false;busy=true;return;}
                 }
                 // While held, the body takes the bar's place once a frame.
-                if(body.Held)body.Hold(Left+Width/2.0,Top+Height/2.0,seconds);
+                if(body.Held)body.Hold(Left+Width/2.0,Top+Height/2.0,HandX()+Width/2.0,HandY()+Height/2.0,seconds);
                 body.Advance(seconds);
                 if(!body.Held)Location=new Point((int)Math.Round(body.CentreX-Width/2.0),(int)Math.Round(body.CentreY-Height/2.0));
                 // While held, a mouse move has usually drawn this frame already.
@@ -715,11 +715,14 @@ namespace Axon {
         // bar and its ghost (AGCU_BAR_TRACE names the file).
         static readonly bool barTrial=Environment.GetEnvironmentVariable("AGCU_BAR_TRIAL")=="1";
         static readonly string barTrace=barTrial?Environment.GetEnvironmentVariable("AGCU_BAR_TRACE"):null;
+        // Bench variant: AGCU_BAR_VARIANT=glide keeps a gliding bar stretched (BarBody.GlideStretch).
+        static readonly bool barGlideVariant=barTrial&&Environment.GetEnvironmentVariable("AGCU_BAR_VARIANT")=="glide";
         double demoVX,demoVY,demoX,demoY;long demoUntil;bool demo;
         internal static void Trace(string what,int x,int y,int w,int h,int alpha) {Trace(what,x,y,w,h,alpha,0);}
-        internal static void Trace(string what,int x,int y,int w,int h,int alpha,double ms) {
+        internal static void Trace(string what,int x,int y,int w,int h,int alpha,double ms) {Trace(what,x,y,w,h,alpha,ms,1,0,0,1);}
+        internal static void Trace(string what,int x,int y,int w,int h,int alpha,double ms,double a,double b,double c,double d) {
             if(String.IsNullOrEmpty(barTrace))return;
-            try {File.AppendAllText(barTrace,(Stopwatch.GetTimestamp()*1000.0/Stopwatch.Frequency).ToString("0.0")+" "+what+" "+x+" "+y+" "+w+" "+h+" "+alpha+" "+ms.ToString("0.00")+"\n");} catch {}
+            try {File.AppendAllText(barTrace,(Stopwatch.GetTimestamp()*1000.0/Stopwatch.Frequency).ToString("0.0")+" "+what+" "+x+" "+y+" "+w+" "+h+" "+alpha+" "+ms.ToString("0.00")+" "+a.ToString("0.000")+" "+b.ToString("0.000")+" "+c.ToString("0.000")+" "+d.ToString("0.000")+"\n");} catch {}
         }
         void StartDemo(double vx,double vy,double seconds) {
             CancelBody();StartBody();if(body==null)return;
@@ -728,13 +731,15 @@ namespace Axon {
         void StartBody() {
             if(!DesktopVisuals.MotionEnabled)return;
             if(body==null||body.Done)body=new BarBody(Width,Height,visualScale);
+            BarBody.GlideStretch=barGlideVariant;
             body.Grab(Left+Width/2.0,Top+Height/2.0);bodyTick=Stopwatch.GetTimestamp();
             Rectangle work=Screen.FromRectangle(Bounds).WorkingArea;int side=(int)Math.Ceiling(12*visualScale),edge=(int)Math.Round(18*visualScale);
             body.Limits(work.Left+side+Width/2.0,work.Right-side-Width/2.0,side,work.Top+edge+Height/2.0,work.Bottom-edge-Height/2.0,edge);
             if(ghost==null||ghost.IsDisposed)ghost=new BarGhost();
             ghost.Recordable(recordVisuals);
-            double most=Math.Exp(BarBody.MaxStrain);
-            ghostSize=new Size((int)Math.Ceiling(Width*most)+8,(int)Math.Ceiling(Height*most)+8);
+            // Room for the largest stretch or swell, and for the lean of a diagonal stretch.
+            double most=Math.Exp(BarBody.MaxStrain),lean=body.LeanPx;
+            ghostSize=new Size((int)Math.Ceiling(Width*most+lean*Height/Width)+8,(int)Math.Ceiling(Height*most+2*lean)+8);
             RenderBodyPicture();
             // The 16 ms frame timer needs the fine system timer while the bar
             // moves, or it ticks every ~31 ms; it is released when it stops.
@@ -747,6 +752,10 @@ namespace Axon {
             using(Graphics g=Graphics.FromImage(next)){g.Clear(Color.Transparent);g.ScaleTransform(visualScale,visualScale);DesktopVisuals.Hud(g,Model());}
             Bitmap old=bodyPicture;bodyPicture=next;bodyPictureStale=false;if(old!=null)old.Dispose();
         }
+        // Where the bar's corner would be with no edge holding it back: the
+        // pointer less the grab offset (the scripted throw in bench mode).
+        double HandX() {return demo?demoX:Cursor.Position.X-dragGrab.X;}
+        double HandY() {return demo?demoY:Cursor.Position.Y-dragGrab.Y;}
         long lastGhostTick;const int GhostGap=7;Bitmap ghostSurface;
         void PresentGhost() {
             lastGhostTick=Stopwatch.GetTimestamp();
@@ -764,15 +773,16 @@ namespace Axon {
                         g.Clear(Color.Transparent);
                         int left=(ghostSize.Width-Width)/2,top=(ghostSize.Height-Height)/2;
                         // At its own shape the picture is copied pixel for pixel, so the text holds still.
-                        if(Math.Abs(a-1)<.002&&Math.Abs(d-1)<.002)g.DrawImageUnscaled(bodyPicture,left,top);
+                        if(Math.Abs(a-1)<.002&&Math.Abs(d-1)<.002&&Math.Abs(b)<.002&&Math.Abs(c)<.002)g.DrawImageUnscaled(bodyPicture,left,top);
                         else {
                             g.InterpolationMode=InterpolationMode.Bilinear;g.PixelOffsetMode=PixelOffsetMode.Half;
-                            g.TranslateTransform(left+Width/2f,top+Height/2f);g.ScaleTransform((float)a,(float)d);
+                            g.TranslateTransform(left+Width/2f,top+Height/2f);
+                            using(Matrix shape=new Matrix((float)a,(float)c,(float)b,(float)d,0,0))g.MultiplyTransform(shape);
                             g.DrawImage(bodyPicture,new RectangleF(-Width/2f,-Height/2f,Width,Height));
                         }
                     }
                     byte ga=(byte)Math.Max(0,Math.Min(255,(int)Math.Round(255*barAlpha)));
-                    ghost.Show(surface,gx,gy,ga);Trace("ghost",gx,gy,ghostSize.Width,ghostSize.Height,ga,(Stopwatch.GetTimestamp()-began)*1000.0/Stopwatch.Frequency);
+                    ghost.Show(surface,gx,gy,ga);Trace("ghost",gx,gy,ghostSize.Width,ghostSize.Height,ga,(Stopwatch.GetTimestamp()-began)*1000.0/Stopwatch.Frequency,a,b,c,d);
                 }
             } catch {}
         }
@@ -863,7 +873,7 @@ namespace Axon {
         // is remembered when it comes to rest.
         void Settle() {
             bool moving=body!=null&&!body.Done&&body.Held;
-            if(moving){long tick=Stopwatch.GetTimestamp();body.Hold(Left+Width/2.0,Top+Height/2.0,(tick-bodyTick)/(double)Stopwatch.Frequency);body.Advance((tick-bodyTick)/(double)Stopwatch.Frequency);bodyTick=tick;}
+            if(moving&&!demo){long tick=Stopwatch.GetTimestamp();body.Hold(Left+Width/2.0,Top+Height/2.0,HandX()+Width/2.0,HandY()+Height/2.0,(tick-bodyTick)/(double)Stopwatch.Frequency);body.Advance((tick-bodyTick)/(double)Stopwatch.Frequency);bodyTick=tick;}
             dragTrail.Clear();
             Screen screen=Screen.FromRectangle(Bounds);float scale=Overlay.ScreenScale(screen);Rectangle work=screen.WorkingArea;
             if(scale!=visualScale) {
