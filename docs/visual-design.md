@@ -15,8 +15,20 @@ Every colour, size and duration lives in `server/native/DesktopVisuals.cs`. The 
 | `Press`, `PressScale` | 160 ms, 0.97 | a press landing |
 | `EaseOut`, `EaseInOut` | cubic-bezier(.23,1,.32,1), (.77,0,.175,1) | entering and leaving; moving |
 | `SpringSeconds`, `SpringBounce` | 0.45 s, 0.15 | the gentle spring |
-| `ThrowSpeed`, `ThrowGlide`, `ThrowBounce` | 900 DIP/s, 0.3 s, 0.3 | a thrown bar: how fast counts as a throw, how far its momentum aims, the snappy spring it lands with |
-| `SquashWide`, `SquashTall`, `SquashMost` | 0.004 and 0.015 per DIP, at most 0.18 | the bar pressed flat against a screen edge |
+| `ThrowGlide`, `BarBody.FlingSpeed` | 0.3 s, 420 DIP/s | a throw: how far its momentum aims, and how fast counts as one |
+
+The bar's drag and throw physics (`BarBody.cs`) are adapted from the liquidglass Calm tab-bar selector (Apache-2.0):
+- Closed-form springs: mass 1, stiffness ω², damping 2ζω.
+- The centre lands on a critical spring, ω 24.
+- While held, speed drives the stretch: drive ω 10, shape ω 32, ζ 0.72, reference 8 slots/s, gain 0.6. Scrubbing back and forth is suppressed.
+- A throw into a screen edge lands on two edges. At impact the trailing edge keeps 0.1 of its speed and swings in (ω 9, ζ 0.3, stiffening 0.5), then recovers (ω 13).
+
+Departures for a 440 by 48 bar:
+- A slot is 96 DIP.
+- The stretch is capped at 0.2 (the library allows 0.336) and has no shear term, so a long bar never tilts.
+- An edge never shortens below 0.6 of its length.
+- The wall is the work area's edge, so the dock's inset is all the give.
+- The impact is measured to the leading edge's rest line.
 
 When Windows' animation preference is off, movement becomes an instant change or a short fade. The feedback itself stays.
 
@@ -35,7 +47,7 @@ The glow marks the window the agent is working in. It is drawn by `Glow.cs` as s
 
 ## Control bar
 
-A 440 by 48 pill on the ink surface, always dark. Two lines of text: the first says the state and takes the state's colour, the second gives the reason or the hint. There are no state dots. Stop and Settings are real buttons, 44 by 44, with names and tooltips for screen readers, and each has hover and pressed states. The bar never takes keyboard focus. It can be dragged and it resists at the screen edge. Put down slowly, it stays where it is, lands on a dock within 12 px of one, and eases back inside if it was dropped past the edge. Thrown, it carries on to the dock nearest where its momentum points, springs in from the speed it was let go at, and squashes flat against the screen edge it meets before springing back to its shape.
+A 440 by 48 pill on the ink surface, always dark. Two lines of text: the first says the state and takes the state's colour, the second gives the reason or the hint. There are no state dots. Stop and Settings are real buttons, 44 by 44, with names and tooltips for screen readers, and each has hover and pressed states. The bar never takes keyboard focus. It can be dragged and it resists at the screen edge. Put down slowly, it stays where it is, lands on a dock within 12 px of one, and eases back inside if it was dropped past the edge. Thrown, it carries on to the dock nearest where its momentum points, springs in from the speed it was let go at, squashes against the screen edge it flies into, and swings back out to its shape. While held, it stretches along the direction it moves, more the faster it goes. While it moves, it is drawn in its moving shape in a click-through window; the bar itself stays in place for clicks.
 
 ## Settings menu
 
