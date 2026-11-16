@@ -652,8 +652,6 @@ export class Runtime {
           // is a straight drag. Both are screenshot pixels mapped to the screen.
           if(Array.isArray(args.points)){
             if(args.from||args.to)fail('bad_points','Use either points or from/to, not both. No input was sent.');
-            // The macOS host draws only from/to, so a curve would silently become a line.
-            if(process.platform==='darwin')fail('points_unsupported','Multi-point drags are not available on macOS yet. Use from/to segments. No input was sent.');
             payload.points=args.points.map(p=>imagePoint(f.image,...p));payload.from=payload.points[0];payload.to=payload.points.at(-1);
           }
           else if(args.from&&args.to){payload.from=imagePoint(f.image,...args.from);payload.to=imagePoint(f.image,...args.to);}
