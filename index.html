@@ -233,7 +233,7 @@
     <h2 class="reveal">Private and careful by design</h2>
     <div class="cards2">
       <div class="card reveal" style="--i:0"><h3>Your data stays yours</h3><ul class="list"><li>No telemetry. Screenshots go only to the model you already use in Antigravity.</li><li>The glow and bar are left out of the agent's own screenshots.</li><li>Sign-ins, admin prompts and the secure desktop are always handed back to you.</li></ul></div>
-      <div class="card reveal" style="--i:1"><h3>Safe to keep running</h3><ul class="list"><li>Every release is signed, and installed copies update only from signed metadata.</li><li>Updates can be switched to manual and rolled back.</li><li>An input whose outcome is uncertain is never replayed.</li></ul></div>
+      <div class="card reveal" style="--i:1"><h3>Safe to keep running</h3><ul class="list"><li>Every release lists a SHA-256 for each archive, and installed copies update only from signed metadata.</li><li>Updates can be switched to manual and rolled back.</li><li>An input whose outcome is uncertain is never replayed.</li></ul></div>
     </div>
   </section>
 
@@ -258,7 +258,7 @@
 
   <section id="install">
     <h2 class="reveal">Install</h2>
-    <p class="sub">Each <a href="https://github.com/shayann07/antigravity-computer-use/releases/latest">release</a> is signed and lists a SHA-256 for every archive in <code>SHA256SUMS.txt</code>. Check the archive before you run anything from it.</p>
+    <p class="sub">Each <a href="https://github.com/shayann07/antigravity-computer-use/releases/latest">release</a> lists a SHA-256 for every archive in <code>SHA256SUMS.txt</code>, and installed copies update only from signed metadata. Check the archive before you run anything from it.</p>
     <p class="label">Windows: download the ZIP and SHA256SUMS.txt, then in PowerShell</p>
     <div class="code"><pre><code>$zip = Get-Item .\AntigravityComputerUse-*-windows-x64.zip
 $want = ((Select-String -Path .\SHA256SUMS.txt -SimpleMatch $zip.Name).Line -split '\s+')[0]
