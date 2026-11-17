@@ -652,6 +652,19 @@ enum MacBarBench {
         func model(_ state: String, prompting: Bool = false, activity: String = "", low: Bool = false, reason: String = "", ended: Bool = false) -> MacBarModel {
             MacBarModel.make(state: state, prompting: prompting, host: host, activity: activity, lowTime: low, reason: reason, ended: ended)
         }
+        // The agent's pointer on dark and light: the dart with its halo, and the
+        // halo alone (what shows around the OS arrow when hiding is refused).
+        for (name, background) in [("dark", NSColor(srgbRed: 31 / 255, green: 33 / 255, blue: 40 / 255, alpha: 1)), ("light", NSColor(white: 0.96, alpha: 1))] {
+            for dart in [true, false] {
+                let path = (directory as NSString).appendingPathComponent("pointer-\(dart ? "dart" : "halo")-\(name).png")
+                try png(CGSize(width: MacPointerView.side, height: MacPointerView.side), to: path) {
+                    background.setFill(); NSRect(x: 0, y: 0, width: MacPointerView.side, height: MacPointerView.side).fill()
+                    let view = MacPointerView(frame: NSRect(x: 0, y: 0, width: MacPointerView.side, height: MacPointerView.side)); view.dart = dart
+                    view.draw(view.bounds)
+                }
+                written.append(path)
+            }
+        }
         try bar("ready", model("idle"))
         try bar("working", model("active"))
         try bar("working-clicking", model("active", activity: "Clicking"))

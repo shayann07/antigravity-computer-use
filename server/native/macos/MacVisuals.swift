@@ -127,7 +127,8 @@ final class MacVisuals: NSObject {
     private var dragTrail: [(Double, CGPoint)] = []
     private var spring: MacBarMotion.Spring?, springTick = 0.0, springHeld = false, motionTimer: Timer?
     private var slide: (from: CGPoint, to: CGPoint, at: Double, span: Double)?
-    var cursorApplied: Bool { !hiddenDisplays.isEmpty }
+    var cursorApplied: Bool { pointerFollow != nil }
+    var pointerFollow: Timer?
     static let barSize = CGSize(width: MacBarArt.width, height: MacBarArt.height)
 
     func makePanel(_ frame: NSRect, clickThrough: Bool) -> NSPanel {
@@ -169,8 +170,11 @@ final class MacVisuals: NSObject {
         view.onSettings = { [weak self] in self?.openMenu() }
         p.contentView = view; panel = p; barView = view
         menu.onChoose = { [weak self] id in self?.menuChosen(id) }
-        let cursor = makePanel(NSRect(x: 0, y: 0, width: 40, height: 40), clickThrough: true)
-        cursor.contentView = MacPointerView(frame: NSRect(x: 0, y: 0, width: 40, height: 40)); pointer = cursor
+        let side = MacPointerView.side
+        let cursor = makePanel(NSRect(x: 0, y: 0, width: side, height: side), clickThrough: true)
+        // Above every window and menu, like the pointer it stands in for.
+        cursor.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.cursorWindow)))
+        cursor.contentView = MacPointerView(frame: NSRect(x: 0, y: 0, width: side, height: side)); pointer = cursor
         applyRecordingPreference()
         writeHudBounds(p.frame)
     }
@@ -208,12 +212,32 @@ final class MacVisuals: NSObject {
         }
         if state == "active" && !captureHidden && !prompting { applyCursor(); animate() }
     }
+    // The agent's pointer, as on Windows (DesktopVisuals.cs Arrow and Pointer):
+    // while the agent works, the OS arrow is hidden and the dart with the glow
+    // halo follows the real pointer at display rate. A background helper may
+    // hide the OS cursor only with the window server's SetsCursorInBackground
+    // connection property; when that or the hide is refused, only the halo is
+    // drawn around the OS arrow, so there is never a second arrow. The window server shows the cursor again if this process
+    // ends.
     func applyCursor() {
-        // No drawn pointer, as on Windows: the real cursor moves for every
-        // physical action. A background helper cannot reliably hide the OS
-        // cursor, so a drawn one showed as a second, lagging arrow.
+        guard pointerFollow == nil, let pointer = pointer, let view = pointer.contentView as? MacPointerView else { return }
+        if hiddenDisplays.isEmpty, MacCursorHiding.allowInBackground(), CGDisplayHideCursor(CGMainDisplayID()) == .success {
+            hiddenDisplays.append(CGMainDisplayID())
+        }
+        // Both calls report success only when the window server accepted the
+        // hide from this background process; otherwise no dart is drawn.
+        view.dart = !hiddenDisplays.isEmpty; view.needsDisplay = true
+        placePointer(); pointer.orderFrontRegardless()
+        let timer = Timer(timeInterval: 1.0 / 120, repeats: true) { [weak self] _ in self?.placePointer() }
+        RunLoop.main.add(timer, forMode: .common); pointerFollow = timer
+    }
+    // The dart's tip sits on the pointer's hot spot.
+    func placePointer() {
+        let point = NSEvent.mouseLocation, tip = MacPointerView.tip
+        pointer?.setFrameOrigin(NSPoint(x: (point.x - tip.x).rounded(), y: (point.y - (MacPointerView.side - tip.y)).rounded()))
     }
     func releaseCursor() {
+        pointerFollow?.invalidate(); pointerFollow = nil
         for display in hiddenDisplays { CGDisplayShowCursor(display) }
         hiddenDisplays.removeAll(); pointer?.orderOut(nil)
     }
@@ -280,8 +304,6 @@ final class MacVisuals: NSObject {
         windowGlow.follow()
         returnHomeIfDue()
         if cursorApplied {
-            let point = NSEvent.mouseLocation
-            pointer?.setFrameOrigin(NSPoint(x: point.x - 4, y: point.y - 38))
             if pointer?.isVisible != true { pointer?.orderFrontRegardless() }
             if Date().timeIntervalSince(hoverChecked) >= 0.15 {
                 hoverChecked=Date();var insertion=false
@@ -494,21 +516,66 @@ final class MacVisuals: NSObject {
 }
 
 final class MacPointerView: NSView {
+    // A 96 pt surface with the hot spot at its middle, as the Windows pointer overlay.
+    static let side: CGFloat = 96
+    static let tip = CGPoint(x: 48, y: 48)
     var textInsertion=false
+    // Whether the OS arrow is hidden, so the dart stands in for it.
+    var dart = true
     override var isFlipped: Bool { true }
     override func draw(_ dirtyRect: NSRect) {
+        // The glow: two soft halos in the glow's first tone, a Gaussian falloff
+        // from the centre, a little below and right of the tip (Pointer()).
+        let tone = MacGlowShape.tones[0], base = NSColor(srgbRed: CGFloat(tone.0) / 255, green: CGFloat(tone.1) / 255, blue: CGFloat(tone.2) / 255, alpha: 1)
+        let centre = NSPoint(x: 54, y: 56)
+        for (radius, color, peak) in [(CGFloat(38), base, 78.0), (CGFloat(18), base.blended(withFraction: 0.35, of: .white) ?? base, 104.0)] {
+            let stops = (0...6).map { i -> (NSColor, CGFloat) in
+                let p = CGFloat(i) / 6, r = 1 - p
+                let factor = i == 0 ? 0 : exp(-(r / 0.52) * (r / 0.52))
+                return (color.withAlphaComponent(CGFloat(peak) / 255 * factor), r)
+            }.reversed()
+            NSGradient(colors: stops.map { $0.0 }, atLocations: stops.map { $0.1 }, colorSpace: .sRGB)?
+                .draw(fromCenter: centre, radius: 0, toCenter: centre, radius: radius, options: [])
+        }
+        guard dart else { return }
+        NSGraphicsContext.saveGraphicsState()
+        let move = NSAffineTransform(); move.translateX(by: MacPointerView.tip.x - 4, yBy: MacPointerView.tip.y - 2); move.concat()
         if textInsertion {
             let p=NSBezierPath();p.move(to:NSPoint(x:4,y:3));p.line(to:NSPoint(x:4,y:28))
             p.move(to:NSPoint(x:0,y:3));p.line(to:NSPoint(x:8,y:3));p.move(to:NSPoint(x:0,y:28));p.line(to:NSPoint(x:8,y:28))
             NSColor(calibratedWhite:0.12,alpha:0.95).setStroke();p.lineWidth=4;p.stroke()
-            NSColor(calibratedRed:0.84,green:0.93,blue:0.98,alpha:1).setStroke();p.lineWidth=1.8;p.stroke();return
+            NSColor(calibratedRed:0.84,green:0.93,blue:0.98,alpha:1).setStroke();p.lineWidth=1.8;p.stroke()
+            NSGraphicsContext.restoreGraphicsState(); return
         }
         let p = NSBezierPath(); p.move(to: NSPoint(x: 4, y: 2)); p.line(to: NSPoint(x: 28, y: 16))
         p.curve(to: NSPoint(x: 27.8, y: 18.2), controlPoint1: NSPoint(x: 29.5, y: 17), controlPoint2: NSPoint(x: 29, y: 18))
         p.line(to: NSPoint(x: 17.3, y: 19.6)); p.line(to: NSPoint(x: 11.8, y: 28.5))
         p.curve(to: NSPoint(x: 9.6, y: 27.8), controlPoint1: NSPoint(x: 11, y: 29.8), controlPoint2: NSPoint(x: 9.9, y: 29.3))
-        p.close(); NSGradient(starting: .white, ending: NSColor(calibratedRed: 0.51, green: 0.69, blue: 0.79, alpha: 1))?.draw(in: p, angle: 90)
-        NSColor(calibratedRed: 0.11, green: 0.15, blue: 0.21, alpha: 0.94).setStroke(); p.lineWidth = 1.25; p.stroke()
+        p.close()
+        let shadow = NSShadow(); shadow.shadowOffset = NSSize(width: 0.4, height: -1.1); shadow.shadowBlurRadius = 1.5
+        shadow.shadowColor = NSColor(srgbRed: 19 / 255, green: 30 / 255, blue: 42 / 255, alpha: 125 / 255); NSGraphicsContext.saveGraphicsState(); shadow.set()
+        NSColor.white.setFill(); p.fill(); NSGraphicsContext.restoreGraphicsState()
+        NSGradient(starting: NSColor(srgbRed: 250 / 255, green: 251 / 255, blue: 252 / 255, alpha: 1), ending: NSColor(srgbRed: 130 / 255, green: 175 / 255, blue: 201 / 255, alpha: 1))?.draw(in: p, angle: 55)
+        let facet = NSBezierPath(); facet.move(to: NSPoint(x: 5, y: 4)); facet.line(to: NSPoint(x: 17.3, y: 19.6)); facet.line(to: NSPoint(x: 10.8, y: 27.4)); facet.close()
+        NSColor(srgbRed: 60 / 255, green: 113 / 255, blue: 148 / 255, alpha: 100 / 255).setFill(); facet.fill()
+        NSColor(srgbRed: 27 / 255, green: 39 / 255, blue: 53 / 255, alpha: 240 / 255).setStroke(); p.lineWidth = 1.25; p.lineJoinStyle = .round; p.stroke()
+        let crease = NSBezierPath(); crease.move(to: NSPoint(x: 5, y: 4)); crease.line(to: NSPoint(x: 17.3, y: 19.6))
+        NSColor(srgbRed: 46 / 255, green: 80 / 255, blue: 106 / 255, alpha: 95 / 255).setStroke(); crease.lineWidth = 0.8; crease.stroke()
+        NSGraphicsContext.restoreGraphicsState()
+    }
+}
+
+// The window server lets a background process hide the cursor only when its
+// connection sets SetsCursorInBackground. Looked up at run time: when the
+// symbol is missing the OS arrow simply stays visible (no drawn arrow then).
+enum MacCursorHiding {
+    private typealias DefaultConnection = @convention(c) () -> Int32
+    private typealias SetProperty = @convention(c) (Int32, Int32, CFString, CFTypeRef) -> Int32
+    static func allowInBackground() -> Bool {
+        let handle = dlopen(nil, RTLD_NOW)
+        guard let connect = dlsym(handle, "_CGSDefaultConnection"), let set = dlsym(handle, "CGSSetConnectionProperty") else { return false }
+        let cid = unsafeBitCast(connect, to: DefaultConnection.self)()
+        return unsafeBitCast(set, to: SetProperty.self)(cid, cid, "SetsCursorInBackground" as CFString, kCFBooleanTrue) == 0
     }
 }
 

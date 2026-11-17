@@ -134,6 +134,13 @@ final class MacWindowGlow {
         guard let found = best, found.2 <= 24 else { return nil }
         return (found.0, found.1)
     }
+    // Whether the nearest window above the target, among ordinary (layer 0)
+    // windows, is the glow's panel. The list runs front to back.
+    static func directlyAbove(_ panel: CGWindowID, target: CGWindowID) -> Bool {
+        guard target != 0, let rows = CGWindowListCopyWindowInfo([.optionOnScreenAboveWindow], target) as? [[String: Any]] else { return false }
+        let ordinary = rows.filter { ($0[kCGWindowLayer as String] as? Int) == 0 }
+        return (ordinary.last?[kCGWindowNumber as String] as? NSNumber)?.uint32Value == panel
+    }
     static func bounds(of id: CGWindowID) -> CGRect? {
         guard id != 0, let list = CGWindowListCopyWindowInfo([.optionIncludingWindow], id) as? [[String: Any]],
               let row = list.first, (row[kCGWindowIsOnscreen as String] as? Bool) == true,
@@ -208,7 +215,10 @@ final class MacWindowGlow {
         aim(at: pending.flatMap { near.contains($0) ? $0 : nil } ?? CGPoint(x: window.midX, y: window.minY), animated: false); pending = nil
         CATransaction.begin(); CATransaction.setDisableActions(true); root.opacity = 0
         wide.opacity = reduce ? 1 : 0; narrow.opacity = reduce ? 0 : 1; CATransaction.commit()
-        panel.order(.above, relativeTo: Int(windowID)); orderedAt = CACurrentMediaTime()
+        // The light must not be seen above the windows covering its target, so
+        // it fades in only once the window server has it directly above the
+        // target. Seen on C7: the first order put it on top for a moment.
+        placeAboveTarget(panel); orderedAt = CACurrentMediaTime()
         startDrift(reduce: reduce)
         CATransaction.begin(); CATransaction.setAnimationDuration(reduce ? MacDesign.fast : MacDesign.slow)
         CATransaction.setAnimationTimingFunction(MacDesign.easeOut)
@@ -322,7 +332,16 @@ final class MacWindowGlow {
         }
         if parked && !passing && now - seenAt >= 0.12 { enter(window) }
         // The target may have been raised above the glow since; stay just above it.
-        if shown, let panel = panel, now - orderedAt >= 0.5 { panel.order(.above, relativeTo: Int(windowID)); orderedAt = now }
+        if shown, let panel = panel, now - orderedAt >= 0.5 { placeAboveTarget(panel); orderedAt = now }
+    }
+    // Orders the panel just above the target and checks the window server's
+    // order. Until it is directly above, the panel stays transparent.
+    private func placeAboveTarget(_ panel: NSPanel) {
+        for _ in 0..<3 {
+            panel.order(.above, relativeTo: Int(windowID))
+            if MacWindowGlow.directlyAbove(CGWindowID(panel.windowNumber), target: windowID) { panel.alphaValue = 1; return }
+        }
+        panel.alphaValue = 0
     }
     func hide(immediately: Bool = false) {
         parked = false; pending = nil
