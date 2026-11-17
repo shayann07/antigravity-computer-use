@@ -3,6 +3,9 @@ const readOnly=new Set(['computer_status','computer_apps','computer_stop','compu
 const denied=(code,message)=>{throw Object.assign(Error(message),{code});};
 // A bearer capability coordinates cooperating clients; it is not proof of a
 // host conversation identity and cannot isolate hostile same-account processes.
+// Model think time between actions has been measured above 12 minutes, so the
+// takeover threshold sits well past the 10-minute orphaned hint.
+export const ORPHAN_TAKEOVER_MS=30*60*1000;
 export class TaskOwnership {
  constructor({now=()=>performance.now()}={}){this.now=now;this.owner=null;}
  claim(state){
@@ -32,6 +35,16 @@ export class TaskOwnership {
   if(this.owner&&!this.owner.used&&this.now()>this.owner.until)this.owner=null;
   if(!this.owner)return state?.task_open===true?'unknown':'none';
   return typeof token==='string'&&/^[a-f0-9]{64}$/.test(token)&&timingSafeEqual(Buffer.from(token),Buffer.from(this.owner.token))?'self':'other';
+ }
+ // A used capability is released only when its task is over in practice: a
+ // human Stop ended it, or nothing has happened for ORPHAN_TAKEOVER_MS with no
+ // grant and no input held. Age alone never transfers an active task (#7);
+ // without this, a caller that vanished without End blocked everyone (#114).
+ releasable(state,idleMs=ORPHAN_TAKEOVER_MS){
+  if(!this.owner?.used||state?.recovered_task===true)return false;
+  if(state?.state==='stopped')return true;
+  return state?.task_liveness==='orphaned'&&Number(state?.last_activity_ms_ago)>idleMs
+   &&!(state?.approved_apps?.length)&&state?.held_resources?.input_held!==true&&!(state?.held_resources?.grants>0);
  }
  ended(){this.owner=null;}
 }

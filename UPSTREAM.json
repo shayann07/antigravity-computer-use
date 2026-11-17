@@ -60,7 +60,7 @@
     {
       "path": "server/native/AxonHost.cs",
       "upstream_sha256": "bef101afecbdf8f75df2a1f8b45d224eade39f09e3c8e25cf7b450e3fa49a8ef",
-      "local_sha256": "a7899884f9888cc04188c4ed0d22368b72f0720c7b2b16ab1fa2fe711ec1cf3a",
+      "local_sha256": "a564109befec8675f7b812bed48938be1b29e9848b0a2e238bc31d5ea1d131ce",
       "modified": true
     },
     {
@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "294d7555c7974b9b7179b38d158064a5e7783d20088d1552ef2cc567a6f7fb3c"
+      "sha256": "158be57472afccd42ef6e75c57dc0b0d5ebec0f7394213e9c42906ea57f04f3e"
     },
     {
       "path": "server/mcp.mjs",
@@ -296,15 +296,15 @@
     },
     {
       "path": "server/desktop-service.mjs",
-      "sha256": "f280098517d7fb13fc81ed31ff04a5546b5715b20f0b5b873a5b50bdaf4c01c2"
+      "sha256": "ca6ba894ef546d1b196c365dd5160e347321e82b8a9936da2a40822ffdb6faa2"
     },
     {
       "path": "server/desktop-tools.mjs",
-      "sha256": "095fa7276d4f27e5742e3c97d50964d2b2587c5e423255d35cb45d2bfe478674"
+      "sha256": "2bf354d2dfef805f7db7bc35ecdcffeb2e67dd39e0b1f188907349036d951c37"
     },
     {
       "path": "scripts/desktop.mjs",
-      "sha256": "a869ccedac1ece8ab0ce9b1a2d2e2b27581be8dfaf292a156d15536b0fec2db3"
+      "sha256": "fa30a7f4659b0562e45de8d23eb5c5652cb01df644c66151ac0941e547cab56b"
     },
     {
       "path": "server/version.mjs",
@@ -352,11 +352,11 @@
     },
     {
       "path": "scripts/install.mjs",
-      "sha256": "60690fed6ac47059b8bcb50e38e5043a8b19b783916986262231cc7a894cb064"
+      "sha256": "8591f44cdaa2389323b9d61c11f0fa098239c16cfdee5b68332dc5d27f9b300a"
     },
     {
       "path": "scripts/rollback.mjs",
-      "sha256": "e6fd70dceef271d168a64787794cdf4161f1e75d111ee9cd200bb4f61c9b4bba"
+      "sha256": "f90364b5d4e1fbcf02e4d26961dac088259e19e2ff8fa042d215d1b448e750d1"
     },
     {
       "path": "scripts/verify-install.mjs",
@@ -476,7 +476,7 @@
     },
     {
       "path": "tests/batch-wait.test.mjs",
-      "sha256": "7bf675f60828120a1ec1ef2039e7920a4d302517cc05f6a5a7f9557a76540bf0"
+      "sha256": "a8e419ae336f8f2798c08ea74436a21b36a335ee187c0e5587a45150dbe800ed"
     },
     {
       "path": "skills/computer-use/references/recovery.md",
@@ -888,11 +888,11 @@
     },
     {
       "path": "server/task-ownership.mjs",
-      "sha256": "1a454e595caecfb4b87a98d81623e9f60aeee5e6796bc695cae76abfa37edc36"
+      "sha256": "df9f706f24db27c8fe5ba70d6fccf38ac35a75016827970d4482289640a89546"
     },
     {
       "path": "tests/task-ownership.test.mjs",
-      "sha256": "100cb69e4906fd07ecab3a4057671d53917e45227bd606be8f8e3288fedef6e0"
+      "sha256": "07aff10597c430a0f232157cd773b75433846f3df3f814ff1b6c9996cfa1e145"
     },
     {
       "path": "tests/installation-location.test.mjs",
@@ -924,7 +924,7 @@
     },
     {
       "path": "package.json",
-      "sha256": "e407504e4339c4d34df61467977d41ba1240406ae2ed9c3e58a67a11b935c9b0"
+      "sha256": "7285c98de03b5e506cbd003f23fc544542a232420bca58e9c063fbfd9e039b4a"
     },
     {
       "path": "server/native/macos/MacPhosphorIcons.swift",

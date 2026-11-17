@@ -4,7 +4,7 @@ import {TaskOwnership} from './task-ownership.mjs';
 import net from 'node:net';
 import fs from 'node:fs';
 import path from 'node:path';
-import {randomBytes,timingSafeEqual} from 'node:crypto';
+import {randomBytes,randomUUID,timingSafeEqual} from 'node:crypto';
 import {Runtime} from './runtime.mjs';
 import {call} from './desktop-tools.mjs';
 import {dataDir} from './build.mjs';
@@ -18,18 +18,32 @@ import {Incidents} from './incidents.mjs';
 import {scheduleUpdates} from './auto-update.mjs';
 import {recoveryAdvice,safeWaitMetrics} from './recovery.mjs';
 
+const IMAGE_LIMIT=50;
+const IMAGE_RETENTION=`newest ${IMAGE_LIMIT} images; copy one elsewhere to keep it`;
 export function compact(result,dir){
   const value={...result};
   if(value.metadata){value.metadata={...value.metadata};delete value.metadata.elements;delete value.metadata.image;}
-  if(result.image?.data){
+  const stepHolders=[value.batch,value].filter(h=>h&&Array.isArray(h.completed)&&h.completed.some(step=>step?.image?.data));
+  const burst=Array.isArray(result.images)&&result.images.some(image=>image?.data);
+  if(result.image?.data||stepHolders.length||burst){
    try {
     const folder=path.join(dir,'observations');fs.mkdirSync(folder,{recursive:true});
-    const file=path.join(folder,result.metadata.observation_id+'.jpg');
-    fs.writeFileSync(file,Buffer.from(result.image.data,'base64'),{mode:0o600});
-    value.image={path:file,width:result.image.width,height:result.image.height,source:result.image.source,capture:result.image.capture};
-    // Observations are short-lived local data, not an unbounded screen archive.
+    const save=(name,image)=>{
+     const file=path.join(folder,name+'.jpg');fs.writeFileSync(file,Buffer.from(image.data,'base64'),{mode:0o600});
+     return {path:file,width:image.width,height:image.height,source:image.source,scale:image.scale,client:image.client,capture:image.capture,kept:IMAGE_RETENTION};
+    };
+    const stem=result.metadata?.observation_id||randomUUID();
+    if(result.image?.data)value.image=save(stem,result.image);
+    if(burst){const id=randomUUID();value.images=result.images.map((image,i)=>image?.data?{...save(`burst-${id}-${i}`,image),at_ms:image.at_ms}:image);}
+    // images:"all" step pictures get their own files next to the final one (#53).
+    for(const holder of stepHolders){
+     const steps=holder.completed.map(step=>step?.image?.data?{...step,image:save(`${stem}-step${step.index}`,step.image)}:step);
+     if(holder===value)value.completed=steps;else value.batch={...value.batch,completed:steps};
+    }
+    // Observations are short-lived local data, not an unbounded screen archive:
+    // the newest IMAGE_LIMIT pictures are kept and older ones are deleted (#52).
     const files=fs.readdirSync(folder).map(name=>({name,at:fs.statSync(path.join(folder,name)).mtimeMs})).sort((a,b)=>b.at-a.at);
-    for(const old of files.slice(50))fs.unlinkSync(path.join(folder,old.name));
+    for(const old of files.slice(IMAGE_LIMIT))fs.unlinkSync(path.join(folder,old.name));
    }catch{
     delete value.image;value.image_error={code:'image_delivery_failed',message:'The image could not be stored. Observe again; completed input must not be repeated.'};
     value.observation_valid=false;value.observe_before_continuing=true;
@@ -143,9 +157,20 @@ export async function serveDesktop({directory=dataDir(),runtime,idlePolicy='shut
           const gate=await runtime.openCallerGate?.()??{gate:null};finished=true;socket.end(JSON.stringify({ok:true,gate:gate.gate??null})+'\n');return;
         }
         if(taskOwnership){
-          const state=runtime.status();
+          let state=runtime.status();
           if(name==='computer_claim'){
             if(busy)throw Object.assign(Error('A desktop operation is pending.'),{code:'task_owned'});
+            // A task stopped by the human, or long orphaned with nothing held,
+            // is ended through the ordinary End path before a new claim (#114).
+            if(taskOwnership.releasable(state)){
+              busy=true;
+              try{
+                const ended=await call(runtime,'computer_end',{});
+                if(coordinator&&ended?.ended===true)await coordinator.release();
+                if(ended?.ended===true&&runtime.status().task_open===false)taskOwnership.ended();
+              }finally{busy=false;}
+              state=runtime.status();
+            }
             // A recovered task is never adopted. Return the runtime's read-only
             // advice (end once, or inspect cleanup) without issuing a token.
             if(state.recovered_task===true&&!taskOwnership.owner){const advice=await runtime.ready();finished=true;socket.end(JSON.stringify({...advice,ok:false,owner:taskOwnership.relation(request.task_token,state)})+'\n');return;}

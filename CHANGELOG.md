@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.3 - Freed tasks, step pictures and short recordings
+
+- A task whose caller disappeared without ending it no longer blocks every other conversation until a restart. A human Stop releases it at once, and a task that has been orphaned for 30 minutes with no approved app or held input is ended by the next `ready`. A task still in use stays protected (#114).
+- `run --images all` returns a screenshot after every step, not only the last, so the state between steps can be shown (#53).
+- New `burst` command: 2 to 10 screenshots of an approved window at a fixed interval (50 to 1000 ms), for checking a short animation or transition (#56).
+- Windows screenshots crop to the window's visible frame, so the invisible resize border no longer shows pixels from the window behind. Every image reports its `scale` and the app's `client` area inside the image, and says that only the newest 50 images are kept (#52).
+
 ## 1.0.2 - Long typing and browser app windows
 
 - Typing up to the 400-character limit no longer stops partway with an unknown outcome in slower apps. Native typing is paced, and a long `type` now gets a deadline in proportion to its length instead of a fixed 30 seconds.

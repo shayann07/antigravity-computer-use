@@ -54,7 +54,7 @@ export function briefReply(value){
  if(out.metadata){const m=out.metadata;delete out.metadata;out.observation_id=m.observation_id;out.hwnd=m.hwnd;out.tree=m.tree;
   if(typeof m.tree_incomplete==='boolean')out.tree_incomplete=m.tree_incomplete||out.tree_incomplete===true;
  }
- if(out.image){out.image={path:out.image.path,width:out.image.width,height:out.image.height};}
+ if(out.image){const {path,width,height,scale,client,kept}=out.image;out.image={path,width,height,...(scale!=null?{scale}:{}),...(client?{client}:{}),...(kept?{kept}:{})};}
  if(out.windows)out.windows=out.windows.map(({hwnd,title,process,minimized,hidden,fullscreen,other_desktop,foreground})=>({hwnd,title,process,minimized,...(hidden?{hidden:true}:{}),...(fullscreen?{fullscreen:true}:{}),...(other_desktop?{other_desktop:true}:{}),foreground}));
  return out;
 }
