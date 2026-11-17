@@ -12,7 +12,8 @@
 https://github.com/user-attachments/assets/5489c2ee-2c81-4e2f-8fd5-834d5aedfedb
 
 <p align="center">
-  <sub>A real recording, 200× faster: from one prompt, Antigravity ran a stroke plan that a script made from the photo, in Microsoft Paint.
+  <b>/computer-use let Gemini 4 Hydrogen paint this in Microsoft Paint.</b><br>
+  <sub>One prompt in Antigravity. The agent drove Paint through a stroke plan scripted from the photo: 2,553 strokes in 40 exact colours, about an hour of real painting, shown 200× faster.
   The bar and glow are drawn in, since they're hidden from screen recordings by default. <a href="#long-desktop-automation-jobs-in-one-command">How it was painted</a></sub>
 </p>
 
@@ -87,12 +88,12 @@ always left to you.
 `plan` sends many steps at once, so the model doesn't have to think between
 every click. A 30-turn task drops to about 9.
 
-The portrait at the top is one prompt and one `plan`: 2,832 steps that pick 40 exact colours in
+The portrait at the top took one prompt. Gemini 4 Hydrogen ran a single `plan` of 2,832 steps that pick 40 exact colours in
 Paint's colour editor and paint each one as long back-and-forth rows. It ran
 unattended for about 65 minutes.
 
 <p align="center">
-  <a href="docs/media/paint-vs-photo.jpg"><img src="docs/media/paint-vs-photo.jpg" width="620" alt="Left: the portrait the agent painted in Paint. Right: the original photo."></a><br>
+  <a href="docs/media/paint-vs-photo.jpg"><img src="docs/media/paint-vs-photo.jpg" width="620" alt="Left: the portrait Gemini 4 Hydrogen painted in Microsoft Paint through /computer-use. Right: the original photo."></a><br>
   <sub>Click to open full size.</sub>
 </p>
 
