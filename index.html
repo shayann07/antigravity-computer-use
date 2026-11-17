@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Antigravity Computer Use: the computer use skill for Google Antigravity</title>
-<meta name="description" content="An open-source computer use skill for Google Antigravity on Windows and macOS. The agent sees your screen, reads accessibility trees and drives real apps with your mouse and keyboard, and Esc always stops it.">
+<meta name="description" content="An open-source computer use skill for Google Antigravity on Windows and macOS. The agent sees your screen, reads accessibility trees and drives real apps with your mouse and keyboard, and Esc stops it at once.">
 <meta name="keywords" content="computer use, computer use skill, Google Antigravity, Antigravity skill, desktop automation, AI agent, Windows automation, macOS automation, Gemini">
 <link rel="canonical" href="https://computeruse.shayxo.dev/">
 <meta property="og:type" content="website">
@@ -142,7 +142,7 @@
 <div class="wrap">
   <header>
     <h1 class="in" style="--i:0">The computer use skill<br>for Google Antigravity</h1>
-    <p class="lede in" style="--i:1">Type <code>/computer-use</code> and your agent sees the screen, reads each app's accessibility tree and drives real apps on Windows and macOS with your mouse and keyboard. <kbd>Esc</kbd> always stops it.</p>
+    <p class="lede in" style="--i:1">Type <code>/computer-use</code> and your agent sees the screen, reads each app's accessibility tree and drives real apps on Windows and macOS with your mouse and keyboard. <kbd>Esc</kbd> stops it at once.</p>
     <div class="actions in" style="--i:2">
       <a class="btn primary" href="#install">Install</a>
       <a class="btn" href="https://github.com/shayann07/antigravity-computer-use">★ Star on GitHub</a>
@@ -258,10 +258,20 @@
 
   <section id="install">
     <h2 class="reveal">Install</h2>
-    <p class="label">Windows, in PowerShell</p>
+    <p class="sub">Each <a href="https://github.com/shayann07/antigravity-computer-use/releases/latest">release</a> is signed and lists a SHA-256 for every archive in <code>SHA256SUMS.txt</code>. Check the archive before you run anything from it.</p>
+    <p class="label">Windows: download the ZIP and SHA256SUMS.txt, then in PowerShell</p>
+    <div class="code"><pre><code>$zip = Get-Item .\AntigravityComputerUse-*-windows-x64.zip
+$want = ((Select-String -Path .\SHA256SUMS.txt -SimpleMatch $zip.Name).Line -split '\s+')[0]
+(Get-FileHash $zip -Algorithm SHA256).Hash.ToLower() -eq $want   # must print True
+Expand-Archive $zip -DestinationPath .
+.\AntigravityComputerUse-windows-x64\install.cmd --integration direct --sidecar</code></pre><button class="copy" type="button"><span class="idle">Copy</span><span class="done">✓ Copied</span></button></div>
+    <p class="label">macOS: download the macos-arm64 or macos-x64 archive and SHA256SUMS.txt, then in Terminal</p>
+    <div class="code"><pre><code>shasum -a 256 -c SHA256SUMS.txt --ignore-missing   # must print OK
+tar -xzf AntigravityComputerUse-*-macos-*.tar.gz</code></pre><button class="copy" type="button"><span class="idle">Copy</span><span class="done">✓ Copied</span></button></div>
+    <p class="sub">Then run <code>macos-bundle/install.command</code> and <code>Setup.Mac.Permissions.command</code>. <a href="https://github.com/shayann07/antigravity-computer-use/blob/main/docs/MACOS.md">Mac guide</a></p>
+    <p class="label">Windows, one line</p>
+    <p class="sub">If you'd rather not do it by hand, <a href="https://github.com/shayann07/antigravity-computer-use/blob/main/install.ps1">install.ps1</a> downloads the same release and checks its SHA-256 before installing anything.</p>
     <div class="code"><pre><code>irm https://raw.githubusercontent.com/shayann07/antigravity-computer-use/main/install.ps1 | iex</code></pre><button class="copy" type="button"><span class="idle">Copy</span><span class="done">✓ Copied</span></button></div>
-    <p class="label">macOS (Apple silicon or Intel)</p>
-    <p class="sub">Download the <code>macos-arm64</code> or <code>macos-x64</code> archive from the <a href="https://github.com/shayann07/antigravity-computer-use/releases/latest">latest release</a>, then run <code>install.command</code> and <code>Setup.Mac.Permissions.command</code>. <a href="https://github.com/shayann07/antigravity-computer-use/blob/main/docs/MACOS.md">Mac guide</a></p>
     <p class="label">Then try</p>
     <div class="code"><pre><code>/computer-use
 Open Paint, draw a red circle in the middle, save it to my Desktop as circle.png.</code></pre><button class="copy" type="button"><span class="idle">Copy</span><span class="done">✓ Copied</span></button></div>
