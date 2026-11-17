@@ -60,7 +60,7 @@ test('the runtime binds the caller to the task and clears it on stop',async()=>{
   const calls=[];
   const runtime=Object.create(Runtime.prototype);
   runtime.driver={call:async(op,args)=>{calls.push([op,args]);return op==='caller_gate_redeem'&&args.nonce==='a'.repeat(64)?{result:{resolved:true,chain}}:{result:{resolved:false,chain:[]}};}};
-  if(process.platform!=='win32'){assert.equal(await runtime.redeemCaller('a'.repeat(64)),null);return;}
+  if(process.platform!=='win32'&&process.platform!=='darwin'){assert.equal(await runtime.redeemCaller('a'.repeat(64)),null);return;}
   assert.equal((await runtime.redeemCaller('a'.repeat(64))).host.name,'claude.exe');
   assert.equal(runtime.callerReport().self_excluded_app,'claude.exe');
   assert.deepEqual(runtime.callerPolicy().release.sort(),['antigravity','openai']);
@@ -95,3 +95,21 @@ test('the native gate reports the kernel-verified client chain once',{skip:proce
     await assert.rejects(new Promise((resolve,reject)=>{const socket=net.createConnection(opened.pipe);socket.on('connect',()=>{socket.destroy();resolve();});socket.on('error',reject);}));
   }finally{await driver.stop();}
 });
+
+test('macOS gate sockets are accepted only from a private agcu folder',async()=>{
+  const {CALLER_GATE}=await import('../scripts/desktop.mjs');
+  const hexName='a'.repeat(32);
+  assert.ok(CALLER_GATE.test(`\\\\.\\pipe\\AGCU.Gate.${hexName}`));
+  assert.ok(CALLER_GATE.test(`/var/folders/x9/q/T/agcu.Ab12Cd/gate.${hexName}`));
+  for(const bad of [`/tmp/AGCU.Gate.${hexName}`,`/tmp/agcu-gate.Ab12Cd/AGCU.Gate.${'A'.repeat(32)}`,`/tmp/agcu-gate.Ab12Cd/AGCU.Gate.${hexName}\n`,'\\\\.\\pipe\\other',`relative/agcu.Ab12Cd/gate.${hexName}`])assert.equal(CALLER_GATE.test(bad),false,bad);
+});
+
+test('a Mac caller chain resolves by app bundle executables',()=>{
+  const mac=(pid,p)=>({pid,path:p,created:String(1000-pid)});
+  const chain=[mac(9,'/Users/u/Library/Application Support/AntigravityComputerUse/releases/r/node'),mac(8,'/bin/zsh'),mac(7,'/Applications/Antigravity.app/Contents/Frameworks/Antigravity Helper (Plugin).app/Contents/MacOS/Antigravity Helper (Plugin)'),mac(6,'/Applications/Antigravity.app/Contents/MacOS/Electron')];
+  const r=resolveCallerHost(chain);
+  assert.equal(r.host.group,'antigravity');assert.deepEqual(r.release.sort(),['claude','openai']);
+  assert.equal(resolveCallerHost([mac(9,'/bin/zsh'),mac(8,'/Applications/Claude.app/Contents/MacOS/Claude')]).host.group,'claude');
+  assert.equal(resolveCallerHost([mac(9,'/bin/zsh'),mac(8,'/usr/sbin/sshd')]),null,'no AI app on the chain releases nothing');
+});
+

@@ -1442,6 +1442,8 @@ func dispatch(_ op: String, _ a: [String: Any]) throws -> [String: Any] {
 func dispatchOp(_ op: String, _ a: [String: Any]) throws -> [String: Any] {
     switch op {
     case "identity": return try macWindowIdentity(a)
+    case "caller_gate_open": return try MacCallerGate.open()
+    case "caller_gate_redeem": return MacCallerGate.redeem(a)
     case "authorize":
         let args = a["action_args"] as? [String: Any] ?? [:]
         let op = str(a["action_op"]) ?? ""

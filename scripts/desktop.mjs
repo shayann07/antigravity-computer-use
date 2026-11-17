@@ -82,10 +82,13 @@ export async function recordedFailureReply(error){
  return result;
 }
 
+// Windows: a named pipe. macOS: a Unix socket in a fresh private directory
+// under the user's temporary folder, kept short for the 104-byte socket path limit (mode 0700/0600).
+export const CALLER_GATE=/^(?:\\\\\.\\pipe\\AGCU\.Gate\.[a-f0-9]{32}|\/[^\0\n]{1,80}\/agcu\.[A-Za-z0-9]{6}\/gate\.[a-f0-9]{32})$/;
 export async function callerGateNonce(session,timeout,expectedPermissionMode,connect=net.createConnection){
   try{
     const opened=await request(session,'caller_gate',{},Math.min(timeout,10000),expectedPermissionMode);
-    if(!opened?.ok||typeof opened.gate!=='string'||!/^\\\\\.\\pipe\\AGCU\.Gate\.[a-f0-9]{32}$/.test(opened.gate))return undefined;
+    if(!opened?.ok||typeof opened.gate!=='string'||!CALLER_GATE.test(opened.gate))return undefined;
     return await new Promise(resolve=>{
       let buffer='',settled=false;const socket=connect(opened.gate);
       const done=value=>{if(settled)return;settled=true;clearTimeout(deadline);socket.destroy();resolve(value);};

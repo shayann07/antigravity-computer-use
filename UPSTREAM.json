@@ -5,7 +5,7 @@
     {
       "path": "server/build.mjs",
       "upstream_sha256": "81260b378fffb46573cfe475a3a336930113c8abc465d3d278bbb0851d8a4377",
-      "local_sha256": "8f10de1328b7293e6cb70d441c4d72e5031d01173d87ba4abdce8d961b5df9b5",
+      "local_sha256": "2db43e5cea9dcb8428ef5a115fef75ad3567543e666e49cd6888e07b4750162b",
       "modified": true
     },
     {
@@ -66,7 +66,7 @@
     {
       "path": "server/native/AxonHost.swift",
       "upstream_sha256": "b50c68feff8bd783ba2f92580358c69491c0ffee31f6182b76543f3aba9f962f",
-      "local_sha256": "3cbfdaad470a1a7d8a023db56ed619fb9e363bb7ef7f2ecbe2d1cdea42892fde",
+      "local_sha256": "4c58043d6d71a60723062da9569166c22fb1e3329103e559ac1266687f864467",
       "modified": true
     },
     {
@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "af873104dff3775622911a1fabe46bb063fe0f22bca76d6649ff7081679d88f6"
+      "sha256": "188678cd84f0040038a19d0490e349fcaa6f5200765797abd0b2e1dced320d6c"
     },
     {
       "path": "server/mcp.mjs",
@@ -296,7 +296,7 @@
     },
     {
       "path": "server/desktop-service.mjs",
-      "sha256": "245986867f6825e4d562b33c724acca3c2e6b9697e2b2f014b392b9e88765d5d"
+      "sha256": "f280098517d7fb13fc81ed31ff04a5546b5715b20f0b5b873a5b50bdaf4c01c2"
     },
     {
       "path": "server/desktop-tools.mjs",
@@ -304,7 +304,7 @@
     },
     {
       "path": "scripts/desktop.mjs",
-      "sha256": "42aaa7be5149249944ac86ea65110c0462ac21dd2d00b2de533075df73996032"
+      "sha256": "a869ccedac1ece8ab0ce9b1a2d2e2b27581be8dfaf292a156d15536b0fec2db3"
     },
     {
       "path": "server/version.mjs",
@@ -568,7 +568,7 @@
     },
     {
       "path": "server/native/macos/MacControl.swift",
-      "sha256": "0119d7f5ff7093c107f3999d76cd5b459816a837d77e00becb617e496d522f71"
+      "sha256": "17639ead5719e8c4d47b96700a45947c2091a6a0f645211107eb9303037cb4b5"
     },
     {
       "path": "server/native/macos/MacGuardian.swift",

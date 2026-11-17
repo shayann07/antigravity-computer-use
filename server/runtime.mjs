@@ -313,13 +313,13 @@ export class Runtime {
   callerPolicy(){return {release:this.callerHost?.release??[]};}
   callerReport(){const h=this.callerHost;return h?{self_excluded_app:h.host.name,self_excluded_path:h.host.path,released_ai_groups:h.release}:{self_excluded_app:null,released_ai_groups:[]};}
   async openCallerGate(){
-    if(process.platform!=='win32'||this.recoveredTask||!this.driver?.call)return {gate:null};
+    if((process.platform!=='win32'&&process.platform!=='darwin')||this.recoveredTask||!this.driver?.call)return {gate:null};
     const reply=await this.driver.call('caller_gate_open',{});const pipe=reply?.result?.pipe??reply?.pipe;
     return {gate:typeof pipe==='string'?pipe:null};
   }
   async redeemCaller(nonce){
     this.callerHost=null;
-    if(process.platform!=='win32'||typeof nonce!=='string'||!/^[a-f0-9]{64}$/.test(nonce)||!this.driver?.call)return null;
+    if((process.platform!=='win32'&&process.platform!=='darwin')||typeof nonce!=='string'||!/^[a-f0-9]{64}$/.test(nonce)||!this.driver?.call)return null;
     try{const reply=await this.driver.call('caller_gate_redeem',{nonce});const r=reply?.result??reply;this.callerHost=r?.resolved===true?resolveCallerHost(r.chain):null;}catch{this.callerHost=null;}
     return this.callerHost;
   }

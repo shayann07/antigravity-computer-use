@@ -280,7 +280,7 @@ enum MacFence {
     }
     static func begin(_ op: String, _ args: [String: Any]) throws {
         current = args; operation = op; didDispatch = false; keyboardPID = 0; keyboardWindow=nil
-        if ["ping", "list_apps", "identity", "presence", "session"].contains(op) { return }
+        if ["ping", "list_apps", "identity", "presence", "session", "caller_gate_open", "caller_gate_redeem"].contains(op) { return }
         if op == "authorize" {
             current = args["action_args"] as? [String: Any] ?? [:]
             operation = str(args["action_op"]) ?? ""
