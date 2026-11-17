@@ -528,7 +528,7 @@
     },
     {
       "path": "install.ps1",
-      "sha256": "af69d7bda581897e8f2e8013603f2b1bf44053fe09b808c0901fb630faad17eb"
+      "sha256": "b7fdeaa1f179c8bad88f9c1daf9fc2dea9d9187775361f10118d5519887d89f1"
     },
     {
       "path": "tests/bootstrap.test.mjs",
@@ -924,7 +924,7 @@
     },
     {
       "path": "package.json",
-      "sha256": "6cf86f9af353819936e5398543ca91f3dfec16827e401ed53f12b0eab3fe7d67"
+      "sha256": "3cd17a2c857cf1367ce2bb5c47eaf909ac56ac777e56f5764f7cf47185c6032f"
     },
     {
       "path": "server/native/macos/MacPhosphorIcons.swift",

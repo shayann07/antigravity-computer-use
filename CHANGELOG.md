@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.0 - Stable release for Windows and macOS
 
 - Pause and Resume are removed. The tools `computer_pause` and `computer_resume` no longer exist; Esc or the bar's Stop ends the task and the next `ready` starts a fresh one.
 - A request to use an app shows the app's name (Windows and macOS), what its access tier allows and a tier tag ("Full control" or "Click only"), with how long the approval lasts.
