@@ -9,9 +9,7 @@
   <a href="https://github.com/shayann07/antigravity-computer-use/stargazers"><img src="https://img.shields.io/github/stars/shayann07/antigravity-computer-use?style=flat&amp;color=80abcf" alt="GitHub stars"></a>
 </p>
 
-<p align="center">
-  <a href="docs/media/paint-vs-photo.jpg"><img src="docs/media/paint-demo.webp" width="720" alt="The Antigravity agent painting a portrait in Microsoft Paint, stroke by stroke, beside the original photo."></a>
-</p>
+https://github.com/user-attachments/assets/5489c2ee-2c81-4e2f-8fd5-834d5aedfedb
 
 <p align="center">
   <sub>A real run, 260× faster: Antigravity painting a photo in Microsoft Paint from one prompt.
