@@ -9,6 +9,12 @@ import {writeAtomicJSON,writeAtomicText,flushPreparedTree,flushPreparedFile,read
 import {deploymentPinned} from '../server/update-core.mjs';
 import {preserveStopLatch,readStopLatch,settleOrphanMacStop} from '../server/recovery.mjs';
 const here=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+export function renameRetrying(from,to,{rename=fs.renameSync,sleep=ms=>Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,ms),attempts=30}={}){
+ for(let attempt=1;;attempt++){
+  try{rename(from,to);return attempt;}
+  catch(error){if(!['EPERM','EBUSY','EACCES'].includes(error.code)||attempt>=attempts)throw error;sleep(100);}
+ }
+}
 export function mergeConfig(file,entry){
  const text=fs.existsSync(file)?fs.readFileSync(file,'utf8').replace(/^\uFEFF/,'').trim():'';
  const current=text?JSON.parse(text):{};
@@ -180,9 +186,11 @@ export function install({bundle=here,target,home=os.homedir(),workspace=null,leg
  switching=true;
  flushPreparedTree(release);
  for(const file of [launcher+'.agcu.tmp',launcherNode+'.agcu.tmp',controllerStart+'.agcu.tmp'])flushPreparedFile(file);
- fs.renameSync(launcherNode+'.agcu.tmp',launcherNode);
- fs.renameSync(launcher+'.agcu.tmp',launcher);
- fs.renameSync(controllerStart+'.agcu.tmp',controllerStart);
+ // A separate CLI call can hold cu-node.exe open for a moment; the
+ // controller lease does not fence it, so a locked rename is retried briefly.
+ renameRetrying(launcherNode+'.agcu.tmp',launcherNode);
+ renameRetrying(launcher+'.agcu.tmp',launcher);
+ renameRetrying(controllerStart+'.agcu.tmp',controllerStart);
  for(const {file,text} of updates){fs.mkdirSync(path.dirname(file),{recursive:true});writeAtomicText(file,text);}
  if(sidecarFiles){for(const [file,text] of [[sidecarFiles.definition,JSON.stringify(sidecarDefinition(path.join(release,platform.node),path.join(release,'scripts/desktop.mjs')),null,2)+'\n'],[sidecarFiles.config,sidecarConfig]]){fs.mkdirSync(path.dirname(file),{recursive:true});writeAtomicText(file,text);}}
  for(const file of skillDirs){

@@ -352,11 +352,11 @@
     },
     {
       "path": "scripts/install.mjs",
-      "sha256": "60690fed6ac47059b8bcb50e38e5043a8b19b783916986262231cc7a894cb064"
+      "sha256": "8591f44cdaa2389323b9d61c11f0fa098239c16cfdee5b68332dc5d27f9b300a"
     },
     {
       "path": "scripts/rollback.mjs",
-      "sha256": "e6fd70dceef271d168a64787794cdf4161f1e75d111ee9cd200bb4f61c9b4bba"
+      "sha256": "f90364b5d4e1fbcf02e4d26961dac088259e19e2ff8fa042d215d1b448e750d1"
     },
     {
       "path": "scripts/verify-install.mjs",

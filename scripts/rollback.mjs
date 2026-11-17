@@ -17,6 +17,22 @@ for(const record of data.records){if(record.kind==='deployment'&&record.existed)
 const unique=new Map();for(const root of roots){const key=process.platform==='win32'?root.toLowerCase():root;if(!unique.has(key))unique.set(key,root);}
 return {data,roots:[...unique.entries()].sort(([a],[b])=>a.localeCompare(b)).map(([,root])=>root)};
 }
+// A launcher such as cu-node.exe can be open for a moment in a separate CLI
+// call, which the controller lease does not fence; Windows then refuses the
+// rename (EPERM/EBUSY). An unchanged file needs no rename at all, and a
+// changed one is retried briefly before the rollback reports failure (#8).
+export function restoreFile(saved,file,{io=fs,sleep=ms=>Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,ms),attempts=30}={}){
+ if(io.existsSync(file)&&!io.statSync(file).isDirectory()&&io.readFileSync(file).equals(io.readFileSync(saved)))return 'unchanged';
+ const temporary=file+'.rollback.tmp';
+ io.copyFileSync(saved,temporary);io.chmodSync(temporary,io.statSync(saved).mode);
+ for(let attempt=1;;attempt++){
+  try{io.renameSync(temporary,file);return 'restored';}
+  catch(error){
+   if(!['EPERM','EBUSY','EACCES'].includes(error.code)||attempt>=attempts){try{io.unlinkSync(temporary);}catch{}throw error;}
+   sleep(100);
+  }
+ }
+}
 export function rollback(file,{guard=()=>{}}={}){return restoreRollback(rollbackPlan(file),guard);}
 function restoreRollback({data,roots},guard){
 guard();
@@ -48,7 +64,7 @@ for(const r of data.records){
  }
  else if(r.existed){
   if(fs.statSync(r.saved).isDirectory())fs.cpSync(r.saved,r.file,{recursive:true});
-  else {fs.copyFileSync(r.saved,r.file+'.rollback.tmp');fs.chmodSync(r.file+'.rollback.tmp',fs.statSync(r.saved).mode);fs.renameSync(r.file+'.rollback.tmp',r.file);}
+  else restoreFile(r.saved,r.file);
  }
  else if(['installation','launcher','deployment','deployment-registry','sidecar-definition'].includes(r.kind)&&fs.existsSync(r.file))fs.unlinkSync(r.file);
  else if(r.kind==='skill'&&fs.existsSync(path.join(r.file,'SKILL.md')))fs.unlinkSync(path.join(r.file,'SKILL.md'));
