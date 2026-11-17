@@ -1,6 +1,6 @@
 <h1 align="center">Antigravity Computer Use</h1>
 
-<p align="center"><b>Let your Antigravity agent use real apps on Windows and macOS.</b></p>
+<p align="center"><b>The computer use skill for Google Antigravity.</b><br>Your agent sees the screen and drives real apps on Windows and macOS: desktop automation with your real mouse and keyboard.</p>
 
 <p align="center">
   <a href="https://github.com/shayann07/antigravity-computer-use/releases/latest"><img src="https://img.shields.io/github/v/release/shayann07/antigravity-computer-use?label=release&amp;color=80abcf" alt="Latest release"></a>
@@ -9,12 +9,18 @@
   <a href="https://github.com/shayann07/antigravity-computer-use/stargazers"><img src="https://img.shields.io/github/stars/shayann07/antigravity-computer-use?style=flat&amp;color=80abcf" alt="GitHub stars"></a>
 </p>
 
-https://github.com/user-attachments/assets/5489c2ee-2c81-4e2f-8fd5-834d5aedfedb
+https://github.com/user-attachments/assets/8f04e5ce-2fc2-4324-bd9a-736165bc7972
 
 <p align="center">
-  <sub>A real run, 260× faster: Antigravity painting a photo in Microsoft Paint from one prompt.
-  <a href="#long-jobs-in-one-command">How it was painted</a></sub>
+  <b>/computer-use let Gemini 4 Hydrogen paint this in Microsoft Paint.</b><br>
+  <sub>One prompt in Antigravity. The agent drove Paint through a stroke plan scripted from the photo: 2,553 strokes in 40 exact colours, about an hour of real painting, shown 200× faster.
+  The bar and glow are drawn in, since they're hidden from screen recordings by default. <a href="#long-desktop-automation-jobs-in-one-command">How it was painted</a></sub>
 </p>
+
+```powershell
+irm https://raw.githubusercontent.com/shayann07/antigravity-computer-use/main/install.ps1 | iex
+```
+<p align="center"><sub>Windows, one line in PowerShell. macOS: see <a href="#install">Install</a>.</sub></p>
 
 Type `/computer-use` in Antigravity and say what you want done. The agent reads
 the app, then clicks, types, drags and fills in dialogs with your real mouse and
@@ -40,7 +46,7 @@ Then open Antigravity and try:
 Open Paint, draw a red circle in the middle, save it to my Desktop as circle.png.
 ```
 
-## You can see what it's doing
+## See what the agent is doing
 
 <p align="center">
   <picture>
@@ -56,7 +62,7 @@ is doing right now.
   <img src="docs/media/bar-states.png" width="440" alt="Three states of the control bar: Antigravity is working, Waiting for your answer, and Stopped because you pressed Esc.">
 </p>
 
-## It asks before it touches anything
+## Approvals before it touches any app
 
 <p align="center">
   <img src="docs/media/access-card.png" width="420" alt="An access card asking to allow Antigravity to use Notepad with full control until a new conversation starts, with Allow and Deny.">
@@ -67,27 +73,27 @@ one-line install, or with this card in [standalone mode](docs/INSTALLATION.md#pe
 where saving, pasting and deleting ask again. Terminals and code editors are
 always click-only, so it can't type commands into them.
 
-## One key stops it
+## One key stops computer use
 
 <p align="center">
   <img src="docs/media/settings-menu.png" width="380" alt="The Settings menu: show bar and glow in recordings, move the bar, glow brightness, and a reminder that Esc or Ctrl+Alt+F12 stops at once.">
 </p>
 
-**Esc** stops it at once, wherever you are, and lets go of every key and
+<kbd>Esc</kbd> stops it at once, wherever you are, and lets go of every key and
 button. Ask it to carry on and it starts fresh. Sign-ins and admin prompts are
 always left to you.
 
-## Long jobs in one command
+## Long desktop automation jobs in one command
 
 `plan` sends many steps at once, so the model doesn't have to think between
 every click. A 30-turn task drops to about 9.
 
-The portrait at the top is one prompt and one `plan`: 2,832 steps that pick 40 exact colours in
+The portrait at the top took one prompt. Gemini 4 Hydrogen ran a single `plan` of 2,832 steps that pick 40 exact colours in
 Paint's colour editor and paint each one as long back-and-forth rows. It ran
 unattended for about 65 minutes.
 
 <p align="center">
-  <a href="docs/media/paint-vs-photo.jpg"><img src="docs/media/paint-vs-photo.jpg" width="620" alt="Left: the portrait the agent painted in Paint. Right: the original photo."></a><br>
+  <a href="docs/media/paint-vs-photo.jpg"><img src="docs/media/paint-vs-photo.jpg" width="620" alt="Left: the portrait Gemini 4 Hydrogen painted in Microsoft Paint through /computer-use. Right: the original photo."></a><br>
   <sub>Click to open full size.</sub>
 </p>
 
