@@ -18,7 +18,7 @@ Anthropic `anthropics/claude-quickstarts`, revision `9ec32b91df50b0d4906cae64b13
 The Windows bundle includes the locally installed official Node executable, with its version/checksum recorded in `bundle-manifest.json` and upstream Node license under `licenses/`. No proprietary product bundles, extracted assets or leaked source maps are included. Product names identify compatibility; no affiliation or endorsement is claimed.
 
 The Windows HUD companion uses the published `LiquidGlass` 1.0.0 NuGet package
-by `shayann07/liquidglass` (Apache-2.0) and `SkiaSharp` / native assets 4.153.1
+by `shayann07/liquidglass` (Apache-2.0) and `SkiaSharp` / native assets 4.156.1
 (MIT and other included notices), together with the self-contained .NET 10
 runtime. Their licenses and notices are retained in
 `licenses/`. The companion renders a caller-owned surface and does not capture
