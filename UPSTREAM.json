@@ -60,7 +60,7 @@
     {
       "path": "server/native/AxonHost.cs",
       "upstream_sha256": "bef101afecbdf8f75df2a1f8b45d224eade39f09e3c8e25cf7b450e3fa49a8ef",
-      "local_sha256": "a7899884f9888cc04188c4ed0d22368b72f0720c7b2b16ab1fa2fe711ec1cf3a",
+      "local_sha256": "3e758a4a5242634936e5f519463c808082d64d801ee93088abeaa06762489eef",
       "modified": true
     },
     {
@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "294d7555c7974b9b7179b38d158064a5e7783d20088d1552ef2cc567a6f7fb3c"
+      "sha256": "cb93af45e9cc76f18a7305dfb6b833423f91a81f15ea7fcaabeb384db7585f6a"
     },
     {
       "path": "server/mcp.mjs",
@@ -296,11 +296,11 @@
     },
     {
       "path": "server/desktop-service.mjs",
-      "sha256": "f280098517d7fb13fc81ed31ff04a5546b5715b20f0b5b873a5b50bdaf4c01c2"
+      "sha256": "ca6ba894ef546d1b196c365dd5160e347321e82b8a9936da2a40822ffdb6faa2"
     },
     {
       "path": "server/desktop-tools.mjs",
-      "sha256": "095fa7276d4f27e5742e3c97d50964d2b2587c5e423255d35cb45d2bfe478674"
+      "sha256": "8fd91911e2c8bec785eae294187dd5c0b44ed42ef2828d4f589baaf64650faa3"
     },
     {
       "path": "scripts/desktop.mjs",
@@ -476,7 +476,7 @@
     },
     {
       "path": "tests/batch-wait.test.mjs",
-      "sha256": "7bf675f60828120a1ec1ef2039e7920a4d302517cc05f6a5a7f9557a76540bf0"
+      "sha256": "a8e419ae336f8f2798c08ea74436a21b36a335ee187c0e5587a45150dbe800ed"
     },
     {
       "path": "skills/computer-use/references/recovery.md",
@@ -888,11 +888,11 @@
     },
     {
       "path": "server/task-ownership.mjs",
-      "sha256": "1a454e595caecfb4b87a98d81623e9f60aeee5e6796bc695cae76abfa37edc36"
+      "sha256": "df9f706f24db27c8fe5ba70d6fccf38ac35a75016827970d4482289640a89546"
     },
     {
       "path": "tests/task-ownership.test.mjs",
-      "sha256": "100cb69e4906fd07ecab3a4057671d53917e45227bd606be8f8e3288fedef6e0"
+      "sha256": "07aff10597c430a0f232157cd773b75433846f3df3f814ff1b6c9996cfa1e145"
     },
     {
       "path": "tests/installation-location.test.mjs",

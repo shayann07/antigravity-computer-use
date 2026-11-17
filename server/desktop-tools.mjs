@@ -28,8 +28,9 @@ export const TOOLS=[
  tool('computer_launch','Launch an existing GUI application (.exe on Windows, .app on macOS) under the host permission policy. Optional observe returns the first unambiguous visible window of that exact launched PID and executable; never relaunch on observe_pending or verification_error.',{app:str,args:{type:'array',items:str},observe:bool,reason:str},['app','reason']),
  tool('computer_open','Open document/folder with its handler; separate confirmation.',{...target,path:str},['hwnd','observation_id','path','reason']),
  tool('computer_file_dialog','Fill and confirm an ALREADY OPEN native file picker. Use owner hwnd, fresh frame and exact path. entry_method clipboard explicitly uses temporary clipboard-preserving paste for atomic filename entry; keyboard is the compatibility default. Never confirms a mismatched filename.',{...target,path:str,action:{type:'string',enum:['open','save']},entry_method:{type:'string',enum:['keyboard','clipboard']}},['hwnd','observation_id','path','reason']),
- tool('computer_run','Run 1-8 predictable actions or observed waits sequentially. Combined polling budgets are at most30seconds; slow observations can extend actual elapsed time. Stop on first failure or unmet wait; do not replay completed steps.',{hwnd:num,observation_id:str,steps:{type:'array',minItems:1,maxItems:contract.batch_steps,items:{type:'object'}},reason:str},['hwnd','observation_id','steps','reason']),
+ tool('computer_run','Run 1-8 predictable actions or observed waits sequentially. images:"all" returns a screenshot after every step, not only the last. Combined polling budgets are at most30seconds; slow observations can extend actual elapsed time. Stop on first failure or unmet wait; do not replay completed steps.',{hwnd:num,observation_id:str,steps:{type:'array',minItems:1,maxItems:contract.batch_steps,items:{type:'object'}},images:{type:'string',enum:['last','all']},reason:str},['hwnd','observation_id','steps','reason']),
  tool('computer_wait','Wait for expected UI text without repeating input: until waits for text to appear; until_gone waits for text you observed (such as a Cancel or progress label) to disappear, and the text must be visible when the wait starts. Supply exactly one. Optional abort_on strings stop early on a known failure; failures win if success and failure appear together. Do not combine abort_on with query: filtering may hide failures. Returns a fresh observation; with_image controls screenshot capture.',{hwnd:num,until:selectorText,until_gone:selectorText,abort_on:{type:'array',minItems:1,maxItems:8,items:selectorText},timeout_ms:{...num,minimum:100,maximum:30000},query:str,with_image:bool,reason:str},['hwnd','reason']),
+ tool('computer_burst','Capture 2-10 screenshots of an approved window at a fixed interval (50-1000 ms), for checking a short animation or transition. Pictures only: no accessibility tree, no input, no observation_id.',{hwnd:num,frames:{...num,minimum:2,maximum:10},interval_ms:{...num,minimum:50,maximum:1000},max_width:{...num,minimum:100,maximum:1400},reason:str},['hwnd','reason']),
  tool('computer_wait_change','Wait for the accessible text tree to differ from a fresh observation. Returns a fresh text-only observation. A change is not proof of success, and pixel-only changes may be invisible.',{hwnd:num,observation_id:str,timeout_ms:{...num,minimum:100,maximum:30000},reason:str},['hwnd','observation_id','reason']),
  tool('computer_feedback','Record an agent-observed concern as bounded, unverified local metadata. Automatic GitHub submission requires the installation reporting preference and authentication. No free text, screenshots, paths or task content are accepted.',{category:{type:'string',enum:['cursor_visual','focus','observation','workflow','performance','missing_capability','unexpected_pause','other']},operation:{type:'string',enum:['observe','click','type','scroll','drag','keyboard','launch','wait','update','other']},evidence:{type:'string',enum:['suspected','observed','reproduced']}},['category','operation','evidence']),
  tool('computer_end','Finish normally; no Antigravity restart needed.'),
@@ -85,6 +86,7 @@ export async function call(r,name,a){
  if(name==='computer_snapshot')return r.observe(a);
  if(name==='computer_wait')return r.wait(a);
  if(name==='computer_wait_change')return r.waitChange(a);
+ if(name==='computer_burst')return r.burst(a);
  if(name==='computer_feedback')return r.feedback(a);
  if(name==='computer_end')return r.finish();
  if(name==='computer_stop')return r.stop();
@@ -104,7 +106,7 @@ export async function call(r,name,a){
    const following=a.steps[i+1],nextPixel=!!following&&(['move','drag'].includes(following.kind)||Object.hasOwn(following,'x')||Object.hasOwn(following,'y'));
    // The CLI always sends an explicit with_image, so a following pixel step
    // must override it; an extra capture is always safe.
-   if(properties.observe)args.observe={with_image:i===a.steps.length-1,...rest.observe,...(nextPixel?{with_image:true}:{})};
+   if(properties.observe)args.observe={with_image:i===a.steps.length-1,...rest.observe,...(nextPixel||a.images==='all'?{with_image:true}:{})};
    // Between two strokes of one chain, the hand-off frame is never shown to the
    // model; it only carries fresh geometry and the occlusion-checked capture for
    // the next pixel step. The post-drag paint settle buys nothing there, so skip
@@ -119,7 +121,7 @@ export async function call(r,name,a){
    const next=plan[i+1];
    const needsImage=!!next&&(['computer_move','computer_drag'].includes(next.n)||Object.hasOwn(next.args,'x')||Object.hasOwn(next.args,'y'));
    if(needsImage)throw new Error('A pixel action cannot use an unseen batch observation. End the batch, inspect a fresh screenshot, then act. No input was sent.');
-   if(plan[i].n==='computer_wait'&&!Object.hasOwn(plan[i].args,'with_image'))plan[i].args.with_image=!next;
+   if(plan[i].n==='computer_wait'&&!Object.hasOwn(plan[i].args,'with_image'))plan[i].args.with_image=a.images==='all'||!next;
   }
   const completed=[];let last=null;let observation=a.observation_id;
   for(let i=0;i<plan.length;i++){
@@ -133,7 +135,9 @@ export async function call(r,name,a){
      const framed=error.code==='wait_label_not_observed'&&typeof last.metadata?.observation_id==='string';
      return {...last,ok:false,error,completed,failed_index:i,skipped:plan.length-i-1,...(framed?{}:{observe_before_continuing:true})};
     }
-    completed.push({index:i,kind,ok:true,...(['computer_wait','computer_wait_change'].includes(n)&&last.wait_metrics?{wait_metrics:last.wait_metrics}:{})});
+    // images:"all" keeps each step's screenshot so the state between steps can be shown (#53).
+    const stepImage=a.images==='all'&&i<plan.length-1&&last.image&&typeof last.image==='object'?{image:last.image}:{};
+    completed.push({index:i,kind,ok:true,...stepImage,...(['computer_wait','computer_wait_change'].includes(n)&&last.wait_metrics?{wait_metrics:last.wait_metrics}:{})});
     if(last.verification_error)return {...last,batch:{completed,failed_index:i,skipped:plan.length-i-1,phase:'verification'}};
     if(n==='computer_wait'&&!last.matched){
      completed.pop();return {...last,ok:false,verification_error:{code:last.aborted?'wait_failure_observed':last.incomplete?'wait_observation_incomplete':'wait_condition_timeout',message:last.aborted?'A known failure was observed. Inspect the returned state; do not replay prior steps.':last.incomplete?'The accessible tree was incomplete; inspect the returned state before continuing. Do not replay prior steps.':'Expected observed text was not found. Inspect the returned state; do not replay prior steps.'},batch:{completed,failed_index:i,skipped:plan.length-i-1,phase:'wait'}};
@@ -148,8 +152,24 @@ export async function call(r,name,a){
  }
  return r.action(OPS[name],a);
 }
+// Step images from images:"all" go out as their own image blocks, in order,
+// with only their geometry left in the text (#53).
+function stepImages(clean){
+ const blocks=[];
+ for(const key of ['batch','']){
+  const holder=key?clean[key]:clean;if(!holder||!Array.isArray(holder.completed))continue;
+  const steps=holder.completed.map(step=>{
+   if(!step?.image?.data)return step;
+   blocks.push({type:'image',data:step.image.data,mimeType:step.image.mime||'image/jpeg'});
+   return {...step,image:{width:step.image.width,height:step.image.height,source:step.image.source,scale:step.image.scale,client:step.image.client}};
+  });
+  if(key)clean[key]={...holder,completed:steps};else clean.completed=steps;
+ }
+ return blocks;
+}
 export function content(v){
- const image=v?.image;const clean={...v};
+ const image=v?.image;const clean={...v};const steps=stepImages(clean);
+ if(Array.isArray(clean.images)){for(const shot of clean.images)if(shot?.data)steps.push({type:'image',data:shot.data,mimeType:shot.mime||'image/jpeg'});clean.images=clean.images.map(shot=>({width:shot?.width,height:shot?.height,source:shot?.source,scale:shot?.scale,at_ms:shot?.at_ms}));}
  if(v?.metadata){
   clean.metadata={...v.metadata};
   // The rendered tree already contains the observation-scoped control indexes.
@@ -157,6 +177,6 @@ export function content(v){
   if(clean.metadata.tree)delete clean.metadata.elements;
   delete clean.metadata.image;
  }
- if(image)clean.image={width:image.width,height:image.height,source:image.source};
- return [{type:'text',text:JSON.stringify(clean)},...(image?.data?[{type:'image',data:image.data,mimeType:image.mime||'image/jpeg'}]:[])];
+ if(image)clean.image={width:image.width,height:image.height,source:image.source,scale:image.scale,client:image.client};
+ return [{type:'text',text:JSON.stringify(clean)},...steps,...(image?.data?[{type:'image',data:image.data,mimeType:image.mime||'image/jpeg'}]:[])];
 }

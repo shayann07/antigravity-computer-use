@@ -739,6 +739,29 @@ export class Runtime {
     }
     catch(error){return {result,input_completed:true,verification_required:true,observe_before_continuing:true,verification_error:{code:error.code||'observation_failed',message:error.message,...(error.hint?{hint:error.hint}:{})}};}
   }
+  // A short series of window pictures for judging motion (#56). It reuses the
+  // observation grant and capture guard, sends no input and keeps no frame.
+  async burst(args){
+    const w=await this.grant(Number(args.hwnd),args.reason,{observationOnly:true});this.check();
+    if(w.fullscreen||w.other_desktop||w.minimized||w.hidden)fail('window_capture_unavailable','Recording needs the window visible on this desktop. Bring it forward, then try again.');
+    const generation=this.generation,handle=Number(args.hwnd);
+    const count=Math.min(10,Math.max(2,Math.floor(Number(args.frames)||5))),interval=Math.min(1000,Math.max(50,Math.floor(Number(args.interval_ms)||200)));
+    const maxWidth=Math.min(args.max_width||800,targetImageSize(w.rect[2],w.rect[3])[0]);
+    this.guardian.send({op:'activity',action:'observe',hwnd:handle,...Runtime.prototype.glowTarget.call(this,w),...Runtime.prototype.hostLabel.call(this)});
+    try{await this.guardian.request({op:'capture'});}
+    catch(error){if(error.code==='guardian_request_timeout')fail('capture_preparation_timeout','Capture preparation timed out; Stop was attempted but is unconfirmed. Inspect status; do not replay input.');throw error;}
+    const frames=[],start=performance.now();
+    try{
+      for(let i=0;i<count;i++){
+        const due=start+i*interval-performance.now();if(due>0)await new Promise(resolve=>setTimeout(resolve,due));
+        this.check();if(generation!==this.generation)fail('control_changed','Control changed during the recording. Observe again.');
+        const shot=(await this.driver.call('screenshot',{...this.stamp(),hwnd:handle,__pid:w.pid,__started:w.started,max_width:maxWidth,quality:70})).result;
+        if(shot.capture==='screen_occluded')fail('window_capture_unavailable','The window was covered during the recording. Bring it forward and try again.');
+        frames.push({...shot,at_ms:Math.round(performance.now()-start)});
+      }
+    }finally{this.guardian.send({op:'capture_end'});}
+    return {hwnd:handle,app:w.path,interval_ms:interval,frames:frames.length,images:frames};
+  }
   async wait(args){
     const started=performance.now(),budget=Math.min(Math.max(args.timeout_ms||15000,100),30000),until=started+budget,generation=this.generation;let latest,observations=0,workerEpoch;
     const observe=async options=>{

@@ -59,3 +59,32 @@ test('ready on a recovered task returns the runtime advice through IPC without i
   const next=await request({...session},'ready');assert.match(next.task_token,/^[a-f0-9]{64}$/);
  }finally{await service.shutdown();fs.rmSync(dir,{recursive:true,force:true});}
 });
+
+test('a used capability is released only by a human Stop or a long orphan with nothing held (#114)',async()=>{
+ const {ORPHAN_TAKEOVER_MS}=await import('../server/task-ownership.mjs');
+ const owner=new TaskOwnership();const token=owner.claim({state:'idle',task_open:false});owner.authorize('computer_snapshot',token,{state:'active',task_open:true});
+ const orphan={state:'idle',task_open:true,task_liveness:'orphaned',last_activity_ms_ago:ORPHAN_TAKEOVER_MS+1,approved_apps:[],held_resources:{grants:0,input_held:false}};
+ assert.equal(owner.releasable({state:'active',task_open:true,task_liveness:'active',last_activity_ms_ago:ORPHAN_TAKEOVER_MS*2}),false,'active work is never taken by age');
+ assert.equal(owner.releasable({...orphan,last_activity_ms_ago:12*60*1000}),false,'a long think gap is not an orphan');
+ assert.equal(owner.releasable({...orphan,approved_apps:['notepad']}),false,'a held grant keeps the owner');
+ assert.equal(owner.releasable({...orphan,held_resources:{grants:0,input_held:true}}),false,'held input keeps the owner');
+ assert.equal(owner.releasable({...orphan,recovered_task:true}),false,'recovery keeps its own path');
+ assert.equal(owner.releasable(orphan),true);
+ assert.equal(owner.releasable({state:'stopped',task_open:true}),true,'a human Stop ends ownership');
+ assert.equal(new TaskOwnership().releasable({state:'stopped',task_open:true}),false,'nothing to release without an owner');
+});
+
+test('after a human Stop another caller can start a fresh task without a controller restart (#114)',async()=>{
+ const dir=fs.mkdtempSync(path.join(testDirectory('tmp'),'stop-release-'));let open=false,state='idle',ends=0;
+ const runtime={status:()=>({state,task_open:open,build_id:BUILD_ID,build_version:VERSION,permission_mode:'standalone'}),async ready(){open=true;state='active';return {ready:true};},async finish(){ends++;open=false;return {ended:true,state};},async stop(){state='stopped';return {stopped:true,task_ended:true};},async close(){}};
+ const service=await serveDesktop({directory:dir,runtime,requireTaskOwnership:true});
+ try{
+  const saved=JSON.parse(fs.readFileSync(service.file)),a={...saved},b={...saved};
+  const first=await request(a,'ready');assert.equal(first.ready,true);
+  assert.equal((await request(b,'ready')).error.code,'task_owned','an active task stays protected');
+  assert.equal((await request(b,'stop')).stopped,true);
+  const next=await request(b,'ready');assert.equal(next.ready,true,JSON.stringify(next));assert.notEqual(next.task_token,first.task_token);assert.equal(ends,1);
+  assert.equal((await request(a,'end')).error.code,'task_owned','the stopped owner cannot end the new task');
+  await request(b,'end');
+ }finally{await service.shutdown();fs.rmSync(dir,{recursive:true,force:true});}
+});

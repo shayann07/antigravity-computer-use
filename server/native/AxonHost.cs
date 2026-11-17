@@ -121,6 +121,18 @@ namespace Axon
         [DllImport("user32.dll")] internal static extern bool AttachThreadInput(uint a, uint b, bool attach);
         [DllImport("kernel32.dll")] internal static extern uint GetCurrentThreadId();
         [DllImport("dwmapi.dll")] internal static extern int DwmGetWindowAttribute(IntPtr h, int attr, out int val, int size);
+        [DllImport("dwmapi.dll", EntryPoint = "DwmGetWindowAttribute")] internal static extern int DwmGetWindowRect(IntPtr h, int attr, out RECT val, int size);
+        [DllImport("gdi32.dll")] internal static extern bool SetViewportOrgEx(IntPtr hdc, int x, int y, IntPtr prev);
+        [DllImport("user32.dll", EntryPoint = "GetClientRect")] internal static extern bool ClientRect(IntPtr h, out RECT r);
+        [DllImport("user32.dll")] internal static extern bool ClientToScreen(IntPtr h, ref POINT p);
+        // The visible frame: the window rect minus the invisible resize border,
+        // which otherwise shows pixels of whatever window is behind (#52).
+        internal static RECT VisibleFrame(IntPtr h, RECT window) {
+            RECT frame;
+            if (DwmGetWindowRect(h, 9 /* DWMWA_EXTENDED_FRAME_BOUNDS */, out frame, Marshal.SizeOf(typeof(RECT))) != 0) return window;
+            RECT r = new RECT { Left = Math.Max(frame.Left, window.Left), Top = Math.Max(frame.Top, window.Top), Right = Math.Min(frame.Right, window.Right), Bottom = Math.Min(frame.Bottom, window.Bottom) };
+            return r.Right > r.Left && r.Bottom > r.Top ? r : window;
+        }
         [DllImport("user32.dll", SetLastError = true)] internal static extern uint SendInput(uint n, INPUT[] inputs, int size);
         [DllImport("user32.dll")] internal static extern bool BlockInput(bool block);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] internal static extern bool PostMessageW(IntPtr h, uint msg, IntPtr w, IntPtr l);
@@ -4253,6 +4265,7 @@ namespace Axon
             bool wantedWindow = Get(a, "hwnd") != null || Get(a, "title") != null;
             IntPtr captureHwnd = IntPtr.Zero;
             Native.RECT captureRect = new Native.RECT();
+            Native.RECT windowRect = new Native.RECT();
 
             if (wantedWindow)
             {
@@ -4266,8 +4279,9 @@ namespace Axon
                     throw new AxonError("window_rect_failed", "Could not read that window's bounds.",
                         "The window may be closing. Re-list windows and try again.");
                 captureHwnd = h;
-                captureRect = rr;
-                region = new Rectangle(rr.Left, rr.Top, rr.Right - rr.Left, rr.Bottom - rr.Top);
+                windowRect = rr;
+                captureRect = Native.VisibleFrame(h, rr);
+                region = new Rectangle(captureRect.Left, captureRect.Top, captureRect.Right - captureRect.Left, captureRect.Bottom - captureRect.Top);
                 // Falling back to a full-screen grab here would quietly hand back
                 // something the caller never asked for, so it is an error instead.
                 if (region.Width <= 0 || region.Height <= 0)
@@ -4317,6 +4331,9 @@ namespace Axon
                             // renders nothing reads as blank, not as its cover.
                             g.Clear(Color.Black);
                             IntPtr hdc = g.GetHdc();
+                            // PrintWindow draws from the window rect's corner; shift it so the
+                            // invisible border falls outside the cropped frame.
+                            Native.SetViewportOrgEx(hdc, windowRect.Left - region.X, windowRect.Top - region.Y, IntPtr.Zero);
                             try { printed = Native.PrintWindow(captureHwnd, hdc, 0x00000002 /* PW_RENDERFULLCONTENT */); }
                             finally { g.ReleaseHdc(hdc); }
                         }
@@ -4364,6 +4381,20 @@ namespace Axon
             res["width"] = nw;
             res["height"] = nh;
             res["source"] = new int[] { region.X, region.Y, region.Width, region.Height };
+            // Image pixels per screen pixel, and where the client area sits in
+            // the image, so coordinates read off a capped image are exact (#52).
+            res["scale"] = Math.Round(nw / (double)region.Width, 4);
+            if (captureHwnd != IntPtr.Zero)
+            {
+                Native.RECT cr; Native.POINT o = new Native.POINT();
+                if (Native.ClientRect(captureHwnd, out cr) && Native.ClientToScreen(captureHwnd, ref o))
+                {
+                    double sx = nw / (double)region.Width, sy = nh / (double)region.Height;
+                    int cx = (int)Math.Round((o.X - region.X) * sx), cy = (int)Math.Round((o.Y - region.Y) * sy);
+                    int cw = (int)Math.Round((cr.Right - cr.Left) * sx), ch = (int)Math.Round((cr.Bottom - cr.Top) * sy);
+                    res["client"] = new int[] { Math.Max(0, cx), Math.Max(0, cy), Math.Min(cw, nw - Math.Max(0, cx)), Math.Min(ch, nh - Math.Max(0, cy)) };
+                }
+            }
             res["bytes"] = bytes.Length;
             res["capture"] = capture;
             res["data"] = Convert.ToBase64String(bytes);

@@ -399,3 +399,16 @@ test('a CLI-built run forces the screenshot before a pixel step even when with_i
  await call(runtime,'computer_run',plan);
  assert.deepEqual(flags,[true,false,true]);
 });
+
+test('images:"all" captures and returns a screenshot after every step (#53)',async()=>{
+ const observes=[];let n=0;
+ const runtime={async action(op,a){observes.push(a.observe?.with_image);n++;return{metadata:{observation_id:'f'+n},image:{path:`shot-${n}.jpg`,width:800,height:600}};}};
+ const plan=parseRunArguments(TOOLS.find(t=>t.name==='computer_run').inputSchema,['--hwnd','7','--observation-id','initial','--reason','Show each state','--images','all','--step','click','--name','Open','--step','key','--keys','escape','--step','click','--name','Close'],k=>({inputSchema:TOOLS.find(t=>t.name==='computer_'+k).inputSchema}));
+ assert.equal(plan.images,'all');
+ const result=await call(runtime,'computer_run',plan);
+ assert.deepEqual(observes,[true,true,true]);
+ assert.deepEqual(result.batch.completed.slice(0,2).map(s=>s.image.path),['shot-1.jpg','shot-2.jpg']);
+ assert.equal(result.image.path,'shot-3.jpg','the last image stays the reply image');
+ const plain=await call(runtime,'computer_run',parseRunArguments(TOOLS.find(t=>t.name==='computer_run').inputSchema,['--hwnd','7','--observation-id','initial','--reason','Default','--step','click','--name','Open','--step','click','--name','Close'],k=>({inputSchema:TOOLS.find(t=>t.name==='computer_'+k).inputSchema})));
+ assert.equal(plain.batch.completed[0].image,undefined,'default keeps only the last image');
+});

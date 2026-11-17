@@ -10,6 +10,9 @@ Read this for the detail behind the command table in SKILL.md: targets, batches,
   Use `--physical false` only when an accessible control requires a semantic action; it may leave the pointer stationary. `set_value`, invoke and other semantic actions need not move it. Do not claim pointer movement for a semantic action.
 - Combine predictable steps in one bounded `run` with 1–8 `--step` groups. The runtime observes between steps, resolves names from fresh state, and stops on the first failure. Do not guess future indexes or pixel positions across layout changes.
   Root owner/frame/reason precede the first group. The last step returns an image by default; use `--no-image` explicitly when appropriate.
+  Add `--images all` before the first group to get a screenshot after every step (in `batch.completed[N].image`), for example to show the state between two steps.
+- To check a short animation or transition, `burst --hwnd H --frames 6 --interval-ms 150 --reason TEXT` returns 2-10 screenshots taken at that interval (pictures only, no input).
+- Every image reports `scale` (image pixels per screen pixel; images are capped at 1400 px wide) and `client` (the app's client area inside the image). Images are kept in the observations folder as the newest 50 only: copy one elsewhere if you need it later.
 - Pixel steps (`click --x --y`, `move`, `drag`) may follow each other in one `run`: each step captures the screenshot the next pixel step needs.
   Take every position from an image you viewed, and end the batch to look again before anything that opens a menu, dialog or new view. A pixel step straight after a `wait` is refused; look first.
 - A short sequence of up to 8 steps can live in a UTF-8 JSON file: `run --hwnd H --observation-id F --reason TEXT --steps-file FILE`.
