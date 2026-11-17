@@ -10,7 +10,12 @@
 </p>
 
 <p align="center">
-  <img src="docs/media/hero-glow.png" width="760" alt="The control bar above a window lit by the soft blue edge glow that marks where the agent is working.">
+  <a href="docs/media/paint-demo.mp4"><img src="docs/media/paint-vs-photo.png" width="520" alt="Left: a portrait painted in Microsoft Paint by the Antigravity agent. Right: the original photo."></a>
+</p>
+
+<p align="center">
+  <a href="docs/media/paint-demo.mp4"><b>▶ Watch it paint (21 s)</b></a><br>
+  <sub>A real run: Antigravity drove Microsoft Paint through a prepared plan of 2,553 strokes in 40 exact colours. About an hour of painting, shown 260× faster.</sub>
 </p>
 
 Type `/computer-use` in Antigravity and say what you want done. The agent reads
