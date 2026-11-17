@@ -636,7 +636,7 @@
     },
     {
       "path": "tests/recovery-update.test.mjs",
-      "sha256": "1211aa35592ce31deee543449fe7b73207ed8580dee5b6c1e10d6f825b928354"
+      "sha256": "a676ff4cc4724a61adfb61ef2fa6937056e40b73bad766cee955ea20f5fca0a2"
     },
     {
       "path": "tests/update-transaction.test.mjs",
