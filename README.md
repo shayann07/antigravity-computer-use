@@ -17,10 +17,7 @@ https://github.com/user-attachments/assets/67d22708-ac70-44bf-9570-acfd81f5a3ae
   The bar and glow are drawn in, since they're hidden from screen recordings by default. <a href="#long-desktop-automation-jobs-in-one-command">How it was painted</a></sub>
 </p>
 
-```powershell
-irm https://raw.githubusercontent.com/shayann07/antigravity-computer-use/main/install.ps1 | iex
-```
-<p align="center"><sub>Windows, one line in PowerShell. macOS: see <a href="#install">Install</a>.</sub></p>
+<p align="center"><a href="#install"><b>Install</b></a>: a signed release for Windows and macOS, with SHA-256 checksums to verify before you run anything.</p>
 
 Type `/computer-use` in Antigravity and say what you want done. The agent reads
 the app, then clicks, types, drags and fills in dialogs with your real mouse and
@@ -29,15 +26,38 @@ server.
 
 ## Install
 
-**Windows**
+Each [release](https://github.com/shayann07/antigravity-computer-use/releases/latest)
+is signed and lists a SHA-256 for every archive in `SHA256SUMS.txt`. Check the
+archive before you run anything from it.
+
+**Windows.** Download `AntigravityComputerUse-<version>-windows-x64.zip` and
+`SHA256SUMS.txt` from the latest release, then in PowerShell, in the download folder:
+
+```powershell
+$zip = Get-Item .\AntigravityComputerUse-*-windows-x64.zip
+$want = ((Select-String -Path .\SHA256SUMS.txt -SimpleMatch $zip.Name).Line -split '\s+')[0]
+(Get-FileHash $zip -Algorithm SHA256).Hash.ToLower() -eq $want   # must print True
+Expand-Archive $zip -DestinationPath .
+.\AntigravityComputerUse-windows-x64\install.cmd --integration direct --sidecar
+```
+
+**macOS.** Download the `macos-arm64` (Apple silicon) or `macos-x64` (Intel)
+archive and `SHA256SUMS.txt`, then in Terminal, in the download folder:
+
+```sh
+shasum -a 256 -c SHA256SUMS.txt --ignore-missing   # must print OK
+tar -xzf AntigravityComputerUse-*-macos-*.tar.gz
+```
+
+Run `macos-bundle/install.command`, then `Setup.Mac.Permissions.command`. [Mac guide](docs/MACOS.md)
+
+**Windows, one line.** If you'd rather not do it by hand,
+[install.ps1](install.ps1) downloads the same release and checks its SHA-256
+before installing anything. Read it first if you like:
 
 ```powershell
 irm https://raw.githubusercontent.com/shayann07/antigravity-computer-use/main/install.ps1 | iex
 ```
-
-**macOS:** download the `macos-arm64` (Apple silicon) or `macos-x64` (Intel)
-archive from the [latest release](https://github.com/shayann07/antigravity-computer-use/releases/latest),
-then run `install.command` and `Setup.Mac.Permissions.command`. [Mac guide](docs/MACOS.md)
 
 Then open Antigravity and try:
 
