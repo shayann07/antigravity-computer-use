@@ -9,7 +9,7 @@
   <a href="https://github.com/shayann07/antigravity-computer-use/stargazers"><img src="https://img.shields.io/github/stars/shayann07/antigravity-computer-use?style=flat&amp;color=80abcf" alt="GitHub stars"></a>
 </p>
 
-https://github.com/user-attachments/assets/8f04e5ce-2fc2-4324-bd9a-736165bc7972
+https://github.com/user-attachments/assets/67d22708-ac70-44bf-9570-acfd81f5a3ae
 
 <p align="center">
   <b>/computer-use let Gemini 4 Hydrogen paint this in Microsoft Paint.</b><br>
