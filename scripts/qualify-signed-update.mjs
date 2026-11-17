@@ -10,7 +10,7 @@ export async function qualifySignedUpdate({target,bundle,directory}){
  const skill=path.join(candidate,'skills/computer-use/SKILL.md');fs.appendFileSync(skill,'\nNative updater qualification candidate.\n');
  const sha=b=>createHash('sha256').update(b).digest('hex');
  const metadataFile=path.join(candidate,'bundle-manifest.json'),metadata=JSON.parse(fs.readFileSync(metadataFile));
- const versionParts=metadata.version.split('-')[0].split('.').map(Number);metadata.version=`${versionParts[0]}.${versionParts[1]}.${versionParts[2]+1}-ci.1`;metadata.files['skills/computer-use/SKILL.md']=sha(fs.readFileSync(skill));metadata.build_id=sha(JSON.stringify(metadata.files));fs.writeFileSync(metadataFile,JSON.stringify(metadata));
+ const versionParts=metadata.version.split('-')[0].split('.').map(Number);metadata.version=`${versionParts[0]}.${versionParts[1]}.${versionParts[2]+1}${metadata.version.includes('-')?'-ci.1':''}`;metadata.files['skills/computer-use/SKILL.md']=sha(fs.readFileSync(skill));metadata.build_id=sha(JSON.stringify(metadata.files));fs.writeFileSync(metadataFile,JSON.stringify(metadata));
  const {privateKey,publicKey}=generateKeyPairSync('ed25519');const keyFile=path.join(directory,'qualification-public.pem');fs.writeFileSync(keyFile,publicKey.export({type:'spki',format:'pem'}));
  const files={},payloads=new Map();for(const name of [...Object.keys(metadata.files),'bundle-manifest.json']){
   const bytes=fs.readFileSync(path.join(candidate,name)),hash=sha(bytes),url=`https://github.com/shayann07/antigravity-computer-use/releases/download/v${metadata.version}/${hash}-${path.basename(name)}`;
