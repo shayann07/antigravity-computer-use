@@ -804,7 +804,7 @@
     },
     {
       "path": "server/liquidglass-host/LiquidGlass.Host.csproj",
-      "sha256": "da834a4b3b554bb06f05f805172ae3794feb2870c2702d11bab117bd08cc4301"
+      "sha256": "87d3859a88746ffd7f7cdc0e3f3bf312da96aefdb37237dd1580dcbee818ed9c"
     },
     {
       "path": "tests/LiquidGlassClientProbe.cs",
