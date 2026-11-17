@@ -105,7 +105,6 @@ final class MacVisuals: NSObject {
     let windowGlow = MacWindowGlow()
     private var preferencesLoaded = false
     var pointer: NSPanel?
-    var hiddenDisplays: [CGDirectDisplayID] = []
     var state = "idle"
     // What line 2 says: the reason for a Stop, the last action's words, and
     // whether the session ran out. prompting: an access card is open.
@@ -212,34 +211,28 @@ final class MacVisuals: NSObject {
         }
         if state == "active" && !captureHidden && !prompting { applyCursor(); animate() }
     }
-    // The agent's pointer, as on Windows (DesktopVisuals.cs Arrow and Pointer):
-    // while the agent works, the OS arrow is hidden and the dart with the glow
-    // halo follows the real pointer at display rate. A background helper may
-    // hide the OS cursor only with the window server's SetsCursorInBackground
-    // connection property; when that or the hide is refused, only the halo is
-    // drawn around the OS arrow, so there is never a second arrow. The window server shows the cursor again if this process
-    // ends.
+    // The agent's pointer: the Windows pointer glow (DesktopVisuals.cs
+    // Pointer) follows the real macOS arrow at display rate while the agent
+    // works. Windows also swaps the arrow for its dart; macOS does not let a
+    // background helper hide or replace the system arrow (tested on macOS
+    // 26.6: SetsCursorInBackground plus CGDisplayHideCursor both report
+    // success and the arrow stays), so a drawn dart would be a second arrow.
+    // The glow is drawn around the real arrow instead: one arrow, lit.
     func applyCursor() {
         guard pointerFollow == nil, let pointer = pointer, let view = pointer.contentView as? MacPointerView else { return }
-        if hiddenDisplays.isEmpty, MacCursorHiding.allowInBackground(), CGDisplayHideCursor(CGMainDisplayID()) == .success {
-            hiddenDisplays.append(CGMainDisplayID())
-        }
-        // Both calls report success only when the window server accepted the
-        // hide from this background process; otherwise no dart is drawn.
-        view.dart = !hiddenDisplays.isEmpty; view.needsDisplay = true
+        view.dart = false; view.needsDisplay = true
         placePointer(); pointer.orderFrontRegardless()
         let timer = Timer(timeInterval: 1.0 / 120, repeats: true) { [weak self] _ in self?.placePointer() }
         RunLoop.main.add(timer, forMode: .common); pointerFollow = timer
     }
-    // The dart's tip sits on the pointer's hot spot.
+    // The surface's hot spot sits on the pointer's.
     func placePointer() {
         let point = NSEvent.mouseLocation, tip = MacPointerView.tip
         pointer?.setFrameOrigin(NSPoint(x: (point.x - tip.x).rounded(), y: (point.y - (MacPointerView.side - tip.y)).rounded()))
     }
     func releaseCursor() {
         pointerFollow?.invalidate(); pointerFollow = nil
-        for display in hiddenDisplays { CGDisplayShowCursor(display) }
-        hiddenDisplays.removeAll(); pointer?.orderOut(nil)
+        pointer?.orderOut(nil)
     }
     func hide() {
         visibility.requestHide()
@@ -520,7 +513,7 @@ final class MacPointerView: NSView {
     static let side: CGFloat = 96
     static let tip = CGPoint(x: 48, y: 48)
     var textInsertion=false
-    // Whether the OS arrow is hidden, so the dart stands in for it.
+    // The dart is drawn only for the bench pictures; live, the real arrow shows.
     var dart = true
     override var isFlipped: Bool { true }
     override func draw(_ dirtyRect: NSRect) {
@@ -564,18 +557,3 @@ final class MacPointerView: NSView {
         NSGraphicsContext.restoreGraphicsState()
     }
 }
-
-// The window server lets a background process hide the cursor only when its
-// connection sets SetsCursorInBackground. Looked up at run time: when the
-// symbol is missing the OS arrow simply stays visible (no drawn arrow then).
-enum MacCursorHiding {
-    private typealias DefaultConnection = @convention(c) () -> Int32
-    private typealias SetProperty = @convention(c) (Int32, Int32, CFString, CFTypeRef) -> Int32
-    static func allowInBackground() -> Bool {
-        let handle = dlopen(nil, RTLD_NOW)
-        guard let connect = dlsym(handle, "_CGSDefaultConnection"), let set = dlsym(handle, "CGSSetConnectionProperty") else { return false }
-        let cid = unsafeBitCast(connect, to: DefaultConnection.self)()
-        return unsafeBitCast(set, to: SetProperty.self)(cid, cid, "SetsCursorInBackground" as CFString, kCFBooleanTrue) == 0
-    }
-}
-

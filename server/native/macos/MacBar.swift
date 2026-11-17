@@ -652,8 +652,8 @@ enum MacBarBench {
         func model(_ state: String, prompting: Bool = false, activity: String = "", low: Bool = false, reason: String = "", ended: Bool = false) -> MacBarModel {
             MacBarModel.make(state: state, prompting: prompting, host: host, activity: activity, lowTime: low, reason: reason, ended: ended)
         }
-        // The agent's pointer on dark and light: the dart with its halo, and the
-        // halo alone (what shows around the OS arrow when hiding is refused).
+        // The agent's pointer glow on dark and light: alone (what is drawn live,
+        // around the real arrow) and with the Windows dart for comparison.
         for (name, background) in [("dark", NSColor(srgbRed: 31 / 255, green: 33 / 255, blue: 40 / 255, alpha: 1)), ("light", NSColor(white: 0.96, alpha: 1))] {
             for dart in [true, false] {
                 let path = (directory as NSString).appendingPathComponent("pointer-\(dart ? "dart" : "halo")-\(name).png")

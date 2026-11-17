@@ -580,7 +580,7 @@
     },
     {
       "path": "server/native/macos/MacVisuals.swift",
-      "sha256": "44a4c6f7dbd5809a1060b1d8638a0f3f7a23907bd6fca598c98a381dd3140848"
+      "sha256": "bb42ccec1ee340d7bb0c6ec5bb67b6a3ad37eace254c281e115f153bb91989e6"
     },
     {
       "path": "server/native/macos/PrivateStorage.swift",
