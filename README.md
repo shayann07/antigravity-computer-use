@@ -82,8 +82,15 @@ always left to you.
 ## Long jobs in one command
 
 `plan` sends many steps at once, so the model doesn't have to think between
-every click. A 30-turn task drops to about 9, and a painting of several
-thousand strokes runs as one job.
+every click. A 30-turn task drops to about 9.
+
+The portrait at the top is one `plan`: 2,832 steps that pick 40 exact colours in
+Paint's colour editor and paint each one as long back-and-forth rows. It ran
+unattended for about 65 minutes with no retries.
+
+<p align="center">
+  <img src="docs/media/paint-progress.png" width="760" alt="Four moments from the real run: the dress blocked in at 9 minutes, more of the figure at 24, the braid and hands at 43, and the finished portrait at about 65 minutes.">
+</p>
 
 ## Learn more
 
