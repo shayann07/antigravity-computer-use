@@ -44,3 +44,10 @@ test('a cropped capture still passes the moved-window check: it compares the ful
  const cs=fs.readFileSync(new URL('../server/native/AxonHost.cs',import.meta.url),'utf8');
  assert.match(cs,/res\["window"\] = new int\[\] \{ windowRect\.Left, windowRect\.Top/);
 });
+
+test('click accepts park_cursor and the native click honours it in real-cursor mode (#49)',async()=>{
+ const {validate}=await import('../server/desktop-tools.mjs');
+ validate('computer_click',{hwnd:1,observation_id:'f',reason:'close hover',name:'Models',park_cursor:true});
+ const cs=fs.readFileSync(new URL('../server/native/AxonHost.cs',import.meta.url),'utf8');
+ assert.match(cs,/AGCU_REAL_CURSOR"\) != "1" \|\| Bool\(Get\(a, "park_cursor"\), false\)/);
+});

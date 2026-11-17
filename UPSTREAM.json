@@ -60,7 +60,7 @@
     {
       "path": "server/native/AxonHost.cs",
       "upstream_sha256": "bef101afecbdf8f75df2a1f8b45d224eade39f09e3c8e25cf7b450e3fa49a8ef",
-      "local_sha256": "cc7eb2177a01abdb690f9c266e0b3bc5de4fcb0bafaaf782800f43ca44149f58",
+      "local_sha256": "a564109befec8675f7b812bed48938be1b29e9848b0a2e238bc31d5ea1d131ce",
       "modified": true
     },
     {
@@ -300,7 +300,7 @@
     },
     {
       "path": "server/desktop-tools.mjs",
-      "sha256": "8fd91911e2c8bec785eae294187dd5c0b44ed42ef2828d4f589baaf64650faa3"
+      "sha256": "2bf354d2dfef805f7db7bc35ecdcffeb2e67dd39e0b1f188907349036d951c37"
     },
     {
       "path": "scripts/desktop.mjs",

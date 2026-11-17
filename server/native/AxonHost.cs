@@ -3149,7 +3149,9 @@ namespace Axon
             // instead of the target - down here, up there - which the OS reads as
             // a drag, and the click silently does not fire. A dozen milliseconds
             // lets the button-up dispatch first; it is imperceptible.
-            if (haveSaved && !held && Environment.GetEnvironmentVariable("AGCU_REAL_CURSOR") != "1")
+            // park_cursor asks for the same return in real-cursor mode, so hover UI
+            // opened by the pointer closes before the next screenshot (#49).
+            if (haveSaved && !held && (Environment.GetEnvironmentVariable("AGCU_REAL_CURSOR") != "1" || Bool(Get(a, "park_cursor"), false)))
             {
                 System.Threading.Thread.Sleep(12);
                 Native.SetCursorPos(saved.X, saved.Y);
