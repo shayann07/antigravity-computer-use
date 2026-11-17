@@ -38,7 +38,7 @@ on every change.
 ## Install
 
 Download the macOS archive for your Mac (arm64 for Apple silicon, x64 for Intel)
-from the [1.0.0 release](https://github.com/shayann07/antigravity-computer-use/releases/tag/v1.0.0)
+from the [1.0.3 release](https://github.com/shayann07/antigravity-computer-use/releases/tag/v1.0.3)
 and check it against the release's checksums.
 
 1. Extract the archive. Keep the complete
