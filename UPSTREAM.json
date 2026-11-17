@@ -304,7 +304,7 @@
     },
     {
       "path": "scripts/desktop.mjs",
-      "sha256": "a869ccedac1ece8ab0ce9b1a2d2e2b27581be8dfaf292a156d15536b0fec2db3"
+      "sha256": "fa30a7f4659b0562e45de8d23eb5c5652cb01df644c66151ac0941e547cab56b"
     },
     {
       "path": "server/version.mjs",
