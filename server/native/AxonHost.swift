@@ -812,7 +812,8 @@ func post(_ e: CGEvent?) throws {
     }
     guard let event = markedEvent(e) else { throw AxonError("event_creation_failed", "Cannot construct native input.") }
     if [.leftMouseDown,.rightMouseDown,.otherMouseDown,.leftMouseDragged,.rightMouseDragged,.otherMouseDragged,.scrollWheel].contains(event.type) {
-        try macCheckTargetPoint(event.location,MacFence.current)
+        if let stroke = macStrokeTarget, [.leftMouseDragged,.rightMouseDragged,.otherMouseDragged].contains(event.type) { try macCheckStrokePoint(event.location, stroke) }
+        else { try macCheckTargetPoint(event.location,MacFence.current) }
     }
     try MacInputLedger.withLock {
         try MacInputLedger.record(event, before: true)
@@ -963,6 +964,9 @@ func opDrag(_ a: [String: Any]) throws -> [String: Any] {
     for p in path { try macCheckTargetPoint(CGPoint(x: p[0], y: p[1]), a) }
     // About 8 pt per hop, at most macMaxStrokeHops hops in total, whatever the point count.
     let hops = macStrokeHops(path, steps: steps)
+    // Resolved once; every dragged event is still checked against it.
+    macStrokeTarget = try macStrokeTarget(a)
+    defer { macStrokeTarget = nil }
     let waited = try guardDisturb(a)
     if waited > 0 { res["waited_for_user_ms"] = waited }
     try checkStop()

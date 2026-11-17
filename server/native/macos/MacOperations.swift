@@ -174,20 +174,26 @@ func macCheckPoint(_ point: CGPoint) throws {
         throw AxonError("point_off_desktop", "Point is outside the active displays. No input was sent.")
     }
 }
-func macCheckTargetPoint(_ point: CGPoint, _ args: [String: Any]) throws {
-    try macCheckPoint(point)
-    let (window, pid, title, _) = try resolveWindow(args)
-    guard let rect = axRect(window), CGRect(x: rect[0], y: rect[1], width: rect[2], height: rect[3]).contains(point) else {
-        throw AxonError("bad_point", "Point is outside the approved window.")
-    }
-    guard let expected = windowNumber(window: window, pid: pid, title: title, rect: rect),
-          let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else { throw AxonError("obscured", "The target point cannot be verified.") }
+// Whether the element under a screen point belongs to the target window:
+// hit-tested through the target app, owned by it, and inside the window by
+// accessibility (directly or through a popover attached to it).
+func macPointInTargetUI(_ point: CGPoint, window: AXUIElement, pid: pid_t) -> Bool {
+    let app = AXUIElementCreateApplication(pid)
+    AXUIElementSetMessagingTimeout(app, 0.25)
+    var hit: AXUIElement?
+    guard AXUIElementCopyElementAtPosition(app, Float(point.x), Float(point.y), &hit) == .success, let element = hit else { return false }
+    var owner: pid_t = 0
+    guard AXUIElementGetPid(element, &owner) == .success, owner == pid else { return false }
+    return macElementInWindow(element, window)
+}
+// Every on-screen window, front to back, with this runtime's own chrome marked.
+func macStackRows(_ windows: [[String: Any]]) -> [MacStackRow] {
     let guardianRecord = (try? String(contentsOfFile: MacFence.file + ".guardian", encoding: .utf8).split(separator:"|")) ?? []
     let guardian = guardianRecord.count == 2 ? Int32(guardianRecord[0]) : nil
     let guardianAlive = guardian != nil && (try? macProcessStart(guardian!)) == String(guardianRecord.last ?? "")
     let ownExecutable = macExecutablePath(getpid())
     var chrome: [Int32: Bool] = [:]
-    let rows: [MacStackRow] = windows.map { candidate in
+    return windows.map { candidate in
         let owner = (candidate[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value ?? -1
         // The bar, glow and access card are drawn by this same AxonHost
         // executable. They are this runtime's own chrome, never the human's
@@ -202,9 +208,56 @@ func macCheckTargetPoint(_ point: CGPoint, _ args: [String: Any]) throws {
                            ownerName: candidate[kCGWindowOwnerName as String] as? String ?? "", layer: (candidate[kCGWindowLayer as String] as? NSNumber)?.int32Value ?? 0,
                            alpha: (candidate[kCGWindowAlpha as String] as? NSNumber)?.doubleValue ?? 0, bounds: bounds, own: own)
     }
+}
+// A stroke's target, resolved once before its first event: the window number
+// and the app. Each later event is checked through the window server only,
+// without an accessibility round trip to the app (which slowed strokes to
+// about 240 ms per event in a busy Preview document).
+struct MacStrokeTarget { let window: CGWindowID; let pid: pid_t }
+var macStrokeTarget: MacStrokeTarget?
+func macStrokeTarget(_ args: [String: Any]) throws -> MacStrokeTarget {
+    let (window, pid, title, _) = try resolveWindow(args)
+    guard let rect = axRect(window), let number = windowNumber(window: window, pid: pid, title: title, rect: rect) else {
+        throw AxonError("obscured", "The target window cannot be verified. No input was sent.")
+    }
+    return MacStrokeTarget(window: number, pid: pid)
+}
+// The per-event check during a stroke: the target window is still on screen,
+// still contains the point, and the frontmost window at the point is the
+// target (or the same app's own window above layer 0).
+func macCheckStrokePoint(_ point: CGPoint, _ target: MacStrokeTarget) throws {
+    try macCheckPoint(point)
+    guard let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else {
+        throw AxonError("obscured", "The target point cannot be verified.")
+    }
+    let rows = macStackRows(windows)
+    guard let own = rows.first(where: { $0.number == target.window }), own.owner == target.pid, own.bounds.contains(point) else {
+        throw AxonError("bad_point", "The target window moved or closed during the stroke.")
+    }
+    guard macTopWindowVerdict(rows, point: point, expected: target.window, pid: target.pid) == .target else {
+        throw AxonError("obscured", "Another window covers this point. No more input was sent.")
+    }
+}
+func macCheckTargetPoint(_ point: CGPoint, _ args: [String: Any]) throws {
+    try macCheckPoint(point)
+    let (window, pid, title, _) = try resolveWindow(args)
+    guard let rect = axRect(window), CGRect(x: rect[0], y: rect[1], width: rect[2], height: rect[3]).contains(point) else {
+        throw AxonError("bad_point", "Point is outside the approved window.")
+    }
+    guard let expected = windowNumber(window: window, pid: pid, title: title, rect: rect),
+          let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else { throw AxonError("obscured", "The target point cannot be verified.") }
+    let rows = macStackRows(windows)
     switch macTopWindowVerdict(rows, point: point, expected: expected, pid: pid) {
     case .target: return
-    case .covered: throw AxonError("obscured", "Another window covers this point. No click was sent.")
+    case .covered:
+        // A popover the target window opened (Preview's colour palette) is a
+        // separate window of the same app at layer 0. It is the target's own
+        // UI when the frontmost window at the point is the same app's and
+        // accessibility puts the element under the point inside the target
+        // window. Any other window, or any doubt, stays covered.
+        if let front = rows.first(where: { !$0.own && $0.ownerName != "Dock" && $0.ownerName != "Window Server" && $0.alpha > 0 && $0.bounds.contains(point) }),
+           front.owner == pid, front.layer == 0, macPointInTargetUI(point, window: window, pid: pid) { return }
+        throw AxonError("obscured", "Another window covers this point. No click was sent.")
     case .none: throw AxonError("obscured", "The target point has no verifiable owning window.")
     }
 }
