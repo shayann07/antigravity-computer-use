@@ -17,7 +17,7 @@ https://github.com/user-attachments/assets/67d22708-ac70-44bf-9570-acfd81f5a3ae
   The bar and glow are drawn in, since they're hidden from screen recordings by default. <a href="#long-desktop-automation-jobs-in-one-command">How it was painted</a></sub>
 </p>
 
-<p align="center"><a href="#install"><b>Install</b></a>: one line on Windows or macOS, checked against the release's SHA-256 before anything runs.</p>
+<p align="center"><a href="#ask-your-ai-agent-to-install-it"><b>Install</b></a>: paste one prompt into your AI agent, or run one line on Windows or macOS.</p>
 
 Type `/computer-use` in Antigravity and say what you want done. The agent reads
 the app, then clicks, types, drags and fills in dialogs with your real mouse and
@@ -25,6 +25,25 @@ keyboard. It uses the model you already have: no API key, no second LLM, no MCP
 server.
 
 ## Install
+
+### Ask your AI agent to install it
+
+The easiest way. Paste this into Antigravity, or any coding agent that can run
+commands on your computer:
+
+```text
+Install Antigravity Computer Use on this computer.
+On Windows, run this in PowerShell:
+  irm https://raw.githubusercontent.com/shayann07/antigravity-computer-use/main/install.ps1 | iex
+On macOS, run this in Terminal:
+  curl -fsSL https://raw.githubusercontent.com/shayann07/antigravity-computer-use/main/install.sh | sh
+Both download the current release and check its SHA-256 before installing anything.
+Show me the command and wait for my OK before you run it. On macOS, leave the
+Accessibility and Screen Recording prompts to me. When it is done, tell me to open
+a new Antigravity conversation and type /computer-use.
+```
+
+### Or install it yourself
 
 Each [release](https://github.com/shayann07/antigravity-computer-use/releases/latest)
 lists a SHA-256 for every archive in `SHA256SUMS.txt`, and installed copies take
@@ -45,14 +64,6 @@ where you grant Accessibility and Screen Recording):
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/shayann07/antigravity-computer-use/main/install.sh | sh
-```
-
-**Or ask Antigravity.** Paste this into a new conversation and approve each command
-it shows you:
-
-```text
-Install the computer use skill from https://github.com/shayann07/antigravity-computer-use
-using the one-line install for this computer in its README. Show me each command before you run it.
 ```
 
 <details>
