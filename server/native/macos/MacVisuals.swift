@@ -279,7 +279,25 @@ final class MacVisuals: NSObject {
         hostPath = path
         var bundle = URL(fileURLWithPath: path)
         while bundle.path != "/" && bundle.pathExtension != "app" { bundle.deleteLastPathComponent() }
-        barView?.icon = bundle.pathExtension == "app" && FileManager.default.fileExists(atPath: bundle.path) ? NSWorkspace.shared.icon(forFile: bundle.path) : nil
+        let found = bundle.pathExtension == "app" && FileManager.default.fileExists(atPath: bundle.path) ? bundle : nil
+        // A command-line agent can run from an inner bundle with no icon of its
+        // own (Claude Code's claude.app). Then the icon comes from the installed
+        // app the runtime named (one of a fixed set), not a blank document.
+        barView?.icon = found.flatMap { MacVisuals.hasOwnIcon($0) ? NSWorkspace.shared.icon(forFile: $0.path) : nil }
+            ?? MacVisuals.installedApp(named: hostName).map { NSWorkspace.shared.icon(forFile: $0.path) }
+            ?? found.map { NSWorkspace.shared.icon(forFile: $0.path) }
+    }
+    static func hasOwnIcon(_ bundle: URL) -> Bool {
+        guard let info = NSDictionary(contentsOf: bundle.appendingPathComponent("Contents/Info.plist")) else { return false }
+        return info["CFBundleIconFile"] != nil || info["CFBundleIconName"] != nil
+    }
+    static let knownApps: [String: [String]] = [
+        "Claude": ["com.anthropic.claudefordesktop"], "ChatGPT": ["com.openai.chat"],
+        "Codex": ["com.openai.codex", "com.openai.chat"], "Antigravity": ["com.google.antigravity"],
+    ]
+    static func installedApp(named name: String) -> URL? {
+        for id in knownApps[name] ?? [] { if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) { return url } }
+        return nil
     }
     // Lights the window of an approved app that received an action. The
     // guardian has already checked the grant; pid and rect come from the
