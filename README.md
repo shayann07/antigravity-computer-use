@@ -10,12 +10,12 @@
 </p>
 
 <p align="center">
-  <a href="docs/media/paint-demo.mp4"><img src="docs/media/paint-demo.webp" width="720" alt="The Antigravity agent painting a portrait in Microsoft Paint, stroke by stroke, beside the original photo."></a>
+  <a href="docs/media/paint-vs-photo.jpg"><img src="docs/media/paint-demo.webp" width="720" alt="The Antigravity agent painting a portrait in Microsoft Paint, stroke by stroke, beside the original photo."></a>
 </p>
 
 <p align="center">
   <sub>A real run, 260× faster: Antigravity painting a photo in Microsoft Paint from one prompt.
-  <a href="docs/media/paint-demo.mp4">HD video</a> · <a href="#long-jobs-in-one-command">How it was painted</a></sub>
+  <a href="#long-jobs-in-one-command">How it was painted</a></sub>
 </p>
 
 Type `/computer-use` in Antigravity and say what you want done. The agent reads
