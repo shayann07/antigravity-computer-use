@@ -5,7 +5,7 @@
     {
       "path": "server/build.mjs",
       "upstream_sha256": "81260b378fffb46573cfe475a3a336930113c8abc465d3d278bbb0851d8a4377",
-      "local_sha256": "2db43e5cea9dcb8428ef5a115fef75ad3567543e666e49cd6888e07b4750162b",
+      "local_sha256": "04547d6a59bc1ff78fb577041df52112edbd1599b9cd2e7eb25c7bb074fa3ffc",
       "modified": true
     },
     {
@@ -924,7 +924,7 @@
     },
     {
       "path": "package.json",
-      "sha256": "3cd17a2c857cf1367ce2bb5c47eaf909ac56ac777e56f5764f7cf47185c6032f"
+      "sha256": "9e9327144bfe89bddb41655588b1cf21e5a401c32d35c6896d6eda634c013918"
     },
     {
       "path": "server/native/macos/MacPhosphorIcons.swift",
