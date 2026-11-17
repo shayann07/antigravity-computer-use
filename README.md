@@ -9,11 +9,14 @@
   <a href="https://github.com/shayann07/antigravity-computer-use/stargazers"><img src="https://img.shields.io/github/stars/shayann07/antigravity-computer-use?style=flat&amp;color=80abcf" alt="GitHub stars"></a>
 </p>
 
-<!-- TEST A: video tag -->
-<video src="https://github.com/shayann07/antigravity-computer-use/raw/docs/readme-1.0.0/docs/media/paint-demo.mp4" controls muted autoplay loop width="720"></video>
+<p align="center">
+  <a href="docs/media/paint-demo.mp4"><img src="docs/media/paint-demo.webp" width="720" alt="The Antigravity agent painting a portrait in Microsoft Paint, stroke by stroke, beside the original photo."></a>
+</p>
 
-<!-- TEST B: animated webp -->
-<p align="center"><img src="docs/media/paint-demo.webp" width="720" alt="The agent painting the portrait in Paint beside the photo."></p>
+<p align="center">
+  <sub>A real run, 260× faster: Antigravity painting a photo in Microsoft Paint from one prompt.
+  <a href="docs/media/paint-demo.mp4">HD video</a> · <a href="#long-jobs-in-one-command">How it was painted</a></sub>
+</p>
 
 Type `/computer-use` in Antigravity and say what you want done. The agent reads
 the app, then clicks, types, drags and fills in dialogs with your real mouse and
@@ -81,9 +84,14 @@ always left to you.
 `plan` sends many steps at once, so the model doesn't have to think between
 every click. A 30-turn task drops to about 9.
 
-The portrait at the top is one `plan`: 2,832 steps that pick 40 exact colours in
+The portrait at the top is one prompt and one `plan`: 2,832 steps that pick 40 exact colours in
 Paint's colour editor and paint each one as long back-and-forth rows. It ran
 unattended for about 65 minutes.
+
+<p align="center">
+  <a href="docs/media/paint-vs-photo.jpg"><img src="docs/media/paint-vs-photo.jpg" width="620" alt="Left: the portrait the agent painted in Paint. Right: the original photo."></a><br>
+  <sub>Click to open full size.</sub>
+</p>
 
 <p align="center">
   <img src="docs/media/paint-progress.jpg" width="760" alt="Four moments from the real run: the dress blocked in at 9 minutes, more of the figure at 24, the braid and hands at 43, and the finished portrait at about 65 minutes.">
