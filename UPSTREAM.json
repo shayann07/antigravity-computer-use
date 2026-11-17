@@ -528,7 +528,7 @@
     },
     {
       "path": "install.ps1",
-      "sha256": "03dc7e2205f898291eead61c43e460a54212691d578a2896839965dade5212ed"
+      "sha256": "bd830be8c7f285fb4c2c21aa6f80e292d5ce2a58f851c809b4318d70d1aab333"
     },
     {
       "path": "tests/bootstrap.test.mjs",
@@ -608,7 +608,7 @@
     },
     {
       "path": "docs/MACOS.md",
-      "sha256": "9071a3d3da85dd8de052c0e5d57c8d8ac0e71454e1e7a550141e756d6ed9c54e"
+      "sha256": "84a4e83cc922368ff606fac7781d6be815334eea680493b17365ae781c53df65"
     },
     {
       "path": "server/update-core.mjs",
