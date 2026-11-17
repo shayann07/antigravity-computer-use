@@ -364,6 +364,33 @@ namespace Axon {
             g.TranslateTransform(-HudWidth/2f,-HudHeight/2f);
             Hud(g,model);g.Restore(saved);
         }
+        internal static void RigidHud(Graphics g,Bitmap bodyPicture,float k,double a,double d,float cx,float cy,bool highContrast) {
+            int Width=(int)Math.Round(HudWidth*k),Height=(int)Math.Round(HudHeight*k);
+            float w=(float)(Width*a),h=(float)(Height*d);
+            Color surface=highContrast?SystemColors.Window:InkSurface;
+            g.SmoothingMode=SmoothingMode.AntiAlias;g.PixelOffsetMode=PixelOffsetMode.HighQuality;
+            RectangleF pill=new RectangleF(cx-w/2f,cy-h/2f,w,h);
+            using(GraphicsPath path=Overlay.RoundRect(pill,h/2f))using(SolidBrush fill=new SolidBrush(surface))g.FillPath(fill,path);
+            using(GraphicsPath edge=Overlay.RoundRect(new RectangleF(pill.X+.5f,pill.Y+.5f,w-1,h-1),(h-1)/2f))
+            using(Pen border=new Pen(highContrast?SystemColors.WindowText:Color.FromArgb(41,255,255,255),highContrast?2:1))g.DrawPath(border,edge);
+            // The content band, in DIP: inside the border, clear of the caps.
+            const float top=7,bottom=41,textFrom=8,split=338,buttonsTo=432;
+            float s=Math.Min(1f,h/Height);
+            bool exact=s>=.999f;
+            g.InterpolationMode=exact?InterpolationMode.NearestNeighbor:InterpolationMode.HighQualityBilinear;
+            g.PixelOffsetMode=PixelOffsetMode.Half;
+            float bandTop=cy+(top-HudHeight/2f)*k*s,bandH=(bottom-top)*k*s;
+            // Buttons: their right edge keeps its inset from the pill's right end.
+            float bw=(buttonsTo-split)*k*s,bx=pill.Right-(HudWidth-buttonsTo)*k*s-bw;
+            // Text: from the left end, cut off before the buttons when squashed.
+            float tx=pill.Left+textFrom*k*s,tw=Math.Max(0,Math.Min((split-textFrom)*k*s,bx-tx));
+            if(exact){bx=(float)Math.Round(bx);tx=(float)Math.Round(tx);bandTop=(float)Math.Round(bandTop);}
+            var saved=g.Save();
+            g.SetClip(new RectangleF(tx,bandTop,tw,bandH));
+            g.DrawImage(bodyPicture,new RectangleF(tx,bandTop,(split-textFrom)*k*s,bandH),new RectangleF(textFrom*k,top*k,(split-textFrom)*k,(bottom-top)*k),GraphicsUnit.Pixel);
+            g.Restore(saved);
+            g.DrawImage(bodyPicture,new RectangleF(bx,bandTop,bw,bandH),new RectangleF(split*k,top*k,(buttonsTo-split)*k,(bottom-top)*k),GraphicsUnit.Pixel);
+        }
         // menu.tick: a tick slides its row's text over Normal, easing in and
         // out; instant with reduced motion.
         internal static float TickAt(double ms,float from,float to) {
@@ -587,15 +614,20 @@ namespace Axon {
                 const int right=1920,rows=14,panel=760;double dock=right-12-HudWidth/2.0;
                 body.Release(true,12+HudWidth/2.0,dock,12,18+HudHeight/2.0,1040-18-HudHeight/2.0,18,null,null,12);
                 HudModel model=new HudModel();model.State="active";model.Line1="Antigravity is working";model.Line2="Drawing in Paint";model.Slot=1;
-                using(Bitmap sheet=new Bitmap(panel*2,(HudHeight+30)*rows*2,PixelFormat.Format32bppArgb)) {
+                using(Bitmap picture=new Bitmap(HudWidth*2,HudHeight*2,PixelFormat.Format32bppPArgb))
+                using(Bitmap sheet=new Bitmap(panel*4,(HudHeight+30)*rows*2,PixelFormat.Format32bppArgb)) {
+                    using(Graphics p=Graphics.FromImage(picture)){p.Clear(Color.Transparent);p.ScaleTransform(2,2);Hud(p,model);}
                     using(Graphics g=Graphics.FromImage(sheet)) {
                         g.Clear(Color.FromArgb(60,64,72));g.ScaleTransform(2,2);g.SmoothingMode=SmoothingMode.AntiAlias;
                         float edge=panel-40;double left=right-(edge-0);
                         for(int i=0;i<rows;i++) {
                             float top=(HudHeight+30)*i+15;
-                            using(Pen wall=new Pen(Color.FromArgb(160,255,120,120),1))g.DrawLine(wall,edge,top-6,edge,top+HudHeight+6);
+                            using(Pen wall=new Pen(Color.FromArgb(160,255,120,120),1)){g.DrawLine(wall,edge,top-6,edge,top+HudHeight+6);g.DrawLine(wall,edge+panel,top-6,edge+panel,top+HudHeight+6);}
                             double a,b,c,d;body.Shape(out a,out b,out c,out d);
                             BodyHud(g,model,a,b,c,d,(float)(body.CentreX-left),top+HudHeight/2f);
+                            var flat=g.Save();g.ResetTransform();
+                            RigidHud(g,picture,2,a,d,(float)(body.CentreX-left+panel)*2,(top+HudHeight/2f)*2,false);
+                            g.Restore(flat);
                             body.Advance(.05);
                         }
                     }

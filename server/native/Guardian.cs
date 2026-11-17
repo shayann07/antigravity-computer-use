@@ -716,6 +716,9 @@ namespace Axon {
         static readonly string barTrace=barTrial?Environment.GetEnvironmentVariable("AGCU_BAR_TRACE"):null;
         // Bench variant: AGCU_BAR_VARIANT=glide keeps a gliding bar stretched (BarBody.GlideStretch).
         static readonly bool barGlideVariant=barTrial&&Environment.GetEnvironmentVariable("AGCU_BAR_VARIANT")=="glide";
+        // Bench variant: AGCU_BAR_VARIANT=stretch draws the moving bar as one
+        // stretched picture, as before the rigid content.
+        static readonly bool barStretchVariant=barTrial&&Environment.GetEnvironmentVariable("AGCU_BAR_VARIANT")=="stretch";
         double demoVX,demoVY,demoX,demoY;long demoUntil;bool demo;
         internal static void Trace(string what,int x,int y,int w,int h,int alpha) {Trace(what,x,y,w,h,alpha,0);}
         internal static void Trace(string what,int x,int y,int w,int h,int alpha,double ms) {Trace(what,x,y,w,h,alpha,ms,1,0,0,1);}
@@ -773,6 +776,7 @@ namespace Axon {
                         int left=(ghostSize.Width-Width)/2,top=(ghostSize.Height-Height)/2;
                         // At its own shape the picture is copied pixel for pixel, so the text holds still.
                         if(Math.Abs(a-1)<.002&&Math.Abs(d-1)<.002&&Math.Abs(b)<.002&&Math.Abs(c)<.002)g.DrawImageUnscaled(bodyPicture,left,top);
+                        else if(!barStretchVariant)DrawRigid(g,a,d);
                         else {
                             g.InterpolationMode=InterpolationMode.Bilinear;g.PixelOffsetMode=PixelOffsetMode.Half;
                             g.TranslateTransform(left+Width/2f,top+Height/2f);
@@ -784,6 +788,13 @@ namespace Axon {
                     ghost.Show(surface,gx,gy,ga);Trace("ghost",gx,gy,ghostSize.Width,ghostSize.Height,ga,(Stopwatch.GetTimestamp()-began)*1000.0/Stopwatch.Frequency,a,b,c,d);
                 }
             } catch {}
+        }
+        // bar.squash, drawn: only the pill changes shape. Its ends stay round
+        // (radius half its drawn height); the text rides the left end and the
+        // buttons the right end, copied pixel for pixel, and shrink evenly
+        // only when the bar is pressed flatter than they are tall.
+        void DrawRigid(Graphics g,double a,double d) {
+            DesktopVisuals.RigidHud(g,bodyPicture,visualScale,a,d,ghostSize.Width/2f,ghostSize.Height/2f,Model().HighContrast);
         }
         // The body comes to rest, or is cut short. Handoff: the bar is drawn
         // again first, then the ghost goes.
