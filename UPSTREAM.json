@@ -688,7 +688,7 @@
     },
     {
       "path": "scripts/qualify-signed-update.mjs",
-      "sha256": "83aea9519c77de50024bb5df094f0313a1497195a85f02ec61972ed93a0f8dc8"
+      "sha256": "3da725b930351923be0d6d49e12b8e25e230192ce68a53d5f2ff6fb8fe64b0f4"
     },
     {
       "path": "scripts/windows-install-check.mjs",

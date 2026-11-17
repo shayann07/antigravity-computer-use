@@ -29,7 +29,7 @@ export async function qualifySignedUpdate({target,bundle,directory}){
  const upgraded=JSON.parse(fs.readFileSync(path.join(target,'installation.json')));
  assert.equal(JSON.parse(fs.readFileSync(path.join(upgraded.release,'bundle-manifest.json'))).build_id,metadata.build_id);
  assert(fs.existsSync(path.join(target,'data/emergency.stop')));
- assert.equal((await update(target,'status',options)).settings.channel,'beta');
+ assert.equal((await update(target,'status',options)).settings.channel,metadata.version.includes('-')?'beta':'stable');
  const {update:updatedClient}=await import(pathToFileURL(path.join(upgraded.release,'scripts/update.mjs')).href);
  const rollbackResult=await updatedClient(target,'rollback',options);
  assert(rollbackResult.rolled_back,JSON.stringify(rollbackResult));
