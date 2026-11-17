@@ -101,6 +101,8 @@ unattended for about 65 minutes.
   <img src="docs/media/paint-progress.jpg" width="760" alt="Four moments from the real run: the dress blocked in at 9 minutes, more of the figure at 24, the braid and hands at 43, and the finished portrait at about 65 minutes.">
 </p>
 
+<p align="center">⭐ If that made you want to try it, <b>a star helps others find it.</b></p>
+
 ## Learn more
 
 [Install guide](docs/INSTALLATION.md) · [Mac guide](docs/MACOS.md) ·
@@ -109,5 +111,3 @@ unattended for about 65 minutes.
 
 MIT licensed. Not affiliated with Google.
 Built on [ridelink0/claude-computer-use](https://github.com/ridelink0/claude-computer-use); see [UPSTREAM.json](UPSTREAM.json).
-
-<p align="center">⭐ <b>Star it if it saves you time.</b></p>
