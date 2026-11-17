@@ -235,7 +235,12 @@ enum MacFence {
         }
         var targetKey: String?
         if current["hwnd"] != nil {
-            let (_, pid, _, _) = try resolveWindow(current)
+            // During a stroke the window and app were verified at its first event,
+            // and every dragged event is checked again through the window server
+            // (macCheckStrokePoint: same window number, same app, on screen, not
+            // covered). An accessibility round trip per event cost about 80 ms in a
+            // busy Preview document, so strokes use the verified app instead.
+            let pid = try macStrokeTarget?.pid ?? resolveWindow(current).1
             let identity = try macIdentity(pid)
             guard state.grants.contains(identity["key"] as! String), int(current["__pid"], -1) == Int(pid),
                   str(current["__started"]) == identity["started"] as? String else {
