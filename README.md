@@ -1,6 +1,6 @@
 <h1 align="center">Antigravity Computer Use</h1>
 
-<p align="center"><b>Let your Antigravity agent use real apps on Windows and macOS.</b></p>
+<p align="center"><b>The computer use skill for Google Antigravity.</b><br>Your agent sees the screen and drives real apps on Windows and macOS: desktop automation with your real mouse and keyboard.</p>
 
 <p align="center">
   <a href="https://github.com/shayann07/antigravity-computer-use/releases/latest"><img src="https://img.shields.io/github/v/release/shayann07/antigravity-computer-use?label=release&amp;color=80abcf" alt="Latest release"></a>
@@ -12,9 +12,14 @@
 https://github.com/user-attachments/assets/5489c2ee-2c81-4e2f-8fd5-834d5aedfedb
 
 <p align="center">
-  <sub>A real run, 260× faster: Antigravity painting a photo in Microsoft Paint from one prompt.
-  <a href="#long-jobs-in-one-command">How it was painted</a></sub>
+  <sub>A real recording, 200× faster: from one prompt, Antigravity ran a stroke plan that a script made from the photo, in Microsoft Paint.
+  The bar and glow are drawn in, since they're hidden from screen recordings by default. <a href="#long-desktop-automation-jobs-in-one-command">How it was painted</a></sub>
 </p>
+
+```powershell
+irm https://raw.githubusercontent.com/shayann07/antigravity-computer-use/main/install.ps1 | iex
+```
+<p align="center"><sub>Windows, one line in PowerShell. macOS: see <a href="#install">Install</a>.</sub></p>
 
 Type `/computer-use` in Antigravity and say what you want done. The agent reads
 the app, then clicks, types, drags and fills in dialogs with your real mouse and
@@ -40,7 +45,7 @@ Then open Antigravity and try:
 Open Paint, draw a red circle in the middle, save it to my Desktop as circle.png.
 ```
 
-## You can see what it's doing
+## See what the agent is doing
 
 <p align="center">
   <picture>
@@ -56,7 +61,7 @@ is doing right now.
   <img src="docs/media/bar-states.png" width="440" alt="Three states of the control bar: Antigravity is working, Waiting for your answer, and Stopped because you pressed Esc.">
 </p>
 
-## It asks before it touches anything
+## Approvals before it touches any app
 
 <p align="center">
   <img src="docs/media/access-card.png" width="420" alt="An access card asking to allow Antigravity to use Notepad with full control until a new conversation starts, with Allow and Deny.">
@@ -67,17 +72,17 @@ one-line install, or with this card in [standalone mode](docs/INSTALLATION.md#pe
 where saving, pasting and deleting ask again. Terminals and code editors are
 always click-only, so it can't type commands into them.
 
-## One key stops it
+## One key stops computer use
 
 <p align="center">
   <img src="docs/media/settings-menu.png" width="380" alt="The Settings menu: show bar and glow in recordings, move the bar, glow brightness, and a reminder that Esc or Ctrl+Alt+F12 stops at once.">
 </p>
 
-**Esc** stops it at once, wherever you are, and lets go of every key and
+<kbd>Esc</kbd> stops it at once, wherever you are, and lets go of every key and
 button. Ask it to carry on and it starts fresh. Sign-ins and admin prompts are
 always left to you.
 
-## Long jobs in one command
+## Long desktop automation jobs in one command
 
 `plan` sends many steps at once, so the model doesn't have to think between
 every click. A 30-turn task drops to about 9.

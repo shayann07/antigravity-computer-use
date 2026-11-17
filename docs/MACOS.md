@@ -223,7 +223,7 @@ three in the setup case.
   `AxonHost --prompt-preview <dir>` renders it offscreen for review. Controls support keyboard focus
   (`Tab` loop, native focus ring mask, `Space`/`Return` activation and `Esc`
   emergency Stop), while areas outside the control bar remain click-through.
-  End/Pause/Stop release the cursor, remove `.hud` bounds and hide active
+  End and Stop release the cursor, remove `.hud` bounds and hide active
   visuals. Native screenshots omit the chrome.
 - POSIX ownership/mode checks, link refusal, extended-Allow-ACL refusal and an
   OS-held `flock` lease protect the data directory. Parent permissions are never

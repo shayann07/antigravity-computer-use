@@ -64,7 +64,7 @@ This does not read or change Antigravity's Turbo preset. The host agent is respo
 
 Normal physical mouse and keyboard activity never pauses the agent, and there is no Pause or Resume. Esc, Ctrl+Alt+F12 or the bar's Stop ends the task at once; the next `ready` starts a fresh task. Never restart a service to bypass Stop. Windows virtual desktops share one mouse, keyboard and active screen capture.
 
-## Recording the visible controls (source recording candidate)
+## Recording the visible controls
 
 By default, Windows screen capture omits the control bar, glow and pointer halo.
 To include them in a real demo, open the control bar's three-dot menu and enable
