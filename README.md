@@ -17,7 +17,7 @@ https://github.com/user-attachments/assets/67d22708-ac70-44bf-9570-acfd81f5a3ae
   The bar and glow are drawn in, since they're hidden from screen recordings by default. <a href="#long-desktop-automation-jobs-in-one-command">How it was painted</a></sub>
 </p>
 
-<p align="center"><a href="#install"><b>Install</b></a>: a signed release for Windows and macOS, with SHA-256 checksums to verify before you run anything.</p>
+<p align="center"><a href="#install"><b>Install</b></a>: Windows and macOS, with SHA-256 checksums to verify before you run anything.</p>
 
 Type `/computer-use` in Antigravity and say what you want done. The agent reads
 the app, then clicks, types, drags and fills in dialogs with your real mouse and
@@ -27,8 +27,8 @@ server.
 ## Install
 
 Each [release](https://github.com/shayann07/antigravity-computer-use/releases/latest)
-is signed and lists a SHA-256 for every archive in `SHA256SUMS.txt`. Check the
-archive before you run anything from it.
+lists a SHA-256 for every archive in `SHA256SUMS.txt`, and installed copies take
+updates only from signed metadata. Check the archive before you run anything from it.
 
 **Windows.** Download `AntigravityComputerUse-<version>-windows-x64.zip` and
 `SHA256SUMS.txt` from the latest release, then in PowerShell, in the download folder:
