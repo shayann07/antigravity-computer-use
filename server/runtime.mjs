@@ -162,6 +162,15 @@ export function observedIndex(elements,selector){
  return matches[0].i;
 }
 
+// Native typing is paced (about 45 ms per character, slower in busy apps), so a
+// long type can outlast the worker's fixed 30 s deadline and end as an unknown
+// outcome mid-word. Give it time in proportion to its length; the desktop
+// client's own 100 s deadline still bounds the whole request.
+export function actionDeadline(op,payload){
+  if(op!=='type'||typeof payload?.text!=='string')return undefined;
+  return {timeoutMs:30000+payload.text.length*120};
+}
+
 export class Runtime {
   constructor({driver=null,guardian=null,sessions=null,latchFile=undefined,taskFile=undefined,permissionMode=process.env.AGCU_PERMISSION_MODE||'standalone',takeoverMode=process.env.AGCU_TAKEOVER_MODE||'manual'}={}){
     if(!['standalone','host-managed'].includes(permissionMode))throw new Error('Invalid startup permission mode');
@@ -714,7 +723,7 @@ export class Runtime {
       // The target window rides along for the control bar and a per-window
       // glow; native accepts it only for an approved app.
       this.guardian.send({op:'activity',action:op,...(w?{hwnd:Number(w.hwnd)}:{}),...Runtime.prototype.glowTarget.call(this,w),...Runtime.prototype.hostLabel.call(this)});
-      const result=(await this.driver.call(op,payload)).result;
+      const result=(await this.driver.call(op,payload,actionDeadline(op,payload))).result;
       // Where the action landed, in screen pixels, so the glow's bright part
       // can ease towards it even when the real pointer did not move.
       const landed=actionPoint(result);

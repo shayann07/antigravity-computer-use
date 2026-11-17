@@ -1961,6 +1961,12 @@ namespace Axon
                 System.Threading.Thread.Sleep(120);
                 webWaitMs += 120;
             }
+            // Chromium builds a page's tree only once its window has been in
+            // front: an app window (msedge --app, an installed web app) that
+            // opened behind another window keeps an empty page area even after
+            // the wake above. Bringing the window forward builds it, so say so.
+            bool webPageMissing = web && cached != null && !HasDocument(cached, 4000)
+                && hkey != 0 && Native.GetForegroundWindow() != new IntPtr(hkey);
 
             Dictionary<int, AutomationElement> elements = new Dictionary<int, AutomationElement>();
             List<object> nodes = new List<object>();
@@ -2223,6 +2229,7 @@ namespace Axon
             if (ranOutOfTime) res["time_budget_ms"] = walkBudgetMs;
             if (web) res["web"] = true;
             if (webWaitMs > 0) res["web_wait_ms"] = webWaitMs;
+            if (webPageMissing) res["web_page_missing"] = true;
             if (offDesktop) res["other_desktop"] = true;
             res["nodes"] = nodes;
             return res;
