@@ -117,3 +117,9 @@ test('frames are read from raw service replies, where they sit under metadata', 
   assert.deepEqual(calls.map(c => c.args.observation_id), ['f0', 'm1', undefined, 'm2']);
   assert.equal(r.observation_id, 'm3');
 });
+
+test('a request timeout with no step index never replays the batch', () => {
+  assert.equal(landedCount({ok: false, error: {code: 'request_timeout', message: 'Desktop request timed out.'}}, 8), 8);
+  assert.equal(landedCount({ok: false, delivery_unknown: true, error: {code: 'connection_lost'}}, 5), 5);
+  assert.equal(landedCount({ok: false, error: {code: 'permission_denied'}}, 8), 0);
+});
