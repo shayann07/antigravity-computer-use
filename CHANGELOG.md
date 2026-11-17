@@ -17,7 +17,8 @@
 - macOS: a pixel click's approval label is the name of the element under the point, as on Windows; an unnamed target still asks (#99).
 - macOS: Esc shows "You pressed Esc" on the bar; the glow stays on its own window (behind windows that cover it, lit inside at screen edges and under the menu bar); no second, drawn cursor (#99).
 - macOS: a Stop left when quitting the host app ended the service and its guardian together now settles on the next `ready`, or when a newer build is installed. Every recorded helper, the controller included, must be gone by process id and start time, and the input ledger empty; it settles to an ordinary Stop that the following `ready` clears (#99).
-- macOS: after a helper update, turn Screen Recording on again in System Settings; Accessibility and Input Monitoring are kept. Helpers are signed with the project's own certificate, not an Apple Developer ID (#99).
+- macOS: when Antigravity starts the service, macOS checks Antigravity's own Accessibility and Screen Recording permissions, so a helper update needs no new permission. Only the setup application's own AxonHost entry loses Screen Recording after an update. Helpers are signed with the project's own certificate, not an Apple Developer ID (#99).
+- macOS: while the agent works, a soft blue glow follows the real pointer, as on Windows. macOS does not let a background helper replace the arrow itself (#99).
 - The installed bundle now includes `conversation-approvals.mjs`; without it the installed service could not start (#99).
 - A refusal raised before any input (`target_not_observed`, `no_image`, a bad point) no longer spends the observation, so the next call can reuse its `observation_id` (#49).
 - The skill's command table now lists `key` (`--keys`), `key` accepts `--text` as an alias, a repeated array flag explains the accepted `X,Y` or JSON form, range errors name the range, and `no_image` says how to get a screenshot (#46, #48, #53).

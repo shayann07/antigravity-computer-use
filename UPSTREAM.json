@@ -608,7 +608,7 @@
     },
     {
       "path": "docs/MACOS.md",
-      "sha256": "7fb9ec8a6e9618c52aaa6f4f1f077c461f81e5449f508ee405f66b3e9a39541f"
+      "sha256": "bfbbe2d19c1ee11dd9b9783ccfce563698bfb1e1fbe844eb0b127fdadfec5636"
     },
     {
       "path": "server/update-core.mjs",
@@ -764,7 +764,7 @@
     },
     {
       "path": "docs/MACOS-QUALIFICATION.md",
-      "sha256": "676aca66bab3bac0559862ac75e893641554c4728635997a9326699c1c1b4d81"
+      "sha256": "b5aa0efd505e81830fa923331b906e374f2323b8c464901097fb3c4b4fe6e6cc"
     },
     {
       "path": "tests/MacStorageMarkerWriter.swift",

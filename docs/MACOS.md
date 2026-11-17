@@ -73,13 +73,20 @@ the project's own certificate, not an Apple Developer ID (owner decision), and
 are not notarized. Do not disable Gatekeeper or system security to run them. A
 permission/quarantine refusal needs human review.
 
-**After a helper update, turn Screen Recording on again.** macOS keeps
-Accessibility and Input Monitoring for a helper signed with the same
-certificate, but no longer applies Screen Recording, even though its switch
-still shows on. Open System Settings > Privacy & Security > Screen & System
-Audio Recording and switch AxonHost off and on (or run the setup again).
-Observed on an Intel Mac with macOS 26.6 and a test certificate; Apple Silicon
-is unverified. Development builds signed ad hoc may lose all three.
+**Which app's permissions count.** macOS charges the helper's Accessibility
+and Screen Recording checks to the *responsible* app: the app that started the
+service. When Antigravity starts it (the normal case), the checks use
+Antigravity's own switches in System Settings, so a helper update needs no
+new permission (seen in the TCC log on an Intel Mac with macOS 26.6: even
+ScreenCaptureKit's capture check through `replayd` named
+`com.google.antigravity` as responsible, and an update to a never-granted
+helper captured with no change in System Settings). The AxonHost entry
+matters only when the helper is responsible for itself, as in the setup
+application opened from Finder; there macOS keeps Accessibility and Input
+Monitoring across a helper update signed with the same certificate, but not
+Screen Recording. A service started from Terminal is charged to Terminal.
+Apple Silicon is unverified. Development builds signed ad hoc may lose all
+three in the setup case.
 
 ## Native behavior
 

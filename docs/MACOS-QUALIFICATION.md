@@ -154,14 +154,22 @@ the desk:
   stayed, so two arrows showed. A standalone test confirmed that a
   background process cannot hide the arrow on macOS 26.6. C9 removes the
   private call and draws the Windows pointer glow around the real arrow.
-  C9 is installed but not checked: its Screen Recording grant is pending.
+  On C9 the human saw one arrow with the blue glow following it.
 - Found: after Markup's colour popover and after a stroke, the Mac host's
   `identity` check briefly failed on Preview, and the shared runtime then
   refuses that handle for the rest of the controller's life (`staleHandles`
   is never cleared, though the error says to run `apps`). A mid-stroke Esc
   reports "No input was sent" although part of the stroke was posted
   (`delivery_unknown` is set correctly).
-- Every helper rebuild needed a new Screen Recording grant (C7, C8, C9).
+- **Permissions after an update.** The TCC log shows macOS charging every
+  Screen Recording check, including ScreenCaptureKit's capture check through
+  `replayd`, to the responsible app, `com.google.antigravity`, when
+  Antigravity starts the service. C8 reinstalled at a new release path
+  captured with no change; C9, a never-granted helper, ran `ready` and
+  captured with no change in System Settings. The re-grants asked of the
+  human for C7 and C8 were not needed. The AxonHost entry matters only when
+  the helper is responsible for itself (the setup application), where the
+  table below still holds.
 
 **Stuck-Stop proof tightened (owner's conditions).** `macStopSettles` in
 `server/recovery.mjs` is the one proof for a recovered task, an orphan Stop
@@ -239,10 +247,11 @@ that nothing was requested, reported for B:
 | Posting input | yes |
 | Screen Recording | **no**: the switch still showed on, but macOS no longer applied it |
 
-So the owner certificate removes two of the three re-grants per helper
-update. Screen Recording still needs a re-grant after each helper update with
-a self-signed certificate on macOS 26.6; whether an Apple Developer ID keeps it
-is not verified here. Apple Silicon is unverified.
+This table is about AxonHost's own entry (the setup application opened from
+Finder, where the helper is responsible for itself). When Antigravity starts
+the service, macOS charges the checks to Antigravity instead and a helper
+update needs no new grant (17 November, TCC log and C9). Apple Silicon is
+unverified.
 
 ### Defects found in physical testing (Intel)
 
