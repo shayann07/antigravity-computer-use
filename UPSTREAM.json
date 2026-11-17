@@ -5,7 +5,7 @@
     {
       "path": "server/build.mjs",
       "upstream_sha256": "81260b378fffb46573cfe475a3a336930113c8abc465d3d278bbb0851d8a4377",
-      "local_sha256": "2db43e5cea9dcb8428ef5a115fef75ad3567543e666e49cd6888e07b4750162b",
+      "local_sha256": "04547d6a59bc1ff78fb577041df52112edbd1599b9cd2e7eb25c7bb074fa3ffc",
       "modified": true
     },
     {

@@ -330,7 +330,7 @@ function ensureMacHost({ force = false, log = () => {} } = {}) {
     '-framework', 'ScreenCaptureKit',
     '-framework', 'Carbon',
     ...SOURCES,
-  ], { encoding: 'utf8', timeout: 120000 });
+  ], { encoding: 'utf8', timeout: 600000 }); // slow Intel runners have taken over 120 s
 
   log('macOS host compiler elapsed_ms=' + Math.round(performance.now()-compilationStarted));
   if (res.error) throw new BuildError('Could not run swiftc: ' + res.error.message, null);
