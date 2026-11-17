@@ -39,7 +39,18 @@ test('prior macOS cleanup requires dead recorded processes and an empty JSON led
  try{
   fs.writeFileSync(file,'stopped||0||0|0');fs.writeFileSync(file+'.watchdog','104|1793377319.476463');fs.writeFileSync(file+'.inputs','{"buttons":[],"keys":[]}');
   const verify=(r=record,probe=dead,platform='darwin')=>priorMacCleanupVerified(dir,r,{platform,probe});
-  assert.equal(verify(),true);for(const incomplete of ['stopped||0||0|1','stopped||0|']){fs.writeFileSync(file,incomplete);assert.equal(verify(),false);}fs.writeFileSync(file,'stopped||0||0|0');assert.equal(verify(record,()=>{},'darwin'),false);assert.equal(verify(record,dead,'win32'),false);
+  assert.equal(verify(),true);
+  // The guardian's seventh field lists click-tier grants; it is empty once idle or stopped.
+  for(const complete of ['stopped||0||0|0|','idle||0||0|0|']){fs.writeFileSync(file,complete);assert.equal(verify(),true,complete);}
+  for(const incomplete of ['stopped||0||0|1|','stopped||0||0|0||extra']){fs.writeFileSync(file,incomplete);assert.equal(verify(),false,incomplete);}
+  // "active" is refused because its guardian is still alive at its recorded
+  // start time, not because a marker is missing.
+  fs.writeFileSync(file,'active|t|9||9|0|');fs.writeFileSync(file+'.guardian','201|1793377300.25');
+  const guardianAlive=n=>{if(n===201)return;return dead();};
+  assert.equal(priorMacCleanupVerified(dir,record,{platform:'darwin',probe:guardianAlive,startOf:()=>1793377300.25}),false,'active with a live guardian');
+  assert.equal(priorMacCleanupVerified(dir,record,{platform:'darwin',probe:dead,startOf:()=>null}),true,'active once every actor is gone');
+  fs.unlinkSync(file+'.guardian');assert.equal(verify(),false,'active without its guardian marker fails closed');
+  for(const incomplete of ['stopped||0||0|1','stopped||0|']){fs.writeFileSync(file,incomplete);assert.equal(verify(),false);}fs.writeFileSync(file,'stopped||0||0|0');assert.equal(verify(record,()=>{},'darwin'),false);assert.equal(verify(record,dead,'win32'),false);
   for(const pid of [101,102,103,104])assert.equal(verify(record,n=>{if(n===pid)return;return dead();}),false);
   fs.writeFileSync(file+'.inputs','{"buttons":[0],"keys":[]}');assert.equal(verify(),false);
   fs.writeFileSync(file+'.inputs','{"buttons":[],"keys":[42]}');assert.equal(verify(),false);

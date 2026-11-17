@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { macToolProbe, publishMacBundle, macSDKFlags, macHudIconFiles, copyMacHudIcons, macCompilerLease, waitForMacCompilerWinner } from './macos-build.mjs';
+import { macToolProbe, publishMacBundle, macSDKFlags, macHudIconFiles, copyMacHudIcons, macCompilerLease, waitForMacCompilerWinner, macSigning, macSignArguments, macSigningLeaf } from './macos-build.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const WIN_SOURCES = [
@@ -37,7 +37,7 @@ const WIN_SOURCES = [
   path.join(HERE, 'native', 'ApprovalMemory.cs'),
   path.join(HERE, 'native', 'BarBody.cs'),
 ];
-const MAC_SOURCES = [path.join(HERE, 'native', 'AxonHost.swift'), ...['PrivateStorage.swift','MacControl.swift','MacGuardian.swift','MacVisuals.swift','MacPhosphorIcons.swift','MacOperations.swift'].map(name=>path.join(HERE,'native','macos',name))];
+const MAC_SOURCES = [path.join(HERE, 'native', 'AxonHost.swift'), ...['PrivateStorage.swift','MacControl.swift','MacDesign.swift','MacAccessPrompt.swift','MacGlow.swift','MacGuardian.swift','MacBar.swift','MacVisuals.swift','MacPhosphorIcons.swift','MacOperations.swift','MacCallerGate.swift'].map(name=>path.join(HERE,'native','macos',name))];
 
 export const SOURCES = process.platform === 'darwin' ? MAC_SOURCES : WIN_SOURCES;
 export const SOURCE = SOURCES[0];
@@ -278,7 +278,9 @@ function ensureMacHost({ force = false, log = () => {} } = {}) {
   const h = createHash('sha256');
   for (const f of SOURCES) h.update(fs.readFileSync(f));
   for (const f of macHudIconFiles)h.update(path.basename(f)+'\0').update(fs.readFileSync(f));
+  const signing=macSigning();
   h.update('\0' + swiftc + '\0mac-guard-v2-wmo\0'+process.arch+'\0'+sdk+'\0'+sdkVersion);
+  if(signing)h.update('\0signed-by\0'+signing.identity);
   const stamp = h.digest('hex');
   const app=path.join(binDir(),'AxonHost-'+stamp.slice(0,16)+'.app');
   const exe=path.join(app,'Contents','MacOS','AxonHost');
@@ -287,6 +289,7 @@ function ensureMacHost({ force = false, log = () => {} } = {}) {
     for(const file of macHudIconFiles)if(!fs.existsSync(path.join(folder,'Contents/Resources/Phosphor',path.basename(file))))throw new BuildError('The macOS HUD is missing an official icon asset.',null);
     const checked=spawnSync('/usr/bin/codesign',['--verify','--strict',folder],{encoding:'utf8',timeout:30000});
     if(checked.status!==0)throw new BuildError('Existing macOS host bundle signature could not be verified.',checked.stderr||checked.stdout);
+    if(signing&&macSigningLeaf(folder)!==signing.identity)throw new BuildError('The macOS host bundle is not signed by the requested certificate.',null);
   };
 
   if (!force && fs.existsSync(exe)) {
@@ -341,8 +344,8 @@ function ensureMacHost({ force = false, log = () => {} } = {}) {
   try { fs.chmodSync(temp, 0o755); } catch {}
   copyMacHudIcons(stagedApp);
   fs.writeFileSync(path.join(stagedApp,'Contents','Info.plist'),'<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>io.github.shayann07.antigravity-computer-use</string><key>CFBundleExecutable</key><string>AxonHost</string><key>CFBundleName</key><string>Antigravity Computer Use</string><key>CFBundleDisplayName</key><string>Antigravity Computer Use</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleVersion</key><string>1</string><key>LSUIElement</key><true/><key>NSHighResolutionCapable</key><true/><key>LSMinimumSystemVersion</key><string>14.0</string></dict></plist>');
-  const signed=spawnSync('/usr/bin/codesign',['--force','--sign','-',stagedApp],{encoding:'utf8',timeout:30000});
-  if(signed.status!==0)throw new BuildError('Ad-hoc signing of the native Mac helper failed.',signed.stderr||signed.stdout);
+  const signed=spawnSync('/usr/bin/codesign',macSignArguments(signing,stagedApp),{encoding:'utf8',timeout:30000});
+  if(signed.status!==0)throw new BuildError(signing?'Signing the native Mac helper with the requested certificate failed.':'Ad-hoc signing of the native Mac helper failed.',signed.stderr||signed.stdout);
   verifyApp(stagedApp);
   lease.assertHeld();
   const published=publishMacBundle(stagedApp,app,verifyApp);

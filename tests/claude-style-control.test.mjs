@@ -22,6 +22,18 @@ test('terminals and IDEs are click tier, browsers and other apps are full, prote
  assert.equal(accessTier({process:'consent',path:'C:/Windows/System32/consent.exe'}),null);
 });
 
+test('macOS terminals and IDEs are click tier by app name or bundle executable; Mac browsers and editors stay full',()=>{
+ for(const [process,exe] of [['Terminal','Terminal'],['iTerm2','iTerm2'],['Warp','stable'],['Ghostty','ghostty'],['Xcode','Xcode'],
+  ['Code','Electron'],['Visual Studio Code','Electron'],['Cursor','Cursor'],['Zed','zed'],['Sublime Text','sublime_text'],
+  ['IntelliJ IDEA','idea'],['IntelliJ IDEA CE','idea'],['PyCharm','pycharm'],['WebStorm','webstorm'],['Android Studio','studio'],
+  ['GoLand','goland'],['RustRover','rustrover'],['Nova','Nova']])
+  assert.equal(accessTier({process,path:`/Applications/${process}.app/Contents/MacOS/${exe}`}),ACCESS.CLICK,process);
+ for(const [process,exe] of [['Safari','Safari'],['Google Chrome','Google Chrome'],['Firefox','firefox'],['TextEdit','TextEdit'],
+  ['Calculator','Calculator'],['Preview','Preview'],['Pages','Pages'],['Notes','Notes']])
+  assert.equal(accessTier({process,path:`/Applications/${process}.app/Contents/MacOS/${exe}`}),ACCESS.FULL,process);
+ assert.equal(accessTier({process:'1Password',path:'/Applications/1Password.app/Contents/MacOS/1Password'}),null);
+});
+
 test('click tier allows only plain left clicks, moves, scrolls and focus; refusals name the tier',()=>{
  for(const op of ['click','move','scroll','focus','fit_window','resize_window'])assert.equal(accessRefusal(ACCESS.CLICK,op,{}),null,op);
  assert.equal(accessRefusal(ACCESS.CLICK,'click',{button:'left'}),null);
@@ -161,4 +173,15 @@ test('a refused second copy opens no task and is asked again on the next ready',
   assert.equal(refused.next_action,'human_close_other_copy');assert.equal(r.taskOpen,false,'nothing was started, so no task stays open');
   held=false;const ready=await r.ready();assert.equal(ready.ready,true);assert.equal(ready.task_started,true);
  }finally{fs.unlinkSync(r.guardFile);}
+});
+
+test('on macOS the activity message names the approved window by process and frame for the glow',()=>{
+ const descriptor=Object.getOwnPropertyDescriptor(process,'platform');
+ try{
+  Object.defineProperty(process,'platform',{value:'darwin'});
+  assert.deepEqual(Runtime.prototype.glowTarget.call({},{pid:42,rect:[1,2,300,200]}),{pid:42,rect:[1,2,300,200]});
+  for(const w of [null,{pid:42},{pid:'42',rect:[1,2,3,4]},{pid:42,rect:[1,2,3]}])assert.deepEqual(Runtime.prototype.glowTarget.call({},w),{});
+  Object.defineProperty(process,'platform',{value:'win32'});
+  assert.deepEqual(Runtime.prototype.glowTarget.call({},{pid:42,rect:[1,2,300,200]}),{});
+ }finally{Object.defineProperty(process,'platform',descriptor);}
 });

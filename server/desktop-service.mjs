@@ -186,7 +186,7 @@ export async function serveDesktop({directory=dataDir(),runtime,idlePolicy='shut
   try{
     await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(pipe,resolve);});
     if(process.platform==='darwin')pipe={host:'127.0.0.1',port:server.address().port};
-    ownership.assertHeld();fs.writeFileSync(temporary,JSON.stringify({pid:process.pid,pipe,secret,...(taskOwnership?{task_protocol:1}:{}),...(coordinator?{global_task_protocol:1}:{}),...(process.platform==='win32'?{caller_gate_protocol:1}:{})}),{mode:0o600});fs.renameSync(temporary,file);
+    ownership.assertHeld();fs.writeFileSync(temporary,JSON.stringify({pid:process.pid,pipe,secret,...(taskOwnership?{task_protocol:1}:{}),...(coordinator?{global_task_protocol:1}:{}),...(process.platform==='win32'||process.platform==='darwin'?{caller_gate_protocol:1}:{})}),{mode:0o600});fs.renameSync(temporary,file);
   }catch(error){try{if(fs.existsSync(temporary))fs.unlinkSync(temporary);}catch{}await shutdown();throw error;}
   expiry=setInterval(()=>{
     if(busy||closing||humanEnding||Date.now()-lastCall<=idleTimeoutMs)return;
