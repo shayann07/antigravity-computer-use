@@ -12,9 +12,13 @@ for signed updates; installing a skill file alone cannot upgrade its runtime.
 See [implementation and qualification status](RELIABILITY-IMPLEMENTATION.md)
 for the distinction between automated checks and real-device acceptance.
 
-## Quick install
+## Verified download (recommended)
 
-Paste this in Windows PowerShell:
+Download the ZIP and `SHA256SUMS.txt`, check the hash, then install from the folder: see the [README](../README.md#install) for the exact commands and [Windows portable bundle](#windows-portable-bundle-manual) below for the options.
+
+## One-line install
+
+If you'd rather not do it by hand, paste this in Windows PowerShell:
 
 ```powershell
 irm https://raw.githubusercontent.com/shayann07/antigravity-computer-use/main/install.ps1 | iex
