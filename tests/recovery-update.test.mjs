@@ -51,7 +51,8 @@ test('prior macOS cleanup requires dead recorded processes and an empty JSON led
   assert.equal(priorMacCleanupVerified(dir,record,{platform:'darwin',probe:dead,startOf:()=>null}),true,'active once every actor is gone');
   fs.unlinkSync(file+'.guardian');assert.equal(verify(),false,'active without its guardian marker fails closed');
   for(const incomplete of ['stopped||0||0|1','stopped||0|']){fs.writeFileSync(file,incomplete);assert.equal(verify(),false);}fs.writeFileSync(file,'stopped||0||0|0');assert.equal(verify(record,()=>{},'darwin'),false);assert.equal(verify(record,dead,'win32'),false);
-  for(const pid of [101,102,103,104])assert.equal(verify(record,n=>{if(n===pid)return;return dead();}),false);
+  // No real start time is read, so a process on the runner with one of these numbers cannot pass for the recorded one.
+  for(const pid of [101,102,103,104])assert.equal(priorMacCleanupVerified(dir,record,{platform:'darwin',probe:n=>{if(n===pid)return;return dead();},startOf:()=>null}),false,'pid '+pid);
   fs.writeFileSync(file+'.inputs','{"buttons":[0],"keys":[]}');assert.equal(verify(),false);
   fs.writeFileSync(file+'.inputs','{"buttons":[],"keys":[42]}');assert.equal(verify(),false);
   fs.writeFileSync(file+'.inputs','');assert.equal(verify(),false);
