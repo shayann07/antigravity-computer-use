@@ -1,12 +1,10 @@
 <!doctype html>
 <html lang="en">
-<script>document.documentElement.classList.add("js")</script>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Antigravity Computer Use: the computer use skill for Google Antigravity</title>
-<meta name="description" content="An open-source computer use skill for Google Antigravity on Windows and macOS. The agent sees your screen, reads accessibility trees and drives real apps with your mouse and keyboard, and Esc stops it at once.">
-<meta name="keywords" content="computer use, computer use skill, Google Antigravity, Antigravity skill, desktop automation, AI agent, Windows automation, macOS automation, Gemini">
+<meta name="description" content="An open-source /computer-use skill for Google Antigravity. The agent sees the screen, reads each app's accessibility tree and drives real Windows and macOS apps with the real mouse and keyboard. Esc stops it at once.">
 <link rel="canonical" href="https://computeruse.shayxo.dev/">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Antigravity Computer Use">
@@ -16,308 +14,809 @@
 <meta property="og:image:height" content="640">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://computeruse.shayxo.dev/media/social-preview.png">
+<meta name="theme-color" content="#0b0d11">
+<script>document.documentElement.classList.add("js")</script>
 <style>
+  /* ---------- Tokens ---------- */
   :root{
-    --ink:#0e0f12; --surface:#12161d; --raised:#1c222c; --line:rgba(255,255,255,.09);
-    --paper:#f2f5f8; --mist:#a9b4c0; --blue:#7fb2ff; --violet:#b48cff;
-    --radius:14px; --gutter:clamp(16px,4vw,40px);
-    /* Motion tokens: the product's own (server/native/DesktopVisuals.cs) */
+    /* Colour: the product's own surfaces and bar states (server/native/DesktopVisuals.cs) */
+    --ink:#0b0d11;            /* page */
+    --surface:#12161d;        /* bar, code, panels */
+    --raised:#1b212b;         /* hover plates, buttons */
+    --line:rgba(255,255,255,.10);
+    --paper:#eef2f6;          /* text */
+    --mist:#a7b2bf;           /* secondary text */
+    --work:#9ccdf0;           /* working state, links, primary action */
+    --wait:#f0b866;           /* waiting state */
+    --halt:#f58ca0;           /* stopped state */
+    --glow-a:110,170,255;     /* glow blue */
+    --glow-b:175,135,255;     /* glow violet: used in the glow only */
+    /* Type */
+    --sans:"Segoe UI Variable Display","Segoe UI Variable","Segoe UI",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+    --mono:"Cascadia Code","Cascadia Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --t-xs:13px; --t-sm:15px; --t-md:17px; --t-lg:22px;
+    --t-xl:clamp(28px,3.4vw,42px); --t-display:clamp(40px,4.6vw,64px);
+    /* Space */
+    --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:40px; --s7:64px;
+    --section:clamp(72px,10vw,136px);
+    --gutter:clamp(16px,4vw,48px);
+    /* Radius */
+    --r-control:8px; --r-media:14px; --r-pill:999px;
+    /* Motion: the product's own tokens. Components use these names only. */
     --fast:100ms; --normal:200ms; --slow:300ms;
-    --ease-out:cubic-bezier(.23,1,.32,1); --ease-in-out:cubic-bezier(.77,0,.175,1);
+    --fast-leave:67ms; --normal-leave:133ms;
+    --press:160ms; --press-scale:.97;
+    --ease-out:cubic-bezier(.23,1,.32,1);
+    --ease-in:cubic-bezier(.55,0,.68,.2);
+    --ease-in-out:cubic-bezier(.77,0,.175,1);
+    --glow-drift:7s;
   }
-  *{box-sizing:border-box;margin:0}
-  html{color-scheme:dark;scroll-behavior:smooth}
-  body{background:var(--ink);color:var(--paper);font:16px/1.6 "Segoe UI Variable","Segoe UI",-apple-system,BlinkMacSystemFont,Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
-  a{color:var(--blue);text-decoration:none} a:hover{text-decoration:underline}
-  code{font:0.92em "Cascadia Code",ui-monospace,Consolas,monospace}
-  .wrap{max-width:1080px;margin:0 auto;padding:0 var(--gutter)}
-  header{padding:56px 0 20px;text-align:center}
-  h1{font-size:clamp(30px,5vw,50px);line-height:1.08;letter-spacing:-.02em;font-weight:650}
-  .lede{color:var(--mist);font-size:clamp(16px,2vw,19px);max-width:660px;margin:14px auto 0}
-  .actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:24px}
-  .btn{display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border-radius:999px;border:1px solid var(--line);color:var(--paper);background:var(--raised);font-weight:600;font-size:15px;transition:transform 160ms var(--ease-out),filter var(--fast) var(--ease-out)}
-  .btn.primary{background:var(--paper);color:var(--ink);border-color:transparent}
-  .btn:hover{text-decoration:none;filter:brightness(1.08)}
-  .btn:active{transform:scale(.97)}
-  .video{margin:36px auto 0;border-radius:var(--radius);overflow:hidden;border:1px solid var(--line);background:#000;max-width:1000px}
-  .video video{display:block;width:100%;height:auto}
-  .caption{color:var(--mist);font-size:14px;text-align:center;max-width:740px;margin:12px auto 0}
-  /* Numbers from the painting run */
-  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:34px auto 0;max-width:900px}
-  .stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;text-align:center}
-  .stat b{display:block;font-size:26px;letter-spacing:-.01em}
-  .stat span{color:var(--mist);font-size:13px}
-  section{padding:72px 0 0}
-  h2{font-size:clamp(22px,3vw,30px);letter-spacing:-.01em;font-weight:650}
-  .sub{color:var(--mist);margin-top:8px;max-width:640px}
-  /* Compare with a magnifier lens */
-  .compare{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:24px}
-  figure{position:relative;border-radius:var(--radius);overflow:hidden;border:1px solid var(--line);background:var(--surface)}
-  figure img{display:block;width:100%;height:auto}
-  figcaption{position:absolute;left:12px;bottom:12px;background:rgba(14,15,18,.72);backdrop-filter:blur(6px);padding:5px 10px;border-radius:8px;font-size:13px}
-  .lens{position:absolute;width:180px;height:180px;border-radius:50%;pointer-events:none;border:2px solid rgba(255,255,255,.75);box-shadow:0 8px 30px rgba(0,0,0,.55);background-repeat:no-repeat;opacity:0;transform:scale(.92);transition:opacity var(--normal) var(--ease-out),transform var(--normal) var(--ease-out)}
-  figure.zooming .lens{opacity:1;transform:scale(1)}
-  .hint{color:var(--mist);font-size:13px;margin-top:10px}
-  .progress{margin-top:22px;border-radius:var(--radius);overflow:hidden;border:1px solid var(--line)}
-  .progress img{display:block;width:100%}
-  /* How it works */
-  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:24px;counter-reset:s}
-  .step{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:22px}
-  .step::before{counter-increment:s;content:counter(s);display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--raised);color:var(--blue);font-weight:700;font-size:14px}
-  .step h3{font-size:17px;margin-top:12px}
-  .step p{color:var(--mist);margin-top:6px;font-size:15px}
-  /* Capabilities */
-  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:24px}
-  .cap{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:20px}
-  .cap h3{font-size:16px}
-  .cap p{color:var(--mist);margin-top:6px;font-size:14.5px}
-  /* Feature rows */
-  .rows{display:grid;gap:22px;margin-top:26px}
-  .row{display:grid;grid-template-columns:1fr 1.1fr;gap:28px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:26px}
-  .row h3{font-size:19px;font-weight:650}
-  .row p{color:var(--mist);margin-top:8px}
-  .row > img{width:100%;height:auto;display:block;border-radius:10px}
-  kbd{font:600 13px/1 inherit;border:1px solid rgba(255,255,255,.35);border-radius:6px;padding:3px 7px;color:var(--paper)}
-  /* The bar, cycling through its real states */
-  .bars{position:relative;aspect-ratio:876/92;width:100%}
-  .bars img{position:absolute;inset:0;width:100%;height:auto;opacity:0;transition:opacity var(--normal) var(--ease-in-out)}
-  .bars img.on{opacity:1}
-  .barlabel{color:var(--mist);font-size:13px;margin-top:10px;min-height:1.6em;transition:opacity var(--normal) var(--ease-in-out)}
-  /* The glow, drifting like the real one */
-  .glow{border-radius:10px;overflow:hidden;position:relative}
-  .glow img{display:block;width:100%;height:auto;animation:drift 6s var(--ease-in-out) infinite alternate}
-  @keyframes drift{from{opacity:.86}to{opacity:1}}
-  /* Proof, privacy, platforms */
-  .cards2{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:24px}
-  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:22px}
-  .card h3{font-size:17px}
-  .card p{color:var(--mist);margin-top:6px;font-size:15px}
-  .card .num{display:flex;gap:18px;margin-top:14px;flex-wrap:wrap}
-  .card .num b{font-size:22px;display:block}
-  .card .num span{color:var(--mist);font-size:12.5px}
-  .list{margin-top:10px;padding-left:18px;color:var(--mist);font-size:15px}
-  .list li{margin-top:4px}
-  .platforms{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:24px}
-  /* FAQ: details that open smoothly where the browser can animate height */
-  .faq{margin-top:22px;border-top:1px solid var(--line)}
-  .faq details{border-bottom:1px solid var(--line)}
-  .faq summary{cursor:pointer;list-style:none;padding:16px 4px;font-weight:600;display:flex;justify-content:space-between;align-items:center;gap:12px}
-  .faq summary::-webkit-details-marker{display:none}
-  .faq summary::after{content:"";width:9px;height:9px;border-right:2px solid var(--mist);border-bottom:2px solid var(--mist);transform:rotate(45deg);transition:transform var(--normal) var(--ease-out);flex:none;margin-right:4px}
-  .faq details[open] summary::after{transform:rotate(225deg)}
-  .faq p{color:var(--mist);padding:0 4px 16px;max-width:760px}
-  @supports (interpolate-size:allow-keywords){
-    :root{interpolate-size:allow-keywords}
-    .faq details::details-content{height:0;overflow:clip;transition:height var(--normal) var(--ease-out),content-visibility var(--normal) allow-discrete}
-    .faq details[open]::details-content{height:auto}
+
+  /* ---------- Base ---------- */
+  *,*::before,*::after{box-sizing:border-box}
+  *{margin:0}
+  html{color-scheme:dark;background:var(--ink);scroll-padding-top:88px;scrollbar-color:#3a4452 var(--ink)}
+  body{position:relative;background:var(--ink);color:var(--paper);font:var(--t-md)/1.6 var(--sans);-webkit-font-smoothing:antialiased;overflow-x:clip}
+  ::selection{background:rgba(156,205,240,.32);color:#fff}
+  img,video,canvas{display:block;max-width:100%}
+  a{color:var(--work);text-decoration:underline;text-decoration-color:rgba(156,205,240,.4);text-underline-offset:.2em;text-decoration-thickness:1px;transition:text-decoration-color var(--fast) var(--ease-out)}
+  a:hover{text-decoration-color:currentColor}
+  :focus-visible{outline:2px solid var(--work);outline-offset:3px;border-radius:4px}
+  code,pre,kbd,.mono{font-family:var(--mono)}
+  code{font-size:.9em}
+  kbd{display:inline-block;font-size:.8em;font-weight:600;line-height:1;padding:.32em .5em;border:1px solid rgba(255,255,255,.34);border-radius:6px;color:var(--paper);vertical-align:.08em}
+  h1,h2,h3{font-weight:650;letter-spacing:-.025em;line-height:1.08;text-wrap:balance}
+  h2{font-size:var(--t-xl);max-width:20ch}
+  h3{font-size:var(--t-lg);letter-spacing:-.015em;line-height:1.2}
+  p{text-wrap:pretty}
+  .wrap{max-width:1240px;margin-inline:auto;padding-inline:var(--gutter)}
+  .lede{color:var(--mist);max-width:62ch}
+  .note{color:var(--mist);font-size:var(--t-xs);line-height:1.5;max-width:62ch}
+  .num{font-variant-numeric:tabular-nums}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+  .skip{position:fixed;left:12px;top:12px;z-index:90;background:var(--paper);color:var(--ink);padding:10px 14px;border-radius:var(--r-control);font-weight:600;text-decoration:none;transform:translateY(-200%)}
+  .skip:focus{transform:none}
+  section{padding-top:var(--section)}
+
+  /* ---------- Buttons ---------- */
+  .btn{display:inline-flex;align-items:center;gap:var(--s2);min-height:48px;padding:0 20px;border-radius:var(--r-pill);border:1px solid var(--line);background:var(--raised);color:var(--paper);font:600 var(--t-sm)/1 var(--sans);text-decoration:none;cursor:pointer;transition:transform var(--press) var(--ease-out),background-color var(--fast) var(--ease-out)}
+  .btn:hover{background:#242c38}
+  .btn:active{transform:scale(var(--press-scale))}
+  .btn.primary{background:var(--work);border-color:transparent;color:#08141d}
+  .btn.primary:hover{background:#b4daf5}
+  .btn svg{width:18px;height:18px;flex:none}
+
+  /* ---------- The glow: lit while the page is "working" ---------- */
+  .glow{position:fixed;inset:0;z-index:60;pointer-events:none;opacity:0;transition:opacity var(--normal-leave) var(--ease-in)}
+  .working .glow{opacity:1;transition:opacity var(--slow) var(--ease-out)}
+  .glow i{position:absolute;inset:0;--d:clamp(12px,1.8vw,26px)}
+  .glow i:first-child{background:
+    linear-gradient(to bottom,rgba(var(--glow-a),.3),transparent var(--d)),
+    linear-gradient(to right,rgba(var(--glow-a),.26),transparent var(--d)),
+    linear-gradient(to left,rgba(var(--glow-b),.26),transparent var(--d)),
+    linear-gradient(to top,rgba(var(--glow-b),.3),transparent var(--d))}
+  .glow i:last-child{opacity:0;background:
+    linear-gradient(to bottom,rgba(var(--glow-b),.28),transparent var(--d)),
+    linear-gradient(to right,rgba(var(--glow-b),.22),transparent var(--d)),
+    linear-gradient(to left,rgba(var(--glow-a),.28),transparent var(--d)),
+    linear-gradient(to top,rgba(var(--glow-a),.24),transparent var(--d));
+    animation:glow-drift var(--glow-drift) var(--ease-in-out) infinite alternate}
+  @keyframes glow-drift{to{opacity:1}}
+
+  /* ---------- The bar: a web twin of the product's control bar ---------- */
+  .bar{position:fixed;z-index:70;top:12px;left:12px;right:12px;margin:0 auto;max-width:440px;height:52px;display:flex;align-items:center;gap:var(--s2);padding:0 4px 0 20px;border-radius:var(--r-pill);background:var(--surface);border:1px solid var(--line);box-shadow:0 10px 28px rgba(0,0,0,.5)}
+  .bar-text{flex:1;min-width:0;line-height:1.25}
+  .bar-l1{font-size:var(--t-sm);font-weight:600;color:var(--work);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:color var(--normal) var(--ease-out)}
+  .bar-l2{font-size:var(--t-xs);color:var(--mist);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bar[data-state="stopped"] .bar-l1{color:var(--halt)}
+  .bar[data-state="tree"] .bar-l1{color:var(--wait)}
+  .bar[data-state="done"] .bar-l1,.bar[data-state="idle"] .bar-l1{color:var(--paper)}
+  .bar-hint{font-size:var(--t-xs);color:var(--mist);white-space:nowrap}
+  .bar:not([data-state="working"]) .bar-hint{display:none}
+  .bar-btn{position:relative;flex:none;width:44px;height:44px;display:grid;place-items:center;border:0;border-radius:50%;background:transparent;color:var(--paper);cursor:pointer;transition:background-color var(--fast) var(--ease-out),transform var(--press) var(--ease-out)}
+  .bar-btn:hover{background:var(--raised)}
+  .bar-btn:active{transform:scale(var(--press-scale))}
+  .bar-btn svg{grid-area:1/1;width:20px;height:20px;transition:opacity var(--normal) var(--ease-out),transform var(--normal) var(--ease-out)}
+  .bar-btn .i-play{opacity:0;transform:scale(.8)}
+  .bar:not([data-state="working"]) .i-stop{opacity:0;transform:scale(.8)}
+  .bar:not([data-state="working"]) .i-play{opacity:1;transform:none}
+  .bar-btn[aria-pressed="true"]{background:var(--raised);color:var(--wait)}
+  .bar-rule{flex:none;width:1px;height:22px;background:var(--line)}
+
+  /* ---------- Header ---------- */
+  .top{display:flex;align-items:center;justify-content:space-between;gap:var(--s4);height:52px;margin-top:12px}
+  .brand{font-weight:650;font-size:var(--t-sm);letter-spacing:-.01em;color:var(--paper);text-decoration:none}
+  .top nav{display:flex;gap:var(--s5);font-size:var(--t-sm)}
+  .top nav a{color:var(--mist);text-decoration:none;padding:12px 0}
+  .top nav a:hover{color:var(--paper)}
+
+  /* ---------- Hero ---------- */
+  .hero{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:clamp(32px,4vw,64px);align-items:center;padding-top:clamp(24px,4vh,56px)}
+  h1{font-size:var(--t-display);letter-spacing:-.035em;line-height:1.02}
+  .hero .lede{margin-top:var(--s5);font-size:clamp(17px,1.5vw,20px);max-width:36ch}
+  .hero .lede code{color:var(--paper)}
+  .actions{display:flex;flex-wrap:wrap;gap:var(--s3);margin-top:var(--s6)}
+  .hero .note{margin-top:var(--s5)}
+
+  .stage{display:grid;grid-template-columns:auto 232px;gap:var(--s5);align-items:end}
+  .canvas{position:relative;height:min(72vh,720px);aspect-ratio:9/16;border-radius:var(--r-media);overflow:hidden;background:#0d0d08;border:1px solid var(--line)}
+  .canvas img,.canvas canvas{position:absolute;inset:0;width:100%;height:100%}
+  .js .canvas.live img{visibility:hidden}
+  .pointer{position:absolute;left:0;top:0;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#fff;box-shadow:0 0 0 3px rgba(var(--glow-a),.5),0 0 18px 6px rgba(var(--glow-a),.55);opacity:0;transition:opacity var(--normal) var(--ease-out);will-change:transform}
+  .working .pointer{opacity:1}
+
+  .panel{display:grid;gap:var(--s4);min-width:0}
+  .count{font-size:var(--t-sm);color:var(--mist)}
+  .count b{color:var(--paper);font-weight:600}
+  .feed{list-style:none;padding:0;font:12.5px/1.9 var(--mono);color:var(--mist);height:calc(7 * 1.9em);overflow:hidden}
+  .feed li{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .feed li:last-child{color:var(--paper)}
+  .feed .verb{color:var(--work)}
+  .feed .sw,.sw{display:inline-block;width:.8em;height:.8em;border-radius:2px;margin-right:.45em;vertical-align:-.05em;box-shadow:0 0 0 1px rgba(255,255,255,.18)}
+  .palette{display:grid;grid-template-columns:repeat(10,1fr);gap:3px}
+  .palette i{aspect-ratio:1;border-radius:3px;opacity:.28;transition:opacity var(--normal) var(--ease-out),transform var(--normal) var(--ease-out)}
+  .palette i.used{opacity:1}
+  .palette i.now{transform:scale(1.28);box-shadow:0 0 0 1.5px var(--paper)}
+  .scrub{display:grid;gap:var(--s1)}
+  .scrub label{font-size:var(--t-xs);color:var(--mist)}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:28px;background:transparent;cursor:pointer;margin:0}
+  input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:linear-gradient(to right,var(--work) var(--fill,0%),#2a323e var(--fill,0%))}
+  input[type=range]::-moz-range-track{height:4px;border-radius:2px;background:#2a323e}
+  input[type=range]::-moz-range-progress{height:4px;border-radius:2px;background:var(--work)}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;margin-top:-7px;border-radius:50%;background:var(--paper);border:0;box-shadow:0 2px 6px rgba(0,0,0,.5);transition:transform var(--fast) var(--ease-out)}
+  input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--paper);border:0;box-shadow:0 2px 6px rgba(0,0,0,.5)}
+  input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
+
+  /* ---------- The real run ---------- */
+  .film{margin-top:var(--s6);border-radius:var(--r-media);overflow:hidden;border:1px solid var(--line);background:#000}
+  .film video{width:100%;height:auto;aspect-ratio:16/9}
+  .film + .note{margin-top:var(--s3)}
+  .proof{display:grid;grid-template-columns:minmax(0,400px) minmax(0,1fr);gap:clamp(32px,5vw,80px);align-items:center;margin-top:var(--s7)}
+  .wipe{position:relative;aspect-ratio:648/1152;border-radius:var(--r-media);overflow:hidden;border:1px solid var(--line);background:var(--surface);--pos:50%}
+  .wipe img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .wipe .after{clip-path:inset(0 0 0 var(--pos))}
+  .wipe .handle{position:absolute;top:0;bottom:0;left:var(--pos);width:2px;margin-left:-1px;background:var(--paper);pointer-events:none}
+  .wipe .handle::after{content:"";position:absolute;top:50%;left:50%;width:36px;height:36px;margin:-18px;border-radius:50%;background:var(--paper) center/18px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230b0d11' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 6l-6 6 6 6M15 6l6 6-6 6'/%3E%3C/svg%3E");box-shadow:0 4px 14px rgba(0,0,0,.5)}
+  .wipe input{position:absolute;inset:0;height:100%;opacity:0;cursor:ew-resize;touch-action:pan-y}
+  .wipe:has(input:focus-visible){outline:2px solid var(--work);outline-offset:3px}
+  .wipe .tag{position:absolute;bottom:12px;padding:5px 10px;border-radius:var(--r-control);background:rgba(11,13,17,.78);font-size:var(--t-xs);pointer-events:none}
+  .wipe .tag.l{left:12px} .wipe .tag.r{right:12px}
+  .proof-text p + p{margin-top:var(--s4)}
+  .proof-text .lede{margin-top:var(--s4)}
+  .progress{margin-top:var(--s6);border-radius:var(--r-media);overflow:hidden;border:1px solid var(--line)}
+  .progress img{width:100%;height:auto}
+
+  /* ---------- Tree ---------- */
+  .tree{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(32px,5vw,80px);align-items:center}
+  .tree .lede{margin-top:var(--s5)}
+  .tree .btn{margin-top:var(--s6)}
+  .tree .btn[aria-pressed="true"]{background:var(--wait);color:#1d1404;border-color:transparent}
+  .lines{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-media);padding:var(--s5);overflow-x:auto}
+  .lines pre{font-size:14px;line-height:2;color:var(--paper)}
+  .lines .verb{color:var(--work)} .lines .q{color:var(--wait)} .lines .dim{color:var(--mist)}
+  .lines + .note{margin-top:var(--s3)}
+  /* Tree view: the page read as roles and names */
+  #treeLayer{position:absolute;inset:0;z-index:50;overflow:hidden;pointer-events:none;display:none}
+  .treeview #treeLayer{display:block}
+  #treeLayer span{position:absolute;max-width:min(320px,90vw);padding:2px 7px;border-radius:4px;background:var(--wait);color:#1d1404;font:600 11.5px/1.5 var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transform:translateY(-100%)}
+  .treeview [data-node]{outline:1px dashed rgba(240,184,102,.8);outline-offset:3px}
+  .treeview main img,.treeview main video,.treeview main canvas{opacity:.16;transition:opacity var(--normal) var(--ease-out)}
+  main img,main video,main canvas{transition:opacity var(--normal-leave) var(--ease-in)}
+
+  /* ---------- The loop ---------- */
+  .loop{list-style:none;padding:0;margin-top:var(--s6);border-top:1px solid var(--line)}
+  .loop li{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:var(--s5);padding:var(--s5) 0;border-bottom:1px solid var(--line);align-items:baseline}
+  .loop code{font-size:14.5px;color:var(--paper);overflow-wrap:anywhere}
+  .loop code b{color:var(--work);font-weight:500}
+  .loop p{color:var(--mist);font-size:var(--t-sm)}
+
+  /* ---------- Plan ---------- */
+  .plan{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(32px,5vw,80px);align-items:start}
+  .plan .lede{margin-top:var(--s5)}
+  .plan .lede + .lede{margin-top:var(--s4)}
+  .split{display:flex;height:14px;border-radius:var(--r-pill);overflow:hidden;gap:2px;margin-top:var(--s2)}
+  .split i{display:block;min-width:6px}
+  .split .a{flex:2553;background:var(--work)} .split .b{flex:123;background:var(--wait)} .split .c{flex:156;background:#566273}
+  .legend{list-style:none;padding:0;margin-top:var(--s4);display:grid;gap:var(--s3);font-size:var(--t-sm);color:var(--mist)}
+  .legend li{display:grid;grid-template-columns:14px 1fr;gap:var(--s3);align-items:baseline}
+  .legend i{width:10px;height:10px;border-radius:50%;transform:translateY(1px)}
+  .legend b{color:var(--paper);font-weight:600}
+
+  /* ---------- Control ---------- */
+  .control-head{display:grid;gap:var(--s5)}
+  .states{margin-top:var(--s6);display:grid;grid-template-columns:minmax(0,440px) minmax(0,1fr);gap:clamp(32px,5vw,80px);align-items:center}
+  .states img{width:100%;height:auto}
+  .states p + p{margin-top:var(--s4)}
+  .pair{margin-top:var(--s7);display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:clamp(32px,5vw,80px);align-items:start}
+  .pair figure img{width:100%;height:auto;border-radius:var(--r-media)}
+  .pair figcaption{margin-top:var(--s4)}
+  .pair figcaption h3{margin-bottom:var(--s2)}
+  .pair figcaption p{color:var(--mist);font-size:var(--t-sm);max-width:52ch}
+  .pair figure:last-child{margin-top:var(--s7)}
+  .glowshot{margin-top:var(--s7)}
+  .glowshot img{width:100%;height:auto;border-radius:var(--r-media);border:1px solid var(--line)}
+  .glowshot figcaption{margin-top:var(--s4);display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(24px,5vw,80px)}
+  .glowshot figcaption p{color:var(--mist);font-size:var(--t-sm)}
+
+  /* ---------- Facts ---------- */
+  .facts{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:clamp(32px,5vw,80px)}
+  .facts dl{border-top:1px solid var(--line)}
+  .facts dl div{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,5fr);gap:var(--s5);padding:var(--s4) 0;border-bottom:1px solid var(--line)}
+  .facts dt{font-weight:600;font-size:var(--t-sm)}
+  .facts dd{color:var(--mist);font-size:var(--t-sm)}
+
+  /* ---------- Install ---------- */
+  .install-head .lede{margin-top:var(--s5)}
+  .routes{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(24px,3vw,40px);margin-top:var(--s6)}
+  .route h3{font-size:var(--t-md);letter-spacing:0}
+  .route > p{color:var(--mist);font-size:var(--t-sm);margin-top:var(--s2)}
+  .code{position:relative;margin-top:var(--s4);background:var(--surface);border:1px solid var(--line);border-radius:var(--r-media)}
+  .code pre{overflow-x:auto;padding:52px 18px 18px;font-size:13.5px;line-height:1.7;color:var(--paper);scrollbar-color:#3a4452 transparent}
+  .code .c{color:var(--mist)}
+  .copy{position:absolute;top:8px;right:8px;display:inline-grid;place-items:center;min-width:92px;height:36px;padding:0 12px;border:1px solid var(--line);border-radius:var(--r-control);background:var(--raised);color:var(--paper);font:600 var(--t-xs)/1 var(--sans);cursor:pointer;transition:transform var(--press) var(--ease-out),background-color var(--fast) var(--ease-out)}
+  .copy::before{content:"";position:absolute;inset:-6px}
+  .copy:hover{background:#242c38}
+  .copy:active{transform:scale(var(--press-scale))}
+  .copy span{grid-area:1/1;display:inline-flex;align-items:center;gap:6px;transition:opacity var(--normal) var(--ease-out),transform var(--normal) var(--ease-out)}
+  .copy svg{width:14px;height:14px}
+  .copy .done{opacity:0;transform:scale(.9);color:#9be0b4}
+  .copy.copied .idle{opacity:0;transform:scale(.9)}
+  .copy.copied .done{opacity:1;transform:none}
+  .easy{margin-top:var(--s7);display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(24px,3vw,40px);align-items:start}
+  .easy h3{font-size:var(--t-md);letter-spacing:0}
+  .easy p{color:var(--mist);font-size:var(--t-sm);margin-top:var(--s2)}
+
+  /* ---------- Footer ---------- */
+  footer{margin-top:var(--section);border-top:1px solid var(--line);padding:var(--s6) 0 var(--s7);color:var(--mist);font-size:var(--t-sm)}
+  footer .wrap{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s5);align-items:start}
+  footer p + p{margin-top:var(--s2)}
+  footer nav{display:flex;flex-wrap:wrap;gap:var(--s2) var(--s5)}
+  footer nav a{padding:6px 0}
+
+  /* Without scripts the controls that need them are not offered. */
+  html:not(.js) .bar-btn,html:not(.js) .bar-rule,html:not(.js) .scrub,html:not(.js) #treeToggle,html:not(.js) .copy{display:none}
+
+  /* ---------- Narrower screens ---------- */
+  @media (max-width:1180px){
+    .hero{align-items:start}
+    .hero > div:first-child{padding-top:clamp(24px,8vh,96px)}
+    .stage{grid-template-columns:auto;width:fit-content}
+    .panel{width:0;min-width:100%}
+    .feed{height:calc(4 * 1.9em)}
   }
-  /* Install */
-  .code{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:12px;margin-top:14px}
-  .code pre{overflow-x:auto;padding:16px 104px 16px 16px;font:14px/1.5 "Cascadia Code",ui-monospace,Consolas,monospace;color:var(--paper)}
-  .copy{position:absolute;top:10px;right:10px;border:1px solid var(--line);background:var(--raised);color:var(--paper);border-radius:8px;padding:6px 10px;font:600 13px inherit;cursor:pointer;min-width:82px;display:inline-grid;place-items:center;transition:transform 160ms var(--ease-out)}
-  .copy:active{transform:scale(.97)}
-  .copy span{grid-area:1/1;transition:opacity 150ms var(--ease-out),transform var(--normal) var(--ease-out)}
-  .copy .done{opacity:0;transform:scale(.9);color:#8fe3b0}
-  .copy.copied .idle{opacity:0}
-  .copy.copied .done{opacity:1;transform:scale(1)}
-  .label{font-weight:650;margin-top:22px}
-  footer{padding:72px 0 48px;color:var(--mist);font-size:14px;text-align:center}
-  /* Entrance (first visit) and one-time reveals */
-  .js .in{opacity:0;transform:translateY(8px);animation:enter var(--slow) var(--ease-out) forwards;animation-delay:calc(var(--i,0) * 50ms)}
-  @keyframes enter{to{opacity:1;transform:none}}
-  .js .reveal{opacity:0;transform:translateY(12px);transition:opacity var(--slow) var(--ease-out),transform var(--slow) var(--ease-out);transition-delay:calc(var(--i,0) * 60ms)}
-  .js .reveal.shown{opacity:1;transform:none}
-  @media (max-width:820px){.compare,.row,.steps,.grid,.cards2,.platforms{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.lens{display:none}}
+  @media (max-width:900px){
+    .top{margin-top:76px;height:auto}
+    html{scroll-padding-top:80px}
+    .hero,.proof,.tree,.plan,.states,.pair,.facts,.routes,.easy,.glowshot figcaption,footer .wrap{grid-template-columns:minmax(0,1fr)}
+    .hero{padding-top:var(--s5)}
+    .hero > div:first-child{padding-top:0}
+    .hero .lede{max-width:62ch}
+    .stage{width:100%}
+    .canvas{height:auto;width:min(100%,340px)}
+    .panel{width:auto;min-width:0}
+    .proof .wipe{max-width:400px}
+    .pair figure:last-child{margin-top:0}
+    .loop li{grid-template-columns:minmax(0,1fr);gap:var(--s2)}
+    .facts dl div{grid-template-columns:minmax(0,1fr);gap:var(--s1)}
+  }
+  @media (max-width:520px){
+    .bar{padding-left:16px}
+    .bar-hint{display:none}
+    .top nav{gap:var(--s4)}
+  }
+  @media (hover:none){
+    .btn:hover{background:var(--raised)} .btn.primary:hover{background:var(--work)}
+    .bar-btn:hover{background:transparent} .copy:hover{background:var(--raised)}
+  }
+
+  /* ---------- Reduced motion: movement becomes an instant change; the feedback stays ---------- */
   @media (prefers-reduced-motion:reduce){
-    html{scroll-behavior:auto}
-    .js .in{transform:none;animation-duration:150ms;animation-delay:0s}
-    .js .reveal{transform:none;transition:opacity 150ms linear;transition-delay:0s}
-    .glow img{animation:none}
-    .lens,.btn,.copy,.copy span,.faq summary::after{transition:none}
-    .faq details::details-content{transition:none}
+    .glow i:last-child{animation:none}
+    .btn,.bar-btn,.copy{transition:background-color var(--fast) linear}
+    .btn:active,.bar-btn:active,.copy:active{transform:none}
+    .bar-btn svg,.copy span,.palette i{transition:opacity var(--fast) linear;transform:none}
+    .palette i.now{transform:none}
+    input[type=range]::-webkit-slider-thumb{transition:none}
   }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <h1 class="in" style="--i:0">The computer use skill<br>for Google Antigravity</h1>
-    <p class="lede in" style="--i:1">Type <code>/computer-use</code> and your agent sees the screen, reads each app's accessibility tree and drives real apps on Windows and macOS with your mouse and keyboard. <kbd>Esc</kbd> stops it at once.</p>
-    <div class="actions in" style="--i:2">
-      <a class="btn primary" href="#install">Install</a>
-      <a class="btn" href="https://github.com/shayann07/antigravity-computer-use">★ Star on GitHub</a>
-      <a class="btn" href="https://github.com/shayann07/antigravity-computer-use/releases/latest">Latest release</a>
-    </div>
-    <div class="video in" style="--i:3">
-      <video src="media/paint-demo.mp4" poster="media/poster.jpg" autoplay muted loop playsinline preload="metadata" aria-label="Gemini 4 Hydrogen painting a portrait in Microsoft Paint through /computer-use, beside the original photo"></video>
-    </div>
-    <p class="caption"><strong>/computer-use let Gemini 4 Hydrogen paint this in Microsoft Paint.</strong> One prompt in Antigravity. The agent drove Paint through a stroke plan scripted from the photo, shown 200× faster. The bar and glow are drawn in, since they're hidden from screen recordings by default.</p>
-    <div class="stats">
-      <div class="stat reveal" style="--i:0"><b>2,553</b><span>real mouse strokes</span></div>
-      <div class="stat reveal" style="--i:1"><b>40</b><span>exact colours</span></div>
-      <div class="stat reveal" style="--i:2"><b>~65 min</b><span>unattended</span></div>
-      <div class="stat reveal" style="--i:3"><b>1</b><span>prompt</span></div>
-    </div>
-  </header>
+<a class="skip" href="#main">Skip to content</a>
 
-  <section>
-    <h2 class="reveal">Look closer</h2>
-    <p class="sub reveal">Hover over the painting to see the strokes. Every one was a real drag of the mouse in Paint.</p>
-    <div class="compare">
-      <figure class="reveal" style="--i:0" data-zoom><img src="media/painting.jpg" width="648" height="1152" alt="The portrait Gemini 4 Hydrogen painted in Microsoft Paint"><div class="lens"></div><figcaption>Painted through /computer-use</figcaption></figure>
-      <figure class="reveal" style="--i:1" data-zoom><img src="media/photo.jpg" width="648" height="1152" alt="The original photo"><div class="lens"></div><figcaption>Original photo</figcaption></figure>
-    </div>
-    <p class="hint">On a phone, tap an image to open it full size.</p>
-    <div class="progress reveal"><img src="media/paint-progress.jpg" alt="The painting at 9, 24 and 43 minutes, and finished at about 65 minutes" loading="lazy"></div>
-  </section>
-
-  <section>
-    <h2 class="reveal">How it works</h2>
-    <p class="sub reveal">One skill and a small local service. It uses the model you already chose in Antigravity: no API key, no second LLM, no MCP server.</p>
-    <div class="steps">
-      <div class="step reveal" style="--i:0"><h3>Observe</h3><p>Reads the window's accessibility tree, the names, roles and values of its controls, and takes a screenshot only when a task needs eyes.</p></div>
-      <div class="step reveal" style="--i:1"><h3>Act</h3><p>Clicks, types, drags and fills in dialogs with the real mouse and keyboard, on the elements it just observed.</p></div>
-      <div class="step reveal" style="--i:2"><h3>Verify</h3><p>Checks a fresh view after each step. An input whose outcome is uncertain is never sent twice.</p></div>
-    </div>
-  </section>
-
-  <section>
-    <h2 class="reveal">What it can do</h2>
-    <div class="grid">
-      <div class="cap reveal" style="--i:0"><h3>Use native controls</h3><p>Click, select, toggle and set values on buttons, fields and lists by name.</p></div>
-      <div class="cap reveal" style="--i:1"><h3>Work visually</h3><p>Click, double-click, right-click, scroll and draw strokes through hundreds of points on a canvas.</p></div>
-      <div class="cap reveal" style="--i:2"><h3>Type anything</h3><p>Unicode text, shortcuts, and paste that puts your clipboard back afterwards.</p></div>
-      <div class="cap reveal" style="--i:0"><h3>Work across apps</h3><p>Launch, find and focus windows, including each app's own file dialogs.</p></div>
-      <div class="cap reveal" style="--i:1"><h3>Run long jobs</h3><p><code>plan</code> sends many steps at once, so a 30-turn task drops to about 9.</p></div>
-      <div class="cap reveal" style="--i:2"><h3>Update safely</h3><p>Signed releases, automatic updates you can switch to manual, and rollback.</p></div>
-    </div>
-  </section>
-
-  <section>
-    <h2 class="reveal">You stay in control</h2>
-    <div class="rows">
-      <div class="row reveal">
-        <div><h3>See what it's doing</h3><p>A small bar always says what the agent is doing right now, and it changes the moment the state does.</p></div>
-        <div><div class="bars" aria-label="The control bar changing between its real states">
-          <img class="on" src="media/bar-working.png" alt="Antigravity is working" data-label="While it works">
-          <img src="media/bar-waiting.png" alt="Waiting for your answer" data-label="When it needs your OK" aria-hidden="true">
-          <img src="media/bar-stopped.png" alt="Stopped, you pressed Esc" data-label="After you press Esc" aria-hidden="true">
-          <img src="media/bar-ready.png" alt="Antigravity is ready" data-label="When it's finished" aria-hidden="true">
-        </div><p class="barlabel">While it works</p></div>
-      </div>
-      <div class="row reveal">
-        <div><h3>A glow on the window it's using</h3><p>Soft light around the window the agent is working in, so you always know where it is. It's left out of the agent's own screenshots.</p></div>
-        <div class="glow"><img src="media/glow-inside.jpg" alt="A window lit by the soft blue and violet edge glow" loading="lazy"></div>
-      </div>
-      <div class="row reveal">
-        <div><h3>It asks before touching an app</h3><p>Nothing runs without your OK. Terminals and code editors are click-only, so it can't type commands into them.</p></div>
-        <img src="media/access-card.png" alt="An access card asking to allow Antigravity to use Notepad" loading="lazy">
-      </div>
-      <div class="row reveal">
-        <div><h3>One key stops it</h3><p><kbd>Esc</kbd> or <kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>F12</kbd> stops it at once and lets go of every key and button. Sign-ins and admin prompts are always left to you.</p></div>
-        <img src="media/settings-menu.png" alt="The Settings menu with the stop keys" loading="lazy">
-      </div>
-    </div>
-  </section>
-
-  <section>
-    <h2 class="reveal">Proven on real apps</h2>
-    <p class="sub reveal">Not a sandbox and not a browser extension: the agent works in the same desktop apps you do.</p>
-    <div class="cards2">
-      <div class="card reveal" style="--i:0"><h3>Microsoft Paint</h3><p>The portrait above: exact colours set through Paint's own colour editor, then painted as long strokes with the real mouse.</p><div class="num"><div><b>2,832</b><span>steps in one plan</span></div><div><b>~65 min</b><span>unattended</span></div></div></div>
-      <div class="card reveal" style="--i:1"><h3>Upscaly</h3><p>Open the app, pick a photo in its file dialog and run a 4× upscale. Batching steps cut the turns the model needs.</p><div class="num"><div><b>30 → 9</b><span>model turns</span></div><div><b>4.5 → 2 min</b><span>end to end</span></div></div></div>
-    </div>
-  </section>
-
-  <section>
-    <h2 class="reveal">Private and careful by design</h2>
-    <div class="cards2">
-      <div class="card reveal" style="--i:0"><h3>Your data stays yours</h3><ul class="list"><li>No telemetry. Screenshots go only to the model you already use in Antigravity.</li><li>The glow and bar are left out of the agent's own screenshots.</li><li>Sign-ins, admin prompts and the secure desktop are always handed back to you.</li></ul></div>
-      <div class="card reveal" style="--i:1"><h3>Safe to keep running</h3><ul class="list"><li>Every release lists a SHA-256 for each archive, and installed copies update only from signed metadata.</li><li>Updates can be switched to manual and rolled back.</li><li>An input whose outcome is uncertain is never replayed.</li></ul></div>
-    </div>
-  </section>
-
-  <section>
-    <h2 class="reveal">Platforms</h2>
-    <div class="platforms">
-      <div class="card reveal" style="--i:0"><h3>Windows</h3><p>Windows 10 and 11, x64. One-line install in PowerShell; uses the .NET Framework already on Windows.</p></div>
-      <div class="card reveal" style="--i:1"><h3>macOS</h3><p>macOS 14 or later on Apple silicon or Intel. You grant Accessibility and Screen Recording once.</p></div>
-    </div>
-  </section>
-
-  <section>
-    <h2 class="reveal">Questions</h2>
-    <div class="faq reveal">
-      <details><summary>Does it need its own API key or model?</summary><p>No. It uses the model you already chose in Antigravity. There's no second LLM, no API key and no MCP server to set up.</p></details>
-      <details><summary>Does it work with agents other than Antigravity?</summary><p>It is built and tested for Google Antigravity. The service is driven by a plain command-line tool, so other agents that can run shell commands can call it, but only Antigravity is supported today.</p></details>
-      <details><summary>What stops it from doing something I don't want?</summary><p>It only acts in apps you approve, terminals and code editors are click-only, and <kbd>Esc</kbd> stops it at once and releases every key and button. Your own mouse and keyboard never pause it, so stopping is always one key away.</p></details>
-      <details><summary>Is it fast?</summary><p>Most of the time in a long task is the model thinking between steps. <code>plan</code> removes much of that by sending many steps in one command.</p></details>
-      <details><summary>Is it open source?</summary><p>Yes, MIT licensed. It is an independent project, not affiliated with or endorsed by Google.</p></details>
-    </div>
-  </section>
-
-  <section id="install">
-    <h2 class="reveal">Install</h2>
-    <p class="sub">Each <a href="https://github.com/shayann07/antigravity-computer-use/releases/latest">release</a> lists a SHA-256 for every archive in <code>SHA256SUMS.txt</code>, and installed copies update only from signed metadata. Check the archive before you run anything from it.</p>
-    <p class="label">Windows: download the ZIP and SHA256SUMS.txt, then in PowerShell</p>
-    <div class="code"><pre><code>$zip = Get-Item .\AntigravityComputerUse-*-windows-x64.zip
-$want = ((Select-String -Path .\SHA256SUMS.txt -SimpleMatch $zip.Name).Line -split '\s+')[0]
-(Get-FileHash $zip -Algorithm SHA256).Hash.ToLower() -eq $want   # must print True
-Expand-Archive $zip -DestinationPath .
-.\AntigravityComputerUse-windows-x64\install.cmd --integration direct --sidecar</code></pre><button class="copy" type="button"><span class="idle">Copy</span><span class="done">✓ Copied</span></button></div>
-    <p class="label">macOS: download the macos-arm64 or macos-x64 archive and SHA256SUMS.txt, then in Terminal</p>
-    <div class="code"><pre><code>shasum -a 256 -c SHA256SUMS.txt --ignore-missing   # must print OK
-tar -xzf AntigravityComputerUse-*-macos-*.tar.gz</code></pre><button class="copy" type="button"><span class="idle">Copy</span><span class="done">✓ Copied</span></button></div>
-    <p class="sub">Then run <code>macos-bundle/install.command</code> and <code>Setup.Mac.Permissions.command</code>. <a href="https://github.com/shayann07/antigravity-computer-use/blob/main/docs/MACOS.md">Mac guide</a></p>
-    <p class="label">Windows, one line</p>
-    <p class="sub">If you'd rather not do it by hand, <a href="https://github.com/shayann07/antigravity-computer-use/blob/main/install.ps1">install.ps1</a> downloads the same release and checks its SHA-256 before installing anything.</p>
-    <div class="code"><pre><code>irm https://raw.githubusercontent.com/shayann07/antigravity-computer-use/main/install.ps1 | iex</code></pre><button class="copy" type="button"><span class="idle">Copy</span><span class="done">✓ Copied</span></button></div>
-    <p class="label">Then try</p>
-    <div class="code"><pre><code>/computer-use
-Open Paint, draw a red circle in the middle, save it to my Desktop as circle.png.</code></pre><button class="copy" type="button"><span class="idle">Copy</span><span class="done">✓ Copied</span></button></div>
-  </section>
-
-  <footer>
-    MIT licensed · Not affiliated with Google · <a href="https://github.com/shayann07/antigravity-computer-use">Source on GitHub</a>
-  </footer>
+<!-- A web twin of the product's control bar. It reports what this page is doing. -->
+<div class="bar" id="bar" data-state="idle" role="region" aria-label="Replay controls">
+  <div class="bar-text">
+    <div class="bar-l1" id="barL1" aria-live="polite">Painted through /computer-use</div>
+    <div class="bar-l2 num" id="barL2">2,832 steps, one prompt</div>
+  </div>
+  <span class="bar-hint" aria-hidden="true">Press <kbd>Esc</kbd> to stop</span>
+  <button class="bar-btn" id="barStop" type="button" aria-label="Start the replay" title="Start the replay">
+    <svg class="i-stop" viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="6.5" width="11" height="11" rx="2.5" fill="currentColor"/></svg>
+    <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6.2v11.6a.6.6 0 0 0 .92.5l9.1-5.8a.6.6 0 0 0 0-1L9.92 5.7a.6.6 0 0 0-.92.5z" fill="currentColor"/></svg>
+  </button>
+  <span class="bar-rule" aria-hidden="true"></span>
+  <button class="bar-btn" id="barTree" type="button" aria-pressed="false" aria-label="Read this page as a tree" title="Read this page as a tree">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4" width="7" height="5" rx="1.2"/><rect x="13.5" y="10" width="7" height="4.5" rx="1.2"/><rect x="13.5" y="16.5" width="7" height="4.5" rx="1.2"/><path d="M7 9v9.75h6.5M7 12.25h6.5"/></svg>
+  </button>
 </div>
+<div class="glow" aria-hidden="true"><i></i><i></i></div>
+
+<header class="wrap top">
+  <a class="brand" href="#main">Antigravity Computer Use</a>
+  <nav aria-label="Page">
+    <a href="#install">Install</a>
+    <a href="https://github.com/shayann07/antigravity-computer-use">GitHub</a>
+  </nav>
+</header>
+
+<main id="main">
+  <div class="wrap hero">
+    <div>
+      <h1>Give Antigravity the mouse.</h1>
+      <p class="lede"><code>/computer-use</code> is a skill for Google Antigravity. The agent sees the screen, reads each app's accessibility tree and drives real Windows and macOS apps with your real mouse and keyboard. <kbd>Esc</kbd> stops it at once.</p>
+      <div class="actions">
+        <a class="btn primary" href="#install">Install 1.0.3</a>
+        <a class="btn" href="https://github.com/shayann07/antigravity-computer-use">Source on GitHub</a>
+      </div>
+      <p class="note">Open source under the MIT licence. Not affiliated with Google.</p>
+    </div>
+
+    <div class="stage">
+      <div class="canvas" id="stage">
+        <img src="media/painting.jpg" width="648" height="1152" alt="A portrait of a woman in a white dress with a long braid, painted in Microsoft Paint by Gemini 4 Hydrogen through /computer-use.">
+        <canvas id="replay" width="936" height="1664" role="img" aria-label="The same portrait, redrawn stroke by stroke from the plan the agent ran."></canvas>
+        <div class="pointer" id="pointer" aria-hidden="true"></div>
+      </div>
+      <div class="panel">
+        <p class="count num" id="count"><b>2,832</b> steps, one prompt</p>
+        <ol class="feed" id="feed" aria-hidden="true">
+          <li><span class="verb">click</span> "Edit colours" Button</li>
+          <li><span class="verb">set_value</span> HexTextBox #19150C</li>
+          <li><span class="verb">click</span> PrimaryButton</li>
+          <li><span class="verb">drag</span> 6 points</li>
+        </ol>
+        <div class="palette" id="palette" role="img" aria-label="The 40 exact colours of the painting, each set through Paint's own colour editor."></div>
+        <div class="scrub">
+          <label for="scrub">Drag through the run</label>
+          <input id="scrub" class="num" type="range" min="0" max="2832" value="2832" step="1" aria-valuetext="Step 2,832 of 2,832">
+        </div>
+        <p class="note">Gemini 4 Hydrogen painted this in Microsoft Paint. Here your browser redraws the plan it ran, step for step. It is a replay, not a recording: the recording is below.</p>
+      </div>
+    </div>
+  </div>
+
+  <section class="wrap" id="run">
+    <h2>One prompt. About an hour of real painting.</h2>
+    <p class="lede" style="margin-top:var(--s5)">The agent drove Paint through a stroke plan scripted from the photo: 2,553 strokes in 40 exact colours, each colour typed into Paint's own colour editor, each stroke a real drag of the mouse.</p>
+    <div class="film">
+      <video id="film" src="media/paint-demo.mp4" poster="media/poster.jpg" width="1280" height="720" muted loop playsinline controls preload="metadata" aria-label="Screen recording of the portrait being painted in Microsoft Paint, beside the original photo."></video>
+    </div>
+    <p class="note">The real recording, shown 200× faster. The bar and glow are drawn in, since they're hidden from screen recordings by default.</p>
+
+    <div class="proof">
+      <div class="wipe" id="wipe">
+        <img src="media/painting.jpg" width="648" height="1152" loading="lazy" alt="The finished painting from Microsoft Paint.">
+        <img class="after" src="media/photo.jpg" width="648" height="1152" loading="lazy" alt="The original photo it was painted from.">
+        <span class="tag l" aria-hidden="true">Painted in Paint</span>
+        <span class="tag r" aria-hidden="true">Original photo</span>
+        <span class="handle" aria-hidden="true"></span>
+        <input type="range" min="0" max="100" value="50" step="1" aria-label="Slide between the painting and the original photo">
+      </div>
+      <div class="proof-text">
+        <h3>Painting on the left, photo on the right.</h3>
+        <p class="lede">Slide the handle. The painting is flat colour laid down in long back-and-forth rows, which is why it looks like a painting and not a print.</p>
+        <p class="lede">It ran unattended for about 65 minutes as a single <code>plan</code> of 2,832 steps.</p>
+        <a class="progress" href="media/paint-progress.jpg" style="display:block">
+          <img src="media/paint-progress.jpg" width="1386" height="663" loading="lazy" alt="Four moments from the real run: the dress blocked in at 9 minutes, more of the figure at 24, the braid and hands at 43, and the finished portrait at about 65 minutes.">
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap tree" id="tree">
+    <div>
+      <h2>It reads the app before it looks at it.</h2>
+      <p class="lede">Every app describes its own controls: a name, a role and a value for each button, field and slider. The agent reads that tree first, and opens a screenshot only when it needs pixel coordinates or has to judge how something looks.</p>
+      <p class="lede" style="margin-top:var(--s4)">Your browser keeps the same kind of tree for this page. Switch it on to see what a tree-first reader gets.</p>
+      <button class="btn" id="treeToggle" type="button" aria-pressed="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4" width="7" height="5" rx="1.2"/><rect x="13.5" y="10" width="7" height="4.5" rx="1.2"/><rect x="13.5" y="16.5" width="7" height="4.5" rx="1.2"/><path d="M7 9v9.75h6.5M7 12.25h6.5"/></svg>
+        <span id="treeToggleText">Read this page as a tree</span>
+      </button>
+    </div>
+    <div>
+      <div class="lines" tabindex="0" role="group" aria-label="Three steps from the portrait's plan"><pre><span class="verb">click</span>      <span class="q">"Edit colours"</span>  Button
+<span class="verb">set_value</span>  HexTextBox      <span class="q">#19150C</span>
+<span class="verb">set_value</span>  <span class="q">"Size"</span>  Slider  <span class="q">3</span>
+<span class="verb">drag</span>       <span class="dim">6 points, read from a screenshot</span></pre></div>
+      <p class="note">Four steps from the portrait's plan. The first three find a control in the tree, by its name or its id, so no pixel is involved. Only the stroke works in pixels.</p>
+    </div>
+  </section>
+
+  <section class="wrap" id="loop">
+    <h2>A task is a short loop.</h2>
+    <p class="lede" style="margin-top:var(--s5)">A skill and a small local service. It uses the model you already have in Antigravity: no API key, no second LLM, no MCP server.</p>
+    <ol class="loop">
+      <li><code><b>ready</b></code><p>Starts a task and reports whether the desktop is ready to be used.</p></li>
+      <li><code><b>launch</b> --app notepad.exe --observe</code><p>Opens the app once you have approved it, brings it to the front and returns its window, a frame and a screenshot.</p></li>
+      <li><code><b>snapshot</b> --hwnd H [--image]</code><p>Reads the window's tree. The image is optional and only for when pixels matter.</p></li>
+      <li><code><b>click</b> --name Settings --role Button</code><p>Acts on what it just observed: click, type, set a value, press keys, drag through up to 400 points, fill in an Open or Save dialog. Every action returns a fresh frame and tree to check against.</p></li>
+      <li><code><b>end</b></code><p>Finishes the task. An input whose reply was lost is never sent again.</p></li>
+    </ol>
+    <p class="note" style="margin-top:var(--s4)">Flags are shortened here. The full command table is in the <a href="https://github.com/shayann07/antigravity-computer-use/blob/main/skills/computer-use/SKILL.md">skill itself</a>.</p>
+  </section>
+
+  <section class="wrap plan" id="plan">
+    <div>
+      <h2>Think once. Then run thousands of steps.</h2>
+      <p class="lede">The model is the slow part of desktop control: each turn costs seconds, while a step runs in a fraction of that. So <code>plan</code> sends many steps at once. A 30-turn task drops to about 9.</p>
+      <p class="lede">A plan runs as checked batches of 8 and keeps a ledger of what landed. If it stops, it resumes from the ledger without replaying input that may already have landed.</p>
+    </div>
+    <div>
+      <h3>What was in the portrait's 2,832 steps</h3>
+      <div class="split" aria-hidden="true" style="margin-top:var(--s5)"><i class="a"></i><i class="b"></i><i class="c"></i></div>
+      <ul class="legend">
+        <li><i style="background:var(--work)"></i><span><b class="num">2,553 strokes.</b> Each one a continuous drag of the real mouse across Paint's canvas.</span></li>
+        <li><i style="background:var(--wait)"></i><span><b class="num">123 steps on controls from the tree.</b> Edit colours, its hex box and confirm button, Fill, Brushes and the Size slider, each found by name or id.</span></li>
+        <li><i style="background:#566273"></i><span><b class="num">156 plain clicks.</b> One fills the canvas. The rest land on empty grey, so each colour change starts a fresh batch.</span></li>
+      </ul>
+      <p class="note" style="margin-top:var(--s5)">Counted from the plan file this page replays.</p>
+    </div>
+  </section>
+
+  <section class="wrap" id="control">
+    <div class="control-head">
+      <h2>Esc stops it at once.</h2>
+      <p class="lede">Wherever you are, <kbd>Esc</kbd> ends the task and lets go of every key and button. Ask it to carry on and it starts fresh. Try it on this page: the replay and its bar obey the same key.</p>
+    </div>
+
+    <div class="states">
+      <img src="media/bar-states.png" width="876" height="315" loading="lazy" alt="Three states of the control bar: Antigravity is working, Waiting for your answer, and Stopped because you pressed Esc.">
+      <div>
+        <h3>A small bar says what it is doing right now.</h3>
+        <p class="lede" style="margin-top:var(--s3)">Working, waiting for your answer, or stopped. Your own mouse and keyboard don't pause it, so stopping is always a deliberate key: <kbd>Esc</kbd>, <kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>F12</kbd>, or the bar's Stop.</p>
+      </div>
+    </div>
+
+    <div class="pair">
+      <figure>
+        <img src="media/access-card.png" width="1080" height="864" loading="lazy" alt="An access card asking to allow Antigravity to use Notepad with full control until a new conversation starts, with Allow and Deny. No answer in 90 seconds counts as Deny.">
+        <figcaption>
+          <h3>Nothing runs without your OK.</h3>
+          <p>Approval comes through Antigravity's own approvals with the one-line install, or through this card in standalone mode, where saving, pasting and deleting ask again. Terminals and code editors are always click-only, so it can't type commands into them. Sign-ins and admin prompts are always left to you.</p>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="media/settings-menu.png" width="768" height="634" loading="lazy" alt="The Settings menu: show bar and glow in recordings, move the bar, glow brightness, and a reminder that Esc or Ctrl+Alt+F12 stops at once.">
+        <figcaption>
+          <h3>The stop keys are written on the menu.</h3>
+          <p>The bar can be moved or thrown to another edge, the glow has three brightness levels, and both stay out of screen recordings unless you ask.</p>
+        </figcaption>
+      </figure>
+    </div>
+
+    <figure class="glowshot">
+      <img src="media/glow-dark.png" width="1280" height="800" loading="lazy" alt="A sample window outlined by a soft blue and violet glow.">
+      <figcaption>
+        <h3>A soft glow outlines the window it is working in.</h3>
+        <p>Blue with a touch of violet, never static, and left out of the agent's own screenshots. The pictures in this section are clean renders from the product's own renderer, shown around a sample window. They are not captures of anyone's desktop.</p>
+      </figcaption>
+    </figure>
+  </section>
+
+  <section class="wrap facts" id="facts">
+    <h2>The plain facts.</h2>
+    <dl>
+      <div><dt>Model</dt><dd>The one you already use in Antigravity. No API key, no second LLM, no MCP server.</dd></div>
+      <div><dt>Privacy</dt><dd>The project has no telemetry connection. Screenshots and accessibility text go to Antigravity's configured model.</dd></div>
+      <div><dt>Windows</dt><dd>x64. The install includes its own Node and native helpers.</dd></div>
+      <div><dt>macOS</dt><dd>macOS 14 or later, Apple silicon or Intel. You grant Accessibility and Screen Recording yourself. Helpers are signed with the project's own certificate, not an Apple Developer ID.</dd></div>
+      <div><dt>Release</dt><dd>1.0.3, stable on both platforms. <a href="https://github.com/shayann07/antigravity-computer-use/blob/main/CHANGELOG.md">Changelog</a></dd></div>
+      <div><dt>Licence</dt><dd>MIT. Built on <a href="https://github.com/ridelink0/claude-computer-use">ridelink0/claude-computer-use</a>.</dd></div>
+    </dl>
+  </section>
+
+  <section class="wrap" id="install">
+    <div class="install-head">
+      <h2>Install</h2>
+      <p class="lede">Download the archive and <code>SHA256SUMS.txt</code> from the <a href="https://github.com/shayann07/antigravity-computer-use/releases/latest">latest release</a>, and check the archive before you run anything from it. The release lists a SHA-256 for every archive, and installed copies update from signed metadata.</p>
+    </div>
+
+    <div class="routes">
+      <div class="route">
+        <h3>Windows</h3>
+        <p>In PowerShell, in the folder with the ZIP and <code>SHA256SUMS.txt</code>.</p>
+        <div class="code"><pre tabindex="0"><code>$zip = Get-Item .\AntigravityComputerUse-*-windows-x64.zip
+$want = ((Select-String -Path .\SHA256SUMS.txt -SimpleMatch $zip.Name).Line -split '\s+')[0]
+(Get-FileHash $zip -Algorithm SHA256).Hash.ToLower() -eq $want   <span class="c"># must print True</span>
+Expand-Archive $zip -DestinationPath .
+.\AntigravityComputerUse-windows-x64\install.cmd --integration direct --sidecar</code></pre><button class="copy" type="button"><span class="idle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>Copy</span><span class="done" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Copied</span></button></div>
+      </div>
+      <div class="route">
+        <h3>macOS</h3>
+        <p>In Terminal, with the <code>macos-arm64</code> (Apple silicon) or <code>macos-x64</code> (Intel) archive and <code>SHA256SUMS.txt</code>.</p>
+        <div class="code"><pre tabindex="0"><code>shasum -a 256 -c SHA256SUMS.txt --ignore-missing   <span class="c"># must print OK</span>
+tar -xzf AntigravityComputerUse-*-macos-*.tar.gz</code></pre><button class="copy" type="button"><span class="idle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>Copy</span><span class="done" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Copied</span></button></div>
+        <p style="margin-top:var(--s4)">Then run <code>install.command</code> and <code>Setup.Mac.Permissions.command</code> from the extracted folder. <a href="https://github.com/shayann07/antigravity-computer-use/blob/main/docs/MACOS.md">Mac guide</a></p>
+      </div>
+    </div>
+
+    <div class="easy">
+      <div>
+        <h3>Or one line, on Windows</h3>
+        <p>The convenience route. <a href="https://github.com/shayann07/antigravity-computer-use/blob/main/install.ps1">install.ps1</a> downloads the same 1.0.3 archive and verifies its SHA-256 before it installs anything.</p>
+        <div class="code"><pre tabindex="0"><code>irm https://raw.githubusercontent.com/shayann07/antigravity-computer-use/main/install.ps1 | iex</code></pre><button class="copy" type="button"><span class="idle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>Copy</span><span class="done" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Copied</span></button></div>
+      </div>
+      <div>
+        <h3>Then open Antigravity and try</h3>
+        <p>Type the command, then say what you want done.</p>
+        <div class="code"><pre tabindex="0"><code>/computer-use
+Open Paint, draw a red circle in the middle, save it to my Desktop as circle.png.</code></pre><button class="copy" type="button"><span class="idle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>Copy</span><span class="done" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Copied</span></button></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <p>MIT licensed. Not affiliated with Google.</p>
+      <p>Built on <a href="https://github.com/ridelink0/claude-computer-use">ridelink0/claude-computer-use</a>.</p>
+    </div>
+    <nav aria-label="Project">
+      <a href="https://github.com/shayann07/antigravity-computer-use">Source</a>
+      <a href="https://github.com/shayann07/antigravity-computer-use/blob/main/docs/INSTALLATION.md">Install guide</a>
+      <a href="https://github.com/shayann07/antigravity-computer-use/blob/main/SECURITY.md">Security</a>
+      <a href="https://github.com/shayann07/antigravity-computer-use/blob/main/CHANGELOG.md">Changelog</a>
+      <a href="https://github.com/shayann07/antigravity-computer-use/blob/main/LICENSE">Licence</a>
+    </nav>
+  </div>
+</footer>
+
+<div id="treeLayer" aria-hidden="true"></div>
+
+<script src="plan.js"></script>
 <script>
-  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  // One-time reveals as sections come into view.
-  const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('shown'); io.unobserve(e.target); } }), {rootMargin: '0px 0px -8% 0px'});
-  const pending = new Set(document.querySelectorAll('.reveal'));
-  pending.forEach(el => io.observe(el));
-  // Backup for when the observer does not fire: reveal whatever is on screen at each scroll,
-  // and everything after 4 s, so no content can stay hidden.
-  const sweep = () => pending.forEach(el => { const r = el.getBoundingClientRect(); if (r.top < innerHeight && r.bottom > 0) { el.classList.add('shown'); pending.delete(el); } });
-  addEventListener('scroll', sweep, {passive: true}); sweep();
-  setTimeout(() => pending.forEach(el => el.classList.add('shown')), 4000);
-  // The bar cycles through its real states, only while it is on screen.
-  const bars = [...document.querySelectorAll('.bars img')], label = document.querySelector('.barlabel');
-  let k = 0, timer = null;
-  const step = () => { bars[k].classList.remove('on'); k = (k + 1) % bars.length; bars[k].classList.add('on'); label.textContent = bars[k].dataset.label; };
-  if (!reduce) new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting && !timer) timer = setInterval(step, 2400); else if (!e.isIntersecting && timer) { clearInterval(timer); timer = null; } })).observe(document.querySelector('.bars'));
-  // Magnifier: a round lens follows the mouse and shows the image at 2.5x.
-  document.querySelectorAll('[data-zoom]').forEach(fig => {
-    const img = fig.querySelector('img'), lens = fig.querySelector('.lens'), Z = 2.5;
-    fig.addEventListener('pointermove', e => {
-      if (e.pointerType !== 'mouse') return;
-      const r = img.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
-      if (x < 0 || y < 0 || x > r.width || y > r.height) { fig.classList.remove('zooming'); return; }
-      lens.style.left = (x - 90) + 'px'; lens.style.top = (y - 90) + 'px';
-      lens.style.backgroundImage = `url("${img.currentSrc || img.src}")`;
-      lens.style.backgroundSize = `${r.width * Z}px ${r.height * Z}px`;
-      lens.style.backgroundPosition = `${-(x * Z - 90)}px ${-(y * Z - 90)}px`;
-      fig.classList.add('zooming');
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+  const fmt = n => n.toLocaleString('en-US');
+  const body = document.body, bar = $('bar'), l1 = $('barL1'), l2 = $('barL2');
+  const stopBtn = $('barStop'), film = $('film');
+
+  /* ---------- Bar state ---------- */
+  let barState = 'idle';
+  function setBar(state, line1, line2) {
+    barState = state;
+    bar.dataset.state = state;
+    if (l1.textContent !== line1) l1.textContent = line1;
+    l2.textContent = line2;
+    const label = state === 'working' ? 'Stop the replay' : 'Start the replay from step 1';
+    stopBtn.setAttribute('aria-label', label); stopBtn.title = label;
+    body.classList.toggle('working', state === 'working');
+  }
+
+  /* ---------- The replay: the real plan, redrawn ---------- */
+  const plan = window.PAINT_PLAN;
+  const replay = plan && (() => {
+    const steps = plan.steps, pal = plan.pal, N = steps.length;
+    const DURATION = 48000;      // ms for the whole run
+    const cv = $('replay'), ctx = cv.getContext('2d'), S = cv.width / 468;
+    const stage = $('stage'), pointer = $('pointer'), scrub = $('scrub');
+    const count = $('count'), feed = $('feed'), palette = $('palette');
+
+    // Per step: the colour in force, and how long it takes on the clock.
+    const colourAt = new Int16Array(N), cum = new Float64Array(N + 1);
+    let c = -1;
+    for (let i = 0; i < N; i++) {
+      const s = steps[i];
+      if (typeof s === 'string' && s[0] === 'H') c = +s.slice(1);
+      colourAt[i] = c;
+      // Clock weight: a stroke takes as long as it has points. The opening strokes are
+      // near-black on a near-black fill, so they pass at three times the pace.
+      const dark = c >= 0 && c < 3;
+      cum[i + 1] = cum[i] + (typeof s === 'string' ? 5 : s.length / 2) * (dark ? 1 / 3 : 1);
+    }
+    const total = cum[N];
+
+    // Palette swatches and feed rows are built once and updated in place.
+    const swatches = pal.map(hex => { const i = document.createElement('i'); i.style.background = hex; palette.appendChild(i); return i; });
+    feed.textContent = '';
+    const rows = Array.from({length: 7}, () => feed.appendChild(document.createElement('li')));
+
+    function describe(i) {
+      const s = steps[i];
+      if (typeof s !== 'string') return ['drag', (s.length / 2) + ' points'];
+      switch (s[0]) {
+        case 'F': return ['click', '"Fill" Button'];
+        case 'E': return ['click', '"Edit colours" Button'];
+        case 'H': return ['set_value', 'HexTextBox ' + pal[+s.slice(1)], pal[+s.slice(1)]];
+        case 'P': return ['click', 'PrimaryButton'];
+        case 'K': return ['click', 'canvas (fill)'];
+        case 'B': return ['click', '"Brushes" RadioButton'];
+        case 'S': return ['set_value', '"Size" Slider 3'];
+        default:  return ['click', 'empty grey (padding)'];
+      }
+    }
+
+    ctx.lineJoin = ctx.lineCap = 'round';
+    let drawn = 0, px = 234, py = 416;
+    function blank() { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height); drawn = 0; }
+    function drawTo(n) {
+      if (n < drawn) blank();
+      let batchColour = -1;
+      for (; drawn < n; drawn++) {
+        const s = steps[drawn];
+        if (s === 'K') { ctx.fillStyle = pal[colourAt[drawn]]; ctx.fillRect(0, 0, cv.width, cv.height); continue; }
+        if (typeof s === 'string') continue;
+        const col = colourAt[drawn];
+        if (col !== batchColour) { if (batchColour !== -1) ctx.stroke(); ctx.beginPath(); ctx.strokeStyle = pal[col]; ctx.lineWidth = 3 * S; batchColour = col; }
+        ctx.moveTo(s[0] * S, s[1] * S);
+        for (let k = 2; k < s.length; k += 2) ctx.lineTo(s[k] * S, s[k + 1] * S);
+        px = s[s.length - 2]; py = s[s.length - 1];
+      }
+      if (batchColour !== -1) ctx.stroke();
+    }
+
+    let stageW = stage.clientWidth, stageH = stage.clientHeight;
+    new ResizeObserver(() => { stageW = stage.clientWidth; stageH = stage.clientHeight; placePointer(); }).observe(stage);
+    function placePointer() { pointer.style.transform = `translate(${px / 468 * stageW}px,${py / 832 * stageH}px)`; }
+
+    let shownStep = -1, usedUpTo = -1;
+    function readout(n) {            // n = steps done
+      if (n === shownStep) return; shownStep = n;
+      count.innerHTML = `Step <b>${fmt(n)}</b> of ${fmt(N)}`;
+      scrub.value = n; scrub.style.setProperty('--fill', (n / N * 100) + '%');
+      scrub.setAttribute('aria-valuetext', `Step ${fmt(n)} of ${fmt(N)}`);
+      for (let r = 0; r < rows.length; r++) {
+        const i = n - rows.length + r, li = rows[r];
+        if (i < 0) { li.textContent = ' '; continue; }
+        const [verb, rest, hex] = describe(i);
+        li.textContent = '';
+        const v = document.createElement('span'); v.className = 'verb'; v.textContent = verb; li.append(v, ' ');
+        if (hex) { const sw = document.createElement('span'); sw.className = 'sw'; sw.style.background = hex; li.append(sw); }
+        li.append(rest);
+      }
+      const now = n ? colourAt[n - 1] : -1;
+      if (now !== usedUpTo) {
+        // Colours are set in palette order, so everything up to `now` has been used.
+        swatches.forEach((el, i) => { el.classList.toggle('used', i <= now); el.classList.toggle('now', i === now && n < N); });
+        usedUpTo = now;
+      }
+      if (n === N) swatches.forEach(el => el.classList.remove('now'));
+    }
+
+    let raf = 0, clock = 0, last = 0, lastReadout = 0;
+    function frame(t) {
+      clock += Math.min(t - last, 250); last = t;      // a hidden tab does not skip ahead
+      const target = clock / DURATION * total;
+      let n = drawn;
+      while (n < N && cum[n + 1] <= target) n++;
+      drawTo(n); placePointer();
+      if (t - lastReadout > 90 || n === N) {
+        readout(n); lastReadout = t;
+        if (barState === 'working') l2.textContent = `Step ${fmt(n)} of ${fmt(N)}`;
+      }
+      if (n >= N) { raf = 0; setBar('done', 'Done', `${fmt(N)} steps redrawn`); return; }
+      raf = requestAnimationFrame(frame);
+    }
+    function halt() { if (raf) cancelAnimationFrame(raf); raf = 0; }
+
+    stage.classList.add('live');
+    blank(); drawTo(N); readout(N); placePointer();   // the finished picture is the resting state
+
+    return {
+      N,
+      get running() { return raf !== 0; },
+      start() { halt(); blank(); clock = 0; last = performance.now(); lastReadout = 0; shownStep = -1;
+                setBar('working', 'Replaying the real plan', `Step 0 of ${fmt(N)}`); raf = requestAnimationFrame(frame); },
+      stop(reason) { const was = raf !== 0; halt(); if (was) { readout(drawn); setBar('stopped', 'Stopped', reason); } return was; },
+      seek(n) { halt(); drawTo(n); placePointer(); readout(n); setBar('stopped', 'Stopped', `Step ${fmt(n)} of ${fmt(N)}`); }
+    };
+  })();
+
+  if (replay) {
+    $('scrub').addEventListener('input', e => replay.seek(+e.target.value));
+    stopBtn.addEventListener('click', () => {
+      if (replay.running) { replay.stop('You pressed Stop'); if (!film.paused) film.pause(); }
+      else replay.start();
     });
-    fig.addEventListener('pointerleave', () => fig.classList.remove('zooming'));
-    fig.addEventListener('click', e => { if (e.pointerType !== 'mouse' || matchMedia('(max-width:820px)').matches) window.open(img.src, '_blank'); });
+    if (reduce.matches) setBar('idle', 'Replay ready', 'Finished picture shown: reduced motion is on');
+    else replay.start();
+  } else {
+    setBar('idle', 'Antigravity Computer Use', 'Replay data did not load');
+    stopBtn.disabled = true;
+  }
+
+  /* ---------- Esc stops it at once ---------- */
+  addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    let did = false;
+    if (body.classList.contains('treeview')) { setTree(false); did = true; }
+    if (!film.paused) { film.pause(); did = true; }
+    if (replay && replay.stop('You pressed Esc')) did = true;
+    else if (did) setBar('stopped', 'Stopped', 'You pressed Esc');
   });
-  // Copy buttons: the label crossfades to a check.
-  document.querySelectorAll('.copy').forEach(b => b.addEventListener('click', async () => {
-    try { await navigator.clipboard.writeText(b.previousElementSibling.innerText); } catch { return; }
-    b.classList.add('copied'); setTimeout(() => b.classList.remove('copied'), 1600);
+
+  /* ---------- The recording plays while it is on screen ---------- */
+  if (!reduce.matches && 'IntersectionObserver' in window) {
+    let userPaused = false, autoPausing = false;
+    film.addEventListener('pause', () => { if (autoPausing) autoPausing = false; else userPaused = true; });
+    film.addEventListener('play', () => { userPaused = false; });
+    new IntersectionObserver(es => es.forEach(e => {
+      if (e.isIntersecting && !userPaused) film.play().catch(() => {});
+      else if (!e.isIntersecting && !film.paused) { autoPausing = true; film.pause(); }
+    }), {threshold: .35}).observe(film);
+  }
+
+  /* ---------- Painting / photo wipe ---------- */
+  const wipe = $('wipe'), wipeInput = wipe.querySelector('input');
+  wipeInput.addEventListener('input', () => wipe.style.setProperty('--pos', wipeInput.value + '%'));
+
+  /* ---------- Tree view: this page as roles and names ---------- */
+  const layer = $('treeLayer'), treeBtns = [$('treeToggle'), $('barTree')], treeText = $('treeToggleText');
+  const ROLE = {H1: 'Heading', H2: 'Heading', H3: 'Heading', A: 'Link', BUTTON: 'Button', IMG: 'Image', VIDEO: 'Video', CANVAS: 'Image', KBD: 'Text'};
+  function nameOf(el) {
+    const t = el.getAttribute('aria-label') || el.getAttribute('alt') || (el.labels && el.labels[0] && el.labels[0].textContent) || el.textContent || '';
+    const s = t.replace(/\s+/g, ' ').trim();
+    return s.length > 44 ? s.slice(0, 43) + '…' : s;
+  }
+  function buildTree() {
+    layer.textContent = '';
+    let count = 0;
+    const base = body.getBoundingClientRect(), placed = [];
+    document.querySelectorAll('main h1, main h2, main h3, main a[href], main button, main img, main video, main canvas, main input[type=range], header a, footer a').forEach(el => {
+      const r = el.getBoundingClientRect();
+      if (!r.width || !r.height || getComputedStyle(el).visibility === 'hidden') return;
+      let role = ROLE[el.tagName] || 'Group', extra = '';
+      if (el.tagName === 'INPUT') { role = 'Slider'; extra = ` {value=${el.value}}`; }
+      el.setAttribute('data-node', '');
+      const tag = document.createElement('span');
+      tag.textContent = `${role} "${nameOf(el)}"${extra}`;
+      const left = Math.max(4, r.left - base.left), width = Math.min(320, tag.textContent.length * 7.2 + 16);
+      let top = r.top - base.top - 4;
+      // A label that would land on its neighbour's goes under its element instead.
+      if (placed.some(b => Math.abs(b.top - top) < 20 && left < b.left + b.width + 6 && b.left < left + width + 6)) {
+        top = r.bottom - base.top + 4; tag.style.transform = 'none';
+      }
+      placed.push({left, top, width});
+      tag.style.left = left + 'px'; tag.style.top = top + 'px';
+      layer.appendChild(tag); count++;
+    });
+    return count;
+  }
+  function setTree(on) {
+    body.classList.toggle('treeview', on);
+    treeBtns.forEach(b => b.setAttribute('aria-pressed', on));
+    treeText.textContent = on ? 'Back to pixels' : 'Read this page as a tree';
+    const label = on ? 'Back to pixels' : 'Read this page as a tree';
+    treeBtns[1].setAttribute('aria-label', label); treeBtns[1].title = label;
+    if (on) {
+
+      if (replay) replay.stop('Reading the tree');
+      const n = buildTree();
+      setBar('tree', 'Reading the tree', `${n} elements with a role and a name`);
+    } else {
+      document.querySelectorAll('[data-node]').forEach(el => el.removeAttribute('data-node'));
+      layer.textContent = '';
+      if (barState === 'tree') setBar('stopped', 'Stopped', 'Tree view closed');
+    }
+  }
+  treeBtns.forEach(b => b.addEventListener('click', () => setTree(!body.classList.contains('treeview'))));
+  let resizeTimer = 0;
+  addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { if (body.classList.contains('treeview')) buildTree(); }, 150); });
+
+  /* ---------- Copy buttons ---------- */
+  document.querySelectorAll('.copy').forEach(btn => btn.addEventListener('click', async () => {
+    const code = btn.previousElementSibling;
+    // Copy the commands without the trailing "must print" notes: zsh would not treat them as comments.
+    const clone = code.cloneNode(true); clone.querySelectorAll('.c').forEach(c => c.remove());
+    const text = clone.textContent.split(/\n/).map(l => l.trimEnd()).join(String.fromCharCode(10));
+    try { await navigator.clipboard.writeText(text); }
+    catch { const sel = getSelection(); sel.removeAllRanges(); const r = document.createRange(); r.selectNodeContents(code); sel.addRange(r); return; }
+    btn.classList.add('copied'); setTimeout(() => btn.classList.remove('copied'), 1600);
   }));
+})();
 </script>
 </body>
 </html>
