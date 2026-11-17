@@ -4384,6 +4384,9 @@ namespace Axon
             // Image pixels per screen pixel, and where the client area sits in
             // the image, so coordinates read off a capped image are exact (#52).
             res["scale"] = Math.Round(nw / (double)region.Width, 4);
+            // The whole window rect, for the moved-window check: source is the
+            // cropped visible frame and no longer equals it.
+            if (captureHwnd != IntPtr.Zero) res["window"] = new int[] { windowRect.Left, windowRect.Top, windowRect.Right - windowRect.Left, windowRect.Bottom - windowRect.Top };
             if (captureHwnd != IntPtr.Zero)
             {
                 Native.RECT cr; Native.POINT o = new Native.POINT();

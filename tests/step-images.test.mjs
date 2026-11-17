@@ -37,3 +37,10 @@ test('burst captures spaced frames of an approved window without input or a fram
  finally{fs.rmSync(dir,{recursive:true,force:true});}
  assert.equal(content(out).filter(b=>b.type==='image').length,3);
 });
+
+test('a cropped capture still passes the moved-window check: it compares the full window rect',async()=>{
+ const src=fs.readFileSync(new URL('../server/runtime.mjs',import.meta.url),'utf8');
+ assert.match(src,/JSON\.stringify\(f\.image\.window\|\|f\.image\.source\)!==JSON\.stringify\(w\.rect\)/);
+ const cs=fs.readFileSync(new URL('../server/native/AxonHost.cs',import.meta.url),'utf8');
+ assert.match(cs,/res\["window"\] = new int\[\] \{ windowRect\.Left, windowRect\.Top/);
+});

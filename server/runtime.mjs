@@ -651,7 +651,7 @@ export class Runtime {
         if(f.workerEpoch!==this.driver.epoch)fail('stale_observation','The native worker restarted. Observe again; old element indexes cannot be reused.');
         payload.__worker_epoch=f.workerEpoch;
         if(f.key!==appKey(w))fail('identity_changed','App identity changed since observation.');
-        if(f.image&&JSON.stringify(f.image.source)!==JSON.stringify(w.rect))fail('window_moved','Window moved or resized. Observe again.');
+        if(f.image&&JSON.stringify(f.image.window||f.image.source)!==JSON.stringify(w.rect))fail('window_moved','Window moved or resized. Observe again.');
         // A refusal raised before any input leaves the frame unchanged, so it stays usable (its original age still applies).
         try{
         if(['name','role','automation_id'].some(k=>Object.hasOwn(args,k))){payload.index=observedIndex(f.elements,args);delete payload.name;delete payload.role;delete payload.automation_id;}
