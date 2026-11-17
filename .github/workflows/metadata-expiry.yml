@@ -1,0 +1,38 @@
+name: Update metadata expiry
+# Signed update metadata expires 12 months after a release is signed. Any new
+# release renews it. This monthly check fails when the latest release is within
+# 60 days of expiry, so GitHub emails the maintainer about the failed run.
+# The log says only whether renewal is due, not the date.
+on:
+  schedule:
+    - cron: '23 6 1 * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check the latest release's signed metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          mkdir meta && cd meta
+          gh release download --repo "$REPO" --pattern 'update-*.json'
+          node -e '
+            const fs = require("fs");
+            const files = fs.readdirSync(".").filter(f => /^update-.*\.json$/.test(f));
+            if (!files.length) { console.log("No update metadata in the latest release."); process.exit(1); }
+            const days = Math.min(...files.map(f => {
+              const m = JSON.parse(Buffer.from(JSON.parse(fs.readFileSync(f)).manifest, "base64"));
+              return (Date.parse(m.expires) - Date.now()) / 86400000;
+            }));
+            if (!Number.isFinite(days)) { console.log("Metadata has no readable expiry."); process.exit(1); }
+            if (days < 60) {
+              console.log("Renewal due: ship a release or run prepare-signed-release with a higher sequence, approve it and publish the new update metadata.");
+              process.exit(1);
+            }
+            console.log("Signed update metadata is current.");
+          '
