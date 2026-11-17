@@ -608,7 +608,7 @@
     },
     {
       "path": "docs/MACOS.md",
-      "sha256": "bfbbe2d19c1ee11dd9b9783ccfce563698bfb1e1fbe844eb0b127fdadfec5636"
+      "sha256": "11c5b9188b28a8ea15dd194d4257b63d9c4dd531ffb6ce90adb05f75fd40d3ba"
     },
     {
       "path": "server/update-core.mjs",

@@ -2,9 +2,9 @@
 
 Version **1.0.0** is the stable direct `/computer-use` release for Windows x64 and macOS with bundled Node and native helpers. Download the [complete Windows ZIP and checksums](https://github.com/shayann07/antigravity-computer-use/releases/tag/v1.0.0). Historical v0.2.0 uses the older MCP route, including the recording labelled as such in the README.
 
-For the **experimental macOS candidate**, including architecture-matched prebuilt
+For **macOS**, including architecture-matched prebuilt
 downloads and human OS permission setup, see [Mac installation](MACOS.md).
-The Windows command below does not install the Mac candidate.
+The Windows command below does not install the Mac build.
 
 The bundle includes control recovery and signed-update support. An older
 installation without the updater needs one supported upgrade before it can check

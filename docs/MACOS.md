@@ -1,4 +1,4 @@
-# macOS adapter — experimental candidate
+# macOS
 
 The Mac implementation uses the same Node runtime, tool schemas, observation
 references, batches, limits, receipts, installation and rollback as Windows.
@@ -13,10 +13,10 @@ unguarded Swift port.
 
 ## Requirements and current status
 
-- macOS 14 or later; Apple Silicon and Intel candidate builds.
+- macOS 14 or later, on Apple silicon or Intel.
 - Antigravity Agent Manager App with global skills and Sidecars.
 - Human-granted Accessibility, Screen Recording and Input Monitoring access.
-- No compiler or external Node installation for a prebuilt candidate. Source
+- No compiler or external Node installation for the release bundle. Source
   builds require Xcode Command Line Tools and Node24.20.0.
 
 Candidate `787ddb1` passed compilation, shared regressions, native contract and
@@ -29,18 +29,19 @@ adapter uses an ephemeral IPv4 **127.0.0.1** endpoint with the same private
 Windows retains its named pipe. This is a transport difference, not a different
 tool or permission API.
 
-**Interactive Mac acceptance remains unrun.** Do not present the candidate as
-qualified Windows parity or a general release. See the exact commit's macOS CI
-for current compilation, installation and packaging results; failed runs are
-retained. No user Mac was controlled from the Windows development environment.
+Since then the Mac adapter has been tested by hand on a real Intel Mac: access
+cards with Allow, Deny and timeout, Esc and Stop, installation, and a 177-step
+drawing in Preview with no failures or retries. The record is in
+[MACOS-QUALIFICATION.md](MACOS-QUALIFICATION.md). Apple silicon is covered by CI
+on every change.
 
-## Try a prebuilt candidate
+## Install
 
-Use the architecture-matching artifact from the Mac adapter branch's successful
-[macOS workflow run](https://github.com/shayann07/antigravity-computer-use/actions/workflows/ci.yml).
-These CI artifacts are temporary development downloads, not release assets.
+Download the macOS archive for your Mac (arm64 for Apple silicon, x64 for Intel)
+from the [1.0.0 release](https://github.com/shayann07/antigravity-computer-use/releases/tag/v1.0.0)
+and check it against the release's checksums.
 
-1. Extract the artifact ZIP and its `.tar.gz` archive. Keep the complete
+1. Extract the archive. Keep the complete
    `macos-bundle` directory together.
 2. Run `install.command` from that folder. It installs the global direct skill
    and the project's own Sidecar, preserving existing configuration and a rollback
