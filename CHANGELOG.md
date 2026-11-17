@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.1 - Plans recover from covered targets
 
 - `plan` no longer stops when a tooltip or popup covers the next target (`obscured`) or a pixel step gets a frame without a screenshot (`no_image`): both are refused before any input, so it takes a fresh frame, with its screenshot, and continues from that step, also partway through a batch.
 
