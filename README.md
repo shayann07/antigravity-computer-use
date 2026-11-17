@@ -9,14 +9,11 @@
   <a href="https://github.com/shayann07/antigravity-computer-use/stargazers"><img src="https://img.shields.io/github/stars/shayann07/antigravity-computer-use?style=flat&amp;color=80abcf" alt="GitHub stars"></a>
 </p>
 
-<p align="center">
-  <a href="docs/media/paint-demo.mp4"><img src="docs/media/paint-vs-photo.png" width="520" alt="Left: a portrait painted in Microsoft Paint by the Antigravity agent. Right: the original photo."></a>
-</p>
+<!-- TEST A: video tag -->
+<video src="https://github.com/shayann07/antigravity-computer-use/raw/docs/readme-1.0.0/docs/media/paint-demo.mp4" controls muted autoplay loop width="720"></video>
 
-<p align="center">
-  <a href="docs/media/paint-demo.mp4"><b>▶ Watch it paint (21 s)</b></a><br>
-  <sub>A real run: Antigravity drove Microsoft Paint through a prepared plan of 2,553 strokes in 40 exact colours. About an hour of painting, shown 260× faster.</sub>
-</p>
+<!-- TEST B: animated webp -->
+<p align="center"><img src="docs/media/paint-demo.webp" width="720" alt="The agent painting the portrait in Paint beside the photo."></p>
 
 Type `/computer-use` in Antigravity and say what you want done. The agent reads
 the app, then clicks, types, drags and fills in dialogs with your real mouse and
@@ -89,7 +86,7 @@ Paint's colour editor and paint each one as long back-and-forth rows. It ran
 unattended for about 65 minutes.
 
 <p align="center">
-  <img src="docs/media/paint-progress.png" width="760" alt="Four moments from the real run: the dress blocked in at 9 minutes, more of the figure at 24, the braid and hands at 43, and the finished portrait at about 65 minutes.">
+  <img src="docs/media/paint-progress.jpg" width="760" alt="Four moments from the real run: the dress blocked in at 9 minutes, more of the figure at 24, the braid and hands at 43, and the finished portrait at about 65 minutes.">
 </p>
 
 ## Learn more
