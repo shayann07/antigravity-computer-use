@@ -12,292 +12,244 @@
 <meta property="og:image" content="https://computeruse.shayxo.dev/media/social-preview.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://computeruse.shayxo.dev/media/social-preview.png">
-<meta name="theme-color" content="#0a0c10">
-<script>document.documentElement.classList.add('js')</script>
+<meta name="theme-color" content="#000000">
+<script>document.documentElement.classList.add('js');if(matchMedia('(prefers-reduced-motion: reduce)').matches)document.documentElement.classList.add('still')</script>
 <style>
   :root{
-    /* colour: the product's own dark UI; the blue-violet only ever means "the agent is working" */
-    --ink:#0a0c10; --surface:#12161d; --raised:#1a1f28; --line:#262d38;
-    --paper:#eef2f6; --mist:#8d99a7; --blue:#6aa8ff; --violet:#b08cff; --ok:#8fe3b0;
-    /* type */
-    --ui:"Segoe UI Variable Display","Segoe UI",-apple-system,BlinkMacSystemFont,"SF Pro Display",system-ui,sans-serif;
-    --mono:"Cascadia Code",ui-monospace,"SF Mono",Consolas,monospace;
-    /* motion */
+    --black:#000; --night:#0b0d11; --surface:#14181f; --line:#262d38;
+    --paper:#f5f5f7; --mist:#86868b; --dim:#a1a1a6; --blue:#6aa8ff; --violet:#b08cff; --ok:#8fe3b0; --stop:#ff9f93;
+    --ui:"SF Pro Display","Segoe UI Variable Display","Segoe UI",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+    --mono:"SF Mono","Cascadia Code",ui-monospace,Consolas,monospace;
     --fast:120ms; --normal:220ms; --slow:320ms;
     --out:cubic-bezier(.23,1,.32,1); --inout:cubic-bezier(.77,0,.175,1);
-    /* space and shape */
-    --r-s:8px; --r-m:14px; --r-l:22px;
   }
   *{box-sizing:border-box;margin:0}
-  html{background:var(--ink);color:var(--paper);font:400 17px/1.55 var(--ui);-webkit-text-size-adjust:100%;scroll-behavior:smooth}
-  body{overflow-x:hidden}
+  html{background:var(--black);color:var(--paper);font:400 17px/1.47 var(--ui);-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%}
+  body{overflow-x:clip}
   a{color:inherit}
-  img,video,canvas{display:block;max-width:100%}
-  kbd{font:600 .8em var(--mono);border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:.05em .4em;background:var(--raised)}
+  img,video{display:block;max-width:100%}
+  kbd{font:600 .82em var(--mono);border:1px solid #3a3f48;border-bottom-width:2px;border-radius:6px;padding:.05em .42em;background:#16191f}
   code{font-family:var(--mono)}
-  .wrap{width:min(1120px,100% - 32px);margin-inline:auto}
-  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-  .skip{position:absolute;left:16px;top:-60px;background:var(--paper);color:var(--ink);padding:8px 14px;border-radius:var(--r-s);z-index:9;transition:transform var(--fast) var(--out)}
-  .skip:focus{transform:translateY(76px)}
   :focus-visible{outline:2px solid var(--blue);outline-offset:3px;border-radius:6px}
+  .skip{position:absolute;left:16px;top:-60px;background:var(--paper);color:#000;padding:8px 14px;border-radius:8px;z-index:20}
+  .skip:focus{top:12px}
 
-  /* top bar */
-  .top{display:flex;align-items:center;justify-content:space-between;height:64px}
-  .brand{font-weight:650;letter-spacing:-.01em;text-decoration:none}
-  .top nav{display:flex;gap:4px}
-  .top nav a{text-decoration:none;color:var(--mist);padding:10px 12px;border-radius:var(--r-s);transition:color var(--fast) ease}
+  /* a quiet nav that sits over the film */
+  .top{position:fixed;inset:0 0 auto;z-index:10;display:flex;justify-content:space-between;align-items:center;height:52px;padding:0 max(16px,calc((100vw - 1100px)/2));background:rgba(0,0,0,.55);backdrop-filter:saturate(1.6) blur(18px);-webkit-backdrop-filter:saturate(1.6) blur(18px);border-bottom:1px solid rgba(255,255,255,.06)}
+  .top .brand{font-size:.92rem;font-weight:600;text-decoration:none;letter-spacing:-.01em}
+  .top nav{display:flex;gap:2px}
+  .top nav a{font-size:.84rem;color:var(--dim);text-decoration:none;padding:12px 10px;transition:color var(--fast) ease}
   @media (hover:hover) and (pointer:fine){.top nav a:hover{color:var(--paper)}}
 
+  /* chapters pin for a few screens while scroll drives them */
+  .ch{position:relative}
+  .pin{position:sticky;top:0;height:100svh;overflow:hidden;display:grid;place-items:center}
+  .still .ch{height:auto!important}
+  .still .pin{position:relative;height:auto;min-height:100svh;padding:96px 0}
+
   /* hero */
-  .hero{display:grid;grid-template-columns:1.05fr .95fr;gap:48px;align-items:center;min-height:calc(100svh - 64px);padding:24px 0 56px}
-  .eyebrow{font:500 .82rem var(--mono);color:var(--mist);letter-spacing:.02em}
-  h1{font-size:clamp(3rem,8.4vw,6.4rem);line-height:.92;letter-spacing:-.045em;font-weight:750;margin:18px 0 22px}
-  h1 .soft{color:transparent;background:linear-gradient(100deg,var(--paper) 30%,#c9d6ff 55%,#d9c9ff 75%);-webkit-background-clip:text;background-clip:text}
-  .lede{font-size:1.18rem;color:#c3ccd6;max-width:30ch}
-  .cta{display:flex;flex-wrap:wrap;gap:12px;margin:30px 0 18px}
-  .btn{display:inline-flex;align-items:center;gap:8px;height:48px;padding:0 22px;border-radius:999px;font:600 1rem var(--ui);text-decoration:none;border:1px solid var(--line);background:var(--raised);color:var(--paper);cursor:pointer;transition:transform var(--fast) var(--out),background var(--fast) ease}
-  .btn.primary{background:var(--paper);color:var(--ink);border-color:var(--paper)}
-  .btn:active{transform:scale(.97)}
-  @media (hover:hover) and (pointer:fine){.btn:hover{background:#232a35}.btn.primary:hover{background:#fff}}
-  .fine{color:var(--mist);font-size:.88rem}
+  .hero{height:320svh}
+  .hero .pin{place-items:start center}
+  .htext{position:absolute;top:calc(52px + 5svh);left:0;right:0;text-align:center;padding:0 16px;will-change:transform,opacity}
+  .eyebrow{font-size:clamp(.95rem,1.6vw,1.25rem);font-weight:600;color:var(--dim)}
+  h1{font-size:clamp(2.8rem,7.4vw,5.8rem);line-height:1.02;letter-spacing:-.035em;font-weight:700;margin-top:6px}
+  .grad{background:linear-gradient(90deg,#9cc4ff,#c6a8ff 60%,#f0b8e8);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .ctas{display:flex;justify-content:center;gap:22px;margin-top:18px;font-size:1.06rem}
+  .ctas a{text-decoration:none;color:#2997ff;display:inline-flex;align-items:center;gap:4px;padding:8px 2px}
+  .ctas a.pill{background:#0071e3;color:#fff;border-radius:999px;padding:9px 20px;transition:transform var(--fast) var(--out),background var(--fast) ease}
+  .ctas a.pill:active{transform:scale(.97)}
+  @media (hover:hover) and (pointer:fine){.ctas a.pill:hover{background:#0077ed}.ctas a:not(.pill):hover{text-decoration:underline}}
+  .frame{position:absolute;left:50%;top:0;height:var(--fh);aspect-ratio:9/16;will-change:transform}
+  .frame .shot{position:absolute;inset:0;border-radius:18px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.6);background:#111}
+  .frame video,.frame img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .frame .photo{clip-path:inset(0 0 0 100%)}
+  .frame .seam{position:absolute;top:0;bottom:0;left:100%;width:2px;margin-left:-1px;background:rgba(255,255,255,.9);opacity:0}
+  .halo{position:absolute;inset:-6%;border-radius:40px;background:radial-gradient(55% 45% at 30% 30%,var(--blue),transparent 70%),radial-gradient(55% 50% at 70% 75%,var(--violet),transparent 70%);filter:blur(40px);opacity:.5;transition:opacity 1.2s var(--out)}
+  .frame.done .halo{opacity:.18}
+  .labels{position:absolute;inset:auto 0 -34px;display:flex;justify-content:space-between;font-size:.78rem;color:var(--mist);opacity:0}
+  .stats{position:absolute;inset:0;pointer-events:none}
+  .stat{position:absolute;opacity:0;will-change:transform,opacity;text-align:left}
+  .stat b{display:block;font-size:clamp(2.2rem,4.6vw,4rem);line-height:1;letter-spacing:-.03em;font-weight:700}
+  .stat span{color:var(--dim);font-size:clamp(.88rem,1.2vw,1.05rem)}
+  .note{position:absolute;bottom:3svh;left:0;right:0;text-align:center;font-size:.78rem;color:var(--mist);padding:0 16px;opacity:0}
 
-  /* stage: an illustrated window the replay paints into */
-  .stage{position:relative;justify-self:center;width:clamp(250px,calc(min(70svh,660px) * .5),360px);padding-top:46px}
-  .glow{position:absolute;inset:6px -26px -26px;border-radius:40px;background:radial-gradient(60% 50% at 30% 25%,var(--blue),transparent 70%),radial-gradient(60% 55% at 75% 80%,var(--violet),transparent 70%);filter:blur(30px);opacity:0;transform:scale(.96);transition:opacity 600ms var(--out),transform 600ms var(--out);pointer-events:none}
-  .stage.working .glow{opacity:.55;transform:scale(1);animation:breathe 4s ease-in-out infinite alternate}
-  @keyframes breathe{from{transform:scale(.985)}to{transform:scale(1.025)}}
-  .win{position:relative;border-radius:var(--r-m);background:#1b2029;border:1px solid #2c3442;box-shadow:0 40px 90px -30px rgba(0,0,0,.8);overflow:hidden}
-  .titlebar{display:flex;align-items:center;gap:7px;height:34px;padding:0 12px;border-bottom:1px solid #2c3442;font-size:.78rem;color:var(--mist)}
-  .titlebar i{width:10px;height:10px;border-radius:50%;background:#3a4352}
-  .titlebar span{margin-left:8px}
-  .canvasbox{position:relative;aspect-ratio:468/832;background:#fff;touch-action:pan-y}
-  .canvasbox canvas,.canvasbox .photo{position:absolute;inset:0;width:100%;height:100%}
-  .photo{object-fit:cover;clip-path:inset(0 0 0 100%)}
-  .cursor{position:absolute;left:0;top:0;width:22px;height:22px;margin:-2px 0 0 -3px;pointer-events:none;filter:drop-shadow(0 2px 3px rgba(0,0,0,.45));opacity:0;transition:opacity var(--normal) var(--out)}
-  .stage.working .cursor{opacity:1}
-  .ripple{position:absolute;left:0;top:0;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;border:2px solid var(--blue);opacity:0;pointer-events:none}
-  .ripple.go{animation:ripple 420ms var(--out)}
-  @keyframes ripple{from{opacity:.9;transform:scale(.4)}to{opacity:0;transform:scale(1.3)}}
-  .handle{position:absolute;top:0;bottom:0;left:100%;width:2px;margin-left:-1px;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.15);opacity:0;pointer-events:none;transition:opacity var(--normal) var(--out)}
-  .handle::after{content:"";position:absolute;top:50%;left:50%;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;background:#fff;box-shadow:0 4px 14px rgba(0,0,0,.35);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230a0c10' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 7l-5 5 5 5M15 7l5 5-5 5'/%3E%3C/svg%3E");background-size:18px;background-repeat:no-repeat;background-position:center}
-  .cmp{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:ew-resize;margin:0}
-  .cmp:disabled{display:none}
-  .stage.compare .handle{opacity:1}
-  .tags{position:absolute;bottom:10px;left:10px;right:10px;display:flex;justify-content:space-between;pointer-events:none;opacity:0;transition:opacity var(--normal) var(--out)}
-  .stage.compare .tags{opacity:1}
-  .tags span{font-size:.72rem;background:rgba(10,12,16,.7);backdrop-filter:blur(6px);padding:3px 8px;border-radius:999px}
-
-  /* the product's control bar */
-  .bar{position:absolute;top:0;left:50%;z-index:2;display:flex;align-items:center;gap:10px;width:max-content;max-width:calc(100% + 40px);padding:8px 8px 8px 16px;border-radius:999px;background:rgba(20,24,31,.86);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid #2e3746;box-shadow:0 10px 30px rgba(0,0,0,.4);transform:translateX(-50%)}
-  @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.bar{background:#151a22}}
-  .bar .text{display:grid;line-height:1.2;min-width:0}
-  .bar b{font-size:.84rem;font-weight:650;white-space:nowrap}
-  .bar small{font:400 .74rem var(--mono);color:var(--mist);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .bar.working b{color:#cfe0ff}.bar.stopped b{color:#ffb4a8}.bar.done b{color:var(--ok)}
-  .bar button{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;border:0;background:#262e3b;color:var(--paper);cursor:pointer;flex:none;transition:transform var(--fast) var(--out)}
-  .bar button:active{transform:scale(.94)}
-  .bar svg{width:14px;height:14px}
-  .caption{margin-top:14px;font-size:.8rem;color:var(--mist);text-align:center}
-
-  /* sections */
-  section{padding:112px 0}
-  h2{font-size:clamp(2rem,4.6vw,3.3rem);line-height:1.02;letter-spacing:-.035em;font-weight:720;max-width:16ch}
-  .sub{color:#b8c2cd;font-size:1.08rem;max-width:52ch;margin-top:16px}
-  .run video{width:100%;border-radius:var(--r-l);border:1px solid var(--line);margin-top:40px;background:#000;aspect-ratio:16/9}
-  .run .fine{margin-top:12px}
-
-  .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:44px}
-  .tile{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-l);padding:20px 20px 24px}
-  .tile h3{font-size:1.18rem;letter-spacing:-.015em;margin-top:18px}
-  .tile p{color:var(--mist);font-size:.96rem;margin-top:6px}
-  .demo{position:relative;height:180px;border-radius:var(--r-m);background:#0e1218;border:1px solid #20262f;overflow:hidden}
-  .again{position:absolute;right:8px;top:8px;border:0;background:#1e2530;color:var(--mist);font:500 .74rem var(--ui);padding:6px 10px;border-radius:999px;cursor:pointer;opacity:0;transition:opacity var(--normal) var(--out),transform var(--fast) var(--out)}
-  .tile.played .again{opacity:1}
-  .again:active{transform:scale(.96)}
-
-  /* demo 1: the tree */
-  .mini{position:absolute;inset:34px 18px auto;display:grid;gap:26px}
-  .ctl{position:relative;height:30px;border-radius:7px;background:#1c222c;border:1px solid #2a3240}
-  .ctl.btnlike{width:84px;background:#2b3442}
-  .ctl.check{width:16px;height:16px;border-radius:4px}
-  .ctl .lab{position:absolute;left:0;top:-3px;transform:translateY(-100%) translateY(4px);font:500 .66rem var(--mono);color:#ffd88a;background:#2a2410;padding:1px 6px;border-radius:4px;white-space:nowrap;opacity:0;transition:opacity var(--normal) var(--out),transform var(--normal) var(--out)}
-  .ctl::after{content:"";position:absolute;inset:-3px;border:1.5px dashed #ffd88a;border-radius:9px;opacity:0;transition:opacity var(--normal) var(--out)}
-  .row{display:flex;align-items:center;gap:10px;color:#748091;font-size:.72rem}
-  .t1.on .ctl .lab{opacity:1;transform:translateY(-100%)}
-  .t1.on .ctl::after{opacity:1}
-
-  /* demo 2: act */
-  .field{position:absolute;left:18px;right:18px;top:46px;height:34px;border-radius:7px;background:#1c222c;border:1px solid #2a3240;font:500 .82rem var(--mono);color:var(--paper);padding:7px 10px;transition:border-color var(--fast) ease}
-  .field.focus{border-color:var(--blue)}
-  .field .caret{display:inline-block;width:1px;height:1em;background:var(--paper);vertical-align:-2px;opacity:0}
-  .field.focus .caret{opacity:1;animation:blink 1s steps(1) infinite}
+  /* chapter: reads, then acts */
+  .work{height:420svh;background:var(--black)}
+  .work .pin{place-items:center}
+  .wtitle{position:absolute;top:calc(52px + 7svh);left:0;right:0;text-align:center;padding:0 16px}
+  .wtitle > div{position:absolute;left:0;right:0;padding:0 16px;will-change:transform,opacity}
+  h2{font-size:clamp(2.2rem,5.6vw,4.4rem);line-height:1.04;letter-spacing:-.03em;font-weight:700}
+  .wtitle p{color:var(--dim);font-size:clamp(1rem,1.6vw,1.25rem);max-width:34ch;margin:12px auto 0}
+  .dialog{position:absolute;top:calc(52px + 7svh + 10.5rem);width:min(560px,calc(100vw - 32px));border-radius:14px;background:#1d2129;border:1px solid #303744;box-shadow:0 40px 100px rgba(0,0,0,.7);will-change:transform,opacity}
+  .dtitle{display:flex;justify-content:space-between;align-items:center;height:40px;padding:0 14px;border-bottom:1px solid #303744;font-size:.86rem;color:#c9ced6}
+  .dtitle i{font-style:normal;color:var(--mist)}
+  .dbody{padding:30px 20px 20px;display:grid;gap:28px;font-size:.88rem;color:#c9ced6}
+  .frow{display:grid;grid-template-columns:110px 1fr;align-items:center;gap:12px}
+  .box{position:relative;height:34px;border-radius:7px;background:#12151b;border:1px solid #333b48;padding:6px 10px;font:500 .86rem var(--mono);color:var(--paper);transition:border-color var(--fast) ease}
+  .box.focus{border-color:var(--blue)}
+  .caret{display:inline-block;width:1px;height:1em;background:var(--paper);vertical-align:-2px;opacity:0}
+  .box.focus .caret{opacity:1;animation:blink 1s steps(1) infinite}
   @keyframes blink{50%{opacity:0}}
-  .save{position:absolute;right:18px;bottom:22px;height:34px;padding:0 16px;border-radius:7px;background:#2f6fd8;color:#fff;font-weight:600;font-size:.84rem;display:grid;place-items:center;transition:transform var(--fast) var(--out),background var(--fast) ease}
-  .save.pressed{transform:scale(.94);background:#2a62c0}
-  .saved{position:absolute;left:18px;bottom:30px;font-size:.76rem;color:var(--ok);opacity:0;transform:translateY(4px);transition:opacity var(--normal) var(--out),transform var(--normal) var(--out)}
-  .saved.on{opacity:1;transform:none}
-  .t2 .cursor{opacity:1;transition:transform 640ms var(--inout)}
+  .crow{display:flex;align-items:center;gap:10px}
+  .cb{position:relative;width:18px;height:18px;border-radius:5px;border:1px solid #47505e;background:#12151b}
+  .brow{display:flex;justify-content:flex-end;gap:10px;padding-top:4px}
+  .b{position:relative;height:34px;padding:0 18px;border-radius:7px;display:grid;place-items:center;font-weight:600;background:#2a303b;color:#e4e7ec;transition:transform var(--fast) var(--out)}
+  .b.save{background:#0a6be0;color:#fff}
+  .b.pressed{transform:scale(.94)}
+  .tag{position:absolute;left:-2px;top:-2px;transform:translateY(-100%);font:600 .7rem var(--mono);color:#1a1404;background:#ffd36b;padding:2px 7px;border-radius:5px;white-space:nowrap;opacity:0;will-change:opacity,transform}
+  .ring{position:absolute;inset:-4px;border:1.5px dashed #ffd36b;border-radius:10px;opacity:0;pointer-events:none}
+  .toast{position:absolute;left:20px;bottom:-46px;color:var(--ok);font-size:.86rem;opacity:0}
+  .cursor{position:absolute;left:0;top:0;width:24px;height:24px;margin:-2px 0 0 -3px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.5));opacity:0;will-change:transform,opacity;z-index:2}
 
-  /* demo 3: Esc */
-  .t3 .glowmini{position:absolute;inset:-30px;background:radial-gradient(45% 40% at 30% 40%,var(--blue),transparent 70%),radial-gradient(45% 45% at 75% 70%,var(--violet),transparent 70%);filter:blur(22px);opacity:.45;transition:opacity 500ms var(--out)}
-  .t3.stopped .glowmini{opacity:0}
-  .t3 .bar{top:40px;transform:translateX(-50%) scale(.92);max-width:calc(100% - 16px)}
-  .key{position:absolute;left:50%;bottom:22px;width:64px;height:44px;margin-left:-32px;border-radius:10px;background:#232a35;border:1px solid #384252;border-bottom-width:4px;display:grid;place-items:center;font:700 .9rem var(--mono);color:var(--paper);transition:transform 90ms ease-out,border-bottom-width 90ms ease-out}
-  .key.down{transform:translateY(3px);border-bottom-width:1px}
+  /* chapter: Esc */
+  .esc{height:260svh}
+  .esc .pin{place-items:center}
+  .edge{position:absolute;inset:0;pointer-events:none;opacity:0;box-shadow:inset 0 0 120px 30px rgba(106,168,255,.55),inset 0 0 260px 60px rgba(176,140,255,.35);will-change:opacity}
+  .dimmer{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none}
+  .ebar{position:absolute;top:calc(52px + 4svh);left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:12px;padding:10px 18px;border-radius:999px;background:rgba(24,28,35,.85);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid #333b48;white-space:nowrap}
+  .ebar .t{display:grid;line-height:1.2}
+  .ebar b{font-size:.9rem;color:#cfe0ff}
+  .ebar small{font:400 .76rem var(--mono);color:var(--mist)}
+  .ebar.stopped b{color:var(--stop)}
+  .ebar i{width:28px;height:28px;border-radius:50%;background:#2a313d;display:grid;place-items:center}
+  .ebar i::before{content:"";width:10px;height:10px;border-radius:2px;background:var(--paper)}
+  .ecopy{text-align:center;padding:0 16px;position:relative}
+  .key{width:clamp(96px,14vw,140px);height:clamp(72px,10vw,104px);margin:0 auto 34px;border-radius:18px;background:linear-gradient(#2a2f38,#1d2129);border:1px solid #3d4552;border-bottom:6px solid #0f1217;display:grid;place-items:center;font:700 clamp(1.3rem,2.4vw,1.9rem) var(--mono);color:var(--paper);transition:transform 90ms ease-out,border-bottom-width 90ms ease-out;box-shadow:0 20px 50px rgba(0,0,0,.5)}
+  .key.down{transform:translateY(5px);border-bottom-width:1px}
+  .ecopy p{color:var(--dim);font-size:clamp(1rem,1.6vw,1.25rem);max-width:36ch;margin:14px auto 0}
 
   /* install */
-  .cards{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:44px}
-  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-l);padding:24px}
-  .card h3{font-size:1.2rem;letter-spacing:-.015em}
-  .card .note{color:var(--mist);font-size:.92rem;margin-top:6px}
-  .code{position:relative;margin-top:16px;background:#0b0e13;border:1px solid #232a35;border-radius:var(--r-m)}
-  .code pre{font:500 .84rem/1.6 var(--mono);padding:14px 16px 14px 16px;padding-right:92px;white-space:pre-wrap;word-break:break-word;color:#dfe6ee}
-  .copy{position:absolute;top:8px;right:8px;height:34px;min-width:72px;border-radius:8px;border:1px solid #2c3442;background:#1a2029;color:var(--paper);font:600 .8rem var(--ui);cursor:pointer;display:grid;place-items:center;transition:transform var(--fast) var(--out)}
+  .install{padding:18svh 0 14svh;background:var(--black)}
+  .wrap{width:min(1000px,calc(100% - 32px));margin:0 auto}
+  .install h2{text-align:center}
+  .install .lead{text-align:center;color:var(--dim);font-size:clamp(1rem,1.6vw,1.25rem);margin-top:12px}
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:52px}
+  .card{background:#101318;border:1px solid #20252d;border-radius:20px;padding:28px}
+  .card h3{font-size:1.25rem;letter-spacing:-.015em}
+  .card p{color:var(--mist);font-size:.92rem;margin-top:6px}
+  .code{position:relative;margin-top:16px;background:#06080b;border:1px solid #1f242c;border-radius:12px}
+  .code pre{font:500 .84rem/1.6 var(--mono);padding:14px 96px 14px 16px;white-space:pre-wrap;word-break:break-word;color:#e3e7ec}
+  .copy{position:absolute;top:8px;right:8px;height:34px;min-width:74px;border-radius:8px;border:1px solid #2a3039;background:#171b22;color:var(--paper);font:600 .8rem var(--ui);cursor:pointer;display:grid;place-items:center;transition:transform var(--fast) var(--out)}
   .copy:active{transform:scale(.96)}
   .copy span{grid-area:1/1;transition:opacity var(--normal) var(--out),transform var(--normal) var(--out),filter var(--normal) var(--out)}
   .copy .done{opacity:0;transform:scale(.9);filter:blur(2px);color:var(--ok)}
   .copy.copied .idle{opacity:0;filter:blur(2px)}
   .copy.copied .done{opacity:1;transform:none;filter:none}
-  .tabs{display:inline-flex;gap:4px;margin-top:16px;padding:4px;border-radius:999px;background:#0b0e13;border:1px solid #232a35}
+  .tabs{display:inline-flex;gap:4px;margin-top:16px;padding:4px;border-radius:999px;background:#06080b;border:1px solid #1f242c}
   .tabs button{height:34px;padding:0 14px;border-radius:999px;border:0;background:transparent;color:var(--mist);font:600 .84rem var(--ui);cursor:pointer;transition:background var(--fast) ease,color var(--fast) ease}
-  .tabs button[aria-selected="true"]{background:var(--raised);color:var(--paper)}
-  .then{margin-top:28px;color:var(--mist)}
+  .tabs button[aria-selected="true"]{background:#1c2129;color:var(--paper)}
+  .then{text-align:center;color:var(--mist);margin-top:34px;font-size:.95rem}
   .then code{color:var(--paper)}
-
-  footer{border-top:1px solid var(--line);padding:32px 0 48px;color:var(--mist);font-size:.88rem}
-  footer .wrap{display:flex;flex-wrap:wrap;gap:8px 20px;justify-content:space-between}
+  footer{border-top:1px solid #1d2128;padding:26px 0 40px;color:var(--mist);font-size:.82rem}
+  footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 18px}
   footer a{display:inline-block;padding:12px 0}
 
-  /* one entrance moment, on first load */
-  .js .in{opacity:0;transform:translateY(10px);animation:enter var(--slow) var(--out) forwards;animation-delay:calc(var(--i,0) * 50ms)}
-  .js .stage.in{transform:scale(.97);animation-duration:500ms}
-  @keyframes enter{to{opacity:1;transform:none}}
-
-  @media (max-width:480px){.brand{font-size:.9rem}.top nav a{padding:10px 8px}}
-  @media (max-width:880px){
-    .hero{grid-template-columns:1fr;gap:56px;min-height:0;padding-top:12px}
-    .tiles,.cards{grid-template-columns:1fr}
-    section{padding:80px 0}
+  /* reduced motion: no pinning or scrubbing, every chapter shown in its finished state */
+  .still .hero .pin,.still .work .pin,.still .esc .pin{display:flex;flex-direction:column;align-items:center;gap:36px}
+  .still .htext,.still .frame,.still .note,.still .stats,.still .stat,.still .wtitle,.still .wtitle>div,.still .dialog,.still .ebar{position:relative!important;inset:auto!important;top:auto!important;left:auto!important;right:auto!important;transform:none!important;opacity:1!important}
+  .still .frame{height:70svh;--fh:70svh}
+  .still .stats{display:flex;flex-wrap:wrap;justify-content:center;gap:28px 44px}
+  .still .stat{text-align:center!important}
+  .still .labels{opacity:1;position:relative;inset:auto;margin-top:10px}
+  .still .wtitle{display:grid;gap:28px}
+  @media (max-width:760px){
+    .cards{grid-template-columns:1fr}
+    .frow{grid-template-columns:1fr;gap:6px}
+    .dialog{top:calc(52px + 7svh + 9rem)}
   }
-  @media (prefers-reduced-motion:reduce){
-    html{scroll-behavior:auto}
-    .js .in{animation-duration:150ms;transform:none}
-    .stage.working .glow{animation:none}
-    .t2 .cursor{transition:none}
-    .ripple.go{animation:none}
-  }
+  @media (prefers-reduced-motion:reduce){.box.focus .caret{animation:none}}
 </style>
 </head>
 <body>
-<a class="skip" href="#main">Skip to content</a>
-<header class="wrap top">
+<a class="skip" href="#install">Skip to install</a>
+<header class="top">
   <a class="brand" href="./">Antigravity Computer Use</a>
   <nav aria-label="Primary"><a href="#install">Install</a><a href="https://github.com/shayann07/antigravity-computer-use">GitHub</a></nav>
 </header>
 
-<main id="main">
-  <div class="wrap hero">
-    <div>
-      <p class="eyebrow in" style="--i:0">/computer-use for Google Antigravity</p>
-      <h1 class="in" style="--i:1">Give your agent <span class="soft">hands.</span></h1>
-      <p class="lede in" style="--i:2">It sees the screen and works real apps on Windows and macOS with your mouse and keyboard. <kbd>Esc</kbd> stops it at once.</p>
-      <div class="cta in" style="--i:3">
-        <a class="btn primary" href="#install">Install</a>
-        <a class="btn" href="#run">See the real run</a>
+<main>
+  <!-- 1. The real run -->
+  <section class="ch hero" id="top" data-ch="hero">
+    <div class="pin">
+      <div class="htext" id="htext">
+        <p class="eyebrow">Antigravity Computer Use</p>
+        <h1>Give your agent <span class="grad">hands.</span></h1>
+        <div class="ctas"><a class="pill" href="#install">Install</a><a href="#work">See how it works &rsaquo;</a></div>
       </div>
-      <p class="fine in" style="--i:4">Free and open source, MIT. Not affiliated with Google.</p>
-    </div>
-
-    <figure class="stage in" id="stage" style="--i:2">
-      <div class="glow" aria-hidden="true"></div>
-      <div class="bar" id="bar" role="status" aria-live="polite">
-        <span class="text"><b id="barTitle">Antigravity is ready</b><small id="barLine">Replaying the real plan</small></span>
-        <button type="button" id="barBtn" aria-label="Stop"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="2" fill="currentColor"/></svg></button>
-      </div>
-      <div class="win">
-        <div class="titlebar" aria-hidden="true"><i></i><i></i><i></i><span>Paint</span></div>
-        <div class="canvasbox" id="box">
-          <canvas id="cv" width="936" height="1664" role="img" aria-label="The portrait being painted, stroke by stroke, from the real plan"></canvas>
-          <img class="photo" id="photo" src="media/photo.jpg" alt="" width="648" height="1152">
-          <svg class="cursor" id="cursor" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 2l15.5 9.2-6.8 1.6-3.6 6.4z" fill="#fff" stroke="#0a0c10" stroke-width="1.6" stroke-linejoin="round"/></svg>
-          <span class="ripple" id="ripple" aria-hidden="true"></span>
-          <span class="handle" id="handle" aria-hidden="true"></span>
-          <div class="tags" aria-hidden="true"><span>Painted in Paint</span><span>Original photo</span></div>
-          <input class="cmp" id="cmp" type="range" min="0" max="100" value="70" disabled aria-label="Compare the painting with the original photo">
+      <figure class="frame" id="frame">
+        <div class="halo" aria-hidden="true"></div>
+        <div class="shot">
+          <video id="film" src="media/hero.mp4" poster="media/hero-first.jpg" muted playsinline preload="auto" aria-label="The real run: the portrait being painted in Microsoft Paint, 400 times faster"></video>
+          <img class="photo" id="photo" src="media/photo.jpg" alt="The original photo, revealed over the painting" width="648" height="1152">
+          <span class="seam" id="seam" aria-hidden="true"></span>
         </div>
+        <figcaption class="labels" id="labels"><span>Painted in Paint</span><span>Original photo</span></figcaption>
+      </figure>
+      <div class="stats" id="stats">
+        <div class="stat"><b>1</b><span>prompt</span></div>
+        <div class="stat"><b>2,553</b><span>real mouse strokes</span></div>
+        <div class="stat"><b>40</b><span>exact colours</span></div>
+        <div class="stat"><b>65 min</b><span>unattended</span></div>
       </div>
-      <figcaption class="caption">The real 2,832-step plan, scripted from the photo, replayed in your browser about 400&times; faster. The window is illustrated.</figcaption>
-    </figure>
-  </div>
-
-  <section class="run" id="run">
-    <div class="wrap">
-      <h2>It painted this in Microsoft Paint.</h2>
-      <p class="sub">One prompt to Gemini 4 Hydrogen. 2,553 strokes in 40 exact colours, typed into Paint's own colour editor, about 65 minutes unattended.</p>
-      <video id="video" src="media/paint-demo.mp4" poster="media/poster.jpg" controls muted loop playsinline preload="none" aria-label="Recording of the real run in Microsoft Paint"></video>
-      <p class="fine">The real recording, 200&times; faster. The bar and glow are drawn in, since they're hidden from screen recordings by default.</p>
+      <p class="note" id="note">Gemini 4 Hydrogen in Microsoft Paint, following a stroke plan scripted from the photo. The real recording, cropped to the canvas, about 400&times; faster.</p>
     </div>
   </section>
 
-  <section id="how">
-    <div class="wrap">
-      <h2>Careful by design.</h2>
-      <div class="tiles">
-        <article class="tile t1" data-demo="1">
-          <div class="demo" aria-hidden="true">
-            <div class="mini">
-              <div class="row"><div class="ctl" style="flex:1"><span class="lab">Edit "File name"</span></div></div>
-              <div class="row"><div class="ctl check"><span class="lab">CheckBox "Open after saving"</span></div><span>Open after saving</span></div>
-              <div class="row" style="justify-content:flex-end"><div class="ctl btnlike"><span class="lab">Button "Save"</span></div></div>
-            </div>
-            <button class="again" type="button" tabindex="-1">Play again</button>
-          </div>
-          <h3>Reads the app first.</h3>
-          <p>Every control has a role and a name. It reads those before it looks at pixels.</p>
-        </article>
-        <article class="tile t2" data-demo="2">
-          <div class="demo" aria-hidden="true">
-            <div class="field" id="f2"><span id="typed"></span><span class="caret"></span></div>
-            <div class="saved" id="saved">Saved</div>
-            <div class="save" id="save">Save</div>
-            <svg class="cursor" id="c2" viewBox="0 0 24 24"><path d="M4 2l15.5 9.2-6.8 1.6-3.6 6.4z" fill="#fff" stroke="#0a0c10" stroke-width="1.6" stroke-linejoin="round"/></svg>
-            <button class="again" type="button" tabindex="-1">Play again</button>
-          </div>
-          <h3>Then works it for real.</h3>
-          <p>Your mouse and keyboard, only in apps you approve.</p>
-        </article>
-        <article class="tile t3" data-demo="3">
-          <div class="demo" aria-hidden="true">
-            <div class="glowmini"></div>
-            <div class="bar working" id="b3"><span class="text"><b id="b3t">Antigravity is working</b><small id="b3l">Typing</small></span></div>
-            <div class="key" id="key">Esc</div>
-            <button class="again" type="button" tabindex="-1">Play again</button>
-          </div>
-          <h3><kbd>Esc</kbd> stops it at once.</h3>
-          <p>Wherever you are. It lets go of every key and button.</p>
-        </article>
+  <!-- 2. Reads the app, then uses it -->
+  <section class="ch work" id="work" data-ch="work">
+    <div class="pin">
+      <div class="wtitle" aria-live="off">
+        <div id="wa"><h2>It reads the app first.</h2><p>Every button and field has a role and a name. It reads those before it looks at pixels.</p></div>
+        <div id="wb"><h2>Then it uses it. For real.</h2><p>Your mouse, your keyboard, only in apps you approve.</p></div>
+      </div>
+      <div class="dialog" id="dialog" aria-hidden="true">
+        <div class="dtitle"><span>Save as</span><i>Paint</i></div>
+        <div class="dbody">
+          <div class="frow"><span>File name</span><div class="box" id="name"><span id="typed"></span><span class="caret"></span><span class="ring"></span><span class="tag">Edit "File name"</span></div></div>
+          <div class="frow"><span>Save as type</span><div class="box">PNG (*.png)<span class="ring"></span><span class="tag">ComboBox "Save as type"</span></div></div>
+          <div class="crow"><div class="cb"><span class="ring"></span><span class="tag">CheckBox "Open after saving"</span></div><span>Open after saving</span></div>
+          <div class="brow"><div class="b">Cancel</div><div class="b save" id="save">Save<span class="ring"></span><span class="tag">Button "Save"</span></div></div>
+        </div>
+        <span class="toast" id="toast">Saved portrait.png</span>
+        <svg class="cursor" id="cursor" viewBox="0 0 24 24"><path d="M4 2l15.5 9.2-6.8 1.6-3.6 6.4z" fill="#fff" stroke="#000" stroke-width="1.6" stroke-linejoin="round"/></svg>
       </div>
     </div>
   </section>
 
-  <section id="install">
+  <!-- 3. Esc -->
+  <section class="ch esc" id="esc" data-ch="esc">
+    <div class="pin">
+      <div class="edge" id="edge" aria-hidden="true"></div>
+      <div class="ebar" id="ebar" aria-hidden="true"><span class="t"><b id="ebt">Antigravity is working</b><small id="ebl">Typing</small></span><i></i></div>
+      <div class="ecopy">
+        <div class="key" id="key" aria-hidden="true">Esc</div>
+        <h2>Esc stops it at once.</h2>
+        <p>Wherever you are. It lets go of every key and button, and the next task starts fresh.</p>
+      </div>
+      <div class="dimmer" id="dimmer" aria-hidden="true"></div>
+    </div>
+  </section>
+
+  <!-- 4. Install -->
+  <section class="install" id="install">
     <div class="wrap">
-      <h2>Install in a minute.</h2>
+      <h2>Ready when you are.</h2>
+      <p class="lead">Free and open source, for Windows and macOS.</p>
       <div class="cards">
         <div class="card">
           <h3>Ask your agent</h3>
-          <p class="note">Paste this into Antigravity and approve the command it shows you.</p>
+          <p>Paste this into Antigravity and approve the command it shows you.</p>
           <div class="code"><pre id="prompt">Install the computer use skill from https://github.com/shayann07/antigravity-computer-use with the one-line installer for this computer. Show me the command before you run it.</pre><button class="copy" type="button" data-copy="prompt"><span class="idle">Copy</span><span class="done">Copied</span></button></div>
         </div>
         <div class="card">
           <h3>Or run one line</h3>
-          <p class="note">It checks the release's SHA-256 before installing anything.</p>
+          <p>It checks the release's SHA-256 before installing anything.</p>
           <div class="tabs" role="tablist" aria-label="Operating system">
             <button role="tab" id="tab-win" aria-controls="os-win" aria-selected="true">Windows</button>
             <button role="tab" id="tab-mac" aria-controls="os-mac" aria-selected="false" tabindex="-1">macOS</button>
           </div>
-          <div id="os-win" role="tabpanel" aria-labelledby="tab-win"><div class="code"><pre id="cmd-win">irm https://raw.githubusercontent.com/shayann07/antigravity-computer-use/main/install.ps1 | iex</pre><button class="copy" type="button" data-copy="cmd-win"><span class="idle">Copy</span><span class="done">Copied</span></button></div><p class="note">In PowerShell.</p></div>
-          <div id="os-mac" role="tabpanel" aria-labelledby="tab-mac" hidden><div class="code"><pre id="cmd-mac">curl -fsSL https://raw.githubusercontent.com/shayann07/antigravity-computer-use/main/install.sh | sh</pre><button class="copy" type="button" data-copy="cmd-mac"><span class="idle">Copy</span><span class="done">Copied</span></button></div><p class="note">In Terminal, then grant Accessibility and Screen Recording when asked.</p></div>
+          <div id="os-win" role="tabpanel" aria-labelledby="tab-win"><div class="code"><pre id="cmd-win">irm https://raw.githubusercontent.com/shayann07/antigravity-computer-use/main/install.ps1 | iex</pre><button class="copy" type="button" data-copy="cmd-win"><span class="idle">Copy</span><span class="done">Copied</span></button></div><p>In PowerShell.</p></div>
+          <div id="os-mac" role="tabpanel" aria-labelledby="tab-mac" hidden><div class="code"><pre id="cmd-mac">curl -fsSL https://raw.githubusercontent.com/shayann07/antigravity-computer-use/main/install.sh | sh</pre><button class="copy" type="button" data-copy="cmd-mac"><span class="idle">Copy</span><span class="done">Copied</span></button></div><p>In Terminal, then grant Accessibility and Screen Recording when asked.</p></div>
         </div>
       </div>
       <p class="then">Then open a new Antigravity conversation and type <code>/computer-use</code>. Prefer to check the SHA-256 yourself? <a href="https://github.com/shayann07/antigravity-computer-use#install">Install by hand</a>.</p>
@@ -312,160 +264,138 @@
   </div>
 </footer>
 
-<script src="plan.js" defer></script>
-<script defer>
-addEventListener('DOMContentLoaded', () => {
+<script>
+(() => {
   const $ = id => document.getElementById(id);
-  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const fmt = n => n.toLocaleString('en-US');
+  const still = document.documentElement.classList.contains('still');
+  const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+  const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;     // in-out cubic
+  const span = (p, a, b) => ease(clamp((p - a) / (b - a)));                          // 0..1 inside [a,b]
+  const mix = (a, b, t) => a + (b - a) * t;
 
-  /* ---------- hero: the real plan, painted into the illustrated window ---------- */
-  const stage = $('stage'), bar = $('bar'), title = $('barTitle'), line = $('barLine'), btn = $('barBtn');
-  const cv = $('cv'), ctx = cv.getContext('2d'), S = cv.width / 468;
-  const cursor = $('cursor'), ripple = $('ripple'), box = $('box');
-  const photo = $('photo'), handle = $('handle'), cmp = $('cmp');
-  const plan = window.PAINT_PLAN;
-  const stopIcon = btn.innerHTML, playIcon = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.8v10.4L13 8z" fill="currentColor"/></svg>';
-  const RUN_MS = 9000;
-  let state = 'idle', raf = 0, t0 = 0, drawn = 0, lastLine = 0, lastColour = -1;
+  /* ---------- 1. hero: the real recording, then the reveal ---------- */
+  const film = $('film'), frame = $('frame'), htext = $('htext'), photo = $('photo'), seam = $('seam');
+  const labels = $('labels'), note = $('note'), stats = [...document.querySelectorAll('.stat')];
+  let filmDone = false;
+  film.addEventListener('ended', () => { filmDone = true; frame.classList.add('done'); });
+  if (still) { film.removeAttribute('autoplay'); film.poster = 'media/hero-last.jpg'; frame.classList.add('done'); }
+  else film.play().catch(() => {});
 
-  function setBar(kind, a, b) { bar.className = 'bar ' + kind; title.textContent = a; line.textContent = b; }
-  function setButton(stop) { btn.innerHTML = stop ? stopIcon : playIcon; btn.setAttribute('aria-label', stop ? 'Stop' : 'Play the replay again'); }
-
-  (() => {
-  if (!plan) { setBar('done', 'Antigravity is ready', 'Replay data did not load'); return showStatic(); }
-  const steps = plan.steps, pal = plan.pal, N = steps.length;
-  const colourAt = new Int16Array(N), cum = new Float64Array(N + 1);
-  let c = -1, strokes = 0;
-  for (let i = 0; i < N; i++) {
-    const s = steps[i];
-    if (typeof s === 'string' && s[0] === 'H') c = +s.slice(1);
-    if (typeof s !== 'string') strokes++;
-    colourAt[i] = c;
-    const dark = c >= 0 && c < 3;                 // near-black on near-black: pass quickly
-    cum[i + 1] = cum[i] + (typeof s === 'string' ? 4 : s.length / 2) * (dark ? .25 : 1);
+  function heroLayout() {
+    const vw = document.documentElement.clientWidth, vh = innerHeight, narrow = vw < 760;
+    const textBottom = htext.getBoundingClientRect().height + 52 + vh * .05 + 16;
+    const startH = Math.max(220, vh - textBottom - 24);                 // fits under the headline
+    const endH = narrow ? vh * .56 : Math.min(vh * .84, 820);           // centred, larger
+    frame.style.setProperty('--fh', endH + 'px');
+    return {vw, vh, narrow, startScale: startH / endH, startY: textBottom, endY: narrow ? 52 + vh * .06 : (vh - endH) / 2 + 10, endH};
   }
-  const total = cum[N];
-  ctx.lineJoin = ctx.lineCap = 'round';
+  let L = heroLayout();
+  addEventListener('resize', () => { L = heroLayout(); render(); });
 
-  function blank() { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height); drawn = 0; lastColour = -1; }
-  function drawTo(n) {
-    let batch = -1, px = null, py = null;
-    for (; drawn < n; drawn++) {
-      const s = steps[drawn];
-      if (s === 'K') { ctx.fillStyle = pal[colourAt[drawn]]; ctx.fillRect(0, 0, cv.width, cv.height); continue; }
-      if (typeof s === 'string') continue;
-      const col = colourAt[drawn];
-      if (col !== batch) { if (batch !== -1) ctx.stroke(); ctx.beginPath(); ctx.strokeStyle = pal[col]; ctx.lineWidth = 3 * S; batch = col; }
-      ctx.moveTo(s[0] * S, s[1] * S);
-      for (let k = 2; k < s.length; k += 2) ctx.lineTo(s[k] * S, s[k + 1] * S);
-      px = s[s.length - 2]; py = s[s.length - 1];
+  function hero(p) {
+    // headline lifts away
+    const t1 = span(p, .04, .26);
+    htext.style.opacity = 1 - t1;
+    htext.style.transform = `translateY(${-50 * t1}px) scale(${1 - .04 * t1})`;
+    // the frame rises to the centre and grows
+    const t2 = span(p, .06, .32);
+    const s = mix(L.startScale, 1, t2), y = mix(L.startY, L.endY, t2);
+    frame.style.transform = `translate(-50%, ${y}px) scale(${s})`;
+    frame.style.transformOrigin = '50% 0';
+    // the finished painting holds, then the photo wipes in to half
+    if (p > .28 && !filmDone && film.duration) { film.pause(); film.currentTime = film.duration; filmDone = true; frame.classList.add('done'); }
+    const t3 = span(p, .36, .58), cut = mix(100, 50, t3);
+    photo.style.clipPath = `inset(0 0 0 ${cut}%)`;
+    seam.style.left = cut + '%'; seam.style.opacity = t3 > 0 && t3 < 1 ? 1 : t3 >= 1 ? .9 : 0;
+    labels.style.opacity = span(p, .5, .6);
+    // the numbers arrive, one at a time, beside the frame (below it on phones)
+    const fw = L.endH * 9 / 16, left = L.vw / 2 - fw / 2, right = L.vw / 2 + fw / 2;
+    stats.forEach((el, i) => {
+      const t = span(p, .58 + i * .06, .7 + i * .06);
+      el.style.opacity = t;
+      if (L.narrow) {
+        const col = i % 2, row = i >> 1, top = L.endY + L.endH + 34 + row * 74;
+        el.style.left = (col ? L.vw / 2 + 8 : 16) + 'px'; el.style.top = top + 'px'; el.style.right = 'auto';
+      } else {
+        const side = i % 2 ? right + 56 : left - 56, top = L.endY + L.endH * (.18 + (i >> 1) * .42);
+        el.style.top = top + 'px';
+        if (i % 2) { el.style.left = side + 'px'; el.style.right = 'auto'; el.style.textAlign = 'left'; }
+        else { el.style.right = (L.vw - side) + 'px'; el.style.left = 'auto'; el.style.textAlign = 'right'; }
+      }
+      el.style.transform = `translateY(${(1 - t) * 24}px)`;
+    });
+    note.style.opacity = span(p, .82, .92);
+  }
+
+  /* ---------- 2. reads the app, then uses it ---------- */
+  const dialog = $('dialog'), wa = $('wa'), wb = $('wb'), cursor = $('cursor'), name = $('name'), typed = $('typed'), save = $('save'), toast = $('toast');
+  const tags = [...dialog.querySelectorAll('.tag')], rings = [...dialog.querySelectorAll('.ring')];
+  const word = 'portrait.png';
+  const pointIn = el => { const d = dialog.getBoundingClientRect(), r = el.getBoundingClientRect(); return [r.left - d.left + r.width * .35, r.top - d.top + r.height * .6]; };
+  function work(p) {
+    const tin = span(p, 0, .1);
+    dialog.style.opacity = tin;
+    dialog.style.transform = `translateY(${(1 - tin) * 60}px) scale(${mix(.94, 1, tin)})`;
+    const ta = 1 - span(p, .42, .48), tb = span(p, .48, .54);
+    wa.style.opacity = ta; wa.style.transform = `translateY(${(1 - ta) * -16}px)`;
+    wb.style.opacity = tb; wb.style.transform = `translateY(${(1 - tb) * 16}px)`;
+    // the tree: labels appear one by one, then step back
+    const fade = 1 - span(p, .44, .5);
+    tags.forEach((el, i) => {
+      const t = span(p, .1 + i * .07, .16 + i * .07) * fade;
+      el.style.opacity = t; el.style.transform = `translateY(-100%) translateY(${(1 - t) * 6}px)`;
+      rings[i].style.opacity = t;
+    });
+    // the act: move to the field, type, move to Save, press
+    const start = [dialog.clientWidth * .5, dialog.clientHeight + 40];
+    const a = pointIn(name), b = pointIn(save);
+    let x = start[0], y = start[1];
+    const m1 = span(p, .54, .62), m2 = span(p, .8, .88);
+    x = mix(mix(start[0], a[0], m1), b[0], m2); y = mix(mix(start[1], a[1], m1), b[1], m2);
+    cursor.style.opacity = span(p, .52, .56);
+    cursor.style.transform = `translate(${x}px,${y}px)`;
+    name.classList.toggle('focus', p > .62 && p < .88);
+    const n = Math.round(clamp((p - .63) / .15) * word.length);
+    if (typed.textContent.length !== n) typed.textContent = word.slice(0, n);
+    save.classList.toggle('pressed', p > .89 && p < .91);
+    toast.style.opacity = span(p, .91, .95);
+  }
+
+  /* ---------- 3. Esc ---------- */
+  const edge = $('edge'), ebar = $('ebar'), ebt = $('ebt'), ebl = $('ebl'), key = $('key'), dimmer = $('dimmer');
+  let stopped = null;
+  function esc(p) {
+    const press = p >= .55;
+    edge.style.opacity = press ? 0 : span(p, .05, .35);
+    edge.style.transition = press ? 'opacity 500ms var(--out)' : 'none';
+    key.classList.toggle('down', p >= .55 && p < .6);
+    dimmer.style.opacity = press ? mix(.0, .35, span(p, .55, .62)) : 0;
+    if (press !== stopped) {
+      stopped = press;
+      ebar.classList.toggle('stopped', press);
+      ebt.textContent = press ? 'Stopped' : 'Antigravity is working';
+      ebl.textContent = press ? 'You pressed Esc' : 'Typing';
     }
-    if (batch !== -1) ctx.stroke();
-    if (px !== null) cursor.style.transform = `translate(${px / 468 * box.clientWidth}px,${py / 832 * box.clientHeight}px)`;
   }
-  function stepAt(t) {              // binary search: steps done at a fraction of the run
-    const target = t * total; let lo = 0, hi = N;
-    while (lo < hi) { const m = (lo + hi) >> 1; if (cum[m + 1] <= target) lo = m + 1; else hi = m; }
-    return lo;
-  }
-  function tick(now) {
-    const p = Math.min(1, (now - t0) / RUN_MS), n = p >= 1 ? N : stepAt(p);
-    drawTo(n);
-    const col = n ? colourAt[n - 1] : -1;
-    if (col !== lastColour && col >= 0 && cursor.style.transform) {
-      lastColour = col;
-      ripple.style.transform = cursor.style.transform; ripple.classList.remove('go'); void ripple.offsetWidth; ripple.classList.add('go');
+
+  /* ---------- the scroll engine: one rAF, writes transforms directly ---------- */
+  const chapters = [...document.querySelectorAll('[data-ch]')].map(el => ({el, fn: {hero, work, esc}[el.dataset.ch]}));
+  function render() {
+    for (const c of chapters) {
+      if (still) { c.fn(c.el.dataset.ch === 'esc' ? 1 : c.el.dataset.ch === 'work' ? 1 : 1); continue; }
+      const r = c.el.getBoundingClientRect(), len = r.height - innerHeight;
+      if (r.bottom < -innerHeight || r.top > innerHeight * 2) continue;
+      c.fn(clamp(-r.top / len));
     }
-    if (now - lastLine > 110) {
-      lastLine = now;
-      const s = steps[Math.max(0, n - 1)];
-      line.textContent = (typeof s === 'string' && s[0] === 'H' ? 'Picking colour ' + pal[+s.slice(1)] : 'Dragging') + ' · step ' + fmt(n) + ' of ' + fmt(N);
-    }
-    if (p < 1) raf = requestAnimationFrame(tick); else finish();
   }
-  function play() {
-    cancelAnimationFrame(raf); blank(); showCompare(false);
-    state = 'running'; stage.classList.add('working'); setButton(true);
-    setBar('working', 'Antigravity is working', 'Starting');
-    t0 = performance.now(); raf = requestAnimationFrame(tick);
-  }
-  function stop() {
-    if (state !== 'running') return;
-    cancelAnimationFrame(raf); state = 'stopped'; stage.classList.remove('working'); setButton(false);
-    setBar('stopped', 'Stopped', 'You pressed Esc');
-  }
-  function finish() {
-    state = 'done'; stage.classList.remove('working'); setButton(false);
-    setBar('done', 'Done', fmt(strokes) + ' strokes in ' + pal.length + ' colours');
-    setTimeout(() => state === 'done' && showCompare(true), 450);
-  }
-  function setSplit(v) { photo.style.clipPath = `inset(0 0 0 ${v}%)`; handle.style.left = v + '%'; }
-  function showCompare(on) {
-    stage.classList.toggle('compare', on); cmp.disabled = !on;
-    if (!on) { photo.style.transition = 'none'; setSplit(100); return; }
-    if (reduce) { setSplit(+cmp.value); return; }
-    photo.style.transition = handle.style.transition = 'clip-path 700ms var(--out), left 700ms var(--out)';
-    requestAnimationFrame(() => setSplit(+cmp.value));
-    setTimeout(() => { photo.style.transition = handle.style.transition = ''; }, 720);
-  }
-  function showStatic() {
-    const img = new Image(); img.src = 'media/painting.jpg';
-    img.onload = () => { ctx.drawImage(img, 0, 0, cv.width, cv.height); state = 'done'; showCompare(true); };
-  }
-  cmp.addEventListener('input', () => setSplit(+cmp.value));
-  btn.addEventListener('click', () => state === 'running' ? stop() : play());
-  addEventListener('keydown', e => { if (e.key === 'Escape') stop(); });
+  let queued = false;
+  addEventListener('scroll', () => { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; render(); }); } }, {passive: true});
+  if (still) { frame.style.position = 'relative'; }
+  render();
 
-  if (reduce) { blank(); drawTo(N); finish(); setBar('done', 'Done', fmt(strokes) + ' strokes in ' + pal.length + ' colours'); }
-  else {
-    blank();
-    // Start when the window is on screen, so phones scrolling past the headline still see it paint.
-    const io = new IntersectionObserver(es => { if (es[0].isIntersecting) { io.disconnect(); setTimeout(play, 500); } }, {threshold: .35});
-    io.observe(stage);
-  }
-  })();
-
-  /* ---------- the real recording plays only while visible ---------- */
-  const video = $('video');
-  if (!reduce) new IntersectionObserver(es => es.forEach(e => {
-    if (e.isIntersecting) { video.preload = 'auto'; video.play().catch(() => {}); } else video.pause();
-  }), {threshold: .4}).observe(video);
-
-  /* ---------- three small demos, each plays once when it comes into view ---------- */
-  const wait = ms => new Promise(r => setTimeout(r, reduce ? 0 : ms));
-  const demos = {
-    async 1(t) { t.classList.remove('on'); await wait(200); t.classList.add('on'); },
-    async 2(t) {
-      const field = $('f2'), typed = $('typed'), save = $('save'), saved = $('saved'), cur = $('c2'), demo = t.querySelector('.demo');
-      typed.textContent = ''; saved.classList.remove('on'); field.classList.remove('focus');
-      const at = el => { const d = demo.getBoundingClientRect(), r = el.getBoundingClientRect(); return `translate(${r.left - d.left + r.width * .3}px,${r.top - d.top + r.height * .55}px)`; };
-      cur.style.transition = 'none'; cur.style.transform = 'translate(12px,140px)'; void cur.offsetWidth; cur.style.transition = '';
-      await wait(250); cur.style.transform = at(field); await wait(700);
-      field.classList.add('focus');
-      for (const ch of 'report.png') { typed.textContent += ch; await wait(70); }
-      await wait(200); cur.style.transform = at(save); await wait(700);
-      save.classList.add('pressed'); await wait(120); save.classList.remove('pressed');
-      field.classList.remove('focus'); saved.classList.add('on');
-    },
-    async 3(t) {
-      const key = $('key'), b = $('b3');
-      t.classList.remove('stopped'); b.className = 'bar working'; $('b3t').textContent = 'Antigravity is working'; $('b3l').textContent = 'Typing';
-      await wait(1100); key.classList.add('down'); await wait(110); key.classList.remove('down');
-      t.classList.add('stopped'); b.className = 'bar stopped'; $('b3t').textContent = 'Stopped'; $('b3l').textContent = 'You pressed Esc';
-    }
-  };
-  document.querySelectorAll('.tile').forEach(t => {
-    const run = async () => { t.classList.remove('played'); await demos[t.dataset.demo](t); t.classList.add('played'); };
-    t.querySelector('.again').addEventListener('click', run);
-    new IntersectionObserver((es, o) => { if (es[0].isIntersecting) { o.disconnect(); run(); } }, {threshold: .6}).observe(t);
-  });
-
-  /* ---------- install: OS tabs and copy buttons ---------- */
+  /* ---------- install: OS tabs and copy ---------- */
   const tabs = [...document.querySelectorAll('[role=tab]')];
-  function select(tab) {
-    tabs.forEach(t => { const on = t === tab; t.setAttribute('aria-selected', on); t.tabIndex = on ? 0 : -1; $(t.getAttribute('aria-controls')).hidden = !on; });
-  }
+  const select = tab => tabs.forEach(t => { const on = t === tab; t.setAttribute('aria-selected', on); t.tabIndex = on ? 0 : -1; $(t.getAttribute('aria-controls')).hidden = !on; });
   tabs.forEach((t, i) => {
     t.addEventListener('click', () => select(t));
     t.addEventListener('keydown', e => { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { const n = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]; select(n); n.focus(); } });
@@ -475,7 +405,7 @@ addEventListener('DOMContentLoaded', () => {
     try { await navigator.clipboard.writeText($(b.dataset.copy).textContent); } catch { return; }
     b.classList.add('copied'); setTimeout(() => b.classList.remove('copied'), 1600);
   }));
-});
+})();
 </script>
 </body>
 </html>
