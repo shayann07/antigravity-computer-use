@@ -84,6 +84,30 @@
   .glow{border-radius:10px;overflow:hidden;position:relative}
   .glow img{display:block;width:100%;height:auto;animation:drift 6s var(--ease-in-out) infinite alternate}
   @keyframes drift{from{opacity:.86}to{opacity:1}}
+  /* Proof, privacy, platforms */
+  .cards2{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:24px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:22px}
+  .card h3{font-size:17px}
+  .card p{color:var(--mist);margin-top:6px;font-size:15px}
+  .card .num{display:flex;gap:18px;margin-top:14px;flex-wrap:wrap}
+  .card .num b{font-size:22px;display:block}
+  .card .num span{color:var(--mist);font-size:12.5px}
+  .list{margin-top:10px;padding-left:18px;color:var(--mist);font-size:15px}
+  .list li{margin-top:4px}
+  .platforms{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:24px}
+  /* FAQ: details that open smoothly where the browser can animate height */
+  .faq{margin-top:22px;border-top:1px solid var(--line)}
+  .faq details{border-bottom:1px solid var(--line)}
+  .faq summary{cursor:pointer;list-style:none;padding:16px 4px;font-weight:600;display:flex;justify-content:space-between;align-items:center;gap:12px}
+  .faq summary::-webkit-details-marker{display:none}
+  .faq summary::after{content:"";width:9px;height:9px;border-right:2px solid var(--mist);border-bottom:2px solid var(--mist);transform:rotate(45deg);transition:transform var(--normal) var(--ease-out);flex:none;margin-right:4px}
+  .faq details[open] summary::after{transform:rotate(225deg)}
+  .faq p{color:var(--mist);padding:0 4px 16px;max-width:760px}
+  @supports (interpolate-size:allow-keywords){
+    :root{interpolate-size:allow-keywords}
+    .faq details::details-content{height:0;overflow:clip;transition:height var(--normal) var(--ease-out),content-visibility var(--normal) allow-discrete}
+    .faq details[open]::details-content{height:auto}
+  }
   /* Install */
   .code{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:12px;margin-top:14px}
   .code pre{overflow-x:auto;padding:16px 104px 16px 16px;font:14px/1.5 "Cascadia Code",ui-monospace,Consolas,monospace;color:var(--paper)}
@@ -100,13 +124,14 @@
   @keyframes enter{to{opacity:1;transform:none}}
   .js .reveal{opacity:0;transform:translateY(12px);transition:opacity var(--slow) var(--ease-out),transform var(--slow) var(--ease-out);transition-delay:calc(var(--i,0) * 60ms)}
   .js .reveal.shown{opacity:1;transform:none}
-  @media (max-width:820px){.compare,.row,.steps,.grid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.lens{display:none}}
+  @media (max-width:820px){.compare,.row,.steps,.grid,.cards2,.platforms{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.lens{display:none}}
   @media (prefers-reduced-motion:reduce){
     html{scroll-behavior:auto}
     .js .in{transform:none;animation-duration:150ms;animation-delay:0s}
     .js .reveal{transform:none;transition:opacity 150ms linear;transition-delay:0s}
     .glow img{animation:none}
-    .lens,.btn,.copy,.copy span{transition:none}
+    .lens,.btn,.copy,.copy span,.faq summary::after{transition:none}
+    .faq details::details-content{transition:none}
   }
 </style>
 </head>
@@ -189,6 +214,42 @@
         <div><h3>One key stops it</h3><p><kbd>Esc</kbd> or <kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>F12</kbd> stops it at once and lets go of every key and button. Sign-ins and admin prompts are always left to you.</p></div>
         <img src="media/settings-menu.png" alt="The Settings menu with the stop keys" loading="lazy">
       </div>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="reveal">Proven on real apps</h2>
+    <p class="sub reveal">Not a sandbox and not a browser extension: the agent works in the same desktop apps you do.</p>
+    <div class="cards2">
+      <div class="card reveal" style="--i:0"><h3>Microsoft Paint</h3><p>The portrait above: exact colours set through Paint's own colour editor, then painted as long strokes with the real mouse.</p><div class="num"><div><b>2,832</b><span>steps in one plan</span></div><div><b>~65 min</b><span>unattended</span></div></div></div>
+      <div class="card reveal" style="--i:1"><h3>Upscaly</h3><p>Open the app, pick a photo in its file dialog and run a 4× upscale. Batching steps cut the turns the model needs.</p><div class="num"><div><b>30 → 9</b><span>model turns</span></div><div><b>4.5 → 2 min</b><span>end to end</span></div></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="reveal">Private and careful by design</h2>
+    <div class="cards2">
+      <div class="card reveal" style="--i:0"><h3>Your data stays yours</h3><ul class="list"><li>No telemetry. Screenshots go only to the model you already use in Antigravity.</li><li>The glow and bar are left out of the agent's own screenshots.</li><li>Sign-ins, admin prompts and the secure desktop are always handed back to you.</li></ul></div>
+      <div class="card reveal" style="--i:1"><h3>Safe to keep running</h3><ul class="list"><li>Every release is signed, and installed copies update only from signed metadata.</li><li>Updates can be switched to manual and rolled back.</li><li>An input whose outcome is uncertain is never replayed.</li></ul></div>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="reveal">Platforms</h2>
+    <div class="platforms">
+      <div class="card reveal" style="--i:0"><h3>Windows</h3><p>Windows 10 and 11, x64. One-line install in PowerShell; uses the .NET Framework already on Windows.</p></div>
+      <div class="card reveal" style="--i:1"><h3>macOS</h3><p>macOS 14 or later on Apple silicon or Intel. You grant Accessibility and Screen Recording once.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="reveal">Questions</h2>
+    <div class="faq reveal">
+      <details><summary>Does it need its own API key or model?</summary><p>No. It uses the model you already chose in Antigravity. There's no second LLM, no API key and no MCP server to set up.</p></details>
+      <details><summary>Does it work with agents other than Antigravity?</summary><p>It is built and tested for Google Antigravity. The service is driven by a plain command-line tool, so other agents that can run shell commands can call it, but only Antigravity is supported today.</p></details>
+      <details><summary>What stops it from doing something I don't want?</summary><p>It only acts in apps you approve, terminals and code editors are click-only, and <kbd>Esc</kbd> stops it at once and releases every key and button. Your own mouse and keyboard never pause it, so stopping is always one key away.</p></details>
+      <details><summary>Is it fast?</summary><p>Most of the time in a long task is the model thinking between steps. <code>plan</code> removes much of that by sending many steps in one command.</p></details>
+      <details><summary>Is it open source?</summary><p>Yes, MIT licensed. It is an independent project, not affiliated with or endorsed by Google.</p></details>
     </div>
   </section>
 
