@@ -42,7 +42,7 @@
     {
       "path": "server/render.mjs",
       "upstream_sha256": "5ff0044fd2becc4b2232f6c370a73ff8245aa258a5b82caadcf118cb46f1d3c4",
-      "local_sha256": "dff6aa4572837d805fd8f1397ee75a5d1d78b1359a617e7fb19ada5c845356c5",
+      "local_sha256": "96d73fc562c1801a712a03d23533b864765c569484d580056ff5bfbe2a55c5b3",
       "modified": true
     },
     {
@@ -60,7 +60,7 @@
     {
       "path": "server/native/AxonHost.cs",
       "upstream_sha256": "bef101afecbdf8f75df2a1f8b45d224eade39f09e3c8e25cf7b450e3fa49a8ef",
-      "local_sha256": "9ca2d87b4588cb8e35bb0b327607dfbe4f3874d90fc71951d8774c47edeffe62",
+      "local_sha256": "a7899884f9888cc04188c4ed0d22368b72f0720c7b2b16ab1fa2fe711ec1cf3a",
       "modified": true
     },
     {
@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "188678cd84f0040038a19d0490e349fcaa6f5200765797abd0b2e1dced320d6c"
+      "sha256": "294d7555c7974b9b7179b38d158064a5e7783d20088d1552ef2cc567a6f7fb3c"
     },
     {
       "path": "server/mcp.mjs",
@@ -924,7 +924,7 @@
     },
     {
       "path": "package.json",
-      "sha256": "9e9327144bfe89bddb41655588b1cf21e5a401c32d35c6896d6eda634c013918"
+      "sha256": "e407504e4339c4d34df61467977d41ba1240406ae2ed9c3e58a67a11b935c9b0"
     },
     {
       "path": "server/native/macos/MacPhosphorIcons.swift",

@@ -185,3 +185,13 @@ test('on macOS the activity message names the approved window by process and fra
   assert.deepEqual(Runtime.prototype.glowTarget.call({},{pid:42,rect:[1,2,300,200]}),{});
  }finally{Object.defineProperty(process,'platform',descriptor);}
 });
+
+test('long native typing gets a deadline in proportion to its length; other actions keep the default',async()=>{
+ const {actionDeadline}=await import('../server/runtime.mjs');
+ assert.equal(actionDeadline('click',{text:'x'}),undefined);
+ assert.equal(actionDeadline('type',{}),undefined);
+ assert.equal(actionDeadline('type',{text:'a'.repeat(400)}).timeoutMs,78000);
+ assert.ok(actionDeadline('type',{text:'a'.repeat(400)}).timeoutMs>400*45+5000,'400 paced characters fit');
+ assert.ok(actionDeadline('type',{text:'a'.repeat(400)}).timeoutMs<100000,'inside the desktop client deadline');
+ assert.equal(actionDeadline('type',{text:'abc'}).timeoutMs,30360);
+});

@@ -416,6 +416,13 @@ export function blindTreeNote(snap) {
     + `a name, a value or anything to act on - this window is either drawn without accessibility or still loading, and nothing here can say which. ${SCREENSHOT}\n\n`;
 }
 
+// Chromium builds a page's accessibility tree only once its window has been
+// in front, so an app window that opened behind another shows just its frame.
+export function webPageMissingNote(snap) {
+  if (!snap.web_page_missing || snap.other_desktop) return '';
+  return 'PAGE NOT EXPOSED YET: this browser window has not built its page tree because it has not been in front since it opened. computer_focus { hwnd } and observe again; the page appears once the window has been in front.';
+}
+
 function otherDesktopNote(snap) {
   if (!snap.other_desktop) return '';
   // Windows serves only a cloaked window's frame - title bar, minimise,
@@ -448,7 +455,7 @@ export function renderSnapshot(snap, { textLimit = null, withRects = false, lean
   const trunc = truncationNote(snap);
   if (trunc) count += ', ' + trunc;
 
-  const out = [headLine(snap, [url ? `url ${url}` : '', count, scope ? '' : focus, otherDesktopNote(snap)], ms), '', ...rows.map(rowText)].join('\n');
+  const out = [headLine(snap, [url ? `url ${url}` : '', count, scope ? '' : focus, otherDesktopNote(snap), webPageMissingNote(snap)], ms), '', ...rows.map(rowText)].join('\n');
   // Said in the output rather than in the docs, because the moment it matters
   // is the moment a big page has just been read - not before.
   if (!lean && out.length > CHATTY) {
@@ -497,7 +504,7 @@ export function renderDelta(snap, prevRows, built, { since, ms = null, force = f
     ? `no change since ${since} (${rows.length} elements, same indices)`
     : `changes since ${since}: +${d.added.length} ~${d.changed.length} -${d.removed.length}, ${d.same} same`;
   const trunc = truncationNote(snap);
-  const out = [headLine(snap, [url ? `url ${url}` : '', summary, built.focus, trunc, otherDesktopNote(snap)], ms)];
+  const out = [headLine(snap, [url ? `url ${url}` : '', summary, built.focus, trunc, otherDesktopNote(snap), webPageMissingNote(snap)], ms)];
   if (moved) {
     out.push('');
     const addedIdx = new Set(d.added.map((r) => r.i));

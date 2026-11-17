@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.2 - Long typing and browser app windows
+
+- Typing up to the 400-character limit no longer stops partway with an unknown outcome in slower apps. Native typing is paced, and a long `type` now gets a deadline in proportion to its length instead of a fixed 30 seconds.
+- A browser app window (`msedge --app`, an installed web app) that opened behind another window used to show only its title bar, because Chromium builds a page's tree only once the window has been in front. The snapshot now says so (`PAGE NOT EXPOSED YET`) and tells the agent to focus the window and observe again.
+
 ## 1.0.1 - Plans recover from covered targets
 
 - `plan` no longer stops when a tooltip or popup covers the next target (`obscured`) or a pixel step gets a frame without a screenshot (`no_image`): both are refused before any input, so it takes a fresh frame, with its screenshot, and continues from that step, also partway through a batch.
