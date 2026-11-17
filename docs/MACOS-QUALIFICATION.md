@@ -127,11 +127,41 @@ the desk:
 - The key rule is the shared contract (338d9e7); `cmd+shift+a` no longer asks.
   The Swift contract check runs the shared cases through ICU.
 
-Still to run on the desk with C7: the Preview drawing test with `points`
-(one card per stroke), whether Preview's canvas comes back unnamed after the
-hit-test, the real duration of a capped 400-point stroke next to
-`dragBudgetMs()`, and physical Esc during a long stroke (button released,
-ledger empty, Stop confirmed).
+**On the desk, 17 November (C7, then C8 and C9).**
+- Pixel-click hit-test: Preview's pen button (named) went through as routine;
+  the unnamed Sketch button, a palette swatch and the canvas itself each raised
+  a card (a permit was written each time). Preview's canvas is still unnamed
+  after the hit-test; no exemption was made.
+- `drag --points` drew a 400-point zigzag in Preview. Raw hops 15 960, scaled
+  to 1197 (the Windows rule). `dragBudgetMs()` for that payload: 31 580 ms.
+  Measured from the approval being consumed to the reply: about 24 s, so
+  about 20 ms per hop, not the 4 ms sleep: every posted event re-checks the
+  Stop fence, permissions and occlusion under the point, and journals the
+  input ledger twice. Inside the budget, but much slower than Windows.
+  The budget is not changed.
+- Physical Esc during a long stroke: the stroke stopped about 7 s in;
+  `state: stopped`, reason `escape`, the latch a confirmed `stopped` with no
+  `.unconfirmed` companion, ledger `{"keys":[],"buttons":[]}`,
+  `input_held: false`, both mouse buttons up (`CGEventSource.buttonState`).
+- The app row card (`card:1`) was seen live on Preview.
+- Glow: on C7 the entrance showed above the covering windows for a moment.
+  C8 keeps the panel transparent until the window server has it directly
+  above its target; with Claude covering TextEdit the glow stayed behind
+  Claude.
+- Pointer: the human asked for the Windows custom pointer with its glow. C8
+  hid the OS arrow with the window server's `SetsCursorInBackground`
+  property and `CGDisplayHideCursor`; both reported success and the arrow
+  stayed, so two arrows showed. A standalone test confirmed that a
+  background process cannot hide the arrow on macOS 26.6. C9 removes the
+  private call and draws the Windows pointer glow around the real arrow.
+  C9 is installed but not checked: its Screen Recording grant is pending.
+- Found: after Markup's colour popover and after a stroke, the Mac host's
+  `identity` check briefly failed on Preview, and the shared runtime then
+  refuses that handle for the rest of the controller's life (`staleHandles`
+  is never cleared, though the error says to run `apps`). A mid-stroke Esc
+  reports "No input was sent" although part of the stroke was posted
+  (`delivery_unknown` is set correctly).
+- Every helper rebuild needed a new Screen Recording grant (C7, C8, C9).
 
 **Stuck-Stop proof tightened (owner's conditions).** `macStopSettles` in
 `server/recovery.mjs` is the one proof for a recovered task, an orphan Stop
