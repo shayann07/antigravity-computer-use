@@ -384,6 +384,8 @@ namespace Axon {
         [DllImport("user32.dll")] static extern bool UnregisterHotKey(IntPtr h, int id);
         [DllImport("user32.dll")] static extern bool AllowSetForegroundWindow(int pid);
         [DllImport("user32.dll")] static extern bool SetWindowDisplayAffinity(IntPtr h, uint affinity);
+        [DllImport("winmm.dll")] static extern uint timeBeginPeriod(uint period);
+        [DllImport("winmm.dll")] static extern uint timeEndPeriod(uint period);
         [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern bool SetPropW(IntPtr h, string key, IntPtr value);
         readonly JavaScriptSerializer js = new JavaScriptSerializer();
         readonly ToolTip tips = new ToolTip();
@@ -409,10 +411,7 @@ namespace Axon {
         string glowLevel="soft";
         void ApplyGlowLevel() {Overlay.GlowBrightness(glowLevel=="bright"?1f:glowLevel=="medium"?.75f:.55f);}
         bool dragging,dragArmed,displaced,sliding,entering,leaving,quitting;Point dragGrab,dragStart,slideFrom,slideTo;DateTime displacedAt,slideAt,enterAt,leaveAt;int slideMs;float enterFrom,leaveFrom;
-        // bar.settle: the spring's place and speed on each axis (pixels, pixels a second), its rest point and the work area it stays in.
-        bool springing,springHeld;double springX,springY,springVX,springVY;Point springTo;Rectangle springWork;long springTick;
         // The last moments of a drag, for the speed the bar is let go at.
-        readonly Queue<KeyValuePair<long,Point>> dragTrail=new Queue<KeyValuePair<long,Point>>();
         // A bar that is fading out is already gone to everything that asks.
         internal bool BarShown {get {return Visible&&!leaving;}}
         string activity="";DateTime activityAt;
@@ -482,7 +481,8 @@ namespace Axon {
             modeButton=new HudButton(this,3,DesktopVisuals.ModeRect);Controls.Add(modeButton);modeButton.Click+=delegate {OpenModeMenu();};
             LoadTakeoverMode();
             ApplyScale(Overlay.ScreenScale(Screen.FromPoint(Cursor.Position)),Screen.FromPoint(Cursor.Position));
-            motion.Interval=16;motion.Tick+=delegate {Motion();};
+            // 15, not 16: the system timer ticks every 15.6 ms, so 16 fires every other tick.
+            motion.Interval=15;motion.Tick+=delegate {Motion();};
             FormClosing += delegate(object sender, FormClosingEventArgs e) { quitting=true;if(!normalClose&&state!="idle")SetState("stopped",null,false);DismissControls(); };
             timer.Interval = 70; timer.Tick += Tick; timer.Start();
         }
@@ -529,11 +529,11 @@ namespace Axon {
             else if(Visible&&!leaving) {
                 CloseMenu(true);
                 if(captureHidden||quitting||!DesktopVisuals.MotionEnabled)HideNow();
-                else {entering=false;leaving=true;leaveFrom=barAlpha;leaveAt=DateTime.UtcNow;motion.Start();}
+                else {CancelBody();entering=false;leaving=true;leaveFrom=barAlpha;leaveAt=DateTime.UtcNow;motion.Start();}
             }
             else if(leaving&&captureHidden)HideNow();
         }
-        void HideNow() {entering=leaving=false;barAlpha=1;Hide();}
+        void HideNow() {CancelBody();entering=leaving=false;barAlpha=1;Hide();}
         bool captureReturn;
         void ShowControls(int milliseconds) {Interlocked.Increment(ref visibilityEpoch);controlsRequested=true;controlsUntil=milliseconds>0?DateTime.UtcNow.AddMilliseconds(milliseconds):DateTime.MaxValue;SyncVisibility();}
         void DismissControls() {Interlocked.Increment(ref visibilityEpoch);controlsRequested=false;SyncVisibility();}
@@ -547,17 +547,24 @@ namespace Axon {
         float barAlpha=1;
         internal void Present() {
             if(!IsHandleCreated||Width<=0||Height<=0)return;
+            // Whatever changed also changes the ghost's picture of the bar.
+            if(ghostOwns)bodyPictureStale=true;
             try {
                 using(Bitmap surface=new Bitmap(Width,Height,System.Drawing.Imaging.PixelFormat.Format32bppPArgb)) {
-                    using(Graphics g=Graphics.FromImage(surface)) {g.Clear(Color.Transparent);g.ScaleTransform(visualScale,visualScale);DesktopVisuals.Hud(g,Model());}
-                    Overlay.Present(Handle,surface,Left,Top,(byte)Math.Max(0,Math.Min(255,(int)Math.Round(255*barAlpha))));
+                    using(Graphics g=Graphics.FromImage(surface)) {
+                        g.Clear(Color.Transparent);g.ScaleTransform(visualScale,visualScale);
+                        DesktopVisuals.Hud(g,Model());
+                    }
+                    // While the ghost draws it, the bar stays hit-testable at alpha 1.
+                    byte ba=ghostOwns?(byte)1:(byte)Math.Max(0,Math.Min(255,(int)Math.Round(255*barAlpha)));
+                    Overlay.Present(Handle,surface,Left,Top,ba);Trace("bar",Left,Top,Width,Height,ba);
                 }
             } catch {}
         }
         protected override void OnVisibleChanged(EventArgs e) {base.OnVisibleChanged(e);if(Visible)Present();}
         // Size, shape and place for one monitor's scale.
         void ApplyScale(float scale,Screen screen) {
-            visualScale=scale;
+            CancelBody();visualScale=scale;
             ClientSize=new Size((int)Math.Round(DesktopVisuals.HudWidth*scale),(int)Math.Round(DesktopVisuals.HudHeight*scale));
             stopButton.Place();modeButton.Place();
             Location=Home(screen.WorkingArea);Present();
@@ -668,7 +675,21 @@ namespace Axon {
                 double t=(now-leaveAt).TotalMilliseconds/DesktopVisuals.NormalLeave;
                 if(t>=1)HideNow();else {barAlpha=leaveFrom*(1-DesktopVisuals.EaseOut((float)t));busy=true;Present();}
             }
-            if(springing&&Spring())busy=true;
+            if(body!=null&&ghostOwns) {
+                long tick=Stopwatch.GetTimestamp();double seconds=(tick-bodyTick)/(double)Stopwatch.Frequency;bodyTick=tick;
+                if(demo&&body.Held) {
+                    Rectangle dw=Screen.FromRectangle(Bounds).WorkingArea;int dm=(int)Math.Ceiling(12*visualScale);
+                    demoX+=demoVX*seconds;demoY+=demoVY*seconds;
+                    Location=new Point(Band(demoX,dw.Left,dw.Right-Width,dm),Band(demoY,dw.Top,dw.Bottom-Height,dm));
+                    if(tick>=demoUntil){body.Hold(Left+Width/2.0,Top+Height/2.0,demoX+Width/2.0,demoY+Height/2.0,seconds);bodyTick=tick;Settle();demo=false;busy=true;return;}
+                }
+                // While held, the body takes the bar's place once a frame.
+                if(body.Held)body.Hold(Left+Width/2.0,Top+Height/2.0,HandX()+Width/2.0,HandY()+Height/2.0,seconds);
+                body.Advance(seconds);
+                if(!body.Held)Location=new Point((int)Math.Round(body.CentreX-Width/2.0),(int)Math.Round(body.CentreY-Height/2.0));
+                // While held, a mouse move has usually drawn this frame already.
+                if(body.Done){EndBody();Landed();}else {if(!body.Held||Stopwatch.GetTimestamp()-lastGhostTick>Stopwatch.Frequency/100)PresentGhost();busy=true;}
+            }
             if(sliding) {
                 double t=(now-slideAt).TotalMilliseconds/slideMs;
                 if(t>=1||!DesktopVisuals.MotionEnabled){sliding=false;Location=slideTo;}
@@ -677,9 +698,113 @@ namespace Axon {
             if(!busy)motion.Stop();
         }
         void SlideTo(Point target,int milliseconds) {
-            springing=springHeld=false;
+            CancelBody();
             if(target==Location){sliding=false;return;}
             slideFrom=Location;slideTo=target;slideAt=DateTime.UtcNow;slideMs=milliseconds;sliding=true;motion.Start();
+        }
+        // bar.throw and bar.squash: while the person holds or throws the bar,
+        // BarBody moves it and the ghost draws it in its moving shape, in a
+        // larger click-through window of one fixed size per gesture. The bar
+        // is drawn once into a cached picture and only transformed, so its
+        // text never re-rasterises mid-motion. Only the frame timer presents.
+        // The bar window stays in place for input at alpha 1 (hit-testable).
+        BarBody body;BarGhost ghost;Bitmap bodyPicture;Size ghostSize;long bodyTick;bool ghostOwns,bodyPictureStale;
+        // Bench only (AGCU_BAR_TRIAL=1): a scripted drag at (demoVX, demoVY)
+        // px/s that lets go when it ends, and a log of every present on the
+        // bar and its ghost (AGCU_BAR_TRACE names the file).
+        static readonly bool barTrial=Environment.GetEnvironmentVariable("AGCU_BAR_TRIAL")=="1";
+        static readonly string barTrace=barTrial?Environment.GetEnvironmentVariable("AGCU_BAR_TRACE"):null;
+        // Bench variant: AGCU_BAR_VARIANT=glide keeps a gliding bar stretched (BarBody.GlideStretch).
+        static readonly bool barGlideVariant=barTrial&&Environment.GetEnvironmentVariable("AGCU_BAR_VARIANT")=="glide";
+        double demoVX,demoVY,demoX,demoY;long demoUntil;bool demo;
+        internal static void Trace(string what,int x,int y,int w,int h,int alpha) {Trace(what,x,y,w,h,alpha,0);}
+        internal static void Trace(string what,int x,int y,int w,int h,int alpha,double ms) {Trace(what,x,y,w,h,alpha,ms,1,0,0,1);}
+        internal static void Trace(string what,int x,int y,int w,int h,int alpha,double ms,double a,double b,double c,double d) {
+            if(String.IsNullOrEmpty(barTrace))return;
+            try {File.AppendAllText(barTrace,(Stopwatch.GetTimestamp()*1000.0/Stopwatch.Frequency).ToString("0.0")+" "+what+" "+x+" "+y+" "+w+" "+h+" "+alpha+" "+ms.ToString("0.00")+" "+a.ToString("0.000")+" "+b.ToString("0.000")+" "+c.ToString("0.000")+" "+d.ToString("0.000")+"\n");} catch {}
+        }
+        void StartDemo(double vx,double vy,double seconds) {
+            CancelBody();StartBody();if(body==null)return;
+            demoVX=vx;demoVY=vy;demoX=Left;demoY=Top;demoUntil=Stopwatch.GetTimestamp()+(long)(seconds*Stopwatch.Frequency);demo=true;
+        }
+        void StartBody() {
+            if(!DesktopVisuals.MotionEnabled)return;
+            if(body==null||body.Done)body=new BarBody(Width,Height,visualScale);
+            BarBody.GlideStretch=barGlideVariant;
+            body.Grab(Left+Width/2.0,Top+Height/2.0);bodyTick=Stopwatch.GetTimestamp();
+            Rectangle work=Screen.FromRectangle(Bounds).WorkingArea;int side=(int)Math.Ceiling(12*visualScale),edge=(int)Math.Round(18*visualScale);
+            body.Limits(work.Left+side+Width/2.0,work.Right-side-Width/2.0,side,work.Top+edge+Height/2.0,work.Bottom-edge-Height/2.0,edge);
+            if(ghost==null||ghost.IsDisposed)ghost=new BarGhost();
+            ghost.Recordable(recordVisuals);
+            // Room for the largest stretch or swell, and for the lean of a diagonal stretch.
+            double most=Math.Exp(BarBody.MaxStrain),lean=body.LeanPx;
+            ghostSize=new Size((int)Math.Ceiling(Width*most+lean*Height/Width)+8,(int)Math.Ceiling(Height*most+2*lean)+8);
+            RenderBodyPicture();
+            // The 16 ms frame timer needs the fine system timer while the bar
+            // moves, or it ticks every ~31 ms; it is released when it stops.
+            if(!fineTimer)fineTimer=timeBeginPeriod(1)==0;
+            // Handoff: the ghost shows first, then the bar goes clear.
+            PresentGhost();ghostOwns=true;Present();motion.Start();
+        }
+        void RenderBodyPicture() {
+            Bitmap next=new Bitmap(Width,Height,System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+            using(Graphics g=Graphics.FromImage(next)){g.Clear(Color.Transparent);g.ScaleTransform(visualScale,visualScale);DesktopVisuals.Hud(g,Model());}
+            Bitmap old=bodyPicture;bodyPicture=next;bodyPictureStale=false;if(old!=null)old.Dispose();
+        }
+        // Where the bar's corner would be with no edge holding it back: the
+        // pointer less the grab offset (the scripted throw in bench mode).
+        double HandX() {return demo?demoX:Cursor.Position.X-dragGrab.X;}
+        double HandY() {return demo?demoY:Cursor.Position.Y-dragGrab.Y;}
+        long lastGhostTick;const int GhostGap=7;Bitmap ghostSurface;
+        void PresentGhost() {
+            lastGhostTick=Stopwatch.GetTimestamp();
+            if(body==null||ghost==null||ghost.IsDisposed||bodyPicture==null)return;
+            if(bodyPictureStale)RenderBodyPicture();
+            double a,b,c,d;body.Shape(out a,out b,out c,out d);
+            double cx=body.Held?Left+Width/2.0:body.CentreX,cy=body.Held?Top+Height/2.0:body.CentreY;
+            // Whole pixels only: a picture drawn at sub-pixel offsets shimmers.
+            int gx=(int)Math.Round(cx-ghostSize.Width/2.0),gy=(int)Math.Round(cy-ghostSize.Height/2.0);long began=Stopwatch.GetTimestamp();
+            try {
+                // One surface per gesture, cleared and reused for every frame.
+                if(ghostSurface==null||ghostSurface.Size!=ghostSize){if(ghostSurface!=null)ghostSurface.Dispose();ghostSurface=new Bitmap(ghostSize.Width,ghostSize.Height,System.Drawing.Imaging.PixelFormat.Format32bppPArgb);}
+                Bitmap surface=ghostSurface;{
+                    using(Graphics g=Graphics.FromImage(surface)) {
+                        g.Clear(Color.Transparent);
+                        int left=(ghostSize.Width-Width)/2,top=(ghostSize.Height-Height)/2;
+                        // At its own shape the picture is copied pixel for pixel, so the text holds still.
+                        if(Math.Abs(a-1)<.002&&Math.Abs(d-1)<.002&&Math.Abs(b)<.002&&Math.Abs(c)<.002)g.DrawImageUnscaled(bodyPicture,left,top);
+                        else {
+                            g.InterpolationMode=InterpolationMode.Bilinear;g.PixelOffsetMode=PixelOffsetMode.Half;
+                            g.TranslateTransform(left+Width/2f,top+Height/2f);
+                            using(Matrix shape=new Matrix((float)a,(float)c,(float)b,(float)d,0,0))g.MultiplyTransform(shape);
+                            g.DrawImage(bodyPicture,new RectangleF(-Width/2f,-Height/2f,Width,Height));
+                        }
+                    }
+                    byte ga=(byte)Math.Max(0,Math.Min(255,(int)Math.Round(255*barAlpha)));
+                    ghost.Show(surface,gx,gy,ga);Trace("ghost",gx,gy,ghostSize.Width,ghostSize.Height,ga,(Stopwatch.GetTimestamp()-began)*1000.0/Stopwatch.Frequency,a,b,c,d);
+                }
+            } catch {}
+        }
+        // The body comes to rest, or is cut short. Handoff: the bar is drawn
+        // again first, then the ghost goes.
+        bool fineTimer;
+        void EndBody() {
+            if(fineTimer){timeEndPeriod(1);fineTimer=false;}
+            if(!ghostOwns)return;
+            ghostOwns=false;Present();
+            if(ghost!=null&&!ghost.IsDisposed){ghost.Conceal();Trace("ghost-hide",0,0,0,0,0);}
+        }
+        void CancelBody() {
+            if(body!=null&&!body.Done)body.Snap(Left+Width/2.0,Top+Height/2.0);
+            EndBody();
+        }
+        // A thrown or put-down bar has stopped: remember the dock it is on, or the free place.
+        void Landed() {
+            Rectangle work=Screen.FromRectangle(Bounds).WorkingArea;string near="free";
+            foreach(string name in Docks)if(HomeFor(name,work)==Location){near=name;break;}
+            dock=near;
+            if(near=="free"){dockX=work.Width>Width?(Left-work.Left)/(double)(work.Width-Width):0;dockY=work.Height>Height?(Top-work.Top)/(double)(work.Height-Height):0;}
+            displaced=false;SavePreferences();
         }
         // Drag and reposition. The handle is everything that is not a button:
         // the buttons are separate controls, so a press on one never arrives here.
@@ -688,31 +813,32 @@ namespace Axon {
             bool physical=(DateTime.UtcNow.Ticks-Presence.LastUserClickTicks)<TimeSpan.TicksPerSecond;
             if(e.Button==MouseButtons.Left&&physical&&!leaving) {
                 dragArmed=true;dragStart=Cursor.Position;dragGrab=new Point(Cursor.Position.X-Left,Cursor.Position.Y-Top);
-                // A new grab holds a settling bar where it is.
-                if(springing){springing=false;springHeld=true;}
+                // A grab catches a bar in flight where it is.
+                if(body!=null&&!body.Done&&!body.Held)body.Grab(Left+Width/2.0,Top+Height/2.0);
             }
             base.OnMouseDown(e);
         }
         protected override void OnMouseMove(MouseEventArgs e) {
             if(dragArmed) {
                 Point p=Cursor.Position;
-                if(!dragging&&(Math.Abs(p.X-dragStart.X)>=4||Math.Abs(p.Y-dragStart.Y)>=4)){dragging=true;sliding=springHeld=false;dragTrail.Clear();}
+                if(!dragging&&(Math.Abs(p.X-dragStart.X)>=4||Math.Abs(p.Y-dragStart.Y)>=4)){dragging=true;sliding=false;if(body==null||body.Done)StartBody();}
                 if(dragging) {
                     // bar.drag: 1:1 from the grab point. Past the inset the bar
-                    // resists, and it never leaves the work area.
+                    // resists, and it never leaves the work area. The frame
+                    // timer feeds the body and draws; this only moves the bar.
                     Rectangle work=Screen.FromPoint(p).WorkingArea;int margin=(int)Math.Ceiling(12*visualScale);
                     Location=new Point(Band(p.X-dragGrab.X,work.Left,work.Right-Width,margin),Band(p.Y-dragGrab.Y,work.Top,work.Bottom-Height,margin));
-                    long now=Stopwatch.GetTimestamp();dragTrail.Enqueue(new KeyValuePair<long,Point>(now,Location));
-                    while(dragTrail.Count>2&&now-dragTrail.Peek().Key>Stopwatch.Frequency*DesktopVisuals.SpringTrail/1000)dragTrail.Dequeue();
+                    Trace("move",p.X,p.Y,Left,Top,0);
+                    // The drawn bar follows the pointer on the same event, not a frame later.
+                    // At most one frame every GhostGap ms: a mouse can report every 5 ms.
+                    if(body!=null&&ghostOwns&&body.Held&&Stopwatch.GetTimestamp()-lastGhostTick>=Stopwatch.Frequency*GhostGap/1000)PresentGhost();
                 }
             }
             base.OnMouseMove(e);
         }
         protected override void OnMouseUp(MouseEventArgs e) {
-            bool settle=dragging;dragArmed=dragging=false;
+            bool settle=dragging||body!=null&&!body.Done&&body.Held;dragArmed=dragging=false;
             if(settle)Settle();
-            // A grab that never became a drag lets the spring carry on.
-            else if(springHeld){springHeld=false;springing=true;springTick=Stopwatch.GetTimestamp();motion.Start();}
             base.OnMouseUp(e);
         }
         // bar.drag: the rubber band. Inside the inset the bar follows exactly;
@@ -725,61 +851,38 @@ namespace Axon {
             return (int)Math.Round(value);
         }
         static double Resist(double over,double dim) {return dim<=0?0:(1-1/(over*.55/dim+1))*dim;}
-        // The speed the bar was let go at, from the last moments of the drag.
-        PointF ReleaseSpeed() {
-            KeyValuePair<long,Point>[] trail=dragTrail.ToArray();dragTrail.Clear();
-            long now=Stopwatch.GetTimestamp(),window=Stopwatch.Frequency*DesktopVisuals.SpringTrail/1000;
-            int first=-1;
-            for(int i=0;i<trail.Length;i++)if(now-trail[i].Key<=window){first=i;break;}
-            if(first<0||first==trail.Length-1)return PointF.Empty;
-            KeyValuePair<long,Point> a=trail[first],b=trail[trail.Length-1];
-            double seconds=(b.Key-a.Key)/(double)Stopwatch.Frequency;
-            if(seconds<=0)return PointF.Empty;
-            return new PointF((float)((b.Value.X-a.Value.X)/seconds),(float)((b.Value.Y-a.Value.Y)/seconds));
-        }
-        // bar.settle: land on a dock when dropped within 12 px of one, and
-        // remember the place. The bar springs there from the speed it was let go at.
+        // bar.throw: let go at BarBody.FlingSpeed or faster, the bar glides on
+        // with its own speed; reaching a screen edge still fast it squashes
+        // against it (BarBody). bar.settle: put down slower, it stays. Either
+        // way, stopping within 12 px of a dock lands it there, and the place
+        // is remembered when it comes to rest.
         void Settle() {
-            PointF speed=ReleaseSpeed();
+            bool moving=body!=null&&!body.Done&&body.Held;
+            if(moving&&!demo){long tick=Stopwatch.GetTimestamp();body.Hold(Left+Width/2.0,Top+Height/2.0,HandX()+Width/2.0,HandY()+Height/2.0,(tick-bodyTick)/(double)Stopwatch.Frequency);body.Advance((tick-bodyTick)/(double)Stopwatch.Frequency);bodyTick=tick;}
             Screen screen=Screen.FromRectangle(Bounds);float scale=Overlay.ScreenScale(screen);Rectangle work=screen.WorkingArea;
             if(scale!=visualScale) {
+                CancelBody();moving=false;
                 Point dropped=Location;ApplyScale(scale,screen);
                 try {Location=WindowGeometry.Fit(new Rectangle(dropped,Size),work).Location;}catch {}
             }
-            // A bar let go in the rubber band comes back to the inset.
-            int margin=(int)Math.Ceiling(12*visualScale);
+            int side=(int)Math.Ceiling(12*visualScale),edge=(int)Math.Round(18*visualScale);
+            if(moving) {
+                double thrown=Math.Sqrt(body.FingerVX*body.FingerVX+body.FingerVY*body.FingerVY)/visualScale;
+                double[] dx=new double[Docks.Length],dy=new double[Docks.Length];
+                for(int i=0;i<Docks.Length;i++){Point home=HomeFor(Docks[i],work);dx[i]=home.X+Width/2.0;dy[i]=home.Y+Height/2.0;}
+                body.Release(thrown>=BarBody.FlingSpeed,work.Left+side+Width/2.0,work.Right-side-Width/2.0,side,work.Top+edge+Height/2.0,work.Bottom-edge-Height/2.0,edge,dx,dy,side);
+                motion.Start();
+                return;
+            }
+            // Without the body (reduced motion): a bar let go in the rubber
+            // band comes back to the inset, and lands on a dock within 12 px.
+            int margin=side;
             Point rest=new Point(Band(Math.Max(work.Left+margin,Math.Min(Left,work.Right-Width-margin)),work.Left,work.Right-Width,margin),Band(Math.Max(work.Top+margin,Math.Min(Top,work.Bottom-Height-margin)),work.Top,work.Bottom-Height,margin));
-            int snap=(int)Math.Ceiling(12*visualScale);string near="free";
-            foreach(string name in Docks){Point home=HomeFor(name,work);if(Math.Abs(home.X-rest.X)<=snap&&Math.Abs(home.Y-rest.Y)<=snap){near=name;break;}}
+            string near="free";
+            foreach(string name in Docks){Point home=HomeFor(name,work);if(Math.Abs(home.X-rest.X)<=side&&Math.Abs(home.Y-rest.Y)<=side){near=name;break;}}
             dock=near;
             if(near=="free"){dockX=work.Width>Width?(rest.X-work.Left)/(double)(work.Width-Width):0;dockY=work.Height>Height?(rest.Y-work.Top)/(double)(work.Height-Height):0;}
-            displaced=false;SpringTo(Home(work),work,speed);SavePreferences();
-        }
-        void SpringTo(Point target,Rectangle work,PointF speed) {
-            sliding=springHeld=false;
-            // Reduced motion: the bar is simply there.
-            if(!DesktopVisuals.MotionEnabled){springing=false;Location=target;return;}
-            springX=Left;springY=Top;springVX=speed.X;springVY=speed.Y;springTo=target;springWork=work;
-            springTick=Stopwatch.GetTimestamp();springing=true;motion.Start();
-        }
-        // bar.settle: an Apple-style spring with mass 1, its stiffness and
-        // damping from SpringSeconds and SpringBounce, solved in fixed steps.
-        // x and y move on their own; the rubber band holds it in the work area.
-        bool Spring() {
-            long now=Stopwatch.GetTimestamp();
-            double elapsed=Math.Min(DesktopVisuals.SpringLongest,(now-springTick)/(double)Stopwatch.Frequency);springTick=now;
-            double turn=2*Math.PI/DesktopVisuals.SpringSeconds,stiffness=turn*turn,damping=4*Math.PI*(1-DesktopVisuals.SpringBounce)/DesktopVisuals.SpringSeconds;
-            int steps=Math.Max(1,(int)Math.Ceiling(elapsed/DesktopVisuals.SpringStep));double dt=elapsed/steps;
-            for(int i=0;i<steps;i++) {
-                springVX+=(-stiffness*(springX-springTo.X)-damping*springVX)*dt;springX+=springVX*dt;
-                springVY+=(-stiffness*(springY-springTo.Y)-damping*springVY)*dt;springY+=springVY*dt;
-            }
-            if(Math.Abs(springX-springTo.X)<DesktopVisuals.SpringNear&&Math.Abs(springY-springTo.Y)<DesktopVisuals.SpringNear&&Math.Abs(springVX)<DesktopVisuals.SpringSlow&&Math.Abs(springVY)<DesktopVisuals.SpringSlow) {
-                springing=false;Location=springTo;return false;
-            }
-            int margin=(int)Math.Ceiling(12*visualScale);
-            Location=new Point(Band(springX,springWork.Left,springWork.Right-Width,margin),Band(springY,springWork.Top,springWork.Bottom-Height,margin));
-            return true;
+            displaced=false;SavePreferences();SlideTo(Home(work),DesktopVisuals.Normal);
         }
         void MoveToDock(string name) {
             dock=name;displaced=false;SlideTo(Home(Screen.FromRectangle(Bounds).WorkingArea),DesktopVisuals.Slow);SavePreferences();
@@ -820,7 +923,7 @@ namespace Axon {
             if(recordVisuals)SetWindowDisplayAffinity(Handle,0);
         }
         void ChangeRecordingPreference() {
-            recordVisuals=!recordVisuals;ApplyRecordingPreference();Overlay.RecordVisuals(recordVisuals);SavePreferences();
+            recordVisuals=!recordVisuals;ApplyRecordingPreference();Overlay.RecordVisuals(recordVisuals);if(ghost!=null&&!ghost.IsDisposed)ghost.Recordable(recordVisuals);SavePreferences();
             Emit(new {ev="settings",takeover_mode=takeover.Mode,record_visuals=recordVisuals});
         }
         // The Settings menu. It opens from the Settings button, belongs to
@@ -861,6 +964,30 @@ namespace Axon {
             else if(id==3){glowLevel=glowLevel=="soft"?"medium":glowLevel=="medium"?"bright":"soft";ApplyGlowLevel();SavePreferences();if(MenuOpen)menu.Refresh(MainMenu());}
             else if(id>=10&&id<10+Docks.Length){CloseMenu();MoveToDock(Docks[id-10]);}
             else if(id==20){CloseMenu();MoveToDock("top-centre");}
+        }
+        // bar.throw: the bar in its moving shape, in a click-through layered
+        // window sized to that shape. Shown only while the body moves.
+        sealed class BarGhost : Form {
+            internal BarGhost() {
+                FormBorderStyle=FormBorderStyle.None;ShowInTaskbar=false;TopMost=true;StartPosition=FormStartPosition.Manual;
+                SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.Opaque,true);
+            }
+            protected override bool ShowWithoutActivation {get {return true;}}
+            // Tool window, no activation, layered, and transparent to input.
+            protected override CreateParams CreateParams {get {CreateParams p=base.CreateParams;p.ExStyle|=0x08000080|0x00080000|0x20;return p;}}
+            protected override void OnPaint(PaintEventArgs e) {}
+            protected override void OnPaintBackground(PaintEventArgs e) {}
+            bool record;
+            internal void Recordable(bool on) {record=on;if(IsHandleCreated)SetWindowDisplayAffinity(Handle,on?0u:0x11u);}
+            internal void Show(Bitmap surface,int x,int y,byte alpha) {
+                if(IsDisposed)return;
+                if(!Visible) {
+                    Bounds=new Rectangle(x,y,surface.Width,surface.Height);Show();
+                    SetPropW(Handle,"ComputerUseOverlayWindow",new IntPtr(1));SetWindowDisplayAffinity(Handle,record?0u:0x11u);
+                }
+                Overlay.Present(Handle,surface,x,y,alpha);
+            }
+            internal void Conceal() {if(!IsDisposed&&Visible)Hide();}
         }
         sealed class BarMenu : Form {
             readonly Guardian owner;List<DesktopVisuals.MenuItem> items=new List<DesktopVisuals.MenuItem>();
@@ -1401,11 +1528,16 @@ namespace Axon {
                         Rectangle placement;
                         canAvoid=WindowGeometry.AvoidHud(Bounds,new Rectangle(rect[0],rect[1],rect[2],rect[3]),Screen.FromRectangle(Bounds).WorkingArea,(int)Math.Ceiling(12*visualScale),out placement);
                         // bar.stepAside is a jump, so the reply always reports the final place.
-                        if(canAvoid&&placement!=Bounds){sliding=springing=springHeld=false;Location=placement.Location;moved=true;displaced=true;displacedAt=DateTime.UtcNow;}
+                        if(canAvoid&&placement!=Bounds){sliding=false;CancelBody();Location=placement.Location;moved=true;displaced=true;displacedAt=DateTime.UtcNow;}
                     }
                 }catch{canAvoid=false;}
                 // This operation never changes Stop, state, grants or visibility.
                 Emit(new {id=id,allowed=canAvoid,moved=moved,state=state});return;
+            }
+            // Bench only: a scripted throw of the bar (see StartDemo).
+            if(op=="bar_demo"&&barTrial) {
+                StartDemo(Convert.ToDouble(m["vx"]),Convert.ToDouble(m["vy"]),m.ContainsKey("seconds")?Convert.ToDouble(m["seconds"]):.25);
+                Emit(new {id=id,started=body!=null});return;
             }
             if(op=="show_controls") {
                 rearmLocked=m.ContainsKey("rearm_locked")&&Convert.ToBoolean(m["rearm_locked"]);

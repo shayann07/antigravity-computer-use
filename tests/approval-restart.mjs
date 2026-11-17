@@ -13,7 +13,8 @@ if(process.platform!=='win32'){console.log('Windows only.');process.exit(0);}
 const dir=fs.mkdtempSync(path.join(testDirectory('approval-restart'),'run-'));const file=path.join(dir,'guard.state');
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 fs.writeFileSync(file,'idle||0|');fs.writeFileSync(file+'.inputs','');
-const env={AGCU_GUARD_FILE:file,AGCU_PARENT_PID:String(process.pid),CU_OVERLAY:'off',CU_PRESENCE:'off',AGCU_PERMISSION_MODE:'standalone'};
+// A guardian without a Stop latch path starts stopped (fail closed), so give it one.
+const env={AGCU_GUARD_FILE:file,AGCU_STOP_LATCH:path.join(dir,'emergency.stop'),AGCU_PARENT_PID:String(process.pid),CU_OVERLAY:'off',CU_PRESENCE:'off',AGCU_PERMISSION_MODE:'standalone'};
 const start=async()=>{const g=new Guardian(env);await g.start();return g;};
 const stop=async g=>{const p=g.proc;g.close();for(let i=0;i<50&&p&&p.exitCode===null&&p.signalCode===null;i++)await delay(100);};
 const notepad=spawn('notepad.exe',[],{detached:true,stdio:'ignore'});notepad.unref();await delay(2500);

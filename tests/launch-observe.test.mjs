@@ -113,4 +113,20 @@ test('an unanswered launch approval reports a timeout, not a human denial',async
   const {r,counts}=harness([]);r.guardian.prompt=async()=>({allowed:false,decision});
   await assert.rejects(Runtime.prototype.launch.call(r,{app,reason:'test'}),e=>e.code===code,decision);assert.equal(counts().launches,0);
  }
+ });
+test('launch --observe brings the new window forward and lets it settle before the first look',async()=>{
+ const {r,counts}=harness([{hwnd:8,pid:123,path:executable,rect:[0,0,100,100]}]);const order=[];
+ r.action=async(op,args)=>{order.push(op);assert.equal(args.hwnd,8);assert.equal(args.risk,'routine');return {focused:true};};
+ const observe=r.observe;r.observe=async args=>{order.push('observe');return observe(args);};
+ const result=await Runtime.prototype.launch.call(r,{app,observe:true,reason:'Front first'});
+ assert.equal(result.input_completed,true);assert.deepEqual(order,['focus','observe']);assert.deepEqual(counts(),{launches:1,observations:1});
+});
+test('a refused focus after launch still observes, but Stop during it does not',async()=>{
+ const refused=harness([{hwnd:8,pid:123,path:executable,rect:[0,0,100,100]}]);
+ refused.r.action=async()=>{throw Object.assign(Error('typing'),{code:'user_active'});};
+ assert.equal((await Runtime.prototype.launch.call(refused.r,{app,observe:true,reason:'Busy person'})).metadata.observation_id,'fresh');
+ const stopped=harness([{hwnd:8,pid:123,path:executable,rect:[0,0,100,100]}]);
+ stopped.r.action=async()=>{throw Object.assign(Error('stopped'),{code:'control_stopped'});};
+ const result=await Runtime.prototype.launch.call(stopped.r,{app,observe:true,reason:'Stopped'});
+ assert.equal(result.verification_error.code,'control_stopped');assert.equal(stopped.counts().observations,0);
 });

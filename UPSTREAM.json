@@ -5,7 +5,7 @@
     {
       "path": "server/build.mjs",
       "upstream_sha256": "81260b378fffb46573cfe475a3a336930113c8abc465d3d278bbb0851d8a4377",
-      "local_sha256": "1bf024fdcb01f4b0ed5c7abc9ebc5eb693a0a123398717cd61b392319a93c554",
+      "local_sha256": "8f10de1328b7293e6cb70d441c4d72e5031d01173d87ba4abdce8d961b5df9b5",
       "modified": true
     },
     {
@@ -66,7 +66,7 @@
     {
       "path": "server/native/AxonHost.swift",
       "upstream_sha256": "b50c68feff8bd783ba2f92580358c69491c0ffee31f6182b76543f3aba9f962f",
-      "local_sha256": "8129d4a41b1aeee7dac79d321a881f58eb284e3d814cf37d25e06283028b95f1",
+      "local_sha256": "3cbfdaad470a1a7d8a023db56ed619fb9e363bb7ef7f2ecbe2d1cdea42892fde",
       "modified": true
     },
     {
@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "eded430f622422aefa8b9d020c79f0c963ef16fa52066bb13e430f995da289e9"
+      "sha256": "af873104dff3775622911a1fabe46bb063fe0f22bca76d6649ff7081679d88f6"
     },
     {
       "path": "server/mcp.mjs",
@@ -268,7 +268,7 @@
     },
     {
       "path": "server/native/Guardian.cs",
-      "sha256": "522f90f98b74aecd810c056e38b3f8633babb5d95d36af519345502a59b06374"
+      "sha256": "37235caa89858209d6c49e5d47023716b0f58ccce6f8e83ffd61cb861eb69fd8"
     },
     {
       "path": "server/native/CursorSafety.cs",
@@ -276,7 +276,7 @@
     },
     {
       "path": "server/native/DesktopVisuals.cs",
-      "sha256": "281bbf1e6bade0197fb5950a93c9abb449032df85e4a60ea326426cd01935962"
+      "sha256": "d69dd01656267dc60f392798dc258c66179da80a017d09f812f9523a62e9bf16"
     },
     {
       "path": "server/native/Glow.cs",
@@ -348,7 +348,7 @@
     },
     {
       "path": "tests/launch-observe.test.mjs",
-      "sha256": "3355595df440b05b00c533aa7c3200b4039a801dcd483c2f5113b8f002c78997"
+      "sha256": "db2d03fca7f5c0e5511373ce3596d6045d7e9b72c8411f53390deafb5b9699a7"
     },
     {
       "path": "scripts/install.mjs",
@@ -568,7 +568,7 @@
     },
     {
       "path": "server/native/macos/MacControl.swift",
-      "sha256": "2ea5f2da64a820e76aa4acfa6ad899f1d1205f000ee6ec1411d8cfedb6f87d86"
+      "sha256": "0119d7f5ff7093c107f3999d76cd5b459816a837d77e00becb617e496d522f71"
     },
     {
       "path": "server/native/macos/MacGuardian.swift",
@@ -576,7 +576,7 @@
     },
     {
       "path": "server/native/macos/MacOperations.swift",
-      "sha256": "bfdd76498809c25bb58cc8e82e77970a243c9caebe4c292adaa0717971f58d89"
+      "sha256": "b66b91c833edb2a37a838f5aec591a66870af9d959ae9da2ad4f014d9ba6b37b"
     },
     {
       "path": "server/native/macos/MacVisuals.swift",

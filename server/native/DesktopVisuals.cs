@@ -24,8 +24,8 @@ namespace Axon {
         internal const double SpringSeconds=.45,SpringBounce=.15;
         // How it is solved: a fixed step and the longest stretch taken at once
         // (seconds); at rest within SpringNear px moving under SpringSlow px a
-        // second; let go at the speed of the drag's last SpringTrail ms.
-        internal const double SpringStep=.001,SpringLongest=.064,SpringNear=.5,SpringSlow=20;internal const int SpringTrail=80;
+        // second. The bar's throw physics are in BarBody.
+        internal const double SpringStep=.001,SpringLongest=.064,SpringNear=.5,SpringSlow=20;
         // The glow's slow life, in seconds: one lap of colour, one swell of
         // the band, one wander of the colours. And its frame times, in
         // milliseconds: in a transition, at rest, and for the deep wash.
@@ -353,6 +353,17 @@ namespace Axon {
             internal float TickLevel=-1;
             internal float Tick {get {return TickLevel<0?(Checked?1:0):TickLevel;}}
         }
+        // bar.squash: the bar pressed flat by a share of its width (x) and
+        // height (y), held on the side of the edge it met (-1 or 1; 0 = none).
+        // The bar drawn in its moving body's shape: the 2 x 2 matrix from
+        // BarBody.Shape about its centre, which sits at (x, y) in DIP.
+        internal static void BodyHud(Graphics g,HudModel model,double a,double b,double c,double d,float x,float y) {
+            var saved=g.Save();
+            g.TranslateTransform(x,y);
+            using(Matrix shape=new Matrix((float)a,(float)c,(float)b,(float)d,0,0))g.MultiplyTransform(shape);
+            g.TranslateTransform(-HudWidth/2f,-HudHeight/2f);
+            Hud(g,model);g.Restore(saved);
+        }
         // menu.tick: a tick slides its row's text over Normal, easing in and
         // out; instant with reduced motion.
         internal static float TickAt(double ms,float from,float to) {
@@ -567,6 +578,29 @@ namespace Axon {
                     }
                 }
                 sheet.Save(Path.Combine(directory,"hud-states.png"),ImageFormat.Png);
+            }
+            // bar.throw: a hard throw along the top edge into the right side,
+            // as BarBody moves it. One row every 50 ms; the line is the screen's right edge.
+            {
+                BarBody body=new BarBody(HudWidth,HudHeight,1);double x=700,y=42,step=1/120.0;
+                body.Grab(x,y);for(int i=0;i<24;i++){x+=4000*step;body.Hold(x,y,step);body.Advance(step);}
+                const int right=1920,rows=14,panel=760;double dock=right-12-HudWidth/2.0;
+                body.Release(true,12+HudWidth/2.0,dock,12,18+HudHeight/2.0,1040-18-HudHeight/2.0,18,null,null,12);
+                HudModel model=new HudModel();model.State="active";model.Line1="Antigravity is working";model.Line2="Drawing in Paint";model.Slot=1;
+                using(Bitmap sheet=new Bitmap(panel*2,(HudHeight+30)*rows*2,PixelFormat.Format32bppArgb)) {
+                    using(Graphics g=Graphics.FromImage(sheet)) {
+                        g.Clear(Color.FromArgb(60,64,72));g.ScaleTransform(2,2);g.SmoothingMode=SmoothingMode.AntiAlias;
+                        float edge=panel-40;double left=right-(edge-0);
+                        for(int i=0;i<rows;i++) {
+                            float top=(HudHeight+30)*i+15;
+                            using(Pen wall=new Pen(Color.FromArgb(160,255,120,120),1))g.DrawLine(wall,edge,top-6,edge,top+HudHeight+6);
+                            double a,b,c,d;body.Shape(out a,out b,out c,out d);
+                            BodyHud(g,model,a,b,c,d,(float)(body.CentreX-left),top+HudHeight/2f);
+                            body.Advance(.05);
+                        }
+                    }
+                    sheet.Save(Path.Combine(directory,"bar-throw.png"),ImageFormat.Png);
+                }
             }
             {
                 var items=new System.Collections.Generic.List<MenuItem>();
