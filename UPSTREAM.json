@@ -268,7 +268,7 @@
     },
     {
       "path": "server/native/Guardian.cs",
-      "sha256": "1d4afb57bb251302a1b6e969df62b2102b9855f0f2c7bddd7474fcfb2a124104"
+      "sha256": "767a5b664877797cfa45c734abd4574d46c602c9f94eaae3c16fd9f331df37df"
     },
     {
       "path": "server/native/CursorSafety.cs",
@@ -276,7 +276,7 @@
     },
     {
       "path": "server/native/DesktopVisuals.cs",
-      "sha256": "e3d7b5ae9ae6a29fd03a9195c0d4f26c259a550ba3fc940b89a1bb18cf87df19"
+      "sha256": "81fe548ce5e3b3d284723eb722a81c5edea073f0afc470744ed0fff1e9af6b0a"
     },
     {
       "path": "server/native/Glow.cs",
