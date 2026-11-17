@@ -7,7 +7,7 @@ import {spawnSync} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
 import {writeAtomicJSON,writeAtomicText,flushPreparedTree,flushPreparedFile,readTaskState} from '../server/atomic-json.mjs';
 import {deploymentPinned} from '../server/update-core.mjs';
-import {preserveStopLatch,readStopLatch} from '../server/recovery.mjs';
+import {preserveStopLatch,readStopLatch,settleOrphanMacStop} from '../server/recovery.mjs';
 const here=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 export function mergeConfig(file,entry){
  const text=fs.existsSync(file)?fs.readFileSync(file,'utf8').replace(/^\uFEFF/,'').trim():'';
@@ -116,7 +116,11 @@ export function install({bundle=here,target,home=os.homedir(),workspace=null,leg
  const preserveControl=()=>{
   const data=path.join(target,'data'),taskFile=path.join(data,'task-state.json');
   for(const root of new Set([target,...previousRoots])){
-   const stop=readStopLatch(path.join(root,'data','emergency.stop'));
+   const latch=path.join(root,'data','emergency.stop');let stop=readStopLatch(latch);
+   // macOS: the same proof ready uses settles an unconfirmed Stop that no open
+   // task names, so a newer build can install over it. It leaves a confirmed
+   // Stop. Windows, an open task and any failed proof keep refusing.
+   if(process.platform==='darwin'&&stop?.unconfirmed&&!stop.invalid&&!readTaskState(path.join(root,'data','task-state.json'))){try{settleOrphanMacStop(latch);}catch{}stop=readStopLatch(latch);}
    if(stop?.unconfirmed||stop?.invalid)throw Error('stop_recovery_required_before_install');
   }
   let dataPrepared=false;

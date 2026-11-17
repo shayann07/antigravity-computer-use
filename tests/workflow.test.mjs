@@ -33,13 +33,13 @@ test('passive startup, status, End and shutdown preserve Stop without opening co
  }finally{fs.unlinkSync(r.guardFile);fs.rmSync(folder,{recursive:true,force:true});}
 });
 
-test('blocked control request explicitly reveals human re-arm without granting or launching',async()=>{
+test('a stopped task shows controls but refuses grant or launch until the next ready',async()=>{
  for(const operation of ['grant','launch']){
-  const sent=[];const guardian=new EventEmitter();Object.assign(guardian,{async request(m){sent.push(m);return {state:'stopped',human_rearm_required:true};}});
+  const sent=[];const guardian=new EventEmitter();Object.assign(guardian,{async request(m){sent.push(m);return {state:'stopped'};}});
   const r=new Runtime({guardian,driver:{async abort(){},async call(){assert.fail('No desktop input or discovery while stopped');}},sessions:{register(){}}});
   try{
    r.state='stopped';
-   await assert.rejects(operation==='grant'?r.grant(1,'Explicit task'):r.launch({app:'unused.exe',reason:'Explicit task'}),e=>e.code==='control_inactive');
+   await assert.rejects(operation==='grant'?r.grant(1,'Explicit task'):r.launch({app:'unused.exe',reason:'Explicit task'}),e=>e.code==='control_stopped');
    assert.deepEqual(sent,[{op:'show_controls'}]);assert.equal(r.state,'stopped');assert.equal(r.grants.size,0);
   }finally{fs.unlinkSync(r.guardFile);}
  }
@@ -321,7 +321,7 @@ test('Stop invalidates an action waiting for the shared input lease before it ca
  try{
   const action=r.action('click',{hwnd:1,observation_id:'fresh',index:3,risk:'routine',reason:'Fixture only'});
   await inLease;await r.stop();release();
-  await assert.rejects(action,error=>error.code==='control_inactive');assert.equal(delivered,0);assert.equal(r.state,'stopped');
+  await assert.rejects(action,error=>error.code==='control_stopped');assert.equal(delivered,0);assert.equal(r.state,'stopped');
  }finally{release();fs.unlinkSync(r.guardFile);}
 });
 

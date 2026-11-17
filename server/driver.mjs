@@ -10,7 +10,7 @@ import {verifyNativeContract} from './platform.mjs';
 
 // A lost response after submitting any of these operations cannot establish
 // whether the target changed, even if the operation uses accessibility APIs.
-const EFFECTFUL = new Set(['move','click','type','set_value','key','scroll','drag','focus','fit_window','close_window','paste','paste_files','clipboard','open','file_dialog','launch']);
+const EFFECTFUL = new Set(['move','click','type','set_value','key','scroll','drag','focus','fit_window','resize_window','close_window','paste','paste_files','clipboard','open','file_dialog','launch']);
 const unknownOutcome = () => new HostError('input_outcome_unknown',
   'The native worker did not confirm the operation; its effect is unknown.',
   'Inspect the target before continuing. Do not repeat the operation automatically.');
@@ -193,7 +193,7 @@ export class Driver {
 
       // file_dialog can type a path/chord. A failure or hard worker exit during
       // it needs the same independent held-input recovery as ordinary typing.
-      const input = ['move','click','type','set_value','key','scroll','drag','paste','paste_files','focus','fit_window','file_dialog'].includes(op);
+      const input = ['move','click','type','set_value','key','scroll','drag','paste','paste_files','focus','fit_window','resize_window','file_dialog'].includes(op);
       if (input) this.inputMayBeHeld = true;
       this.pending.set(id, { resolve, reject, timer, input, effectful });
 

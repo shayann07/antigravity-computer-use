@@ -1,10 +1,10 @@
 # Installation, update and removal
 
-Version **0.3.0-beta.7** is the Windows direct `/computer-use` prerelease with bundled Node and native helpers. Download the [complete Windows ZIP and checksums](https://github.com/shayann07/antigravity-computer-use/releases/tag/v0.3.0-beta.7). Historical v0.2.0 uses the older MCP route, including the recording labelled as such in the README.
+Version **1.0.0** is the stable direct `/computer-use` release for Windows x64 and macOS with bundled Node and native helpers. Download the [complete Windows ZIP and checksums](https://github.com/shayann07/antigravity-computer-use/releases/tag/v1.0.0). Historical v0.2.0 uses the older MCP route, including the recording labelled as such in the README.
 
-For the **experimental macOS candidate**, including architecture-matched prebuilt
+For **macOS**, including architecture-matched prebuilt
 downloads and human OS permission setup, see [Mac installation](MACOS.md).
-The Windows command below does not install the Mac candidate.
+The Windows command below does not install the Mac build.
 
 The bundle includes control recovery and signed-update support. An older
 installation without the updater needs one supported upgrade before it can check
@@ -20,7 +20,7 @@ Paste this in Windows PowerShell:
 irm https://raw.githubusercontent.com/shayann07/antigravity-computer-use/main/install.ps1 | iex
 ```
 
-It downloads the beta.7 archive and pinned helper, verifies SHA-256, and
+It downloads the 1.0.0 archive and pinned helper, verifies SHA-256, and
 installs the global direct skill and Sidecar. A matching installation is verified
 and reused without shutting down a running session. Existing permission policy and
 emergency Stop are retained. Source: [install.ps1](../install.ps1). On unsafe
@@ -28,7 +28,7 @@ replaceable cache ancestors the installer refuses rather than changing parent AC
 
 ## Windows portable bundle (manual)
 
-1. Download the complete Windows ZIP and SHA256 checksums from [the beta.7 release](https://github.com/shayann07/antigravity-computer-use/releases/tag/v0.3.0-beta.7). Source builds use Node 24.20.0 and the Windows compiler: `npm test`, then `npm run bundle`. Release packaging can use `node scripts/bundle.mjs --output <new-empty-folder>` to preserve previous output.
+1. Download the complete Windows ZIP and SHA256 checksums from [the 1.0.0 release](https://github.com/shayann07/antigravity-computer-use/releases/tag/v1.0.0). Source builds use Node 24.20.0 and the Windows compiler: `npm test`, then `npm run bundle`. Release packaging can use `node scripts/bundle.mjs --output <new-empty-folder>` to preserve previous output.
 2. Extract/copy the complete `dist/AntigravityComputerUse-windows-x64` folder. Its prebuilt helper and Node are required; normal installation needs no compiler, Python, new model account or credentials.
 3. For App-managed startup, run `install.cmd --integration direct --sidecar`. Direct integration is the default; omitting `--sidecar` uses manual local startup. Sidecar installs default to `host-managed` permission mode so Antigravity's host/Turbo policy can authorize ordinary actions without repeated native approval modals; an existing explicit mode is preserved. The installer prints the release and exact backup paths.
 4. Start a fresh Antigravity App conversation, invoke `/computer-use` and describe the task. The skill calls its pinned local script, opens returned screenshot files and uses native input. No MCP restart is required for this route. An old already-running MCP server may remain in an old conversation until the host refreshes; do not mix both controllers.
@@ -46,7 +46,7 @@ For the App's documented process lifecycle, opt in during the **global** direct 
 
 This registers only `antigravity-computer-use` under `~/.gemini/config/sidecars/` and enables its own entry in `config.json`, preserving permissions, models and other sidecars. Existing disabled state survives ordinary updates; explicitly passing `--sidecar` enables it. Project-local installs reuse the global companion and do not rewrite its configuration. Sidecars are an [official Antigravity App feature](https://www.antigravity.google/docs/sidecars/), distinct from MCP. The definition uses the pinned Node launcher, `serve` and `on-failure` restart. It creates no conversations or model requests. Actual App-managed beta.2 startup and read-only native discovery passed on 27 October 2026 without a manual launcher or whole-App restart. Refresh the Sidecar if a configuration change has not loaded; do not restart an active task.
 
-The installed sidecar policy keeps the private listener resident after idle cleanup; app grants, cached observations and held inputs are released. It never resumes a Pause or clears emergency Stop. `end` finishes a task while retaining the listener; `shutdown` exits normally and is not an automatic crash restart. Manual installs without `--sidecar` retain the 15-minute service expiry. No Windows login task is registered.
+The installed sidecar policy keeps the private listener resident after idle cleanup; app grants, cached observations and held inputs are released. It never clears emergency Stop. `end` finishes a task while retaining the listener; `shutdown` exits normally and is not an automatic crash restart. Manual installs without `--sidecar` retain the 15-minute service expiry. No Windows login task is registered.
 
 New Windows installations use private `D:\Apps\AntigravityComputerUse\<owner-hash>` storage when D: is available, or LocalAppData otherwise. Existing deployments keep their registered target during upgrades. Download staging uses the Antigravity user-profile tree (`~/.gemini/AntigravityComputerUseBootstrap`), with LocalAppData as fallback. The printed directory is stable for the Windows account. A writable/renamable parent such as an inherited shared `D:\Tools` is rejected; parent/global settings are never changed. Choose a private application folder with trusted ancestors or a user-profile folder for `--target`. App skill location: `~/.gemini/config/skills/computer-use`. Project location: `.agents/skills/computer-use`. These match [the official App documentation](https://antigravity.google/docs/skills).
 
@@ -62,7 +62,7 @@ Manual direct installations default to standalone native app/session and sensiti
 
 This does not read or change Antigravity's Turbo preset. The host agent is responsible for required user/sensitive-effect review before running the script. Broad terminal grants grant broad desktop authority. Native identity, frame, budget, watchdog and Stop checks remain active. The mode is fixed deployment configuration, not a model-controlled action flag.
 
-Keep working is the default: normal physical mouse/keyboard activity does not pause. The bar's optional Yield on input mode pauses on deliberate input. Soft Resume follows local human Resume or, in host-managed mode, an explicit user message. Esc/Stop always requires local human re-arm; never restart a service to bypass it. Windows virtual desktops share one mouse, keyboard and active screen capture.
+Normal physical mouse and keyboard activity never pauses the agent, and there is no Pause or Resume. Esc, Ctrl+Alt+F12 or the bar's Stop ends the task at once; the next `ready` starts a fresh task. Never restart a service to bypass Stop. Windows virtual desktops share one mouse, keyboard and active screen capture.
 
 ## Recording the visible controls (source recording candidate)
 

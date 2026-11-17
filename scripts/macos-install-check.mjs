@@ -22,7 +22,7 @@ try {
  command([path.join(first.release,'scripts/verify-install.mjs'),target]);
  const started=desktop('start');assert.equal(started.state,'idle');assert.equal(started.runtime,'native-macos');
  assert.deepEqual(started.approved_apps,[]);assert.equal(started.custom_cursor,null);
- assert.equal(desktop('end').state,'idle');assert.equal(desktop('stop').human_rearm_required,true);
+ assert.equal(desktop('end').state,'idle');assert.equal(desktop('stop').task_ended,true);
  desktop('shutdown');
  const stopped=desktop('start');assert.equal(stopped.state,'stopped');assert.equal(stopped.custom_cursor,null);
  assert.equal(desktop('end').state,'stopped');desktop('shutdown');

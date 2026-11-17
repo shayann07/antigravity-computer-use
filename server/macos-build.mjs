@@ -1,4 +1,5 @@
 // Native adapters only. Tool dispatch, control lifecycle and IPC stay shared.
+import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -117,4 +118,33 @@ export function buildMacStorage({force=false}={}) {
   const build=spawnSync(compiler,['-O','-parse-as-library','-sdk',sdk,'-target',target,'-o',temporary,...sources],{encoding:'utf8',timeout:120000});
   checkMacStorageBuild(build);
   fs.chmodSync(temporary,0o755);fs.renameSync(temporary,output);return output;
+}
+
+// Optional owner signing for the Mac helper. macOS keeps Accessibility,
+// Screen Recording and Input Monitoring for an app whose signature names the
+// same certificate, so a release signed with the owner's long-lived key keeps
+// users' permissions across updates. Ad-hoc remains the default: its
+// permissions are tied to one exact binary.
+export function macSigning(env=process.env){
+  const identity=env.AGCU_MAC_SIGN_IDENTITY||'';
+  if(!identity)return null;
+  if(!/^[0-9A-F]{40}$/i.test(identity))throw Object.assign(Error('AGCU_MAC_SIGN_IDENTITY must be the 40-character SHA-1 of the signing certificate.'),{code:'mac_signing_invalid'});
+  const keychain=env.AGCU_MAC_SIGN_KEYCHAIN||'';
+  if(keychain&&(!path.isAbsolute(keychain)||!fs.existsSync(keychain)))throw Object.assign(Error('AGCU_MAC_SIGN_KEYCHAIN must be an existing absolute keychain path.'),{code:'mac_signing_invalid'});
+  return {identity:identity.toUpperCase(),keychain};
+}
+export function macSignArguments(signing,app){
+  if(!signing)return ['--force','--sign','-',app];
+  return ['--force','--sign',signing.identity,'--timestamp=none',...(signing.keychain?['--keychain',signing.keychain]:[]),app];
+}
+// The SHA-1 of the leaf certificate in a bundle's signature, or null when it
+// has none (ad-hoc).
+export function macSigningLeaf(app,run=spawnSync){
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'agcu-leaf-'));
+  try{
+    const result=run('/usr/bin/codesign',['-d','--extract-certificates='+path.join(dir,'cert'),app],{encoding:'utf8',timeout:30000});
+    if(result.status!==0)return null;
+    const leaf=path.join(dir,'cert0');
+    return fs.existsSync(leaf)?createHash('sha1').update(fs.readFileSync(leaf)).digest('hex').toUpperCase():null;
+  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 }

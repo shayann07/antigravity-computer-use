@@ -1,8 +1,8 @@
 # Physical handoff boundary
 
-Read this when the task asks a human to press Esc, take over, or re-arm.
+Read this when the task asks a human to press Esc or take over.
 
-For a task that asks a human to press Esc, take over, or re-arm, perform at
+For a task that asks a human to press Esc or take over, perform at
 most one bounded input attempt that reaches the requested handoff state. Then
 stop issuing controller calls and wait for the human's report. Do not poll,
 repeat `run`, retry a drag, or start another batch while waiting. A completed

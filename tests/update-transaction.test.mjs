@@ -52,6 +52,29 @@ test('uncertain Stop defers apply, rollback and recovery before service reservat
  }finally{f.cleanup();}
 });
 
+test('installer: macOS settles an orphan unconfirmed Stop with the ready proof; Windows and open tasks keep refusing',async()=>{
+ const {persistRecoveryStop,readStopLatch}=await import('../server/recovery.mjs');
+ const f=fixture();try{
+  const data=path.join(f.target,'data');fs.mkdirSync(data,{recursive:true});
+  // A controller pid with no process, so the guard is an orphan.
+  let pid=99990;for(;pid>90000;pid--){try{process.kill(pid,0);}catch(error){if(error.code==='ESRCH')break;}}
+  const guard=`guard-${pid}-12345678-1234-1234-1234-123456789abc.state`,state=path.join(data,guard),latch=path.join(data,'emergency.stop');
+  fs.writeFileSync(state,'idle|t|9||9|0|');fs.writeFileSync(state+'.inputs','{"keys":[],"buttons":[]}');
+  persistRecoveryStop(latch,guard,{unconfirmed:true,nonce:'d'.repeat(32)});
+  const taskFile=path.join(data,'task-state.json');
+  fs.writeFileSync(taskFile,JSON.stringify({schema:1,open:true,guard,children:[],dispatched:false,watchdogs_complete:true}));
+  assert.throws(()=>f.adapters.install({bundle:f.fresh.bundle,target:f.target}),/stop_recovery_required_before_install/,'an open task keeps refusing');
+  assert(readStopLatch(latch).unconfirmed);
+  fs.writeFileSync(taskFile,JSON.stringify({schema:1,open:false}));
+  fs.writeFileSync(state+'.inputs','{"keys":[42],"buttons":[]}');
+  assert.throws(()=>f.adapters.install({bundle:f.fresh.bundle,target:f.target}),/stop_recovery_required_before_install/,'held input keeps refusing');
+  fs.writeFileSync(state+'.inputs','{"keys":[],"buttons":[]}');
+  if(process.platform!=='darwin'){assert.throws(()=>f.adapters.install({bundle:f.fresh.bundle,target:f.target}),/stop_recovery_required_before_install/,'Windows is unchanged');return;}
+  f.adapters.install({bundle:f.fresh.bundle,target:f.target});
+  const saved=readStopLatch(latch);assert.equal(saved.value,'stopped');assert.equal(saved.unconfirmed,false);assert.equal(fs.existsSync(latch+'.unconfirmed'),false);
+ }finally{f.cleanup();}
+});
+
 test('direct rollback refuses a companion-only uncertainty marker without changing pins',()=>{
  const f=fixture();try{
   const next=f.adapters.install({bundle:f.fresh.bundle,target:f.target});const before=fs.readFileSync(path.join(f.target,'installation.json'),'utf8');

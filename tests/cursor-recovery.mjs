@@ -17,15 +17,15 @@ async function close(s){const p=s.g.proc;s.g.close();await s.d.abort();if(p)awai
 let current;
 try {
  const roles=[32512,32649,32513,32650],baselines=new Map(roles.map(role=>[role,probe('baseline-'+role,role)]));
- const baseline=baselines.get(32512);current=await session('pause');await active(current);
+ const baseline=baselines.get(32512);current=await session('stop');await active(current);
  const levels=[];for(let i=0;i<12;i++){levels.push((await current.g.request({op:'visual_status'})).glow_opacity);await delay(130);}
- assert(Math.max(...levels)-Math.min(...levels)>.03,'Live glow opacity must breathe');checks.push('Cached native glow actually animates over time');
+ assert(levels.every(level=>level===0||level===1),'The glow is steady: absent with no target window, full when shown');checks.push('Glow does not breathe; it is absent until the agent works in a window');
  assert(!probe('active').equals(baseline),'System arrow pixels must differ while active');checks.push('Actual Windows system arrow replaced, with independent watchdog armed');
  for(const role of roles)assert(!probe('active-'+role,role).equals(baselines.get(role)),'Native role '+role+' must have custom artwork');checks.push('Arrow, link, text and background-work cursor roles all have actual native artwork');
  assert(!probe('text-role',32513).equals(probe('arrow-role',32512)),'Text fields must retain a distinct insertion cursor');checks.push('Text cursor retains its distinct insertion affordance');
- current.g.send({op:'pause'});await waitFor(()=>current.g.state==='paused');await delay(250);
- assert(probe('paused').equals(baseline));checks.push('Pause restores configured Windows arrow');await close(current);current=null;
- for(const role of roles)assert(probe('restored-'+role,role).equals(baselines.get(role)),'Native role '+role+' must restore');checks.push('All modified cursor roles restore after pause');
+ current.g.send({op:'stop'});await waitFor(()=>current.g.state==='stopped');await delay(250);
+ assert(probe('stopped').equals(baseline));checks.push('Stop restores configured Windows arrow');await close(current);current=null;
+ for(const role of roles)assert(probe('restored-'+role,role).equals(baselines.get(role)),'Native role '+role+' must restore');checks.push('All modified cursor roles restore after Stop');
  current=await session('ui-crash');await active(current);const ui=current.g.proc;ui.kill();
  await waitFor(()=>fs.readFileSync(current.file,'utf8').startsWith('stopped|'));await delay(250);
  assert(probe('after-ui-crash').equals(baseline));assert.throws(()=>process.kill(current.worker,0));

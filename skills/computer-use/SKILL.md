@@ -58,7 +58,7 @@ Launch returns the window, frame and screenshot; reuse them.
 Finish with `end`. `ready` starts a task; to check state after `end`, use `status`, which never opens a task.
 If you noticed a skill or runtime problem, keep private notes during the task and, after `end`, follow the report step in [finishing and reports](references/finishing-and-reports.md).
 Report only what the app showed. If it shows no output path, use at most one visible control that opens the output folder, or say the path was not shown. Do not explore history panels, hover for tooltips or search the disk to find it.
-For physical handoff (a human presses Esc, takes over or re-arms): at most one bounded input attempt, then stop issuing controller calls and wait for the human. Details in the handoff reference below.
+For physical handoff (a human presses Esc or takes over): at most one bounded input attempt, then stop issuing controller calls and wait for the human. Details in the handoff reference below.
 These common command shapes are complete; use them directly without schema setup. H/F/N are observed handle/frame/index values. Optional flags are in brackets; replace placeholders, not the command names.
 
 | Command | Named arguments |
@@ -103,11 +103,11 @@ These are packaged operating guidance, not a reason to explore source files. Rea
 | When | Read |
 | --- | --- |
 | `ready:false`, `update_notice`, any `next_action` or recovery state | [ready replies](references/ready-replies.md) |
-| A human must press Esc, take over or re-arm | [handoff](references/handoff.md) |
+| A human must press Esc or take over | [handoff](references/handoff.md) |
 | Targets, batches, steps files, waits, schemas | [observe and act](references/observe-and-act.md) |
 | Dozens or hundreds of steps (drawing, repetitive entry) | [complex tasks](references/complex-tasks.md) |
 | Typing, paste, Unicode, Open/Save dialogs | [dialogs and text](references/dialogs-and-text.md) |
-| Pause, Stop, permissions, `input_completed`, `delivery_unknown` | [control and permissions](references/control-and-permissions.md) |
+| Stop, Esc, permissions, `input_completed`, `delivery_unknown` | [control and permissions](references/control-and-permissions.md) |
 | macOS, sidecar unavailable, control bar, task ownership | [platform and sidecar](references/platform-and-sidecar.md) |
 | Any other failure code | [recovery](references/recovery.md) |
 | Reporting, giving up, feedback, updates | [finishing and reports](references/finishing-and-reports.md) |

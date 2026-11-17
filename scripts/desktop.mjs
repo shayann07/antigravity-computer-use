@@ -19,10 +19,13 @@ import {recoveryAdvice,persistStopLatch,readStopLatch} from '../server/recovery.
 import {withRecovery} from '../server/recovery-guide.mjs';
 import {runPlan,loadPlan} from '../server/plan-runner.mjs';
 const EMPTY_INPUT={type:'object',properties:{},required:[],additionalProperties:false};
+// The bare help line is the first list an agent reads; build it from both
+// registries so no command (plan, report_*) is left out.
+export const commandList=()=>[...LIFECYCLE.map(entry=>entry.command==='describe'?'describe [COMMAND...] | describe --all':entry.command),...TOOLS.map(tool=>tool.name.replace(/^computer_/,''))].join(' | ');
 const LIFECYCLE=[
   {command:'start',description:'Start or reconnect to this exact installed build. No arguments. Never clears emergency Stop or changes the installed permission policy.',inputSchema:EMPTY_INPUT},
   {command:'serve',description:'Run the exact installed service in the foreground. For an interactive host terminal use run_command IsDaemon:true and WaitMsBeforeAsync:1000. Windows exebox terminals need the installed App sidecar or local starter. No permission/data overrides. Reuses only a matching live build/policy.',inputSchema:EMPTY_INPUT},
-  {command:'shutdown',description:'Shut down the native service after input cleanup. No arguments. Preserves emergency Stop for human re-arm.',inputSchema:EMPTY_INPUT},
+  {command:'shutdown',description:'Shut down the native service after input cleanup. No arguments. Preserves an uncertain Stop for inspection.',inputSchema:EMPTY_INPUT},
   {command:'plan',description:'Run a long pre-computed list of steps (drawing, form filling, data entry) as consecutive run batches of at most 8, with a progress ledger. Resumes without replaying input, re-observes after a spoiled frame, halts on any other refusal, and returns a frame every --checkpoint-every batches (default 6) for you to check before running the same command again. --renew-budget N (default 0) lets it end and restart the task at most N times when the 200-action budget runs out; the reply then carries the new task token.',usage:'plan --hwnd H --observation-id F --plan-file STEPS.json --ledger LEDGER.json --reason TEXT [--checkpoint-every N] [--renew-budget N]',inputSchema:{type:'object',properties:{hwnd:{type:'integer'},observation_id:{type:'string'},plan_file:{type:'string'},ledger:{type:'string'},reason:{type:'string'},checkpoint_every:{type:'integer',minimum:1,maximum:50},renew_budget:{type:'integer',minimum:0,maximum:10}},required:['hwnd','observation_id','plan_file','ledger','reason'],additionalProperties:false}},
   {command:'report_draft',description:'After end, and only if you noticed a problem in the skill or runtime: build the exact GitHub issue text from 1 to 3 findings. Read-only; scrubs paths, emails, URLs, window titles and long numbers; checks open agent-report issues for a duplicate. Show the returned title and body to the user and ask once: Yes / Not now / Never ask. status disabled or daily_limit means do not ask.',usage:'report_draft --finding "CATEGORY: one line of at most 200 characters" [--finding ...]',inputSchema:{type:'object',properties:{finding:{type:'array',maxItems:3,items:{type:'string',maxLength:210,description:'CATEGORY: line; CATEGORY is one of '+CATEGORIES.join(', ')}}},required:['finding'],additionalProperties:false}},
   {command:'report_submit',description:'Only after the user answered Yes to a report_draft: post that exact draft. Uses the signed-in GitHub CLI to create the issue (or comment on the duplicate); otherwise returns a prefilled link for the user to click. Never open the link yourself.',usage:'report_submit --draft DRAFT_ID [--dry-run]',inputSchema:{type:'object',properties:{draft:{type:'string'},'dry-run':{type:'boolean'}},required:['draft'],additionalProperties:false}},
@@ -79,6 +82,24 @@ export async function recordedFailureReply(error){
  return result;
 }
 
+// Windows: a named pipe. macOS: a Unix socket in a fresh private directory
+// under the user's temporary folder, kept short for the 104-byte socket path limit (mode 0700/0600).
+export const CALLER_GATE=/^(?:\\\\\.\\pipe\\AGCU\.Gate\.[a-f0-9]{32}|\/[^\0\n]{1,80}\/agcu\.[A-Za-z0-9]{6}\/gate\.[a-f0-9]{32})$/;
+export async function callerGateNonce(session,timeout,expectedPermissionMode,connect=net.createConnection){
+  try{
+    const opened=await request(session,'caller_gate',{},Math.min(timeout,10000),expectedPermissionMode);
+    if(!opened?.ok||typeof opened.gate!=='string'||!CALLER_GATE.test(opened.gate))return undefined;
+    return await new Promise(resolve=>{
+      let buffer='',settled=false;const socket=connect(opened.gate);
+      const done=value=>{if(settled)return;settled=true;clearTimeout(deadline);socket.destroy();resolve(value);};
+      const deadline=setTimeout(()=>done(undefined),5000);
+      socket.setEncoding('utf8');
+      socket.on('data',chunk=>{buffer+=chunk;const newline=buffer.indexOf('\n');if(newline<0){if(buffer.length>200)done(undefined);return;}const nonce=buffer.slice(0,newline).trim();done(/^[a-f0-9]{64}$/.test(nonce)?nonce:undefined);});
+      socket.on('error',()=>done(undefined));socket.on('close',()=>done(undefined));
+    });
+  }catch{return undefined;}
+}
+
 export async function request(session,command,args={},timeout=100000,expectedPermissionMode){
   if(session.task_protocol===1&&command==='ready'&&!session.task_token){
     const claim=await request(session,'claim',{},timeout,expectedPermissionMode);
@@ -86,6 +107,9 @@ export async function request(session,command,args={},timeout=100000,expectedPer
     if(typeof claim.task_token!=='string'||claim.task_token.length!==64||!/^[a-f0-9]{64}$/.test(claim.task_token))throw Object.assign(Error('Task reservation did not return valid context; no desktop action was requested.'),{code:'task_claim_unconfirmed'});
     session.task_token=claim.task_token;
   }
+  // #60: prove which app runs this CLI. Any failure sends no nonce, and the
+  // service keeps every AI app blocked.
+  const callerNonce=command==='ready'&&session.caller_gate_protocol===1?await callerGateNonce(session,timeout,expectedPermissionMode):undefined;
   return new Promise((resolve,reject)=>{
     let buffer='',settled=false,connected=false;
     const socket=net.createConnection(session.pipe);
@@ -95,7 +119,7 @@ export async function request(session,command,args={},timeout=100000,expectedPer
     // Absolute deadline: partial bytes cannot keep a hung action alive forever.
     // Closing the connection requests server cancellation, not proof of cleanup.
     const deadline=setTimeout(()=>done(transportFailure('request_timeout','Desktop request timed out. Cancellation was requested; completion is unconfirmed. Inspect status and the actual app before continuing; do not replay the action.')),timeout);
-    socket.on('connect',()=>{connected=true;socket.write(JSON.stringify({secret:session.secret,task_token:session.task_token,command,args,expected_build_id:BUILD_ID,expected_permission_mode:expectedPermissionMode})+'\n');});
+    socket.on('connect',()=>{connected=true;socket.write(JSON.stringify({secret:session.secret,task_token:session.task_token,command,args,expected_build_id:BUILD_ID,expected_permission_mode:expectedPermissionMode,...(callerNonce?{caller_nonce:callerNonce}:{})})+'\n');});
     socket.on('data',chunk=>{
       buffer+=chunk;
       if(Buffer.byteLength(buffer)>4*1024*1024)return done(transportFailure('service_response_too_large','Desktop response exceeded its limit. Completion is unconfirmed; inspect the app without replaying the action.'));
@@ -151,7 +175,7 @@ export async function main(){
     else printReply(rest[0]?describeCommand(rest[0]):{commands:[...LIFECYCLE,...TOOLS.map(tool=>({command:tool.name.replace(/^computer_/,''),description:tool.description}))].map(({command,description})=>({command,description}))});return;
   }
   if(!command||command==='--help'){
-    console.log('Native desktop skill (no MCP)\nserve | start | shutdown | describe [COMMAND...] | describe --all | '+TOOLS.map(tool=>tool.name.replace(/^computer_/,'' )).join(' | ')+'\nAntigravity: reuse the installed App sidecar; isolated exebox terminals cannot start visible-desktop control. The human starter runs on the normal Windows desktop. Interactive external terminals may use start or foreground serve. Fast path: snapshot --hwnd 123; click --hwnd 123 --observation-id FRAME --index 7 --reason "Open settings". Named action flags return a compact tree without a new image unless --image is requested. Read the tree first; open the actual image.path only for pixel targets or visual checks. Use --text-file for generated bulk text. Fast batches: run --hwnd 123 --observation-id FRAME --reason "Import sample" --step click --index 7 --risk routine --step file_dialog --path "D:/sample.png" --action open --entry-method clipboard. Owner/frame/reason precede all --step groups. No JSON/plan file is needed; the final step returns an image by default. No per-action request/result files or JPEG copies are needed. One describe call can fetch multiple schemas; do not interrogate every command at startup. JSON inline and --request FILE remain supported; --json retains full output. Esc stops; only the human can re-arm.');return;
+    console.log('Native desktop skill (no MCP)\n'+commandList()+'\nAntigravity: reuse the installed App sidecar; isolated exebox terminals cannot start visible-desktop control. The human starter runs on the normal Windows desktop. Interactive external terminals may use start or foreground serve. Fast path: snapshot --hwnd 123; click --hwnd 123 --observation-id FRAME --index 7 --reason "Open settings". Named action flags return a compact tree without a new image unless --image is requested. Read the tree first; open the actual image.path only for pixel targets or visual checks. Use --text-file for generated bulk text. Fast batches: run --hwnd 123 --observation-id FRAME --reason "Import sample" --step click --index 7 --risk routine --step file_dialog --path "D:/sample.png" --action open --entry-method clipboard. Owner/frame/reason precede all --step groups. No JSON/plan file is needed; the final step returns an image by default. No per-action request/result files or JPEG copies are needed. One describe call can fetch multiple schemas; do not interrogate every command at startup. JSON inline and --request FILE remain supported; --json retains full output. Esc stops and ends the task; report and wait for the human, then ready starts fresh.');return;
   }
   const jsonMode=rest[0]==='--json';if(jsonMode)rest.shift();
   replyMode=jsonMode||(rest.length&&(!rest[0].startsWith('--')||rest[0]==='--request'))?'json':'brief';
@@ -172,7 +196,7 @@ export async function main(){
     if(existing?.ok){
       if(existing.build_id!==BUILD_ID||existing.build_version!==VERSION)throw Object.assign(Error('This skill and the running service use different builds. Do not interrupt an active task or change a pinned deployment. Inspect the intended scope and use a matching installed version.'),{code:'version_mismatch'});
       if(existing.permission_mode!==policy.permission_mode)throw Object.assign(Error('A different permission policy owns the live session. Finish and shutdown its task before using this installed policy; no override was applied.'),{code:'deployment_policy_mismatch'});
-      printReply(command==='ready'?await request(saved,'ready',{},15000,policy.permission_mode):existing);return;
+      printReply(command==='ready'?await request(saved,'ready',args,15000,policy.permission_mode):existing);return;
     }
     // An unresponsive live service may still be controlling the desktop. Never
     // replace its capability file or create a competing guardian after timeout.
@@ -192,20 +216,20 @@ export async function main(){
     const child=spawn(process.execPath,[fileURLToPath(new URL('../server/desktop-service.mjs',import.meta.url)),'--serve'],{detached:true,windowsHide:true,stdio:'ignore',env:{...process.env,AGCU_PERMISSION_MODE:policy.permission_mode}});child.unref();
     for(let i=0;i<100;i++){
       await new Promise(resolve=>setTimeout(resolve,100));
-      try{const session=JSON.parse(fs.readFileSync(file));session.task_token=taskToken;const found=await request(session,'status',{},1500,policy.permission_mode);if(found.ok&&found.build_id===BUILD_ID&&found.permission_mode===policy.permission_mode){printReply(command==='ready'?await request(session,'ready',{},15000,policy.permission_mode):found);return;}}catch(error){if(command==='ready'&&error.code!=='session_unavailable')throw error;}
+      try{const session=JSON.parse(fs.readFileSync(file));session.task_token=taskToken;const found=await request(session,'status',{},1500,policy.permission_mode);if(found.ok&&found.build_id===BUILD_ID&&found.permission_mode===policy.permission_mode){printReply(command==='ready'?await request(session,'ready',args,15000,policy.permission_mode):found);return;}}catch(error){if(command==='ready'&&error.code!=='session_unavailable')throw error;}
     }
     throw Error('Native session did not start; run the service in foreground for diagnostics.');
   }
   if(!fs.existsSync(file)){
     if(command==='status'){const latch=readStopLatch(path.join(dataDir(),'emergency.stop'));printReply({ok:true,state:latch?'stopped':'not_running',...(latch?.unconfirmed?{control_reason:'guardian_stop_unconfirmed'}:{}),...(latch?.invalid?{control_reason:'stop_persistence_failed'}:{}),build_version:VERSION,build_id:BUILD_ID,reconnect_required:true});return;}
-    throw Object.assign(Error('No desktop session is running (it may have expired after15 idle minutes). Restart the installed App sidecar (or use its human starter on the normal Windows desktop), then discover apps and take a fresh observation. Antigravity does not need to restart; emergency Stop remains latched.'),{code:'no_session'});
+    throw Object.assign(Error('No desktop session is running (it may have expired after15 idle minutes). Restart the installed App sidecar (or use its human starter on the normal Windows desktop), then discover apps and take a fresh observation. Antigravity does not need to restart.'),{code:'no_session'});
   }
   const session=JSON.parse(fs.readFileSync(file));session.task_token=taskToken;
   if(command==='plan'){
     const steps=loadPlan(args.plan_file);
     const call=(name,input)=>{if(name==='run')validate('computer_run',input);return request(session,name,input,100000,policy.permission_mode).catch(failureReply);};
-    const renew=async()=>{const ended=await request(session,'end',{},100000,policy.permission_mode).catch(failureReply);if(!ended.ok)return ended;session.task_token=undefined;return request(session,'ready',{},15000,policy.permission_mode).catch(failureReply);};
-    const result=await runPlan({steps,hwnd:args.hwnd,observationId:args.observation_id,reason:args.reason,ledgerFile:args.ledger,call,renew,checkpointEvery:args.checkpoint_every??6,maxRenewals:args.renew_budget??0});
+    const renew=async()=>{const ended=await request(session,'end',{},100000,policy.permission_mode).catch(failureReply);if(!ended.ok)return ended;session.task_token=undefined;const handle=ended.session_handle??ended.result?.session_handle;return request(session,'ready',handle?{session_handle:handle}:{},15000,policy.permission_mode).catch(failureReply);};
+    const result=await runPlan({steps,hwnd:args.hwnd,observationId:args.observation_id,reason:args.reason,ledgerFile:args.ledger,call,renew,checkpointEvery:args.checkpoint_every??6,maxRenewals:args.renew_budget??1});
     printReply(result);if(!result.ok)process.exitCode=1;return;
   }
   if(command==='shutdown'){

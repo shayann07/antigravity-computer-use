@@ -19,11 +19,15 @@
     "edge_depth": 82,
     "edge_alpha": 154,
     "edge_core": 5,
-    "edge_core_alpha": 20
+    "edge_core_alpha": 20,
+    "glow_min": 0.5,
+    "glow_reach": 0.42,
+    "glow_strength": 0.6,
+    "glow_lap_seconds": 60
   },
   "sensitive_operations": ["launch", "clipboard", "close_window", "paste", "paste_files", "open", "file_dialog"],
   "ambiguous_target_operations": ["click", "drag"],
   "sensitive_label_pattern": "send|submit|pay|purchase|buy|delete|remove|install|upload|share|password|permission|transfer|sign.in",
   "sensitive_process_pattern": "^(windowsterminal|regedit|systemsettings|system settings|control|code|visual studio code|idea64|rider64|terminal|iterm2?|alacritty|kitty|hyper)$",
-  "sensitive_key_pattern": "enter|return|delete|alt\\+|option\\+|win|meta|super|(?:ctrl|cmd|command)\\+[svx]"
+  "sensitive_key_pattern": "enter|return|delete|alt\\+|option\\+|win|meta|super|(?:ctrl|cmd|command)\\+(?:(?:shift|alt|option)\\+)*[svx](?![a-z0-9])"
 }

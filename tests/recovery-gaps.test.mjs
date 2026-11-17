@@ -13,7 +13,7 @@ test('flag, policy, update, busy and unlock refusals name who acts and the comma
   ['bad_selector', 'fix_arguments_and_retry', 'agent', true], ['text_limit', 'fix_arguments_and_retry', 'agent', true], ['no_steps', 'fix_arguments_and_retry', 'agent', true],
   ['protected_app', 'choose_permitted_target', 'agent', false], ['app_blocked', 'choose_permitted_target', 'agent', false], ['key_blocked', 'choose_permitted_target', 'agent', false],
   ['needs_confirmation', 'await_user_decision', 'human', false], ['model_approval_forbidden', 'await_user_decision', 'human', false],
-  ['human_resume_required', 'awaiting_human_resume', 'human', false], ['desktop_locked', 'await_human_unlock', 'human', false],
+  ['control_stopped', 'report_and_wait_for_human', 'human', false], ['session_limit', 'renew_task_and_continue', 'agent', false], ['app_tier_click', 'choose_permitted_target', 'agent', false], ['desktop_locked', 'await_human_unlock', 'human', false],
   ['update_in_progress', 'wait_for_update', 'agent', false], ['operation_pending', 'wait_for_pending_operation', 'agent', false],
   ['session_unavailable', 'human_restart_controller', 'human', false], ['launch_failed', 'fix_app_path', 'agent', false],
   ['launch_timeout', 'discover_apps_then_observe', 'agent', false], ['index_out_of_range', 'observe_again', 'agent', false],
@@ -49,4 +49,9 @@ test('a fixable refusal after earlier batch steps landed is not replayable', asy
  assert.equal(partial.replay_allowed, false); assert.equal(partial.next_action, 'fix_arguments_and_resume_after_completed');
  const clean = recoveryAdvice({ok:false, completed:[], failed_index:0, error:{code:'bad_point'}}, 'computer_run');
  assert.equal(clean.replay_allowed, true);
+});
+
+test('a second copy of Computer Use and a hung window get their own recovery advice',()=>{
+ const held=recoveryAdvice({error:{code:'input_lease_held'}});assert.equal(held.next_action,'human_close_other_copy');assert.equal(held.replay_allowed,false);assert.equal(RECOVERY_GUIDE.human_close_other_copy.actor,'human');
+ const hung=recoveryAdvice({error:{code:'window_not_responding'}});assert.equal(hung.next_action,'observe_again');assert.equal(hung.replay_allowed,false);
 });

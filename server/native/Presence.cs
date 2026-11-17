@@ -84,8 +84,12 @@ namespace Axon
         internal static PhysicalInputSample Capture() {lock(_physicalLock)return _physical.Capture();}
         static void TrackPointer(uint message,int x,int y,bool injected) {
             lock(_physicalLock)_physical.Mouse(message,injected,x,y,TakeoverPolicy.NowMs);
+            // Told where the pointer is, for the pointer's glow. The listener
+            // must only note the point: this runs inside the input hook.
+            if(message==WM_MOUSEMOVE){Action<int,int> moved=PointerMoved;if(moved!=null)try {moved(x,y);}catch {}}
         }
 
+        internal static volatile Action<int,int> PointerMoved;
         internal static bool HooksOk { get { return _hooksOk; } }
 
         internal static void NoteSelfInput() { Interlocked.Exchange(ref _lastSelfInject, DateTime.UtcNow.Ticks); }
