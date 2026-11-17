@@ -528,7 +528,7 @@
     },
     {
       "path": "install.ps1",
-      "sha256": "b7fdeaa1f179c8bad88f9c1daf9fc2dea9d9187775361f10118d5519887d89f1"
+      "sha256": "03dc7e2205f898291eead61c43e460a54212691d578a2896839965dade5212ed"
     },
     {
       "path": "tests/bootstrap.test.mjs",
