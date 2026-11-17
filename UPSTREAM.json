@@ -364,7 +364,7 @@
     },
     {
       "path": "scripts/bundle.mjs",
-      "sha256": "d0411bf1aac21e141369a1683eaecc7134789341b08045b78e359475f9c0b9b9"
+      "sha256": "dc7152a9cddddf3afe7bd64f93787b4af0c8810b936488807feb424d125d4429"
     },
     {
       "path": "tests/install.test.mjs",
@@ -608,7 +608,7 @@
     },
     {
       "path": "docs/MACOS.md",
-      "sha256": "84a4e83cc922368ff606fac7781d6be815334eea680493b17365ae781c53df65"
+      "sha256": "11de1c9e29784b41d7fdaabe8d1d612973a2413073059d837015fd075778ecb0"
     },
     {
       "path": "server/update-core.mjs",

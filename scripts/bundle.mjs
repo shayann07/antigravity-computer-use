@@ -38,7 +38,13 @@ fs.cpSync(path.join(root,'docs'),path.join(out,'docs'),{recursive:true,filter:bu
 const sha=file=>createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const nativeSource=createHash('sha256');for(const file of SOURCES)nativeSource.update(path.basename(file)+'\0').update(fs.readFileSync(file));
 fs.writeFileSync(path.join(out,'bundle-manifest.json'),JSON.stringify({version,platform:process.platform,arch:process.arch,node:process.version,node_sha256:sha(path.join(out,platform.node)),host_sha256:sha(path.join(out,'bin',platform.host)),storage_guard_sha256:sha(path.join(out,'bin',platform.storage)),storage_source_sha256:sha(path.join(root,process.platform==='darwin'?'server/native/macos/PrivateStorage.swift':'server/native/StorageGuard.cs')),native_source_sha256:nativeSource.digest('hex'),license_node_revision:'v24.20.0',built_at:new Date().toISOString(),default_direct_permission_mode:'standalone',permission_modes:['standalone','host-managed'],qualification:process.platform==='darwin'?'experimental-native-adapter-interactive-qualification-pending':'windows-beta'},null,2));
-if(process.platform==='win32')fs.writeFileSync(path.join(out,'install.cmd'),'@echo off\r\n"%~dp0node.exe" "%~dp0scripts\\install.mjs" %*\r\n');
+if(process.platform==='win32'){
+ fs.writeFileSync(path.join(out,'install.cmd'),'@echo off\r\n"%~dp0node.exe" "%~dp0scripts\\install.mjs" %*\r\n');
+ // Double-click installer with the recommended defaults (global skill plus
+ // background startup), matching macOS install.command. No spaces in the
+ // name: GitHub renames release assets that contain them.
+ fs.writeFileSync(path.join(out,'Install.Computer.Use.cmd'),'@echo off\r\n"%~dp0node.exe" "%~dp0scripts\\install.mjs" --integration direct --sidecar %*\r\nif errorlevel 1 (echo. & echo Installation did not finish. Read the message above.) else (echo. & echo Done. In Antigravity, type /computer-use and describe your task.)\r\npause\r\n');
+}
 else {
  for(const [name,body]of [
   ['install.command','#!/bin/sh\nset -eu\ncd -- "$(dirname -- "$0")"\nexec ./node ./scripts/install.mjs --integration direct --sidecar "$@"\n'],

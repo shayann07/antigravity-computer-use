@@ -37,6 +37,17 @@ on every change.
 
 ## Install
 
+The quickest way is one line in Terminal. It picks the archive for your Mac,
+checks its SHA-256 against the release's `SHA256SUMS.txt` and stops if it differs,
+runs `install.command`, then opens the permission setup:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/shayann07/antigravity-computer-use/main/install.sh | sh
+```
+
+Files fetched with curl carry no download quarantine, so Gatekeeper does not block
+the two `.command` scripts. To do it by hand instead:
+
 Download the macOS archive for your Mac (arm64 for Apple silicon, x64 for Intel)
 from the [1.0.3 release](https://github.com/shayann07/antigravity-computer-use/releases/tag/v1.0.3)
 and check it against the release's checksums.

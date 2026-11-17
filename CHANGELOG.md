@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- macOS installs in one line: `curl -fsSL https://raw.githubusercontent.com/shayann07/antigravity-computer-use/main/install.sh | sh` picks the archive for Apple silicon or Intel, checks its SHA-256 and stops if it differs, installs, then opens the permission setup. Files fetched with curl are not quarantined, so Gatekeeper does not block the setup scripts.
+- The Windows ZIP has a double-click installer, `Install.Computer.Use.cmd`, with the recommended defaults (global skill and background startup).
+- The README's Install section opens with a prompt to paste into Antigravity, or any coding agent that can run commands, so the agent installs the skill, showing each command first and leaving macOS permission prompts to you.
+
 ## 1.0.3 - Freed tasks, step pictures and short recordings
 
 - A task whose caller disappeared without ending it no longer blocks every other conversation until a restart. A human Stop releases it at once, and a task that has been orphaned for 30 minutes with no approved app or held input is ended by the next `ready`. A task still in use stays protected (#114).
