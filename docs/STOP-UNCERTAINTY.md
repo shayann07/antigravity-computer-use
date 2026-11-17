@@ -5,7 +5,7 @@ remains open. A file-only probe invoked the actual Windows native `LatchStop`
 method and the actual shared Runtime with inert dependencies. Both changed
 `unconfirmed:<fixture>` into plain `stopped`; a reconstructed Runtime then
 reported an ordinary persisted Stop. No controls, application grant, input or
-physical re-arm was involved. The native source blob also matches beta.4's
+human control action was involved. The native source blob also matches beta.4's
 source. This proves lost uncertainty metadata, not a demonstrated input bypass.
 
 ## Candidate repair
@@ -19,15 +19,15 @@ source. This proves lost uncertainty metadata, not a demonstrated input bypass.
 - Updated native workers and human controls check both paths. The independent
   monitors also observe the uncertainty marker; active/paused control is
   revoked without requiring the agent or responsive guardian UI to relay it.
-  Passive startup remains invisible; this does not start a guardian or re-arm.
+  Passive startup remains invisible; this does not start a guardian.
 - Shared startup, shutdown and status preserve the stronger reason. Unknown
   filesystem entries fail closed; marker reads are bounded and do not follow
   file links. Both marker names remain private runtime state.
 - Installer, updater and rollback refuse or defer when uncertainty or Stop
   persistence errors are present. No older bundle is launched automatically to
   bypass this boundary. Ordinary confirmed Stop still survives normal upgrades.
-- Update preparation refuses unresolved Stop recovery. Permission settings,
-  deployment pins and human-only re-arm are unchanged.
+- Update preparation refuses unresolved Stop recovery. Permission settings and
+  deployment pins are unchanged.
 
 The supported complete bundle must include these native and shared changes
 together. An arbitrary old executable does not honor the new companion file;
@@ -56,8 +56,8 @@ The shared runtime publishes uncertainty before requesting Stop and aborts its
 driver independently. It coalesces concurrent Stop requests. Only the marker
 created for that fresh request can be settled after both native acknowledgement
 and driver cleanup succeed. The primary `stopped` marker is written/flushed
-before removing the matching companion; input remains blocked and re-arm is
-still human-only. BigInt file identities avoid rounding Windows file IDs.
+before removing the matching companion; input remains blocked and the Stop
+is not cleared by the receipt. BigInt file identities avoid rounding Windows file IDs.
 Old/recovered uncertainty is never settled by a receipt from a new controller.
 End refuses to discard the durable task record while Stop uncertainty or
 persistence failure remains; those old actor/ledger identities are recovery
@@ -81,4 +81,4 @@ Windows and Mac remain release gates. Source/fixture passes cannot close them.
 
 ## Bound recovery and local task closure
 
-New uncertain Stops persist a nonce and original guard binding. A fresh correlated receipt from that same original guardian can settle its prior uncertain nonce. A current controller whose native actors have exited can instead verify its exact recorded actor set and empty native ledger; it cannot use this path while a replacement process is starting or alive. After controller restart, settlement requires the recorded original parent and native actors to be gone, matching guard context, and verified old cleanup records. All settlement leaves ordinary Stop latched for human re-arm. Missing legacy context or incomplete actor coverage remains blocked for inspection. The local End-session menu uses these same proofs; it does not bypass them.
+New uncertain Stops persist a nonce and original guard binding. A fresh correlated receipt from that same original guardian can settle its prior uncertain nonce. A current controller whose native actors have exited can instead verify its exact recorded actor set and empty native ledger; it cannot use this path while a replacement process is starting or alive. After controller restart, settlement requires the recorded original parent and native actors to be gone, matching guard context, and verified old cleanup records. Settlement leaves an ordinary confirmed Stop, which the next `ready` clears after the usual cleanup proof. Missing legacy context or incomplete actor coverage remains blocked for inspection. The local End-session menu uses these same proofs; it does not bypass them.

@@ -16,7 +16,7 @@ and every change needs evidence that it works.
 - Windows x64 and **Node 24.20.0**, the version used for packaging. There are
   no npm dependencies.
 - The native helpers are compiled with the built-in .NET Framework compiler.
-- Experimental macOS work needs macOS 14+, a matching Node 24.20.0 and the Xcode
+- macOS work needs macOS 14+, a matching Node 24.20.0 and the Xcode
   Command Line Tools; see [docs/MACOS.md](docs/MACOS.md).
 
 ```powershell

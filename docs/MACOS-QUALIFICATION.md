@@ -1,5 +1,290 @@
 # Intel Mac qualification: reported device results and review limits
 
+## 16 November 2026: issue #99 umbrella, Intel (in progress)
+
+Branch `mac/umbrella-x86_64` (draft PR #105), built on `feat/final-native`
+(#103) because the shared runtime for the new control model exists only there;
+`main` is an ancestor of that branch. The human granted permissions and
+answered cards on this Mac; each row says whether it was physically observed,
+measured, rendered offscreen or checked headless. No physical Esc has been
+pressed yet.
+
+### Identities
+
+- Hardware: Intel MacBook Pro, Core i7-9750H, native x86_64 (`uname -m`).
+- macOS 26.6.2, build 25G83. Xcode at `/Applications/Xcode.app`, SDK 26.4,
+  Swift 6.3.1, target `x86_64-apple-macosx26.0` (native Liquid Glass compiled).
+- Node v24.20.0 darwin-x64 (official tarball, SHASUMS verified by nvm).
+- Antigravity 2.29.0.
+- Baseline commit: `main` `76ea55ac91d3fca7eaec41681027d4dc19d70e5e`
+  (CI green: macos-15, macos-15-intel, macos-26, macos-26-intel, windows).
+- Base of the work: `feat/final-native` `258b00a` (CI green on the same jobs).
+
+### Results
+
+| Check | Commit | Result | Evidence |
+| --- | --- | --- | --- |
+| Native check, provenance, bundle, install check | `76ea55a` (baseline) | pass | local logs |
+| Full suite | `76ea55a` (baseline) | 665 tests, 624 pass, 0 fail, 41 skipped (Windows-only) | local log |
+| Native check, provenance, bundle, install check | `8369686` | pass | local logs |
+| Full suite | `8369686` | 694 tests, 652 pass, 0 fail, 42 skipped | local log |
+| Native check, provenance, bundle, install check | `7808f4f` (Pause removed, glow) | pass | local logs |
+| Full suite | `7808f4f` | 695 tests, 653 pass, 0 fail, 42 skipped | local log |
+| Native check, provenance, bundle, install check | `2d9b0c7` (bar drag, docks, avoidance) | pass | local logs |
+| Full suite | `2d9b0c7` | 695 tests, 653 pass, 0 fail, 42 skipped | local log |
+| Native check, provenance, bundle, install check | `1002b5a` + docs (parity, recovery) | pass | local logs |
+| Full suite | `1002b5a` | 709 tests, 667 pass, 0 fail, 42 skipped (Windows-only) | local log |
+| Native check, provenance, bundle, install check | `be70509` (merged with `feat/final-native` `886f3a4`) | pass | local logs |
+| Full suite | `be70509` | 709 tests, 666 pass, 0 fail, 43 skipped (Windows-only) | local log |
+| Native contract: tiers (target and frontmost), remembered approvals, confirmed-only Stop clearing, approval fenced by Pause/Stop, easing, prompt layout, glow maths | branch head | pass | `macos-native-check` |
+| Real guardian binary, headless: `clear_stop` clears only a confirmed Stop; unconfirmed, companion, invalid, directory and recovered-task markers stay; Smart preference rewritten | branch head | pass | `tests/macos-guardian-control.test.mjs` |
+| Access prompt drawing (short, long scrolling, launch, hover/press/focus) | branch head | inspected offscreen | `--prompt-preview` pictures, kept local |
+| Glow drawing on dark and light, small window | branch head | inspected offscreen | `--glow-preview` pictures, kept local |
+| Glow cost at rest, 1132x995 window, Soft | branch head | process about 0.9 % of one core; window server 24.9 % idle vs about 31 % with the glow (two runs) | `--glow-trial 10`; physically observed on screen, not judged for feel |
+
+### Parity with Windows (owner's list, 16 November)
+
+Build C2 (test-certificate signed, CDHash `f66c9471…`) installed on this Mac.
+Pictures are rendered by `AxonHost --visual-preview <dir>`, one file per
+surface and state (48 files: `bar-*`, `menu-*`, `prompt-*`, `glow-*`), and
+kept local, as the rules for this PR require. The Windows pictures are not yet
+beside them; that comparison is open.
+
+| Item | Result | How shown |
+| --- | --- | --- |
+| 1 Drawing test (Preview Markup) | **blocked** | see "Drawing test" below |
+| 2 Bar: 440×48, always dark, two lines, line 1 by state, no dots, Stop and Settings 44×44 with hover and pressed | done | pictures `bar-ready`, `bar-working`, `bar-working-clicking`, `bar-working-one-minute-left`, `bar-asking`, `bar-stopped-esc`, `bar-stopped-button`, `bar-stopped-safety-check`, `bar-session-ended`, `bar-stop-hover`/`-pressed`, `bar-settings-hover`/`-pressed`, `bar-working-increase-contrast`; the human saw the ready, working and amber asking bars on screen |
+| 2 Bar drag, edge resistance, spring 0.45 s / bounce 0.15 | done; feel not agreed | the human dragged it ("moves but no spring"): the Windows constants make the landing subtle; from rest it settles in 0.35 s with no visible overshoot, a 1500 pt/s throw overshoots about 3 pt (contract check). To compare with Windows side by side |
+| 2 Menu: 312 wide, 12 radius, 44-pt rows, opacity and 0.96 scale, 200 ms in, 133 ms out | done | pictures `menu-main`, `menu-main-row-hover`/`-pressed`, `menu-move-bar`, `menu-page-change-33ms`…`150ms`, `menu-opening-25pct`/`50pct`, `menu-main-above-low-bar`, `menu-main-recording-on`; the human used the tick, Move bar and click-outside close |
+| 2 Menu tick slides; unticked rows left-aligned | done (Mac-only, asked for by the human) | picture `menu-main-tick-sliding-in-50pct`; differs from Windows |
+| 2 Prompt card: 496 wide, 18 radius, Allow and Deny 104×44, Deny focused, Return and Esc deny, 90 s note | done | pictures `prompt-app`, `prompt-action-long`, `prompt-launch`, `prompt-states-*`; two cards seen on screen by the human, Allow used |
+| 2 No Pause anywhere | done | the guardian refuses `pause`/`resume` with `pause_removed`; no Pause in the bar or menu. The runtime part was removed on `feat/final-native` and is merged here |
+| 3 Glow: one palette, thick, never static, no rectangle or steps | done | pictures `glow-{dark,light}-{window,full-screen}-{soft,medium,bright}` (12); the human saw it around Preview's alert |
+| 3 Glow: Soft default, Medium, Bright; one 60 s lap; entrance fades while the band widens | done | pictures above and `glow-entrance-start`/`-end`; level is a menu row |
+| 3 Glow: 15 fps at rest | measured | 302 frames in 20 s, one every 66.0 ms, at each level |
+| 3 Glow: 16 ms frames in transitions | not measured | the entrance runs in the render server; only its in-process CPU is measured (below) |
+| 3 Glow eases toward the action point | done in code, not shown | the runtime now sends each action's point (merged from `feat/final-native`); the point message now also carries the window's pid and frame, which the Mac guardian needs (`fc4fe37`) |
+| 3 Glow never takes a click; hidden from the runtime's own screenshots | done in code; physically the click-through was seen | the window ignores mouse events; capture excludes it unless "Show bar and glow in recordings" is on |
+| 3 Glow recording | not taken | needs the human's screen recording |
+| 4 Performance | measured | table below |
+| 5 Rejected motions (on Stop/Esc, per action, easing during a window drag, hover fade on menu rows) | not added | code review; the only added motion is the tick slide above |
+| 6 Reduce Motion | done in code | hover and menu changes become instant, the bar enters with a fade only; not checked with the setting on |
+
+#### Performance (Intel i7-9750H, macOS 26.6, busy desktop)
+
+| Measure | Mac | Windows reference |
+| --- | --- | --- |
+| Glow process CPU at rest, Soft / Medium / Bright, 708x965 window, 20 s each | 0.90 / 0.89 / 0.87 % of one core | 8.9 % / 0.8 % (as reported) |
+| Glow process CPU during the entrance | 3.2–3.7 % of one core | |
+| Rest frame interval; work per frame | 66.0 ms; 0.11 ms mean, 0.27 ms worst | 66 ms |
+| Entrance frame time | not measured (render server) | about 19 ms |
+| WindowServer CPU without / with the glow | 28.4 % / 32.8–33.3 % (+4.4–4.9 points) | |
+| Idle service helpers, no glow | guardian 2.4 %, watchdog 1.7 % of one core | |
+
+The glow figures are the bare trial process. The real guardian idles at
+2.4 % without a glow, so it is not like-for-like with Windows' 0.8 %.
+| `snapshot` without / with picture | 0.59–0.65 s / 1.14–1.62 s | |
+| `apps`, `ready` | 0.27–0.76 s, 0.42 s | |
+| s per click, s per drag | not measured: every pixel click and drag on Preview needed a card (below) | about 1.04 s per drag |
+
+CPU is from `getrusage` in the trial and from cumulative `cputime` of
+WindowServer over the same span (`AxonHost --glow-trial 20 --level …`).
+
+#### Drawing test
+
+Blocked before the first stroke. Preview opened the 900x1200 dark canvas (the
+earlier "couldn't be opened" alert came from a launch that passed the file as
+an argument; opening it through Launch Services works). Every pixel click and
+drag on the Mac is sensitive: `MacFence.preview` gives pixel actions an empty
+label (`MacControl.swift:313-314`), and the shared contract makes a click or
+drag with an empty label sensitive (`ambiguous_target_operations`). Windows
+instead hit-tests the pixel and uses that control's name (`AxonHost.cs:634`),
+so the Mac asks where Windows may not. Also, the Mac runtime refuses
+`drag --points` outright (`points_unsupported`, `runtime.mjs:644`): multi-point
+strokes are not implemented on the Mac yet, only from/to segments. Preview's
+canvas image has no name
+either way, so every stroke would need its own approval card. Markup's toolbar
+pen is not exposed to accessibility, so turning Markup on is also a pixel
+click. The human approved one card; the click was then refused as covered
+(another window covered it), and the next card timed out at 90 s. Unblocking needs
+an owner decision: hit-test pixels on the Mac as on Windows, and decide
+whether an unnamed canvas in a full-tier app may take routine drags.
+
+Also seen: `cmd+shift+a` (Markup's shortcut) is sensitive because
+`(?:ctrl|cmd|command)\+[svx]` matches the `s` of `shift`; Windows has the same
+pattern for `ctrl+shift+…`.
+
+**Update after the owner's answers (head f516b34, build C7).** The owner
+decided on #105 not to exempt unnamed targets. Done in code, not yet run on
+the desk:
+- A pixel click's label is now the name of the element under the point,
+  hit-tested through the target app with the snapshot's name rule (title,
+  description, placeholder; no role). An empty name still asks. Drags carry
+  no point and stay unnamed, so every stroke still asks.
+- `drag --points` is accepted on the Mac: the host draws one stroke with the
+  Windows hop rule. The `points_unsupported` refusal in `runtime.mjs` is
+  removed (approved by the human, to be reviewed from the Windows side).
+- The key rule is the shared contract (338d9e7); `cmd+shift+a` no longer asks.
+  The Swift contract check runs the shared cases through ICU.
+
+**On the desk, 17 November (C7, then C8 and C9).**
+- Pixel-click hit-test: Preview's pen button (named) went through as routine;
+  the unnamed Sketch button, a palette swatch and the canvas itself each raised
+  a card (a permit was written each time). Preview's canvas is still unnamed
+  after the hit-test; no exemption was made.
+- `drag --points` drew a 400-point zigzag in Preview. Raw hops 15 960, scaled
+  to 1197 (the Windows rule). `dragBudgetMs()` for that payload: 31 580 ms.
+  Measured from the approval being consumed to the reply: about 24 s, so
+  about 20 ms per hop, not the 4 ms sleep: every posted event re-checks the
+  Stop fence, permissions and occlusion under the point, and journals the
+  input ledger twice. Inside the budget, but much slower than Windows.
+  The budget is not changed.
+- Physical Esc during a long stroke: the stroke stopped about 7 s in;
+  `state: stopped`, reason `escape`, the latch a confirmed `stopped` with no
+  `.unconfirmed` companion, ledger `{"keys":[],"buttons":[]}`,
+  `input_held: false`, both mouse buttons up (`CGEventSource.buttonState`).
+- The app row card (`card:1`) was seen live on Preview.
+- Glow: on C7 the entrance showed above the covering windows for a moment.
+  C8 keeps the panel transparent until the window server has it directly
+  above its target; with Claude covering TextEdit the glow stayed behind
+  Claude.
+- Pointer: the human asked for the Windows custom pointer with its glow. C8
+  hid the OS arrow with the window server's `SetsCursorInBackground`
+  property and `CGDisplayHideCursor`; both reported success and the arrow
+  stayed, so two arrows showed. A standalone test confirmed that a
+  background process cannot hide the arrow on macOS 26.6. C9 removes the
+  private call and draws the Windows pointer glow around the real arrow.
+  On C9 the human saw one arrow with the blue glow following it.
+- Found: after Markup's colour popover and after a stroke, the Mac host's
+  `identity` check briefly failed on Preview, and the shared runtime then
+  refuses that handle for the rest of the controller's life (`staleHandles`
+  is never cleared, though the error says to run `apps`). A mid-stroke Esc
+  reports "No input was sent" although part of the stroke was posted
+  (`delivery_unknown` is set correctly).
+- **Permissions after an update.** The TCC log shows macOS charging every
+  Screen Recording check, including ScreenCaptureKit's capture check through
+  `replayd`, to the responsible app, `com.google.antigravity`, when
+  Antigravity starts the service. C8 reinstalled at a new release path
+  captured with no change; C9, a never-granted helper, ran `ready` and
+  captured with no change in System Settings. The re-grants asked of the
+  human for C7 and C8 were not needed. The AxonHost entry matters only when
+  the helper is responsible for itself (the setup application), where the
+  table below still holds.
+
+**Stuck-Stop proof tightened (owner's conditions).** `macStopSettles` in
+`server/recovery.mjs` is the one proof for a recovered task, an orphan Stop
+and the installer. Every recorded actor, the controller and task children
+included, is checked by pid and recorded start time; the controller writes
+`guard-….state.controller` for that. An actor with no recorded start time
+counts as gone only when no process holds its pid. Physically on C7:
+quitting Antigravity while the C6 service ran left an unconfirmed Stop with no
+task open; installing C7 directly, with no `ready` or `end` first, settled it
+to a confirmed `stopped` and removed the `.unconfirmed` companion.
+`ready` reports a settled orphan Stop as stopped; the following `ready`
+clears it as any confirmed Stop.
+
+#### Not checked
+
+- The installed build is C6 (`bdc5b91`, CDHash `e59e2436…`). The visible-area glow
+  and the removed drawn pointer (next commit) are not installed or seen yet.
+- The alert-click fix on a visible alert; the tick slide installed on screen.
+- Recovery condition "never resumes" is tested at helper level and seen once
+  physically; there is no Runtime-level test yet.
+- Control+Option+F12, and Esc during held input (#99 test 5).
+- The drawing test (blocked, above); s per click and s per drag.
+- Entrance frame time (16 ms target).
+- The glow easing toward an action point, on screen.
+- App rows in the access card: the runtime asks for them (`card:1`) and Windows
+  draws them; the Mac still shows the text card, and the row view is to be
+  added as the card's body (`MacPromptBody`).
+- A screen recording of the bar, menu and glow, and full-screen windows on
+  screen (only rendered offscreen).
+- Reduce Motion and Increase Contrast with the settings on.
+- VoiceOver on the bar, menu and card.
+- The spring's feel next to Windows.
+- The Windows pictures beside the Mac ones.
+- Apple Silicon.
+
+### Acceptance tests (#99 table)
+
+| # | Result on Intel | Reason |
+| --- | --- | --- |
+| 1 Baseline | pass | see Results |
+| 2 Allow / Deny / timeout | pass (physically observed) | installed 0.3.0-beta.7, standalone. Allow: the human approved a TextEdit launch card and TextEdit started; the launch approval also grants the launched app, so its access card does not repeat. Deny: the human denied the Calculator access card (13.8 s), reported as `permission_denied`. Timeout: three unanswered cards stayed on screen (modal-panel level, alpha 1) and closed at 90.2–90.4 s with nothing launched; the runtime wrongly reported that as `permission_denied`, fixed in this branch to `approval_timeout` |
+| 3 Tiers | partial (physically observed) | the human approved Terminal; the card and status showed tier `click`. `type`, `key` and a right click were each refused with `app_tier_click` and nothing reached Terminal. The allowed left click was refused as `obscured`: the new window glow, drawn by the guardian 46 pt around the target, counted as a covering window. Fixed in this branch (windows owned by this AxonHost executable are skipped); the left click and the full-tier TextEdit side are rerun after reinstall |
+| 4 Esc ends the task | pass (physically observed, build C5) | the human pressed Esc during an active task: the bar showed "Stopped · You pressed Esc or ⌃⌥F12", status `stopped` with reason `escape`, the marker a confirmed `stopped`, no input held, and the next `ready` started fresh. On C4 the same Esc stopped too, but the bar said "The task was ended" (fixed in `d685fe0`) |
+| 5 Esc during held input | unrun | needs physical Esc and a disposable target |
+| 6 Human input does not pause | pass (physically observed) | the human moved the mouse during an active task; it stayed active and the bar kept reading "Antigravity is working" until Esc |
+| 7 Dispatch race | partial | existing lock-holder and worker-exit fixtures pass; no new many-iteration harness yet |
+| 8 Stop latch robustness | pass (headless) | missing, dangling link, directory, companion, unreadable cases in the native contract |
+| 9 Watchdog | pass (headless, existing fixtures) | no change in this branch |
+| 10 Restart durability | pass (headless) | a fresh guardian starts stopped on an unconfirmed or companion marker and refuses to clear it |
+| 11 Clock | partial | monotonic deadline arithmetic passes; sleep/wake unrun |
+| 12 Unicode and file I/O | unrun | needs permissions |
+| 13 Real pointer vs semantic | unrun | needs permissions |
+| 14 Multi-app and dialogs | unrun | needs permissions |
+| 15 Permissions revoke/regrant | unrun | needs a human in System Settings |
+| 16 HUD | partial | prompt and glow drawing, glow cost, and bar dock/avoidance geometry recorded; live prompt focus, Return/Esc, VoiceOver, contrast, capture exclusion and motion feel unrun |
+| 17 Install lifecycle | pass (fake home) | `macos-install-check`; real install on this Mac unrun |
+| 18 Both architectures | Apple Silicon unrun | no Apple Silicon Mac available; CI covers compile and headless contracts only |
+
+### Signed helper: do users keep Mac permissions across an update? (Intel, macOS 26.6)
+
+Physically observed, with the human granting in System Settings. The helper
+was signed with a throwaway test certificate made by
+`scripts/make-mac-signing-cert.mjs` (the owner's real certificate lives only
+in the protected release environment). Build A and build B had different
+binaries (CDHash `b7d0bf28…` and `8f81106b…`) and the same designated
+requirement (`identifier "io.github.shayann07.antigravity-computer-use" and
+certificate leaf = H"867af550…"`). The human granted A once; B was installed
+over it with no change in System Settings. `AxonHost --setup`, cancelled so
+that nothing was requested, reported for B:
+
+| Permission | Kept by B without a prompt |
+| --- | --- |
+| Accessibility | yes |
+| Input Monitoring | yes |
+| Posting input | yes |
+| Screen Recording | **no**: the switch still showed on, but macOS no longer applied it |
+
+This table is about AxonHost's own entry (the setup application opened from
+Finder, where the helper is responsible for itself). When Antigravity starts
+the service, macOS charges the checks to Antigravity instead and a helper
+update needs no new grant (17 November, TCC log and C9). Apple Silicon is
+unverified.
+
+### Defects found in physical testing (Intel)
+
+| Defect | Status |
+| --- | --- |
+| `type` delivered no characters after an earlier modifier chord (events inherited Command) | fixed in 1ee1541, contract check; not yet re-run physically |
+| Frontmost app checked once before a >1 s typing loop; a human switching apps could receive the rest | fixed in 1ee1541 (checked before every character); not yet re-run physically |
+| The guardian's own window glow made every real-pointer click on the target `obscured` | fixed in b1b0af5; physically re-run, click delivered |
+| Launch and sensitive-action timeouts were reported as human denial | fixed in bc94383; physically re-run, `approval_timeout` |
+| CLI `ready` dropped `session_handle`, so every task re-asked every app | fixed in efa2758 |
+| Conversation approvals live only in controller memory: any controller restart, update or idle shutdown re-asks every app | fixed (approvals kept in private storage); physically re-run on C2: Preview, approved under an earlier handle, was used after a controller restart and a Preview relaunch with no card |
+| The bundle left out `conversation-approvals.mjs`, so the installed service could not start | fixed; `tests/bundle-imports.test.mjs` fails without the fix |
+| Switching a Mac permission, or a second AxonHost instance exiting, can end the guardian; the live controller cannot settle the resulting unconfirmed Stop, and recovery needed a controller restart | fixed for the reproduced case (all helpers killed with `kill -9` mid-task, then Stop): the dead guardian's `active` state now settles when every recorded actor is gone and the ledger is empty (`server/recovery.mjs`, `tests/recovery-mac-active.test.mjs`); physically re-run on this Mac, `end` settled it and the next `ready` was idle. Still needs a controller restart or `end`; the live controller does not settle it alone |
+| The installer refuses to install over an unconfirmed Stop, but only the newer build can settle it | open, owner decision; worked around here by running the new build's `end` once, after a rehearsal on a copy of the data |
+| After an unanswered card the bar disappeared until the next `ready`; on build B the access card window existed (modal-panel level, alpha 1) but was not visible to the human, three times | fixed: the card panel hid itself when the helper was not the active app (`hidesOnDeactivate`), and the bar is restored after every capture; physically re-run twice, both cards visible with the amber "Waiting for your answer" bar |
+| A live Esc was labelled as a persisted Stop, so the bar said "The task was ended" | fixed in `d685fe0`; physically re-run, the bar says "You pressed Esc or ⌃⌥F12" |
+| The glow was at status-bar level and drew over windows covering its target | fixed in `d685fe0` (normal level, just above the target); the human's screenshot shows it around the front window; the covered case still to be looked at |
+| With the glow at normal level, AppKit moved its panel out from under the menu bar, so for a window at the top of the screen the band slid 46 pt down (none on top, double at the bottom); seen by the human on Preview | fixed: the glow panel is never constrained (`MacGlowPanel`), with a contract check that fails without the fix; re-measured on build C6: Preview at (4, 34) 708×965, glow panel at (−42, −12) 800×1057, 46 pt on every side, ordered directly above Preview |
+| The glow lit an edge from inside only for full-screen windows; for a window against the screen edge or under the menu bar, the band fell off-screen or under the menu bar and only one side showed (human's screenshot) | fixed after C6: room is measured against the visible area (menu bar and Dock excluded), so those edges are lit inside; not yet seen on screen |
+| Double cursor: the Mac drew its own arrow that followed the mouse on a timer while asking macOS to hide the real cursor, which a background helper cannot reliably do (human's screenshot) | fixed after C6: no drawn pointer, the real cursor moves, as on Windows; not yet seen on screen |
+| Quitting Antigravity ends the service and its guardian together; the Stop then goes unacknowledged and is recorded as unconfirmed, with no open task naming the guard, so nothing could settle it and the installer refused | fixed in `c47ff83` (Mac only, same evidence as the `active` rule: no task open, not the current guard, no cleanup pending, every recorded actor gone, empty ledger); physically re-run, `ready` settled it and started fresh |
+| Clicks on an app's own alert (Preview, layer 8) were refused as covered | fixed (`macTopWindowVerdict`); not yet re-run on a visible alert |
+| A service started from a shell without Accessibility (for example an agent's terminal) gets `accessibility_denied` though setup reports access, because macOS checks the app that launched it | by design of macOS; documented. Start the service from Antigravity or the human starter |
+| Pixel clicks on an unnamed target need a sensitive-action card (by contract); agents must prefer `--index` | by design on Mac, but Windows hit-tests the pixel first; parity is an owner decision (see Drawing test) |
+
+### Changes in this branch
+
+See PR #105: unlatched control model in the Mac guardian (clear_stop,
+remembered approvals per `session_handle`, click tier enforced natively, no
+Smart takeover, no Re-arm), `MacDesign.swift` tokens equal to
+`DesktopVisuals.cs`, the access prompt card, and the window glow.
+
+
 Current material audit: see [Mac HUD material and icon correction](MACOS-GLASS-MATERIAL.md).
 The later fallback-only source did not use native macOS 26 glass, and its icons
 were approximations. Historical reports below retain their original context;

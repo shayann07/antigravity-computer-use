@@ -14,7 +14,10 @@ import crypto from 'node:crypto';
 
 export const BATCH = 8;
 // Refusals raised before any input whose fix is simply a fresh observation.
-const OBSERVE_AND_RETRY = new Set(['stale_observation', 'capture_changed', 'window_moved', 'snapshot_expired', 'observation_expired', 'wait_label_not_observed']);
+// `obscured` (a tooltip or popup covered the target as the cursor arrived) and
+// `no_image` (a pixel step got a frame without a screenshot) are refused before
+// any input reaches the target, so a fresh frame and the same step are safe.
+const OBSERVE_AND_RETRY = new Set(['stale_observation', 'capture_changed', 'window_moved', 'snapshot_expired', 'observation_expired', 'wait_label_not_observed', 'obscured', 'no_image']);
 const MAX_RETRIES = 2;
 // Failures where the step's input may have been sent before the failure: the
 // worker died, timed out or the connection dropped mid-step. Count the step as
@@ -29,6 +32,9 @@ export function landedCount(reply, chunkLength) {
       const landed = reply.delivery_unknown === true || reply.input_completed === true || UNCERTAIN.has(reply.error?.code);
       return Math.min(chunkLength, reply.failed_index + (landed ? 1 : 0));
     }
+    // No step index (the CLI's own request timeout, a dropped connection):
+    // any of the batch may have landed, so none of it is sent again.
+    if (reply.delivery_unknown === true || UNCERTAIN.has(reply.error?.code)) return chunkLength;
   }
   return 0;
 }
@@ -62,7 +68,7 @@ export async function runPlan({steps, hwnd, observationId, reason, ledgerFile, c
   const ledger = readLedger(ledgerFile, hash, steps.length);
   let obs = observationId, retries = 0, sinceCheckpoint = 0, last = null, renewed = null;
   const progress = done => ({plan: {total: steps.length, next: ledger.next, done, batches: ledger.batches, renewals: ledger.renewals, ledger: ledgerFile}});
-  const observe = async () => { const s = await call('snapshot', {hwnd, reason: 'Observe before resuming the plan'}); if (s.ok && frameOf(s)) obs = frameOf(s); return s; };
+  const observe = async () => { const s = await call('snapshot', {hwnd, with_image: true, reason: 'Observe before resuming the plan'}); if (s.ok && frameOf(s)) obs = frameOf(s); return s; };
   while (ledger.next < steps.length) {
     const chunk = steps.slice(ledger.next, ledger.next + BATCH);
     const reply = await call('run', {hwnd, observation_id: obs, steps: chunk, reason});
@@ -89,7 +95,7 @@ export async function runPlan({steps, hwnd, observationId, reason, ledgerFile, c
     }
     // A verification problem after input, or a refusal that only needs a fresh
     // frame: observe again and continue from the first step that did not land.
-    if (reply.verification_error || (OBSERVE_AND_RETRY.has(code) && landed === 0)) {
+    if (reply.verification_error || OBSERVE_AND_RETRY.has(code)) {
       if (landed === 0 && ++retries > MAX_RETRIES) return {...reply, ok: false, ...progress(false), ...renewed, halted: 'repeated_refusal'};
       if (landed > 0) retries = 0;
       const s = await observe(); if (!s.ok) return {...s, ...progress(false), ...renewed};

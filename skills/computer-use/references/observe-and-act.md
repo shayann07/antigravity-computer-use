@@ -45,3 +45,6 @@ When the next accessible label is unknown, `wait_change --hwnd H --observation-i
 It uses the original snapshot's query and node limit. Incomplete trees are refused or returned for inspection rather than treated as a change; do not replay an earlier action.
 `--step wait_change` can also follow an action in a batch; it compares that action's returned frame, and a timeout stops later steps. A change may already have happened before that frame, or may be unrelated; canvas or pixel-only changes may not appear.
 Inspect the returned tree and take a fresh screenshot when needed. A change is never proof of success, and a timeout is not permission to repeat an earlier action.
+
+For responsive-layout checks, `resize_window --hwnd H --client-width W --client-height H [--units logical|physical] --reason TEXT` sets the client area of a resizable top-level window exactly (DPI aware) and returns a fresh frame.
+The reply gives the resulting client size in physical and logical pixels; `matched:false` means the app enforced its own minimum or maximum. A window without a sizing border is refused with `window_not_resizable`. Windows only.

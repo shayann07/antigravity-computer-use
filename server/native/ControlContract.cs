@@ -40,6 +40,22 @@ namespace Axon {
             if(Values.TryGetValue("ambiguous_target_operations",out value))foreach(object name in (object[])value)if(Convert.ToString(name)==op)return true;
             return !Values.ContainsKey("ambiguous_target_operations")&&(op=="click"||op=="drag");
         }
+        // Optional glow colours for a host: ui.glow_tones[name] = [[r,g,b],...].
+        internal static int[][] Tones(string name) {
+            try {
+                object ui,all,list;var fields=Values.TryGetValue("ui",out ui)?ui as Dictionary<string,object>:null;
+                var hosts=fields!=null&&fields.TryGetValue("glow_tones",out all)?all as Dictionary<string,object>:null;
+                if(hosts==null||name==null||!hosts.TryGetValue(name,out list))return null;
+                object[] stops=list as object[];if(stops==null||stops.Length<2||stops.Length>16)return null;
+                int[][] result=new int[stops.Length][];
+                for(int i=0;i<stops.Length;i++) {
+                    object[] rgb=stops[i] as object[];if(rgb==null||rgb.Length!=3)return null;
+                    result[i]=new int[3];
+                    for(int k=0;k<3;k++){int v=Convert.ToInt32(rgb[k]);if(v<0||v>255)return null;result[i][k]=v;}
+                }
+                return result;
+            } catch {return null;}
+        }
         internal static Color ColorValue(string key,Color fallback) {
             object ui,value;if(!Values.TryGetValue("ui",out ui))return fallback;
             var fields=ui as Dictionary<string,object>;if(fields==null||!fields.TryGetValue(key,out value))return fallback;

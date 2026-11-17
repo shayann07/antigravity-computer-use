@@ -52,10 +52,12 @@ test('points together with from/to, or neither, is refused before any input',asy
  assert.ok(recoveryFor('fix_drag_points'));
 });
 
-test('macOS refuses a points drag instead of silently drawing a straight line',async()=>{
+test('macOS sends a points drag to the host as one stroke, like Windows',async()=>{
  const f=fixture();
- await asPlatform('darwin',()=>assert.rejects(f.drag({points:[[0,0],[50,20],[100,50]]}),e=>e.code==='points_unsupported'));
- assert.equal(f.drags().length,0);
+ await asPlatform('darwin',()=>f.drag({points:[[0,0],[50,20],[100,50]]}));
+ assert.equal(f.drags().length,1);
+ const [{payload:sent}]=f.drags();assert.equal(sent.points.length,3);assert.deepEqual(sent.from,sent.points[0]);assert.deepEqual(sent.to,sent.points.at(-1));
+ // Older builds still refuse with points_unsupported; its advice stays.
  assert.equal(recoveryAdvice({error:{code:'points_unsupported'}}).next_action,'fix_drag_points');
 });
 

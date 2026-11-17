@@ -60,6 +60,30 @@ jobs:
         env:
           AGCU_LIQUIDGLASS_HELPER_BUILD: ${{ github.workspace }}/.localdata/liquidglass-publish
         run: node --test tests/liquidglass-client.test.mjs
+      # The Mac helper is signed with the owner's long-lived certificate so
+      # macOS keeps users' Accessibility, Screen Recording and Input
+      # Monitoring grants across updates. Fails closed without the secret.
+      - name: Load the owner's Mac helper signing certificate
+        if: runner.os == 'macOS'
+        env:
+          AGCU_MAC_HELPER_P12: ${{ secrets.AGCU_MAC_HELPER_P12 }}
+          AGCU_MAC_HELPER_P12_PASSWORD: ${{ secrets.AGCU_MAC_HELPER_P12_PASSWORD }}
+          AGCU_MAC_HELPER_SHA1: ${{ vars.AGCU_MAC_HELPER_SHA1 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$AGCU_MAC_HELPER_P12" ] || [ -z "$AGCU_MAC_HELPER_P12_PASSWORD" ] || [ -z "$AGCU_MAC_HELPER_SHA1" ]; then
+            echo "The release environment has no Mac helper signing certificate; refusing an ad-hoc release." >&2; exit 1
+          fi
+          umask 077
+          printf '%s' "$AGCU_MAC_HELPER_P12" | base64 --decode > "$RUNNER_TEMP/helper-signing.p12"
+          keychain="$RUNNER_TEMP/agcu-helper-signing.keychain-db"
+          node scripts/macos-signing-keychain.mjs create "$keychain" "$RUNNER_TEMP/helper-signing.p12" "$AGCU_MAC_HELPER_SHA1"
+          rm -f "$RUNNER_TEMP/helper-signing.p12"
+          # codesign resolves identities only from keychains on the search list.
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          echo "AGCU_MAC_SIGN_IDENTITY=$AGCU_MAC_HELPER_SHA1" >> "$GITHUB_ENV"
+          echo "AGCU_MAC_SIGN_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
       - name: Build sealed bundle
         env:
           AGCU_LIQUIDGLASS_HELPER_BUILD: ${{ runner.os == 'Windows' && format('{0}/.localdata/liquidglass-publish', github.workspace) || '' }}
@@ -79,6 +103,10 @@ jobs:
       - name: Qualify the exact signed Windows bundle or record ACL refusal
         if: runner.os == 'Windows'
         run: node scripts/windows-install-check.mjs .localdata/release-bundle
+      - name: Remove the temporary signing keychain
+        if: always() && runner.os == 'macOS'
+        shell: bash
+        run: node scripts/macos-signing-keychain.mjs delete "$RUNNER_TEMP/agcu-helper-signing.keychain-db"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: signed-release-${{ matrix.platform }}-${{ matrix.arch }}

@@ -1,5 +1,12 @@
 # Mac HUD material and icon correction
 
+> **Superseded for the control bar (issue #99, PR #105).** The bar, its menu
+> and the access card are now drawn on the always-dark ink surface of the
+> Windows design (`docs/visual-design.md`, `DesktopVisuals.cs`), so the Mac and
+> Windows look the same. `NSGlassEffectView` is no longer used by the bar; the
+> guardian reports `material: "ink_surface"`. The history below is kept for
+> earlier releases.
+
 The branch now integrates shared core through main `a02fabc`, including the
 brief completeness fix and current qualification procedures. The established
 shared skill is retained. This remains a source-only Mac candidate; its package

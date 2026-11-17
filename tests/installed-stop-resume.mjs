@@ -1,5 +1,5 @@
 // Interactive qualification of an explicitly selected, sealed Windows install.
-// No injected Stop/Esc, permission approval or re-arm. Run only with the human
+// No injected Stop/Esc or permission approval, and no re-arm step to perform. Run only with the human
 // available and the desktop reserved. Importing this module performs no test.
 import fs from 'node:fs';import path from 'node:path';import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';import {createInterface} from 'node:readline';
@@ -12,7 +12,7 @@ const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function until(check,timeout){
  const deadline=performance.now()+timeout;
  while(performance.now()<deadline){const result=await check();if(result)return result;await pause(100);}
- throw Object.assign(Error('Human/native checkpoint timed out. Nothing was re-armed or replayed.'),{code:'qualification_checkpoint_timeout'});
+ throw Object.assign(Error('Human/native checkpoint timed out. Nothing was cleared by hand or replayed.'),{code:'qualification_checkpoint_timeout'});
 }
 export async function beginSignal({input=process.stdin,timeoutMs=45000}={}){
  if(!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>45000)throw Error('Invalid BEGIN deadline.');
@@ -75,22 +75,22 @@ export async function installedStopQualification(configFile,{checkOnly=false,fix
   assert(image.ok&&image.image?.path,'A fresh usable screenshot is required');
   for(const point of [config.from,config.to])assert(point[0]<image.image.width&&point[1]<image.image.height,'Coordinates are outside the actual screenshot');
   record.stage='awaiting_image_inspection';save();
-  console.log(JSON.stringify({stage:record.stage,image:image.image,hwnd:config.hwnd,evidence,instruction:'Inspect this actual image and its harmless drag path. With the human ready, send BEGIN. The human must press Esc as soon as the selection starts moving. Do not re-arm until prompted.'}));
+  console.log(JSON.stringify({stage:record.stage,image:image.image,hwnd:config.hwnd,evidence,instruction:'Inspect this actual image and its harmless drag path. With the human ready, send BEGIN. The human must press Esc as soon as the selection starts moving. After Esc, wait for the next prompt; there is nothing to re-arm.'}));
   await (fixtures?.begin||beginSignal)();
   const moved=await input('move',{hwnd:config.hwnd,observation_id:image.metadata.observation_id,x:config.from[0],y:config.from[1],risk:'routine',reason:'Approach the inspected harmless drag start'});
   assert(moved.ok&&moved.metadata,moved.error?.code);
   const session=JSON.parse(fs.readFileSync(path.join(directory,'desktop-session.json')));
-  const journal=currentInputJournal(directory,session.pid),latch=path.join(directory,'emergency.stop');
+  const journal=currentInputJournal(directory,session.pid),stopMarker=path.join(directory,'emergency.stop');
   let heldSeen=false,ledgerError;
   const sampler=setInterval(()=>{try{if(qualificationLedger(journal).split(/\r?\n/).includes('m:4'))heldSeen=true;}catch(error){ledgerError=error;}},5);
   const steps=physicalStopSteps(config.from,config.to);
   record.stage='awaiting_physical_escape_during_drag';save();
-  console.log('Physical check starting: press Esc as soon as the selection moves. Do not click Re-arm yet.');
+  console.log('Physical check starting: press Esc as soon as the selection moves. The task ends when you press Esc.');
   let batch;try{batch=await input('run',{hwnd:config.hwnd,observation_id:moved.metadata.observation_id,steps,reason:'Physical Esc must stop the first drag and skip seven queued harmless moves'});}finally{clearInterval(sampler);}
   if(ledgerError)throw ledgerError;
   assert(heldSeen,'Held input was not independently sampled before Stop; do not replay automatically');
   const stopped=await until(async()=>{const state=await call('status');return state.state==='stopped'&&state;},5000);
-  assert.equal(stopped.control_reason,'escape','Only the native physical-Esc path qualifies this stage');assert(fs.existsSync(latch));
+  assert.equal(stopped.control_reason,'escape','Only the native physical-Esc path qualifies this stage');assert(fs.existsSync(stopMarker));
   const summary=batch.batch||batch;assert.equal(summary.failed_index,0);assert.equal(summary.completed.length,0);assert.equal(summary.skipped,7);
   await until(()=>qualificationLedger(journal)==='',5000);
   record.held_input_sampled=true;record.native_escape_event_seen=true;record.input_ledger_verified_empty=true;
@@ -99,22 +99,23 @@ export async function installedStopQualification(configFile,{checkOnly=false,fix
   assert.equal((await call('end')).state,'stopped');ownsTask=false;
   cli('shutdown');
   assert.equal(JSON.parse(fs.readFileSync(config.installation)).release,release,'The deployment changed during qualification; do not restart an older client');
-  assert.equal(cli('start').state,'stopped');assert(fs.existsSync(latch));
+  assert.equal(cli('start').state,'stopped');assert(fs.existsSync(stopMarker));
+  record.checks.push('Stop persisted across passive service restart');
+  // No human step: the next ready starts a fresh task once the runtime and the
+  // native controls prove cleanup. The qualification only observes the result.
+  record.stage='ready_after_stop';save();
   const controls=cli('ready');if(controls.ok&&controls.task_open===true)ownsTask=true;
-  assert.equal(controls.controls_visible,true,'Do not ask for an invisible Re-arm button');assert.equal(controls.state,'stopped');assert.equal(controls.task_open,true);
-  record.stage='awaiting_local_human_rearm';record.checks.push('Stop persisted across passive service restart; explicit controls are visible');save();
-  console.log('LOCAL HUMAN: click the triangle Re-arm button once. No further Esc is needed. No app input is sent while waiting.');
-  // Wait for local latch deletion using filesystem checks, without flooding the
-  // receipt journal or pretending a model message performed human re-arm.
-  await until(()=>!fs.existsSync(latch),30000);
+  assert(controls.ok&&controls.ready===true&&controls.controls_visible===true,'The next ready did not start a fresh task after Stop: '+(controls.error?.code||controls.next_action));
+  assert.equal(controls.error,undefined);assert(!fs.existsSync(stopMarker),'The confirmed Stop marker was not cleared by ready');
   await until(async()=>{const state=await call('status');return state.state==='idle'&&state.task_open===true;},3000);
-  image=await call('snapshot',{hwnd:config.hwnd,reason:'Verify a fresh second-session observation after local human re-arm'});assert(image.ok&&image.image?.path);ownsTask=true;
+  record.checks.push('Next ready started a fresh task after Stop with no human re-arm');save();
+  image=await call('snapshot',{hwnd:config.hwnd,reason:'Verify a fresh second-task observation after Stop'});assert(image.ok&&image.image?.path);ownsTask=true;
   const second=await input('move',{hwnd:config.hwnd,observation_id:image.metadata.observation_id,x:config.from[0],y:config.from[1],risk:'routine',reason:'Verify a harmless real pointer move in the second session'});assert(second.ok,second.error?.code);
   if(config.close_owned_window){const closed=await call('close_window',{hwnd:config.hwnd,reason:'Close the explicitly operator-owned disposable qualification window'});assert(closed.ok,closed.error?.code);}
   assert.equal((await call('end')).state,'idle');ownsTask=false;
   const final=await call('status');assert.equal(final.task_open,false);assert.equal(final.approved_apps.length,0);assert.notEqual(final.custom_cursor,true);
   if(aborting)throw Object.assign(Error('Qualification was aborted.'),{code:'qualification_aborted'});
-  record.passed=true;record.stage='scoped_checks_complete';record.final_status=final;record.checks.push('Local re-arm, second-session observation/pointer action and End verified');save();
+  record.passed=true;record.stage='scoped_checks_complete';record.final_status=final;record.checks.push('Fresh task after Stop, second-task observation/pointer action and End verified');save();
   console.log(JSON.stringify({passed:true,qualification_complete:false,target_release_delivery_verified:false,evidence,note:'Review actual target release, visuals and remaining release gates separately.'}));return record;
  }catch(error){
   record.stage='failed';record.error_code=error.code||'qualification_failed';save();fs.writeFileSync(path.join(evidence,'private-error.txt'),error.stack||String(error));

@@ -127,8 +127,8 @@ async function simulatedQualification(t,{busy=false,incompleteStop=false}={}){
    assert.fail('Unexpected simulated command '+command);
   },
   lifecycle(command){calls.push('cli:'+command);if(command==='shutdown')return {ok:true};if(command==='start')return {ok:true,state:'stopped'};
-   assert.equal(command,'ready');open=true;setTimeout(()=>{fs.unlinkSync(latch);state='idle';reason='simulated-human-rearm';},15);
-   return {ok:true,state:'stopped',task_open:true,controls_visible:true};
+   assert.equal(command,'ready');open=true;fs.unlinkSync(latch);state='idle';reason='fresh_task_after_stop';
+   return {ok:true,ready:true,state:'idle',task_open:true,controls_visible:true};
   }
  };
  const log=console.log;console.log=()=>{};

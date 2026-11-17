@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+- `plan` no longer stops when a tooltip or popup covers the next target (`obscured`) or a pixel step gets a frame without a screenshot (`no_image`): both are refused before any input, so it takes a fresh frame, with its screenshot, and continues from that step, also partway through a batch.
+
+## 1.0.0 - Stable release for Windows and macOS
+
+- Pause and Resume are removed. The tools `computer_pause` and `computer_resume` no longer exist; Esc or the bar's Stop ends the task and the next `ready` starts a fresh one.
+- A request to use an app shows the app's name (Windows and macOS), what its access tier allows and a tier tag ("Full control" or "Click only"), with how long the approval lasts.
+- Windows keeps the apps you approved across a guardian restart or an update, per conversation, for up to 24 hours without use. A click-only approval never covers full control.
+- Ctrl+Shift and Cmd+Shift shortcuts other than S, V and X no longer ask for approval. The key rule matched the "s" of "shift", so every such chord was treated as Save, Paste or Cut.
+- A launched app is brought to the front before its first screenshot, so you see what the agent will work on and a window that resizes as it activates no longer refuses the first click (`window_moved`).
+- `plan` no longer re-sends a batch after the CLI's own request timeout or a dropped connection: the whole batch counts as landed and the plan halts for a look.
+- The control bar can be thrown: it glides on with its own speed, squashes against a screen edge it hits fast and springs back to shape, and lands on a dock it stops near. Put down slowly, it stays where you leave it.
+- In the Settings menu, unticked rows sit at the left and a tick slides in and out, matching macOS.
+- The glow's bright part now also moves to actions that do not move the real pointer, such as background clicks.
+- macOS: the bar, its Settings menu and the access card now match Windows: a 440×48 dark bar with two lines, Stop and Settings at 44×44, a 312-wide menu that opens with a 0.96 scale, the Windows spring when the bar lands on a dock, and Reduce Motion support. There is no Pause or Resume on the Mac (#99).
+- macOS: the window glow widens as it fades in, lights the edges inside the screen for full-screen windows, and has Soft, Medium and Bright levels (#99).
+- macOS: the access card is shown even when the helper is not the active app; before, it could exist without being visible. The bar stays, reading "Waiting for your answer", while a card waits (#99).
+- macOS: a Stop left stuck after the guardian was killed mid-task now settles once every recorded helper is gone and the input ledger is empty (#99).
+- macOS: clicks on an app's own alert or sheet are no longer refused as covered (#99).
+- macOS: `drag` with `points` draws one continuous stroke through every point, with the Windows timing; before, it was refused (`points_unsupported`). An unnamed pixel stroke still asks for approval (#99).
+- macOS: a pixel click's approval label is the name of the element under the point, as on Windows; an unnamed target still asks (#99).
+- macOS: Esc shows "You pressed Esc" on the bar; the glow stays on its own window (behind windows that cover it, lit inside at screen edges and under the menu bar); no second, drawn cursor (#99).
+- macOS: a Stop left when quitting the host app ended the service and its guardian together now settles on the next `ready`, or when a newer build is installed. Every recorded helper, the controller included, must be gone by process id and start time, and the input ledger empty; it settles to an ordinary Stop that the following `ready` clears (#99).
+- macOS: when Antigravity starts the service, macOS checks Antigravity's own Accessibility and Screen Recording permissions, so a helper update needs no new permission. Only the setup application's own AxonHost entry loses Screen Recording after an update. Helpers are signed with the project's own certificate, not an Apple Developer ID (#99).
+- macOS: while the agent works, a soft blue glow follows the real pointer, as on Windows. macOS does not let a background helper replace the arrow itself (#99).
+- The installed bundle now includes `conversation-approvals.mjs`; without it the installed service could not start (#99).
 - A refusal raised before any input (`target_not_observed`, `no_image`, a bad point) no longer spends the observation, so the next call can reuse its `observation_id` (#49).
 - The skill's command table now lists `key` (`--keys`), `key` accepts `--text` as an alias, a repeated array flag explains the accepted `X,Y` or JSON form, range errors name the range, and `no_image` says how to get a screenshot (#46, #48, #53).
 

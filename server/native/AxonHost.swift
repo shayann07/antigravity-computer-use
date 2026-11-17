@@ -250,6 +250,32 @@ func axAlive(_ el: AXUIElement) -> Bool {
 }
 
 // The element under a screen point, for point clicks and describe.
+// The name a snapshot lists for an element. A pixel click's approval label
+// uses the same rule (MacFence.preview), so a target is named the same way.
+func macSnapshotName(_ el: AXUIElement) -> String? {
+    axString(el, kAXTitleAttribute as String)
+        ?? axString(el, kAXDescriptionAttribute as String)
+        ?? axString(el, "AXPlaceholderValue")
+}
+
+// The label of the element under a pixel click, for the approval rule only:
+// hit-tested through the target app, which must own the element, inside the
+// target window. Any failure, a secure field or no name gives "", which the
+// ambiguous-target rule treats as sensitive. There is no fallback to the role
+// (as on Windows, AxonHost.cs PreviewLabel).
+func macPointLabel(_ point: [Int], _ a: [String: Any]) -> String {
+    guard let (win, pid, _, _) = try? resolveWindow(a) else { return "" }
+    let app = AXUIElementCreateApplication(pid)
+    AXUIElementSetMessagingTimeout(app, 0.25)
+    var hit: AXUIElement?
+    guard AXUIElementCopyElementAtPosition(app, Float(point[0]), Float(point[1]), &hit) == .success, let el = hit else { return "" }
+    var owner: pid_t = 0
+    guard AXUIElementGetPid(el, &owner) == .success, owner == pid, macElementInWindow(el, win) else { return "" }
+    let role = (axString(el, kAXRoleAttribute as String) ?? "") + (axString(el, kAXSubroleAttribute as String) ?? "")
+    if role.lowercased().contains("secure") { return "" }
+    return macSnapshotName(el)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+}
+
 func elementAt(_ x: Int, _ y: Int) -> AXUIElement? {
     let system = AXUIElementCreateSystemWide()
     var el: AXUIElement?
@@ -610,9 +636,7 @@ func opSnapshot(_ a: [String: Any]) throws -> [String: Any] {
         let subrole = axString(el, kAXSubroleAttribute as String) ?? ""
         let isSecure = role.lowercased().contains("secure") || subrole.lowercased().contains("secure")
         if role == "AXWebArea" { foundWebArea = true }
-        let name = axString(el, kAXTitleAttribute as String)
-            ?? axString(el, kAXDescriptionAttribute as String)
-            ?? axString(el, "AXPlaceholderValue")
+        let name = macSnapshotName(el)
         let ident = axString(el, kAXIdentifierAttribute as String)
         let textVal = !isSecure ? axValueText(el) : nil
         let hasNameOrId = !(name?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
@@ -788,7 +812,8 @@ func post(_ e: CGEvent?) throws {
     }
     guard let event = markedEvent(e) else { throw AxonError("event_creation_failed", "Cannot construct native input.") }
     if [.leftMouseDown,.rightMouseDown,.otherMouseDown,.leftMouseDragged,.rightMouseDragged,.otherMouseDragged,.scrollWheel].contains(event.type) {
-        try macCheckTargetPoint(event.location,MacFence.current)
+        if let stroke = macStrokeTarget, [.leftMouseDragged,.rightMouseDragged,.otherMouseDragged].contains(event.type) { try macCheckStrokePoint(event.location, stroke) }
+        else { try macCheckTargetPoint(event.location,MacFence.current) }
     }
     try MacInputLedger.withLock {
         try MacInputLedger.record(event, before: true)
@@ -896,11 +921,38 @@ func opClick(_ a: [String: Any]) throws -> [String: Any] {
     return res
 }
 
+let macMaxStrokeHops = 1500
+// Hops per segment of a stroke (index 0 unused): steps for a straight drag,
+// otherwise about 8 pt per hop (1 to 40), scaled down to macMaxStrokeHops.
+func macStrokeHops(_ path: [[Int]], steps: Int) -> [Int] {
+    var hops = [Int](repeating: 0, count: path.count), wanted = 0
+    for s in 1..<path.count {
+        let dx = Double(path[s][0] - path[s - 1][0]), dy = Double(path[s][1] - path[s - 1][1])
+        hops[s] = path.count == 2 ? steps : max(1, min(40, Int((dx * dx + dy * dy).squareRoot() / 8)))
+        wanted += hops[s]
+    }
+    if wanted > macMaxStrokeHops { for s in 1..<path.count { hops[s] = max(1, hops[s] * macMaxStrokeHops / wanted) } }
+    return hops
+}
+
 func opDrag(_ a: [String: Any]) throws -> [String: Any] {
     var res: [String: Any] = [:]
     guard let from = pair(a["from"]), let to = pair(a["to"]) else {
         throw AxonError("bad_points", "drag needs from:[x,y] and to:[x,y] in screen coordinates.",
                         "Read the window with with_rects:true to find the points.")
+    }
+    // Optional points draw one continuous stroke through every point (curves
+    // on a canvas); from/to are its first and last points. Same rule and
+    // timing as the Windows host (AxonHost.cs OpDrag).
+    var path: [[Int]] = [from, to]
+    if let raw = a["points"] as? [Any] {
+        path = []
+        for p in raw {
+            guard let q = pair(p) else { throw AxonError("bad_points", "Every point must be [x,y].") }
+            path.append(q)
+        }
+        guard path.count >= 2 && path.count <= 400 else { throw AxonError("bad_points", "A points drag needs 2 to 400 points.") }
+        guard path[0] == from, path[path.count - 1] == to else { throw AxonError("bad_points", "from and to must be the first and last points.") }
     }
     let button = (str(a["button"]) ?? "left").lowercased()
     let steps = max(2, min(200, int(a["steps"], 12)))
@@ -908,8 +960,13 @@ func opDrag(_ a: [String: Any]) throws -> [String: Any] {
     let (win, pid, _, _) = try resolveWindow(a)
     try guardSameWindow(a, pid)
     try macBringToFront(a)
-    try macCheckTargetPoint(CGPoint(x: from[0], y: from[1]), a)
-    try macCheckTargetPoint(CGPoint(x: to[0], y: to[1]), a)
+    // Validate every point before moving or holding a button.
+    for p in path { try macCheckTargetPoint(CGPoint(x: p[0], y: p[1]), a) }
+    // About 8 pt per hop, at most macMaxStrokeHops hops in total, whatever the point count.
+    let hops = macStrokeHops(path, steps: steps)
+    // Resolved once; every dragged event is still checked against it.
+    macStrokeTarget = try macStrokeTarget(a)
+    defer { macStrokeTarget = nil }
     let waited = try guardDisturb(a)
     if waited > 0 { res["waited_for_user_ms"] = waited }
     try checkStop()
@@ -936,11 +993,14 @@ func opDrag(_ a: [String: Any]) throws -> [String: Any] {
     Thread.sleep(forTimeInterval: 0.03)
     try post(CGEvent(mouseEventSource: src, mouseType: downType, mouseCursorPosition: start, mouseButton: cgButton))
     Thread.sleep(forTimeInterval: Double(holdMs) / 1000.0)
-    for i in 1...steps {
-        let p = CGPoint(x: Double(from[0] + (to[0] - from[0]) * i / steps),
-                        y: Double(from[1] + (to[1] - from[1]) * i / steps))
-        try post(CGEvent(mouseEventSource: src, mouseType: dragType, mouseCursorPosition: p, mouseButton: cgButton))
-        Thread.sleep(forTimeInterval: 0.012)
+    for s in 1..<path.count {
+        let p0 = path[s - 1], p1 = path[s], n = hops[s]
+        for i in 1...n {
+            let p = CGPoint(x: Double(p0[0] + (p1[0] - p0[0]) * i / n),
+                            y: Double(p0[1] + (p1[1] - p0[1]) * i / n))
+            try post(CGEvent(mouseEventSource: src, mouseType: dragType, mouseCursorPosition: p, mouseButton: cgButton))
+            Thread.sleep(forTimeInterval: path.count == 2 ? 0.012 : 0.004)
+        }
     }
     Thread.sleep(forTimeInterval: Double(holdMs) / 1000.0)
     let end = CGPoint(x: Double(to[0]), y: Double(to[1]))
@@ -955,6 +1015,7 @@ func opDrag(_ a: [String: Any]) throws -> [String: Any] {
     res["to"] = to
     res["button"] = button
     res["steps"] = steps
+    if path.count > 2 { res["points"] = path.count }
     return res
 }
 
@@ -1028,25 +1089,18 @@ func opType(_ a: [String: Any]) throws -> [String: Any] {
     }
     try checkStop()
     let text = str(a["text"]) ?? ""
+    let (_, typingPid, _, _) = try resolveWindow(a)
     let src = CGEventSource(stateID: .hidSystemState)
     for ch in text.unicodeScalars {
-        // A newline or a tab is a key, not a character: apps act on the key.
-        if ch == "\n" || ch == "\t" {
-            let code: CGKeyCode = ch == "\n" ? 36 : 48
-            try post(CGEvent(keyboardEventSource: src, virtualKey: code, keyDown: true))
-            try post(CGEvent(keyboardEventSource: src, virtualKey: code, keyDown: false))
-            continue
-        }
         if ch == "\r" { continue }
-        var utf16 = Array(String(ch).utf16)
-        if let down = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: true) {
-            down.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: &utf16)
-            try post(down)
+        // Human input never pauses automation, so the human can bring another
+        // app forward while this loop runs. Check before every character, so a
+        // switch stops typing instead of sending the rest into the wrong app.
+        guard macFrontmostPid() == typingPid else {
+            throw AxonError("focus_changed", "Another app came to the front while typing, so typing stopped and the rest was not sent.",
+                            "Observe, bring the approved window forward, and type only the missing part.")
         }
-        if let up = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: false) {
-            up.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: &utf16)
-            try post(up)
-        }
+        for event in macTypingEvents(source: src, scalar: ch) { try post(event) }
     }
     res["typed"] = text.count
     return res
@@ -1388,6 +1442,8 @@ func dispatch(_ op: String, _ a: [String: Any]) throws -> [String: Any] {
 func dispatchOp(_ op: String, _ a: [String: Any]) throws -> [String: Any] {
     switch op {
     case "identity": return try macWindowIdentity(a)
+    case "caller_gate_open": return try MacCallerGate.open()
+    case "caller_gate_redeem": return MacCallerGate.redeem(a)
     case "authorize":
         let args = a["action_args"] as? [String: Any] ?? [:]
         let op = str(a["action_op"]) ?? ""
@@ -1479,6 +1535,83 @@ func readLoop() {
             if args.contains("--warmup") { emit(["event": "warm"]); return }
             if args.contains("--setup") { macSetup(); return }
             if args.contains("--contract-test") { try macContractTest(); return }
+            // Offscreen pictures of the access prompt for review. No window is
+            // shown, no permission is requested and no input is sent.
+            if let at = args.firstIndex(of: "--glow-preview"), args.count > at + 1 {
+                try? MacContract.load(); _ = NSApplication.shared
+                let dir = args[at + 1]
+                try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+                var written: [String] = []
+                for (name, size, background) in [("dark-window", CGSize(width: 640, height: 420), NSColor(white: 0.12, alpha: 1)),
+                                                 ("light-window", CGSize(width: 640, height: 420), NSColor(white: 0.93, alpha: 1)),
+                                                 ("small-window", CGSize(width: 220, height: 160), NSColor(white: 0.12, alpha: 1))] {
+                    let path = (dir as NSString).appendingPathComponent("glow-\(name).png")
+                    try MacWindowGlow.preview(window: size, to: path, background: background); written.append(path)
+                }
+                emit(["written": written, "desktop_input_sent": false]); return
+            }
+            // Lights one on-screen window for a few seconds and reports the
+            // process's CPU share at rest. Shows light only; sends no input.
+            if let at = args.firstIndex(of: "--glow-trial"), args.count > at + 1, let seconds = Double(args[at + 1]), seconds > 0, seconds <= 60 {
+                try? MacContract.load(); _ = NSApplication.shared; NSApp.setActivationPolicy(.accessory)
+                let mine = getpid()
+                guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]],
+                      let row = list.first(where: { ($0[kCGWindowLayer as String] as? NSNumber)?.intValue == 0 && ($0[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value != mine
+                          && (CGRect(dictionaryRepresentation: ($0[kCGWindowBounds as String] as? [String: Any] ?? [:]) as CFDictionary)?.width ?? 0) >= 200 }),
+                      let id = (row[kCGWindowNumber as String] as? NSNumber)?.uint32Value,
+                      let bounds = CGRect(dictionaryRepresentation: (row[kCGWindowBounds as String] as? [String: Any] ?? [:]) as CFDictionary) else {
+                    throw AxonError("no_window", "No on-screen window to light.")
+                }
+                let glow = MacWindowGlow()
+                if let level = args.firstIndex(of: "--level").flatMap({ args.count > $0 + 1 ? MacGlowLevel(rawValue: args[$0 + 1]) : nil }) { glow.level = level }
+                glow.show(windowID: id, frame: MacWindowGlow.appKit(bounds), point: nil, pulse: false)
+                let tick = Timer(timeInterval: 0.07, repeats: true) { _ in glow.follow() }
+                RunLoop.main.add(tick, forMode: .common)
+                func cpu() -> Double { var u = rusage(); getrusage(RUSAGE_SELF, &u)
+                    return Double(u.ru_utime.tv_sec + u.ru_stime.tv_sec) + Double(u.ru_utime.tv_usec + u.ru_stime.tv_usec) / 1_000_000 }
+                // The entrance runs in the render server at the display's rate;
+                // only its in-process share is measured here.
+                let enterCPU = cpu(), enterWall = Date()
+                RunLoop.main.run(until: Date().addingTimeInterval(MacDesign.slow))
+                let enterUsed = cpu() - enterCPU, enterSpan = Date().timeIntervalSince(enterWall)
+                RunLoop.main.run(until: Date().addingTimeInterval(1.2))   // past the entrance
+                glow.resetStats()
+                let startCPU = cpu(), startWall = Date()
+                RunLoop.main.run(until: Date().addingTimeInterval(seconds))
+                let used = cpu() - startCPU, wall = Date().timeIntervalSince(startWall)
+                let ticks = max(1, glow.tickCount)
+                glow.hide(immediately: true); tick.invalidate()
+                emit(["window_size": [bounds.width, bounds.height], "seconds": wall, "cpu_seconds": used,
+                      "cpu_percent_of_one_core": wall > 0 ? used / wall * 100 : 0, "reduce_motion": MacDesign.reduceMotion,
+                      "rest_frames": glow.tickCount, "rest_frame_interval_ms": glow.intervalSeconds / Double(ticks) * 1000,
+                      "rest_frame_work_ms_mean": glow.tickSeconds / Double(ticks) * 1000, "rest_frame_work_ms_worst": glow.tickWorst * 1000,
+                      "entrance_cpu_percent_of_one_core": enterSpan > 0 ? enterUsed / enterSpan * 100 : 0,
+                      "level": glow.level.rawValue, "desktop_input_sent": false]); return
+            }
+            if let at = args.firstIndex(of: "--visual-preview"), args.count > at + 1 {
+                try? MacContract.load(); _ = NSApplication.shared
+                let dir = args[at + 1]
+                var written = try MacBarBench.write(to: dir) + (try MacAccessPrompt.preview(to: dir))
+                for (name, size, background, full) in [("dark-window", CGSize(width: 640, height: 420), NSColor(white: 0.12, alpha: 1), false),
+                                                       ("light-window", CGSize(width: 640, height: 420), NSColor(white: 0.93, alpha: 1), false),
+                                                       ("dark-full-screen", CGSize(width: 720, height: 450), NSColor(white: 0.12, alpha: 1), true),
+                                                       ("light-full-screen", CGSize(width: 720, height: 450), NSColor(white: 0.93, alpha: 1), true)] {
+                    for level in MacGlowLevel.allCases {
+                        let path = (dir as NSString).appendingPathComponent("glow-\(name)-\(level.rawValue).png")
+                        try MacWindowGlow.preview(window: size, to: path, background: background, level: level, fullScreen: full); written.append(path)
+                    }
+                }
+                // The entrance: the narrow band it widens from, and full width.
+                for (name, spread) in [("entrance-start", CGFloat(0.35)), ("entrance-end", CGFloat(1))] {
+                    let path = (dir as NSString).appendingPathComponent("glow-\(name).png")
+                    try MacWindowGlow.preview(window: CGSize(width: 640, height: 420), to: path, background: NSColor(white: 0.12, alpha: 1), spread: spread); written.append(path)
+                }
+                emit(["written": written, "desktop_input_sent": false]); return
+            }
+            if let at = args.firstIndex(of: "--prompt-preview"), args.count > at + 1 {
+                try? MacContract.load(); _ = NSApplication.shared
+                emit(["written": try MacAccessPrompt.preview(to: args[at + 1]), "desktop_input_sent": false]); return
+            }
             if args.contains("--contract-lock-holder") {
                 try MacFence.initialize(requireDirectParent: false)
                 try MacInputLedger.withLock { emit(["lock_held": true]); _ = readLine() }
@@ -1500,7 +1633,7 @@ func readLoop() {
             MacWorkerLifetime.start()
             defaultMode = "take"
             emit(["event": "ready", "pid": Int(getpid()), "platform": "darwin", "dpi_mode": "native",
-                  "control_contract": 1, "native_fence": true, "held_input_cleanup": true,
+                  "control_contract": 1, "native_fence": true, "held_input_cleanup": true, "hud_avoidance": true,
                   "accessibility": AXIsProcessTrusted()])
             Thread.detachNewThread { readLoop() }
             RunLoop.current.run()

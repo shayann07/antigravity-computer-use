@@ -150,63 +150,8 @@ final class MacPanicMonitor {
         if type == .keyDown && (key == 53 || (key == 111 && event.flags.contains([.maskControl, .maskAlternate]))) {
             MacFence.emergency("escape"); return
         }
-        guard state.state == "active" else { return }
-        let preferences = (URL(fileURLWithPath: MacFence.file).deletingLastPathComponent()).appendingPathComponent("control-preferences.json")
-        let mode = (try? Data(contentsOf: preferences)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }?["takeover_mode"] as? String ?? "manual"
-        guard mode == "smart" else { return }
-        // Local controls must remain usable without the takeover hook racing them.
-        if type != .keyDown, let bytes = try? Data(contentsOf: URL(fileURLWithPath: MacFence.file + ".hud")),
-           let r = try? JSONSerialization.jsonObject(with: bytes) as? [Double], r.count == 4,
-           CGRect(x: r[0], y: r[1], width: r[2], height: r[3]).contains(event.location) { return }
-        var deliberate = type != .mouseMoved
-        if type == .mouseMoved {
-            if Date().timeIntervalSince(at) > 0.5 { moved = 0; at = Date(); baseline = event.location }
-            if let previous = baseline { moved += hypot(event.location.x - previous.x, event.location.y - previous.y) }
-            baseline = event.location; deliberate = moved >= 70
-        }
-        if deliberate {
-            // Read the guardian's actual focused modal via public AX APIs.
-            // No file rectangle or model-supplied flag can declare a consent UI.
-            if localConsentInteraction(type, event) { moved = 0; baseline = event.location; return }
-            do { guard try MacFence.pauseForTakeover(state) else { return } }
-            catch { MacFence.emergency("takeover_state_unavailable"); return }
-            let workersStopped = macWaitForWorkers(), inputsRecovered = MacInputLedger.recover()
-            if !workersStopped || !inputsRecovered { MacFence.emergency("input_cleanup_failed") }
-        }
-    }
-    static func consentPointVisible(_ point: CGPoint, modal: CGRect, guardian: pid_t, windows: [[String: Any]]) -> Bool {
-        guard modal.contains(point) else { return false }
-        // CGWindowList is front-to-back. A foreign cover is never an exemption,
-        // including system banners; uncertainty retains ordinary takeover.
-        for row in windows {
-            guard let alpha = (row[kCGWindowAlpha as String] as? NSNumber)?.doubleValue, alpha.isFinite else { return false }
-            if alpha <= 0 { continue }
-            guard let bounds = row[kCGWindowBounds as String] as? [String: Any],
-                  let rect = CGRect(dictionaryRepresentation: bounds as CFDictionary),
-                  [rect.minX, rect.minY, rect.width, rect.height].allSatisfy({ $0.isFinite }) else { return false }
-            if !rect.contains(point) { continue }
-            return (row[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == guardian &&
-                abs(rect.minX - modal.minX) <= 2 && abs(rect.minY - modal.minY) <= 2 &&
-                abs(rect.width - modal.width) <= 2 && abs(rect.height - modal.height) <= 2
-        }
-        return false
-    }
-    func localConsentInteraction(_ type: CGEventType, _ event: CGEvent) -> Bool {
-        guard let (pid, birth) = guardianIdentity, (try? macProcessStart(pid)) == birth else { return false }
-        let app = AXUIElementCreateApplication(pid)
-        guard AXUIElementSetMessagingTimeout(app, 0.02) == .success,
-              let raw = axAttr(app, kAXFocusedWindowAttribute as String), CFGetTypeID(raw) == AXUIElementGetTypeID() else { return false }
-        let window = raw as! AXUIElement
-        guard AXUIElementSetMessagingTimeout(window, 0.02) == .success,
-              let modal = axAttr(window, kAXModalAttribute as String), CFGetTypeID(modal) == CFBooleanGetTypeID(),
-              (modal as? Bool) == true else { return false }
-        var owner: pid_t = 0
-        guard AXUIElementGetPid(window, &owner) == .success, owner == pid else { return false }
-        if type == .keyDown { return NSWorkspace.shared.frontmostApplication?.processIdentifier == pid }
-        guard let bounds = axRect(window),
-              let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else { return false }
-        let rect = CGRect(x: bounds[0], y: bounds[1], width: bounds[2], height: bounds[3])
-        return Self.consentPointVisible(event.location, modal: rect, guardian: pid, windows: windows)
+        // Human mouse and keyboard input never pauses or yields control.
+        // Only Esc or Control+Option+F12 ends the task (handled above).
     }
     func run(guardian: pid_t, birth: String) -> Never {
         guardianIdentity = (guardian, birth)
@@ -247,13 +192,27 @@ final class MacGuardian: NSObject {
     var bootUntil: UInt64 = 0
     var cleanupPending = false
     var grants = Set<String>()
+    // App keys approved at the click tier (terminals and IDEs).
+    var clickGrants = Set<String>()
+    // Approvals last for the agent's conversation: per session_handle, the
+    // executables the human approved. Kept across Stop, End and expiry, and
+    // saved for 24 hours without use so a restart does not ask again; a new
+    // conversation (a new handle) always asks.
+    var remembered: [String: Set<String>] = [:]
+    var rememberedSeen: [String: Double] = [:]
+    var rememberedLoaded = false
+    // Apps the human approved in this guardian's own cards, per conversation,
+    // kept beside the guard files so a controller restart or update does not
+    // ask again. Written only after a human Allow; the runtime's claim alone
+    // is never enough.
+    static var approvalsFile: String { (MacFence.file as NSString).deletingLastPathComponent + "/guardian-approvals.json" }
     var watchdog: Process?
     var timer: Timer?
     var visuals = MacVisuals()
-    var prompt: NSAlert?
+    var prompt: NSPanel?
     var controlsUntil = Date.distantFuture
     // Set while a previous task's input cleanup is unverified: the bar is
-    // visible and Stop works, but re-arm, resume and activation refuse.
+    // visible and Stop works, but clear_stop, resume and activation refuse.
     // Starts locked when the runtime recovered an unverified prior task.
     var rearmLocked = ProcessInfo.processInfo.environment["AGCU_REARM_LOCKED"] == "1"
     let hostManaged = ProcessInfo.processInfo.environment["AGCU_PERMISSION_MODE"] == "host-managed"
@@ -261,14 +220,13 @@ final class MacGuardian: NSObject {
         _ = NSApplication.shared; NSApp.setActivationPolicy(.accessory)
         try Data("\(getpid())|\(try macProcessStart(getpid()))".utf8).write(to: URL(fileURLWithPath: MacFence.file + ".guardian"), options: [.atomic])
         chmod(MacFence.file + ".guardian", 0o600)
-        visuals.onToggle = { [weak self] in self?.humanToggle() }
         visuals.onStop = { [weak self] in self?.stop("button") }
-        visuals.onEnd = { [weak self] in guard let self = self else { return }; self.stop("human_end"); self.visuals.hide(); emit(["ev":"human_end","state":self.state]) }
-        visuals.onMode = { [weak self] mode in self?.saveMode(mode) }
+        retireSmartMode()
         state = MacFence.latchBlocks(MacFence.latch) ? "stopped" : "idle"
         try writeState(); visuals.hide()
-        emit(["ev": "settings", "takeover_mode": takeoverMode()])
-        emit(["ev": "ready", "pid": Int(getpid()), "hotkey": false, "presence": false, "platform": "darwin"])
+        emit(["ev": "settings", "takeover_mode": "manual"])
+        emit(["ev": "ready", "pid": Int(getpid()), "hotkey": false, "presence": false, "platform": "darwin",
+              "clear_stop": true, "session_reason": true, "remembered_approvals": true, "access_tiers": true, "prompt_card": true])
         timer = Timer(timeInterval: 0.07, repeats: true) { [weak self] _ in self?.tick() }
         RunLoop.main.add(timer!, forMode: .common); RunLoop.main.add(timer!, forMode: .modalPanel)
         Thread.detachNewThread { [weak self] in
@@ -284,17 +242,14 @@ final class MacGuardian: NSObject {
         }
         NSApp.run(); exit(0)
     }
-    func takeoverMode() -> String {
+    // Smart takeover is retired: human input never pauses. A saved "smart"
+    // preference from an older build is rewritten to manual.
+    func retireSmartMode() {
         let path = URL(fileURLWithPath: MacFence.file).deletingLastPathComponent().appendingPathComponent("control-preferences.json")
-        let value = (try? Data(contentsOf: path)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
-        return value?["takeover_mode"] as? String == "smart" ? "smart" : "manual"
-    }
-    func saveMode(_ mode: String) {
-        let path = URL(fileURLWithPath: MacFence.file).deletingLastPathComponent().appendingPathComponent("control-preferences.json")
-        var value = (try? Data(contentsOf: path)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
-        value["takeover_mode"] = mode
+        guard var value = (try? Data(contentsOf: path)).flatMap({ try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }),
+              value["takeover_mode"] as? String == "smart" else { return }
+        value["takeover_mode"] = "manual"
         if let bytes = try? JSONSerialization.data(withJSONObject: value) { try? bytes.write(to: path, options: [.atomic]); chmod(path.path, 0o600) }
-        emit(["ev": "settings", "takeover_mode": takeoverMode()])
     }
     func ensureWatchdog() throws {
         guard AXIsProcessTrusted(), CGPreflightScreenCaptureAccess(), CGPreflightListenEventAccess(), CGPreflightPostEventAccess() else {
@@ -305,73 +260,90 @@ final class MacGuardian: NSObject {
     }
     func writeState() throws {
         let encoded = Data(grants.sorted().joined(separator: "\n").utf8).base64EncodedString()
-        try MacFence.write("\(state)|\(token)|\(until)|\(encoded)|\(bootUntil)|\(cleanupPending ? 1 : 0)")
+        let click = Data(clickGrants.intersection(grants).sorted().joined(separator: "\n").utf8).base64EncodedString()
+        try MacFence.write("\(state)|\(token)|\(until)|\(encoded)|\(bootUntil)|\(cleanupPending ? 1 : 0)|\(click)")
     }
-    func set(_ next: String, reason: String = "") {
+    func clearGrants() { grants.removeAll(); clickGrants.removeAll() }
+    func set(_ next: String, reason: String = "", clearingStop: Bool = false) {
         if next == "active" && (MacFence.latchBlocks(MacFence.latch) || state == "stopped") { return }
+        // Only clear_stop, after its cleanup proof, leaves a stopped state.
+        if state == "stopped" && next != "stopped" && !clearingStop { return }
         var effectiveReason = reason
         state = next
         cleanupPending = next != "active"
-        if next == "stopped" || next == "idle" { grants.removeAll() }
+        if next == "stopped" || next == "idle" { clearGrants() }
         do { try writeState() } catch { state = "stopped"; MacFence.emergency("state_write_failed") }
         // The independent watchdog may latch Stop while this transition is
         // being published. Recheck after the write so a stale idle/paused
         // transition cannot leave the local UI claiming control is available.
         let resolved = MacFence.resolvedState(state, latched: MacFence.latchBlocks(MacFence.latch))
         if resolved != state {
-            state = resolved; cleanupPending = true; grants.removeAll(); effectiveReason = "emergency_stop"
+            state = resolved; cleanupPending = true; clearGrants(); effectiveReason = "emergency_stop"
             do { try writeState() } catch { MacFence.emergency("state_write_failed") }
         }
         if state != "active" {
             let workersStopped = macWaitForWorkers(), inputsRecovered = MacInputLedger.recover()
-            if !workersStopped || !inputsRecovered { state = "stopped"; grants.removeAll(); effectiveReason = "input_cleanup_failed"; MacFence.emergency(effectiveReason) }
+            if !workersStopped || !inputsRecovered { state = "stopped"; clearGrants(); effectiveReason = "input_cleanup_failed"; MacFence.emergency(effectiveReason) }
             else {
                 cleanupPending = false
                 do { try writeState() } catch { state = "stopped"; effectiveReason = "state_write_failed"; MacFence.emergency(effectiveReason) }
                 let final = MacFence.resolvedState(state, latched: MacFence.latchBlocks(MacFence.latch))
-                if final != state { state = final; grants.removeAll(); effectiveReason = "emergency_stop"; do { try writeState() } catch { MacFence.emergency("state_write_failed") } }
+                if final != state { state = final; clearGrants(); effectiveReason = "emergency_stop"; do { try writeState() } catch { MacFence.emergency("state_write_failed") } }
             }
             visuals.releaseCursor()
         }
-        if state == "idle" { visuals.hide() }
+        visuals.reason = effectiveReason
+        // A session that ran out says so for a few seconds; any other idle hides the bar.
+        if state == "idle" && effectiveReason == "session_expired" && visuals.visible { visuals.ended = true; visuals.show(state); controlsUntil = Date().addingTimeInterval(8) }
+        else if state == "idle" { visuals.ended = false; visuals.hide() }
         else { visuals.show(state); controlsUntil = state == "stopped" ? Date().addingTimeInterval(8) : .distantFuture }
         emit(["ev": "state", "state": state, "reason": effectiveReason, "custom_cursor": visuals.cursorApplied])
     }
     func stop(_ reason: String) { MacFence.emergency(reason); set("stopped", reason: reason) }
-    func humanToggle() {
-        if state == "active" { set("paused", reason: "requested_pause"); return }
-        if rearmLocked { emit(["ev":"visual_warning", "message":"A previous task's input cleanup is unverified; re-arm stays locked"]); return }
-        do { try ensureWatchdog() } catch { emit(["ev":"visual_warning", "message":String(describing:error)]); return }
-        guard macWaitForWorkers(), MacInputLedger.recover() else { return }
-        until = MacFenceState.now + Int64(MacContract.value["session_ms"] as? Int ?? 600_000) * 10_000
-        bootUntil = MacDeadline.create(requested: until, wallNow: MacFenceState.now, bootNow: MacDeadline.now, maximumMs: MacContract.value["session_ms"] as? Int ?? 600_000)
-        guard bootUntil > 0 else { return }
-        if state == "stopped" {
-            guard !MacFence.latch.isEmpty else { return }
-            if MacFence.latchEntryBlocks(MacFence.latch + ".unconfirmed") {
-                emit(["ev":"visual_warning", "message":"Stop delivery is unconfirmed; inspect prior input cleanup before re-arm"])
-                return
+    // There is no Pause and no Resume (owner decision, #99): Esc, Control+
+    // Option+F12 or the bar's Stop end the task, and the agent's next ready
+    // clears a confirmed Stop after cleanup proof. A "paused" record left by an
+    // older build is still read as no-control, never resumed.
+    // Moves a confirmed Stop to idle once cleanup is proven: keys and buttons
+    // released, prior workers gone. An unconfirmed Stop or an unreadable
+    // marker is never cleared. Mirrors Guardian.cs "clear_stop".
+    func clearStop() -> [String: Any] {
+        var cleared = false, why: String?
+        if state != "stopped" { cleared = state == "idle"; if !cleared { why = "not_stopped" } }
+        else if rearmLocked { why = "recovered_cleanup_unverified" }
+        else if !macWaitForWorkers() || !MacInputLedger.recover() { why = "input_cleanup_unverified" }
+        else {
+            // The watchdog ignores Esc while the fence reads stopped, but any
+            // other writer that replaces the fence while the marker is being
+            // cleared means a new Stop: latch again and refuse.
+            var before = stat(), after = stat()
+            let pinned = lstat(MacFence.file, &before) == 0
+            switch MacFence.clearConfirmedLatch(MacFence.latch) {
+            case .cleared where !pinned || lstat(MacFence.file, &after) != 0 || after.st_ino != before.st_ino || after.st_mtimespec.tv_nsec != before.st_mtimespec.tv_nsec || after.st_mtimespec.tv_sec != before.st_mtimespec.tv_sec:
+                MacFence.latchStop(MacFence.latch); why = "stopped_again"
+            case .cleared:
+                set("idle", reason: "stop_cleared", clearingStop: true)
+                cleared = state == "idle"; if !cleared { why = "stopped_again" }
+            case .refused(let reason): why = reason
             }
-            if let text = try? String(contentsOfFile: MacFence.latch, encoding: .utf8), text.hasPrefix("unconfirmed:") {
-                emit(["ev":"visual_warning", "message":"Stop delivery is unconfirmed; inspect prior input cleanup before re-arm"])
-                return
-            }
-            if unlink(MacFence.latch) != 0 && errno != ENOENT { return }
         }
-        set(state == "paused" ? "active" : "idle", reason: "human_resume")
-        emit(["ev": "human_resume", "state": state])
+        return ["cleared": cleared, "reason": why ?? NSNull(), "workers_stopped": cleared, "input_cleanup_confirmed": cleared]
     }
     func tick() {
         if Date() > controlsUntil { visuals.hide(); controlsUntil = .distantFuture }
         if (["active", "paused"].contains(state) || prompt != nil), MacFence.latchBlocks(MacFence.latch) {
-            if prompt != nil { NSApp.abortModal() }; stop(MacFence.latchEntryBlocks(MacFence.latch + ".unconfirmed") ? "guardian_stop_unconfirmed" : "persisted_emergency_stop"); return
+            // The watchdog latches, then writes the fence as stopped. A fence it
+            // has just stopped during this task is a live Esc or Control+Option+F12,
+            // not a Stop persisted from before, so the bar says so.
+            let live = state == "active" && (try? MacFence.read())?.state == "stopped"
+            if prompt != nil { NSApp.abortModal() }
+            stop(MacFence.latchEntryBlocks(MacFence.latch + ".unconfirmed") ? "guardian_stop_unconfirmed" : live ? "escape" : "persisted_emergency_stop"); return
         }
         guard let stored = try? MacFence.read() else { if state == "active" { stop("state_unavailable") }; return }
         if stored.state == "stopped" && state != "stopped" { if prompt != nil { NSApp.abortModal() }; set("stopped", reason: "escape") }
-        if stored.state == "paused" && state == "active" { set("paused", reason: "human_takeover") }
         if state == "active" {
             if watchdog?.isRunning != true { stop("watchdog_exited"); return }
-            if MacFenceState.now >= until || !MacDeadline.valid(bootUntil, now: MacDeadline.now) { set("idle", reason: "expired"); return }
+            if MacFenceState.now >= until || !MacDeadline.valid(bootUntil, now: MacDeadline.now) { set("idle", reason: "session_expired"); return }
             visuals.animate()
         }
         let parent = pid_t(ProcessInfo.processInfo.environment["AGCU_PARENT_PID"] ?? "0") ?? 0
@@ -384,8 +356,12 @@ final class MacGuardian: NSObject {
         func reply(_ extra: [String: Any] = [:]) { emit(extra.merging(["id": id, "state": state]) { _, new in new }) }
         do {
             switch op {
-            case "visual_status": reply(["controls_visible": visuals.visible, "cursor": state == "active", "takeover_mode": takeoverMode(), "material_backend": MacVisuals.materialBackend(for: visuals.rootView)])
-            case "show_controls": rearmLocked = (message["rearm_locked"] as? Bool) ?? false; visuals.show(state); controlsUntil = .distantFuture; reply(["controls_visible": visuals.visible, "human_rearm_required": state == "stopped", "rearm_locked": rearmLocked, "material_backend": MacVisuals.materialBackend(for: visuals.rootView)])
+            case "visual_status":
+                visuals.loadPreferences()
+                reply(["controls_visible": visuals.visible, "cursor": state == "active", "takeover_mode": "manual", "material_backend": "ink_surface",
+                       "record_visuals": visuals.recordVisuals, "line1": visuals.barView?.model.line1 ?? "", "line2": visuals.barView?.model.line2 ?? "",
+                       "dock": visuals.dock, "glow_level": visuals.windowGlow.level.rawValue])
+            case "show_controls": rearmLocked = (message["rearm_locked"] as? Bool) ?? false; visuals.ended = false; visuals.show(state); controlsUntil = .distantFuture; reply(["controls_visible": visuals.visible, "rearm_locked": rearmLocked, "material_backend": "ink_surface"])
             case "dismiss_controls": if ["active", "paused"].contains(state) { stop("dismiss") }; visuals.hide(); reply(["controls_visible": false])
             case "attach": reply(["registered": true]) // worker self-registers before reporting ready
             case "activate":
@@ -393,16 +369,25 @@ final class MacGuardian: NSObject {
                 try ensureWatchdog(); let nextToken = str(message["token"]) ?? "", requested = Int64(str(message["deadline"]) ?? "0") ?? 0
                 let nextBoot = MacDeadline.create(requested: requested, wallNow: MacFenceState.now, bootNow: MacDeadline.now, maximumMs: MacContract.value["session_ms"] as? Int ?? 600_000)
                 guard !nextToken.isEmpty, nextBoot > 0 else { reply(["allowed": false]); return }
-                token = nextToken; until = requested; bootUntil = nextBoot
+                token = nextToken; until = requested; bootUntil = nextBoot; visuals.deadlineMs = requested
                 set("active"); reply(["allowed": state == "active"])
-            case "resume":
-                guard hostManaged, !rearmLocked, state == "paused", MacInputLedger.recover() else { reply(["allowed": false]); return }
-                try ensureWatchdog(); until = MacFenceState.now + 6_000_000_000
-                bootUntil = MacDeadline.create(requested: until, wallNow: MacFenceState.now, bootNow: MacDeadline.now, maximumMs: MacContract.value["session_ms"] as? Int ?? 600_000)
-                guard bootUntil > 0 else { reply(["allowed": false]); return }
-                set("active", reason: "host_authorized_resume")
-                emit(["ev": "host_resume", "state": state]); reply(["allowed": state == "active"])
-            case "pause": set("paused", reason: "requested_pause")
+            case "avoid_input":
+                // Moves the bar clear of a click target (global points, top-left
+                // origin). Only the agent's own active task can ask; it never
+                // changes Stop, state, grants or visibility.
+                var allowed = state == "active" && !token.isEmpty && str(message["token"]) == token, moved = false
+                if let r = message["rect"] as? [NSNumber], r.count == 4,
+                   r.allSatisfy({ $0.doubleValue.isFinite && abs($0.doubleValue) <= 10_000_000 }), r[2].doubleValue > 0, r[3].doubleValue > 0 {
+                    if allowed {
+                        let target = MacWindowGlow.appKit(CGRect(x: r[0].doubleValue, y: r[1].doubleValue, width: r[2].doubleValue, height: r[3].doubleValue))
+                        (allowed, moved) = visuals.avoid(target)
+                    }
+                } else { allowed = false }
+                reply(["allowed": allowed, "moved": moved])
+            case "pause", "resume":
+                // Removed: nothing pauses or resumes control. Refused without effect.
+                reply(["allowed": false, "error": "pause_removed"])
+            case "clear_stop": reply(clearStop())
             case "stop":
                 stop("request")
                 if let nonce = str(message["stop_nonce"]), macStopNonceValid(nonce) {
@@ -414,7 +399,7 @@ final class MacGuardian: NSObject {
                     reply(["stop_nonce":nonce,"guardian_pid":Int(getpid()),"guard_file":(MacFence.file as NSString).lastPathComponent,"workers_stopped":exited,"input_cleanup_confirmed":clean])
                 }
             case "end":
-                grants.removeAll(); set(["stopped", "paused"].contains(state) ? state : "idle"); visuals.hide()
+                clearGrants(); set(["stopped", "paused"].contains(state) ? state : "idle"); visuals.hide()
                 if let nonce = str(message["end_nonce"]), macStopNonceValid(nonce) {
                     let exited = macWaitForWorkers()
                     let native = try? MacFence.read()
@@ -426,7 +411,25 @@ final class MacGuardian: NSObject {
                 } else { reply(["controls_visible": visuals.visible]) }
             case "capture": visuals.hideForCapture(); reply(["allowed": true])
             case "capture_end": visuals.finishCapture(state)
-            case "activity": visuals.activity(str(message["action"]) ?? "Checking")
+            case "activity":
+                let action = str(message["action"]) ?? "Checking"
+                if state == "active" { visuals.activity(action) }
+                if let name = str(message["host_name"]) { visuals.setHost(name: name, path: str(message["host_path"])) }
+                // The glow follows the last window that received an action. Only
+                // a window of an app approved for this task is accepted.
+                // point: the action in global screen points, top-left origin
+                // (the same space as rect). Without it the pointer is used.
+                var at: CGPoint?
+                if let point = message["point"] as? [NSNumber], point.count == 2,
+                   point.allSatisfy({ $0.doubleValue.isFinite && abs($0.doubleValue) < 100_000 }) {
+                    at = MacWindowGlow.appKit(CGPoint(x: point[0].doubleValue, y: point[1].doubleValue))
+                }
+                if state == "active", let pid = (message["pid"] as? NSNumber)?.int32Value, pid > 0,
+                   let rect = message["rect"] as? [NSNumber], rect.count == 4,
+                   rect.allSatisfy({ $0.doubleValue.isFinite && abs($0.doubleValue) < 100_000 }),
+                   let key = (try? macIdentity(pid))?["key"] as? String, grants.contains(key) {
+                    visuals.glow(action: action, pid: pid, rect: CGRect(x: rect[0].doubleValue, y: rect[1].doubleValue, width: rect[2].doubleValue, height: rect[3].doubleValue), point: at)
+                }
             case "shutdown": if state != "idle" { stop("shutdown") }; visuals.hide(); watchdog?.terminate(); exit(0)
             case "prompt":
                 guard state != "stopped", state != "paused" else { reply(["allowed": false]); return }
@@ -436,31 +439,63 @@ final class MacGuardian: NSObject {
                 guard ["app", "action"].contains(kind) else { throw AxonError("bad_arguments", "Unknown native confirmation kind.") }
                 var identity: [String: Any]?
                 if kind == "app" { identity = try macIdentity(pid_t(int(message["app_pid"], -1))) }
-                var allowed = hostManaged
-                if !hostManaged {
-                    visuals.hideForCapture()
-                    // Capture hiding removes our pointer window; the human
-                    // needs the normal OS cursor throughout a modal decision.
-                    visuals.releaseCursor()
-                    let alert = NSAlert(); alert.messageText = kind == "app" ? "Allow this app for this session?" : "Allow one sensitive action?"
-                    alert.informativeText = String((identity?["path"] as? String ?? "") + "\n\n" + (str(message["message"]) ?? "").prefix(6000))
-                    alert.addButton(withTitle: "Deny"); alert.addButton(withTitle: "Allow")
-                    prompt = alert
-                    let expiry = Timer(timeInterval: 90, repeats: false) { _ in NSApp.abortModal() }
-                    RunLoop.main.add(expiry, forMode: .common); RunLoop.main.add(expiry, forMode: .modalPanel)
-                    allowed = alert.runModal() == .alertSecondButtonReturn
-                    expiry.invalidate(); prompt = nil
-                    tick() // Resolve takeover, Stop and expiry before restoring control visuals.
-                    visuals.finishCapture(state)
+                var handle = str(message["session_handle"])
+                if let value = handle, value.isEmpty || value.utf8.count > 64 { handle = nil }
+                let executable = identity?["path"] as? String
+                // Already approved in this conversation: restored without a prompt.
+                // The handle alone is never an approval; the executable must match.
+                if !rememberedLoaded {
+                    rememberedLoaded = true
+                    (remembered, rememberedSeen) = MacGuardian.loadRemembered(MacGuardian.approvalsFile, now: Date().timeIntervalSince1970)
+                }
+                let known = kind == "app" && (message["remembered"] as? Bool) == true &&
+                    MacGuardian.rememberedAllows(remembered, handle: handle, executable: executable)
+                var allowed = hostManaged || known, timedOut = false
+                if !allowed {
+                    // The prompt hangs from the bar where it was before capture hiding.
+                    let bar = visuals.visible ? visuals.panel?.frame : nil
+                    // The bar stays, says it is waiting for an answer and keeps
+                    // Stop; the human gets the normal OS cursor for the decision.
+                    visuals.beginPrompt()
+                    var request = String((str(message["message"]) ?? "").prefix(6000))
+                    if let path = identity?["path"] as? String, !request.contains(path) {
+                        // Keep the native identity in view when the request omits it.
+                        let parts = MacPromptCardView.split(request, fallback: "")
+                        request = (parts.title.isEmpty ? "" : parts.title + "\n\n") + path + "\n\n" + parts.body
+                    }
+                    // An app request with card:1 is shown as a row. Its name and
+                    // path come from this guardian's own identity of the process,
+                    // its tag from the same tier that is granted below. Any other
+                    // tier, or a failed identity lookup, keeps the text card.
+                    var card: MacPromptCardView?
+                    if kind == "app", int(message["card"], 0) == 1, let path = identity?["path"] as? String, let pid = identity?["pid"] as? Int,
+                       let app = MacPromptApp.make(tier: str(message["tier"]) ?? "full", name: MacPromptApp.appName(path), conversation: handle != nil) {
+                        let line: (String, String) -> String = { field, lead in
+                            let text = (str(message[field]) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                            return text.isEmpty ? "" : lead + String(text.prefix(2000))
+                        }
+                        card = MacPromptCardView(app: app, host: visuals.hostName, details: path + "\nPID \(pid)" + line("task", "\n\nTask: ") + line("notice", "\n\n"))
+                    }
+                    allowed = MacAccessPrompt.run(message: request,
+                                                  fallback: kind == "app" ? "Allow this app for this session?" : "Allow one sensitive action?",
+                                                  bar: bar, onPanel: { [weak self] in self?.prompt = $0 }, timedOut: &timedOut, card: card)
+                    tick() // Resolve Stop and expiry before restoring control visuals.
+                    visuals.endPrompt()
                 }
                 if state == "stopped" || state == "paused" || MacFence.latchBlocks(MacFence.latch) { allowed = false }
-                var result: [String: Any] = ["allowed": allowed, "decision": allowed ? (hostManaged ? "host-authorized" : "allowed") : "denied"]
+                var result: [String: Any] = ["allowed": allowed, "decision": allowed ? (hostManaged ? "host-authorized" : known ? "remembered" : "allowed") : (state == "stopped" ? "stopped" : timedOut ? "timeout" : "denied")]
                 if allowed {
                     try MacFence.withApprovalFence(approvalState) {
                         if kind == "app", let identity = identity {
                             let current = try macIdentity(pid_t(identity["pid"] as! Int))
                             guard current["key"] as? String == identity["key"] as? String else { throw AxonError("identity_changed", "App restarted during approval.") }
-                            grants.insert(identity["key"] as! String); try writeState()
+                            let key = identity["key"] as! String
+                            grants.insert(key)
+                            if str(message["tier"]) == "click" { clickGrants.insert(key) } else { clickGrants.remove(key) }
+                            try writeState()
+                            if let handle = handle, let executable = executable {
+                                remembered = MacGuardian.remember(remembered, handle: handle, executable: executable)
+                            }
                         }
                         if kind == "action" {
                             let args = message["args"] as? [String: Any] ?? [:], operation = str(message["action_op"]) ?? ""
@@ -473,11 +508,59 @@ final class MacGuardian: NSObject {
                         }
                     }
                 }
+                if allowed, kind == "app", let handle = handle, remembered[handle] != nil {
+                    // Saved for a later controller; a failed save only means
+                    // the human is asked again after a restart.
+                    rememberedSeen[handle] = Date().timeIntervalSince1970
+                    (remembered, rememberedSeen) = MacGuardian.pruneRemembered(remembered, rememberedSeen, now: Date().timeIntervalSince1970)
+                    _ = MacGuardian.saveRemembered(MacGuardian.approvalsFile, remembered, rememberedSeen)
+                }
                 reply(result)
             default: reply(["allowed": false, "error": "unknown_guardian_operation"])
             }
         } catch {
             reply(["allowed": false, "decision": "refused", "message": String(describing: error)])
         }
+    }
+    static func rememberedAllows(_ table: [String: Set<String>], handle: String?, executable: String?) -> Bool {
+        guard let handle = handle, !handle.isEmpty, handle.utf8.count <= 64,
+              let executable = executable, !executable.isEmpty else { return false }
+        return table[handle]?.contains(executable) == true
+    }
+    static let rememberedIdleSeconds: Double = 24 * 60 * 60
+    static func pruneRemembered(_ table: [String: Set<String>], _ seen: [String: Double], now: Double) -> ([String: Set<String>], [String: Double]) {
+        let live = table.keys.filter { key in seen[key].map { now - $0 <= rememberedIdleSeconds && $0 <= now + 60 } ?? false }
+            .sorted { (seen[$0] ?? 0) > (seen[$1] ?? 0) }.prefix(64)
+        var nextTable: [String: Set<String>] = [:], nextSeen: [String: Double] = [:]
+        for key in live { nextTable[key] = Set(table[key]!.sorted().prefix(64)); nextSeen[key] = seen[key] }
+        return (nextTable, nextSeen)
+    }
+    static func loadRemembered(_ path: String, now: Double) -> ([String: Set<String>], [String: Double]) {
+        var info = stat()
+        guard lstat(path, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG, info.st_nlink == 1, info.st_uid == getuid(),
+              info.st_size <= 256 * 1024,
+              let data = FileManager.default.contents(atPath: path),
+              let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              value["schema"] as? Int == 1, let sessions = value["sessions"] as? [String: Any] else { return ([:], [:]) }
+        var table: [String: Set<String>] = [:], seen: [String: Double] = [:]
+        for (handle, raw) in sessions {
+            guard !handle.isEmpty, handle.utf8.count <= 64, let record = raw as? [String: Any],
+                  let when = record["seen"] as? Double, let apps = record["apps"] as? [String] else { continue }
+            let paths = apps.filter { $0.hasPrefix("/") && !$0.contains("\0") && $0.utf8.count <= 4096 }
+            if !paths.isEmpty { table[handle] = Set(paths); seen[handle] = when }
+        }
+        return pruneRemembered(table, seen, now: now)
+    }
+    static func saveRemembered(_ path: String, _ table: [String: Set<String>], _ seen: [String: Double]) -> Bool {
+        var sessions: [String: Any] = [:]
+        for (handle, apps) in table { sessions[handle] = ["seen": seen[handle] ?? 0, "apps": apps.sorted()] }
+        guard let data = try? JSONSerialization.data(withJSONObject: ["schema": 1, "sessions": sessions], options: [.sortedKeys]) else { return false }
+        do { try data.write(to: URL(fileURLWithPath: path), options: [.atomic]); chmod(path, 0o600); return true } catch { return false }
+    }
+    static func remember(_ table: [String: Set<String>], handle: String, executable: String) -> [String: Set<String>] {
+        guard !handle.isEmpty, handle.utf8.count <= 64, !executable.isEmpty else { return table }
+        var next = table
+        next[handle, default: []].insert(executable)
+        return next
     }
 }
