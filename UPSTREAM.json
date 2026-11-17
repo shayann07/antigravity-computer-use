@@ -1007,7 +1007,7 @@
     {
       "path": "licenses/SkiaSharp.txt",
       "source": "NuGet SkiaSharp",
-      "revision": "4.153.1",
+      "revision": "4.156.1",
       "upstream_sha256": "89101e35a8c66fd4d6dffc1763259161d35cb564c169714ec227a768c89f2938",
       "local_sha256": "bc2eb4f37d574f9b1b67da2b17e14d151618850527d78f7323239e7518df5b77",
       "modified": true
@@ -1015,9 +1015,9 @@
     {
       "path": "licenses/SkiaSharp-Third-Party.txt",
       "source": "NuGet SkiaSharp.NativeAssets.Win32",
-      "revision": "4.153.1",
-      "upstream_sha256": "21504c46c4c58aa64c1055bd2dcbc5f9a136b4b8c412ed3cc6740e22c5b127f5",
-      "local_sha256": "98acf9d4d6083959988c884f630cdff760f94bfeb9acf57774653e08c23d1e45",
+      "revision": "4.156.1",
+      "upstream_sha256": "243f2276bde636931b1cf8517fb11c0451be857996fbe1a2c690a3c7d39502ac",
+      "local_sha256": "b70e053cbb26d84ff54dc67076bff5263da30d37172068de35e4d7fbbfcaaed0",
       "modified": true
     },
     {
