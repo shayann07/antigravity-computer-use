@@ -123,3 +123,16 @@ test('a request timeout with no step index never replays the batch', () => {
   assert.equal(landedCount({ok: false, delivery_unknown: true, error: {code: 'connection_lost'}}, 5), 5);
   assert.equal(landedCount({ok: false, error: {code: 'permission_denied'}}, 8), 0);
 });
+
+test('a covered target or a frame without a screenshot is observed again, with an image, and retried', async () => {
+  for (const code of ['obscured', 'no_image']) {
+    const d = dir(); const ledger = path.join(d, 'ledger.json');
+    const {calls, call} = fakeService([{ok: false, error: {code}, completed: [{}, {}], failed_index: 2},
+      {ok: true, metadata: {observation_id: 'm1'}}, {ok: true, metadata: {observation_id: 'm2'}}]);
+    const r = await runPlan({steps: steps(8), hwnd: 1, observationId: 'f0', reason: 't', ledgerFile: ledger, call, checkpointEvery: 10});
+    assert.equal(r.plan.done, true, code);
+    const snap = calls.find(c => c.name === 'snapshot');
+    assert.equal(snap.args.with_image, true, code);
+    assert.equal(calls.at(-1).args.steps.length, 6, code);   // resumes at the step that was refused
+  }
+});

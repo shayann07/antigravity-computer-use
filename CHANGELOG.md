@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `plan` no longer stops when a tooltip or popup covers the next target (`obscured`) or a pixel step gets a frame without a screenshot (`no_image`): both are refused before any input, so it takes a fresh frame, with its screenshot, and continues from that step, also partway through a batch.
+
 ## 1.0.0 - Stable release for Windows and macOS
 
 - Pause and Resume are removed. The tools `computer_pause` and `computer_resume` no longer exist; Esc or the bar's Stop ends the task and the next `ready` starts a fresh one.
