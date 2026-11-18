@@ -25,10 +25,12 @@
     }
     return true;
   }
-  function prep(canvas, cssW) {
-    const k = cssW / W * Math.min(devicePixelRatio || 1, 2);
+  function prep(canvas, cssW, maxRatio = 2, cpu = false) {
+    const k = cssW / W * Math.min(devicePixelRatio || 1, maxRatio);
     canvas.width = Math.round(W * k); canvas.height = Math.round(H * k);
-    const ctx = canvas.getContext('2d', {alpha: false});
+    // cpu: a software canvas. Hundreds of round-capped strokes in one frame are cheap
+    // for the CPU but stall the GPU's path tessellation, which shows as scroll hitches.
+    const ctx = canvas.getContext('2d', {alpha: false, willReadFrequently: cpu});
     ctx.setTransform(k, 0, 0, k, 0, 0);
     ctx.lineWidth = BRUSH; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     return ctx;
@@ -52,7 +54,7 @@
     const art = $('art'), canvas = $('paint'), agent = $('agent'), pill = $('pill'), pillText = $('pillText');
     const count = $('count'), swatch = $('swatch'), stopBtn = $('stop'), stopText = $('stopText'), stopKey = stopBtn.querySelector('kbd');
     const DURATION = 14000, FILL_AT = 700;  // the 65 minute run, about 280x faster; it opens with a bucket fill
-    let ctx, drawn = 0, filled = false, elapsed = 0, state = 'idle', last = 0, raf = 0, away = false;
+    let ctx, drawn = 0, filled = false, elapsed = 0, state = 'idle', last = 0, raf = 0, away = false, onScreen = true;
     let cssW = 0, cx = 0, cy = 0, tx = 0, ty = 0;
 
     function size() {
@@ -83,7 +85,8 @@
       // the hand trails its brush a little, so it glides instead of teleporting
       const a = follow(.3, dt); cx += (tx - cx) * a; cy += (ty - cy) * a;
       agent.style.transform = `translate3d(${cx}px,${cy}px,0)`;
-      raf = state === 'running' || Math.abs(tx - cx) + Math.abs(ty - cy) > .5 ? requestAnimationFrame(frame) : 0;
+      // off screen the painting waits where it is, so scrolling never pays for it
+      raf = (state === 'running' && onScreen) || Math.abs(tx - cx) + Math.abs(ty - cy) > .5 ? requestAnimationFrame(frame) : 0;
     }
     function loop() { if (!raf) { last = performance.now(); raf = requestAnimationFrame(frame); } }
     function aim() { tx = cssW * .5; ty = cssW * 16 / 9 * .5; }
@@ -118,6 +121,8 @@
       // start when the canvas is in view; replay a finished painting when you come back to it
       let left = false;
       new IntersectionObserver(([e]) => {
+        onScreen = e.intersectionRatio > 0;
+        if (onScreen && state === 'running') loop();
         if (e.intersectionRatio >= .4) {
           if (state === 'ready') start();
           else if (state === 'done' && left) { left = false; restart(); }
@@ -143,20 +148,21 @@
     function snap(k) { const c = document.createElement('canvas'); c.width = canvas.width; c.height = canvas.height; c.getContext('2d').drawImage(canvas, 0, 0); snaps[k] = c; }
     function restore(k) { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(snaps[k], 0, 0); ctx.restore(); n = k * SNAP; }
     // n: -1 blank canvas, 0 bucket-filled, m = filled plus m strokes
-    function render(want) {
+    function render(want, budget = Infinity) {
       if (want === n) return;
       if (want < 0) { fillWith(ctx, '#fff'); n = -1; return; }
       if (n < 0) { fillWith(ctx, PAL[0]); n = 0; if (!snaps[0]) snap(0); }
       const k = Math.floor(want / SNAP);
       if (want < n || (k * SNAP > n && snaps[k])) restore(k);
-      while (n < want) {
-        const next = Math.min(want, (Math.floor(n / SNAP) + 1) * SNAP);
+      while (n < want && budget > 0) {
+        const next = Math.min(want, (Math.floor(n / SNAP) + 1) * SNAP, n + budget);
+        budget -= next - n;
         strokes(ctx, n, next); n = next;
         if (n % SNAP === 0 && !snaps[n / SNAP]) snap(n / SNAP);
       }
     }
     function size() {
-      cssW = cmp.clientWidth; ctx = prep(canvas, cssW); snaps = [];
+      cssW = cmp.clientWidth; ctx = prep(canvas, cssW, 1.25); snaps = [];
       const want = n; n = -2; render(Math.max(-1, want));
       const r = sec.getBoundingClientRect(); top = r.top + scrollY; len = Math.max(1, sec.offsetHeight - innerHeight);
     }
@@ -182,7 +188,8 @@
       if (!ready) return;
       const p = clamp((scrollY - top) / len);
       const want = RM ? STROKES.length : p < .03 ? -1 : p < .06 ? 0 : Math.round(clamp((p - .06) / .7) * STROKES.length);
-      render(want);
+      render(want, 150);                       // at most 150 strokes a frame; a fast scroll catches up over the next frames
+      if (n !== want) requestAnimationFrame(update);
       bar.style.transform = `scaleX(${Math.max(0, n) / STROKES.length})`;
       text.textContent = n < 0 ? 'Scroll to paint' : n === 0 ? 'Bucket fill' : `Stroke ${fmt(n)} / ${fmt(STROKES.length)}`;
       const done = n === STROKES.length;
@@ -217,7 +224,9 @@
     }, {threshold: .6}).observe($('stats'));
 
     return {
-      init() { ready = true; size(); update(); let rw = cmp.clientWidth; new ResizeObserver(() => { if (cmp.clientWidth !== rw) { rw = cmp.clientWidth; size(); update(); } }).observe(cmp); },
+      init() { ready = true; size(); update();
+        // decode the photo ahead of time, so revealing it never stalls a scrolling frame
+        new IntersectionObserver(([e], io) => { if (e.isIntersecting) { io.disconnect(); rvImg.decode?.().catch(() => {}); } }, {rootMargin: '150% 0px'}).observe(cmp); let rw = cmp.clientWidth; new ResizeObserver(() => { if (cmp.clientWidth !== rw) { rw = cmp.clientWidth; size(); update(); } }).observe(cmp); },
       update, resize() { if (ready) { const r = sec.getBoundingClientRect(); top = r.top + scrollY; len = Math.max(1, sec.offsetHeight - innerHeight); } },
       // where the narrator should be: on the brush while it paints, on the handle once it is finished
       point() {
@@ -365,30 +374,6 @@
   const onScroll = () => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; exhibit.update(); narrator.kick(); }); };
   addEventListener('scroll', onScroll, {passive: true});
   addEventListener('resize', () => { exhibit.resize(); onScroll(); });
-
-  /* ---------- smooth wheel: only for notched mouse wheels; trackpads, keys, Find and anchors stay native ---------- */
-  if (FINE && !RM) {
-    let target = scrollY, current = scrollY, raf = 0, last = 0, mine = -1;
-    const max = () => document.documentElement.scrollHeight - innerHeight;
-    function frame(now) {
-      const dt = Math.min(64, now - last); last = now;
-      if (Math.abs(scrollY - mine) > 2) { raf = 0; return; }       // something else scrolled: let it win
-      current += (target - current) * follow(.16, dt);
-      if (Math.abs(target - current) < .5) current = target;
-      mine = Math.round(current); scrollTo({top: current, behavior: 'instant'});
-      raf = current !== target ? requestAnimationFrame(frame) : 0;
-    }
-    addEventListener('wheel', e => {
-      if (e.ctrlKey || e.defaultPrevented || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
-      const notched = e.deltaMode === 1 || (Number.isInteger(e.deltaY) && Math.abs(e.deltaY) >= 50);
-      if (!notched || e.target.closest('dialog,pre,.cmp')) return;
-      e.preventDefault();
-      if (!raf) { current = scrollY; target = scrollY; mine = scrollY; }
-      const step = e.deltaMode === 1 ? e.deltaY * 40 : e.deltaY;
-      target = clamp(target + step, 0, max());
-      if (!raf) { last = performance.now(); raf = requestAnimationFrame(frame); }
-    }, {passive: false});
-  }
 
   /* ---------- 3D tilt on hover: mouse only, transform only ---------- */
   if (FINE && !RM) for (const el of document.querySelectorAll('[data-tilt]')) {

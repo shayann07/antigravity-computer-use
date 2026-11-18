@@ -36,7 +36,7 @@
     /* radius: chips, controls, surfaces */
     --r1:4px;--r2:10px;--r3:16px;
     /* shadow: only the artwork on the wall and floating app windows */
-    --hang:0 1px 2px rgba(18,22,29,.08),0 28px 56px -18px rgba(18,22,29,.34);
+    --hang:0 1px 2px rgba(18,22,29,.08),0 14px 28px -14px rgba(18,22,29,.32);
     /* motion tokens: every transition below uses these names */
     --fast:100ms; --normal:200ms; --slow:300ms;
     --out:cubic-bezier(.23,1,.32,1); --in:cubic-bezier(.55,0,1,.45); --inout:cubic-bezier(.77,0,.175,1);
@@ -171,7 +171,7 @@
   .rv{position:absolute;inset:0;overflow:hidden;transform:translateX(100%)}
   .rv img{transform:translateX(-100%)}
   .handle{position:absolute;inset:0;transform:translateX(100%);pointer-events:none}
-  .handle::before{content:"";position:absolute;left:-1px;top:0;bottom:0;width:2px;background:rgba(255,255,255,.96);box-shadow:0 0 0 .5px rgba(18,22,29,.18),0 0 14px rgba(0,0,0,.28)}
+  .handle::before{content:"";position:absolute;left:-1px;top:0;bottom:0;width:2px;background:rgba(255,255,255,.96);box-shadow:0 0 0 .5px rgba(18,22,29,.18),0 0 6px rgba(0,0,0,.24)}
   .handle span{position:absolute;left:-15px;top:50%;width:30px;height:60px;margin-top:-30px;border-radius:999px;background:rgba(248,249,251,.95);box-shadow:0 0 0 1px rgba(18,22,29,.1),0 8px 20px -6px rgba(18,22,29,.5);display:grid;place-items:center;color:var(--ink);transition:transform var(--fast) var(--out)}
   .handle svg{width:16px;height:16px}
   .cmp.dragging .handle span{transform:scale(1.08)}
@@ -208,7 +208,7 @@
   .steps button.past::before,.steps button[aria-current="step"]::before{background:var(--ink)}
   @media (hover:hover) and (pointer:fine){.steps button:hover{color:var(--ink)}}
   .desk{position:relative;aspect-ratio:4/3;max-height:calc(100svh - 160px);border-radius:var(--r3);background:var(--desk);border:1px solid var(--rule);display:grid;place-items:center;overflow:hidden}
-  .desk::after{content:"";position:absolute;inset:0;border-radius:var(--r3);box-shadow:inset 0 0 0 1.5px rgba(124,206,255,.95),inset 0 0 56px 6px rgba(84,150,255,.42);opacity:0;transition:opacity var(--slow) var(--out);pointer-events:none}
+  .desk::after{content:"";position:absolute;inset:0;border-radius:var(--r3);box-shadow:inset 0 0 0 1.5px rgba(124,206,255,.95),inset 0 0 18px 2px rgba(84,150,255,.36);will-change:opacity;opacity:0;transition:opacity var(--slow) var(--out);pointer-events:none}
   .desk.working::after{opacity:1}
   .desk .pill{left:50%;top:16px;transform:translate(-50%,-4px)}
   .desk .pill.on{transform:translate(-50%,0)}
@@ -262,15 +262,18 @@
   .card .foot{margin-top:auto;padding-top:var(--s4)}
   .card h3{font:700 1.35rem/1.2 var(--display);letter-spacing:-.02em}
   .card p{color:var(--graphite);font-size:.92rem;margin-top:var(--s2)}
-  .code{position:relative;margin-top:var(--s4);background:var(--ink);border-radius:var(--r2)}
-  .code pre{font:400 .82rem/1.6 var(--mono);padding:14px 92px 14px 16px;white-space:pre-wrap;word-break:break-word;color:#EEF1F5}
-  .copy{position:absolute;top:8px;right:8px;height:34px;min-width:72px;border-radius:8px;border:1px solid #2C3442;background:#1C222C;color:#EEF1F5;font:500 .8rem var(--ui);display:grid;place-items:center;transition:transform var(--fast) var(--out)}
+  /* code sits on a soft cool surface, not a black slab, so the light page keeps one weight */
+  .code{position:relative;margin-top:var(--s4);background:#EEF2F8;border:1px solid rgba(18,22,29,.08);border-radius:var(--r2)}
+  .code pre{font:400 .82rem/1.6 var(--mono);padding:14px 92px 14px 16px;white-space:pre-wrap;word-break:break-word;color:var(--ink)}
+  .copy{position:absolute;top:8px;right:8px;height:34px;min-width:72px;border-radius:8px;border:1px solid var(--rule);background:var(--white);color:var(--ink);font:600 .8rem var(--ui);display:grid;place-items:center;transition:transform var(--fast) var(--out),background-color var(--fast) ease}
+  @media (hover:hover) and (pointer:fine){.copy:hover{background:#FFFFFF}}
+  .copy .done{color:var(--accent)}
   .copy:active{transform:scale(.96)}
   .copy span{grid-area:1/1;transition:opacity var(--normal) var(--out),transform var(--normal) var(--out)}
   .copy .done{opacity:0;transform:scale(.9)}
   .copy.copied .idle{opacity:0}
   .copy.copied .done{opacity:1;transform:none}
-  .os{display:inline-flex;gap:var(--s1);margin-top:var(--s4);padding:var(--s1);border-radius:999px;background:#EDF0F3;border:1px solid var(--rule)}
+  .os{align-self:flex-start;display:inline-flex;gap:var(--s1);margin-top:var(--s4);padding:var(--s1);border-radius:999px;background:#EDF0F3;border:1px solid var(--rule)}
   .os button{height:36px;padding:0 var(--s4);border-radius:999px;border:0;background:transparent;color:var(--graphite);font-weight:500;font-size:.86rem;transition:background-color var(--fast) ease,color var(--fast) ease}
   .os button[aria-selected="true"]{background:var(--white);color:var(--ink);box-shadow:0 0 0 1px var(--rule)}
   .then{color:var(--graphite);margin-top:var(--s6);font-size:.95rem}
