@@ -12,229 +12,312 @@
 <meta property="og:image" content="https://computeruse.shayxo.dev/media/social-preview.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://computeruse.shayxo.dev/media/social-preview.png">
-<meta name="theme-color" content="#000000">
-<script>document.documentElement.classList.add('js');if(matchMedia('(prefers-reduced-motion: reduce)').matches)document.documentElement.classList.add('still')</script>
+<meta name="theme-color" content="#E2E6EA">
+<meta name="color-scheme" content="light">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap">
+<link rel="preload" href="plan.js" as="script">
+<link rel="preload" href="media/smoke.webp" as="image">
+<link rel="preload" href="media/glow-0.webp" as="image">
+<script>if(matchMedia('(prefers-reduced-motion: reduce)').matches)document.documentElement.classList.add('rm')</script>
 <style>
   :root{
-    --black:#000; --night:#0b0d11; --surface:#14181f; --line:#262d38;
-    --paper:#f5f5f7; --mist:#86868b; --dim:#a1a1a6; --blue:#6aa8ff; --violet:#b08cff; --ok:#8fe3b0; --stop:#ff9f93;
-    --ui:"SF Pro Display","Segoe UI Variable Display","Segoe UI",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
-    --mono:"SF Mono","Cascadia Code",ui-monospace,Consolas,monospace;
-    --fast:120ms; --normal:220ms; --slow:320ms;
-    --out:cubic-bezier(.23,1,.32,1); --inout:cubic-bezier(.77,0,.175,1);
+    /* colour: taken from the product's own glow (Glow.cs "Aurora" loop) and its ink, on cool smoke.
+       Aurora fills carry ink text; accent text uses the deeper blue for contrast; rose is the stopped state */
+    --paper:#E2E6EA; --white:#F8F9FB; --ink:#12161D; --graphite:#4A5361; --rule:rgba(18,22,29,.13); --desk:rgba(18,22,29,.05);
+    --aurora:#5496FF; --aurora-press:#3F84F2; --accent:#2E5BD8; --rose:#FF8FA0;
+    /* type */
+    --display:"Manrope",system-ui,-apple-system,"Segoe UI",sans-serif;
+    --ui:"Manrope",system-ui,-apple-system,"Segoe UI",sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,"Cascadia Code",Consolas,monospace;
+    /* spacing 4 8 12 16 24 32 48 64 96 128 */
+    --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:24px;--s6:32px;--s7:48px;--s8:64px;--s9:96px;--s10:128px;
+    /* radius: chips, controls, surfaces */
+    --r1:4px;--r2:10px;--r3:16px;
+    /* shadow: only the artwork on the wall and floating app windows */
+    --hang:0 1px 2px rgba(27,24,19,.08),0 28px 56px -18px rgba(27,24,19,.32);
+    /* motion tokens: every transition below uses these names */
+    --fast:100ms; --normal:200ms; --slow:300ms;
+    --out:cubic-bezier(.23,1,.32,1); --in:cubic-bezier(.55,0,1,.45); --inout:cubic-bezier(.77,0,.175,1);
   }
   *{box-sizing:border-box;margin:0}
-  html{background:var(--black);color:var(--paper);font:400 17px/1.47 var(--ui);-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%}
+  html{background:var(--paper);color:var(--ink);font:400 17px/1.55 var(--ui);-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%;scroll-padding-top:72px}
   body{overflow-x:clip}
+  /* the smoke sits on its own fixed layer and drifts on the compositor, so scrolling never repaints it */
+  body::before{content:"";position:fixed;inset:-6%;z-index:-1;background:var(--paper) url("media/smoke.webp") center/cover;animation:drift 70s ease-in-out infinite alternate;will-change:transform}
+  @keyframes drift{to{transform:translate3d(-3%,-2%,0) scale(1.04)}}
   a{color:inherit}
-  img,video{display:block;max-width:100%}
-  kbd{font:600 .82em var(--mono);border:1px solid #3a3f48;border-bottom-width:2px;border-radius:6px;padding:.05em .42em;background:#16191f}
-  code{font-family:var(--mono)}
-  :focus-visible{outline:2px solid var(--blue);outline-offset:3px;border-radius:6px}
-  .skip{position:absolute;left:16px;top:-60px;background:var(--paper);color:#000;padding:8px 14px;border-radius:8px;z-index:20}
+  img{display:block;max-width:100%}
+  button{font:inherit;color:inherit;cursor:pointer}
+  kbd{font:500 .8em var(--mono);background:var(--white);border:1px solid var(--rule);border-bottom-width:2px;border-radius:var(--r1);padding:.08em .45em}
+  code{font-family:var(--mono);font-size:.9em}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:var(--r1)}
+  .skip{position:absolute;left:16px;top:-60px;background:var(--ink);color:var(--paper);padding:8px 14px;border-radius:var(--r2);z-index:20}
   .skip:focus{top:12px}
+  .wrap{width:min(1180px,calc(100% - 32px));margin:0 auto}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
-  /* a quiet nav that sits over the film */
-  .top{position:fixed;inset:0 0 auto;z-index:10;display:flex;justify-content:space-between;align-items:center;height:52px;padding:0 max(16px,calc((100vw - 1100px)/2));background:rgba(0,0,0,.55);backdrop-filter:saturate(1.6) blur(18px);-webkit-backdrop-filter:saturate(1.6) blur(18px);border-bottom:1px solid rgba(255,255,255,.06)}
-  .top .brand{font-size:.92rem;font-weight:600;text-decoration:none;letter-spacing:-.01em}
-  .top nav{display:flex;gap:2px}
-  .top nav a{font-size:.84rem;color:var(--dim);text-decoration:none;padding:12px 10px;transition:color var(--fast) ease}
-  @media (hover:hover) and (pointer:fine){.top nav a:hover{color:var(--paper)}}
+  /* nav: solid, no blur, so scrolling under it costs nothing */
+  .top{position:sticky;top:0;z-index:10;background:rgba(226,230,234,.9);border-bottom:1px solid var(--rule)}
+  .top .wrap{display:flex;justify-content:space-between;align-items:center;height:56px}
+  .brand{display:flex;align-items:center;gap:var(--s2);font-weight:600;font-size:.95rem;text-decoration:none;letter-spacing:-.01em}
+  .brand svg{width:16px;height:16px}
+  .brand svg path{fill:var(--aurora);stroke:var(--ink);stroke-width:1.4;stroke-linejoin:round}
+  .top nav{display:flex;align-items:center;gap:var(--s1)}
+  .top nav a{font-size:.9rem;color:var(--graphite);text-decoration:none;padding:12px 10px;transition:color var(--fast) ease}
+  .top nav a.cta{color:var(--white);background:var(--ink);border-radius:999px;padding:7px 16px;margin-left:var(--s2)}
+  @media (hover:hover) and (pointer:fine){.top nav a:not(.cta):hover{color:var(--ink)}}
 
-  /* chapters pin for a few screens while scroll drives them */
-  .ch{position:relative}
-  .pin{position:sticky;top:0;height:100svh;overflow:hidden;display:grid;place-items:center}
-  .still .ch{height:auto!important}
-  .still .pin{position:relative;height:auto;min-height:100svh;padding:96px 0}
+  /* buttons */
+  .btn{display:inline-flex;align-items:center;gap:var(--s2);height:48px;padding:0 var(--s5);border-radius:999px;border:0;font-weight:600;font-size:1rem;text-decoration:none;transition:transform var(--fast) var(--out),background-color var(--fast) ease}
+  .btn:active{transform:scale(.97)}
+  .btn.primary{background:var(--aurora);color:var(--ink)}
+  .btn.quiet{background:transparent;color:var(--ink);box-shadow:inset 0 0 0 1px var(--rule)}
+  @media (hover:hover) and (pointer:fine){.btn.primary:hover{background:var(--accent-press)}.btn.quiet:hover{background:var(--white)}}
 
-  /* hero */
-  .hero{height:320svh}
-  .hero .pin{place-items:start center}
-  .htext{position:absolute;top:calc(52px + 5svh);left:0;right:0;text-align:center;padding:0 16px;will-change:transform,opacity}
-  .eyebrow{font-size:clamp(.95rem,1.6vw,1.25rem);font-weight:600;color:var(--dim)}
-  h1{font-size:clamp(2.8rem,7.4vw,5.8rem);line-height:1.02;letter-spacing:-.035em;font-weight:700;margin-top:6px}
-  .grad{background:linear-gradient(90deg,#9cc4ff,#c6a8ff 60%,#f0b8e8);-webkit-background-clip:text;background-clip:text;color:transparent}
-  .ctas{display:flex;justify-content:center;gap:22px;margin-top:18px;font-size:1.06rem}
-  .ctas a{text-decoration:none;color:#2997ff;display:inline-flex;align-items:center;gap:4px;padding:8px 2px}
-  .ctas a.pill{background:#0071e3;color:#fff;border-radius:999px;padding:9px 20px;transition:transform var(--fast) var(--out),background var(--fast) ease}
-  .ctas a.pill:active{transform:scale(.97)}
-  @media (hover:hover) and (pointer:fine){.ctas a.pill:hover{background:#0077ed}.ctas a:not(.pill):hover{text-decoration:underline}}
-  .frame{position:absolute;left:50%;top:0;height:var(--fh);aspect-ratio:9/16;will-change:transform}
-  .frame .shot{position:absolute;inset:0;border-radius:18px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.6);background:#111}
-  .frame video,.frame img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-  .frame .photo{clip-path:inset(0 0 0 100%)}
-  .frame .seam{position:absolute;top:0;bottom:0;left:100%;width:2px;margin-left:-1px;background:rgba(255,255,255,.9);opacity:0}
-  .halo{position:absolute;inset:-6%;border-radius:40px;background:radial-gradient(55% 45% at 30% 30%,var(--blue),transparent 70%),radial-gradient(55% 50% at 70% 75%,var(--violet),transparent 70%);filter:blur(40px);opacity:.5;transition:opacity 1.2s var(--out)}
-  .frame.done .halo{opacity:.18}
-  .labels{position:absolute;inset:auto 0 -34px;display:flex;justify-content:space-between;font-size:.78rem;color:var(--mist);opacity:0}
-  .stats{position:absolute;inset:0;pointer-events:none}
-  .stat{position:absolute;opacity:0;will-change:transform,opacity;text-align:left}
-  .stat b{display:block;font-size:clamp(2.2rem,4.6vw,4rem);line-height:1;letter-spacing:-.03em;font-weight:700}
-  .stat span{color:var(--dim);font-size:clamp(.88rem,1.2vw,1.05rem)}
-  .note{position:absolute;bottom:3svh;left:0;right:0;text-align:center;font-size:.78rem;color:var(--mist);padding:0 16px;opacity:0}
+  /* ---------- 1. hero: the exhibit paints itself ---------- */
+  .hero{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:var(--s8);min-height:calc(100svh - 56px);padding:var(--s7) 0 var(--s8)}
+  .eyebrow{font:500 .82rem var(--mono);color:var(--graphite);letter-spacing:.02em}
+  .eyebrow code{font-size:1em;color:var(--accent)}
+  h1{font:800 clamp(3rem,6.2vw,6rem)/.96 var(--display);letter-spacing:-.045em;margin-top:var(--s5)}
+  h1 em,h2 em{font-style:normal;color:var(--accent)}
+  .lede{font-size:clamp(1.05rem,1.5vw,1.25rem);color:var(--graphite);max-width:34ch;margin-top:var(--s5)}
+  .actions{display:flex;flex-wrap:wrap;gap:var(--s3);margin-top:var(--s6)}
+  .art-col{--ah:min(74svh,780px);width:calc(var(--ah) * 9 / 16);display:grid;gap:var(--s4);justify-items:start}
+  .art{position:relative;height:var(--ah);aspect-ratio:9/16;background:var(--white);border-radius:2px;box-shadow:var(--hang)}
+  .art canvas{position:absolute;inset:0;width:100%;height:100%;border-radius:2px}
+  /* the product's edge glow, baked from its six Aurora tones: it breathes (7 s) and drifts round the loop (30 s), and goes out on Esc */
+  .glow{position:absolute;left:-30.56%;right:-30.56%;top:-17.19%;bottom:-17.19%;pointer-events:none;opacity:0;transition:opacity var(--normal) var(--in)}
+  .art.working .glow{opacity:1;transition:opacity var(--slow) var(--out)}
+  .glow>span{position:absolute;inset:0;animation:breath 7s ease-in-out infinite alternate}
+  .glow i{position:absolute;inset:0;background:url("media/glow-0.webp") center/100% 100% no-repeat}
+  .glow i+i{background-image:url("media/glow-1.webp");animation:lap 30s ease-in-out infinite alternate}
+  @keyframes breath{from{opacity:.62}to{opacity:1}}
+  @keyframes lap{from{opacity:0}to{opacity:1}}
+  .agent{position:absolute;left:0;top:0;z-index:2;pointer-events:none;will-change:transform;opacity:0;transition:opacity var(--normal) var(--out)}
+  .agent.on{opacity:1}
+  .desk .agent b{left:auto;right:6px}
+  .agent svg{width:22px;height:22px;display:block;filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.35))}
+  .agent b{position:absolute;left:18px;top:18px;font:500 .7rem var(--mono);background:var(--aurora);color:var(--ink);padding:2px 7px;border-radius:var(--r1);white-space:nowrap}
+  .pill{position:absolute;left:12px;top:12px;z-index:3;display:flex;align-items:center;gap:var(--s2);font:500 .74rem var(--mono);background:var(--ink);color:var(--paper);padding:5px 10px;border-radius:999px;opacity:0;transform:translateY(-4px);transition:opacity var(--normal) var(--out),transform var(--normal) var(--out)}
+  .pill.on{opacity:1;transform:none}
+  .pill i{width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  .pill.stopped i{background:var(--rose)}
+  .readout{display:flex;align-items:center;justify-content:space-between;gap:var(--s4);width:100%}
+  .count{font:400 .8rem var(--mono);color:var(--graphite);font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:var(--s2)}
+  .swatch{width:12px;height:12px;border-radius:3px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15);background:#0D0D08}
+  .stop{display:inline-flex;align-items:center;gap:var(--s2);height:40px;padding:0 var(--s3) 0 var(--s2);border-radius:var(--r2);border:1px solid var(--rule);background:var(--white);font-size:.86rem;font-weight:500;transition:transform var(--fast) var(--out)}
+  .stop:active{transform:scale(.97)}
+  .placard{font-size:.8rem;line-height:1.5;color:var(--graphite);border-left:2px solid var(--ink);padding-left:var(--s3)}
+  .placard b{display:block;color:var(--ink);font:700 .95rem var(--display)}
 
-  /* chapter: reads, then acts */
-  .work{height:420svh;background:var(--black)}
-  .work .pin{place-items:center}
-  .wtitle{position:absolute;top:calc(52px + 7svh);left:0;right:0;text-align:center;padding:0 16px}
-  .wtitle > div{position:absolute;left:0;right:0;padding:0 16px;will-change:transform,opacity}
-  h2{font-size:clamp(2.2rem,5.6vw,4.4rem);line-height:1.04;letter-spacing:-.03em;font-weight:700}
-  .wtitle p{color:var(--dim);font-size:clamp(1rem,1.6vw,1.25rem);max-width:34ch;margin:12px auto 0}
-  .dialog{position:absolute;top:calc(52px + 7svh + 10.5rem);width:min(560px,calc(100vw - 32px));border-radius:14px;background:#1d2129;border:1px solid #303744;box-shadow:0 40px 100px rgba(0,0,0,.7);will-change:transform,opacity}
-  .dtitle{display:flex;justify-content:space-between;align-items:center;height:40px;padding:0 14px;border-bottom:1px solid #303744;font-size:.86rem;color:#c9ced6}
-  .dtitle i{font-style:normal;color:var(--mist)}
-  .dbody{padding:30px 20px 20px;display:grid;gap:28px;font-size:.88rem;color:#c9ced6}
-  .frow{display:grid;grid-template-columns:110px 1fr;align-items:center;gap:12px}
-  .box{position:relative;height:34px;border-radius:7px;background:#12151b;border:1px solid #333b48;padding:6px 10px;font:500 .86rem var(--mono);color:var(--paper);transition:border-color var(--fast) ease}
-  .box.focus{border-color:var(--blue)}
-  .caret{display:inline-block;width:1px;height:1em;background:var(--paper);vertical-align:-2px;opacity:0}
-  .box.focus .caret{opacity:1;animation:blink 1s steps(1) infinite}
+  /* ---------- 2. the exhibit: painting against the photo ---------- */
+  .exhibit{padding:var(--s9) 0;border-top:1px solid var(--rule)}
+  .exhibit .wrap{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s8);align-items:center}
+  h2{font:800 clamp(2.2rem,4.4vw,4rem)/1 var(--display);letter-spacing:-.04em}
+  .sub{color:var(--graphite);font-size:clamp(1rem,1.4vw,1.15rem);max-width:38ch;margin-top:var(--s4)}
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:var(--s6) var(--s5);margin-top:var(--s7);max-width:460px}
+  .stats div{border-top:1px solid var(--ink);padding-top:var(--s3)}
+  .stats b{display:block;font:700 clamp(2.2rem,3.6vw,3rem)/1 var(--display);letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+  .stats span{font-size:.88rem;color:var(--graphite)}
+  .cmp{position:relative;height:min(80svh,820px);aspect-ratio:9/16;overflow:hidden;border-radius:2px;box-shadow:var(--hang);touch-action:pan-y;cursor:ew-resize;user-select:none;-webkit-user-select:none;background:var(--white)}
+  .cmp img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none}
+  .rv{position:absolute;inset:0;overflow:hidden;transform:translateX(100%)}
+  .rv img{transform:translateX(-100%)}
+  .handle{position:absolute;inset:0;transform:translateX(100%);pointer-events:none}
+  .handle::before{content:"";position:absolute;left:-1px;top:0;bottom:0;width:2px;background:var(--white)}
+  .handle span{position:absolute;left:-20px;top:50%;width:40px;height:40px;margin-top:-20px;border-radius:50%;background:var(--white);box-shadow:0 2px 10px rgba(0,0,0,.25);display:grid;place-items:center;font:500 .8rem var(--mono);color:var(--ink)}
+  .tags{position:absolute;inset:auto 12px 12px;display:flex;justify-content:space-between;pointer-events:none}
+  .tags span{font:500 .7rem var(--mono);background:rgba(27,24,19,.78);color:var(--paper);padding:3px 8px;border-radius:var(--r1)}
+  /* the one scroll-linked moment, run by the compositor where supported */
+  @supports (animation-timeline:view()){
+    html:not(.rm) .cmp{animation:hang linear both;animation-timeline:view();animation-range:entry 10% cover 45%}
+    @keyframes hang{from{transform:translateY(64px) scale(.94);opacity:.4}to{transform:none;opacity:1}}
+  }
+
+  /* ---------- 3. how: pinned, three beats, each a timed sequence ---------- */
+  .how{position:relative;height:300svh;border-top:1px solid var(--rule)}
+  .trig{position:absolute;left:0;right:0;height:100svh;pointer-events:none}
+  .how-pin{position:sticky;top:56px;height:calc(100svh - 56px);display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:var(--s8);align-items:center}
+  .beats{display:grid}
+  .beat{grid-area:1/1;opacity:0;transform:translateY(12px);transition:opacity var(--normal) var(--in),transform var(--normal) var(--in);pointer-events:none}
+  .beat.on{opacity:1;transform:none;transition:opacity var(--slow) var(--out) 80ms,transform var(--slow) var(--out) 80ms;pointer-events:auto}
+  .beat .n{font:500 .8rem var(--mono);color:var(--accent);margin-bottom:var(--s4)}
+  .try{display:inline-flex;align-items:center;gap:var(--s2);margin-top:var(--s5);font-size:.95rem;color:var(--ink)}
+  .dots{display:flex;gap:var(--s2);margin-top:var(--s7)}
+  .dots i{width:28px;height:3px;border-radius:2px;background:var(--rule);transition:background-color var(--normal) ease}
+  .dots i.on{background:var(--ink)}
+  .desk{position:relative;aspect-ratio:4/3;max-height:calc(100svh - 160px);border-radius:var(--r3);background:var(--desk);border:1px solid var(--rule);display:grid;place-items:center;overflow:hidden}
+  .desk::after{content:"";position:absolute;inset:0;border-radius:var(--r3);box-shadow:inset 0 0 0 1.5px rgba(124,206,255,.95),inset 0 0 56px 6px rgba(84,150,255,.42);opacity:0;transition:opacity var(--slow) var(--out);pointer-events:none}
+  .desk.working::after{opacity:1}
+  .desk .pill{left:50%;top:16px;transform:translate(-50%,-4px)}
+  .desk .pill.on{transform:translate(-50%,0)}
+  .win{width:min(440px,84%);background:var(--white);border-radius:var(--r2);box-shadow:var(--hang);font-size:.85rem;position:relative}
+  .win .bar{display:flex;justify-content:space-between;align-items:center;height:36px;padding:0 var(--s3);border-bottom:1px solid #E6E9EE;color:var(--graphite)}
+  .win .bar b{font-weight:500;color:var(--ink)}
+  .win .body{padding:40px var(--s5) var(--s4);display:grid;gap:var(--s6)}
+  .taskbar{position:absolute;left:0;right:0;bottom:0;height:40px;background:rgba(255,255,255,.55);border-top:1px solid rgba(27,24,19,.06);display:flex;justify-content:center;align-items:center;gap:var(--s2)}
+  .taskbar i{width:22px;height:22px;border-radius:6px;background:rgba(18,22,29,.12)}
+  .taskbar i.app{background:var(--white);box-shadow:inset 0 0 0 1px var(--rule),inset 0 -3px 0 -1px var(--aurora)}
+  .row{display:grid;grid-template-columns:96px 1fr;align-items:center;gap:var(--s3)}
+  .field{position:relative;height:32px;border:1px solid #C6CCD5;border-radius:6px;padding:0 10px;display:flex;align-items:center;font:400 .84rem var(--mono);transition:border-color var(--fast) ease}
+  .field.focus{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+  .caret{width:1px;height:1.05em;background:var(--ink);margin-left:1px;opacity:0}
+  .field.focus .caret{opacity:1;animation:blink 1s steps(1) infinite}
   @keyframes blink{50%{opacity:0}}
-  .crow{display:flex;align-items:center;gap:10px}
-  .cb{position:relative;width:18px;height:18px;border-radius:5px;border:1px solid #47505e;background:#12151b}
-  .brow{display:flex;justify-content:flex-end;gap:10px;padding-top:4px}
-  .b{position:relative;height:34px;padding:0 18px;border-radius:7px;display:grid;place-items:center;font-weight:600;background:#2a303b;color:#e4e7ec;transition:transform var(--fast) var(--out)}
-  .b.save{background:#0a6be0;color:#fff}
-  .b.pressed{transform:scale(.94)}
-  .tag{position:absolute;left:-2px;top:-2px;transform:translateY(-100%);font:600 .7rem var(--mono);color:#1a1404;background:#ffd36b;padding:2px 7px;border-radius:5px;white-space:nowrap;opacity:0;will-change:opacity,transform}
-  .ring{position:absolute;inset:-4px;border:1.5px dashed #ffd36b;border-radius:10px;opacity:0;pointer-events:none}
-  .toast{position:absolute;left:20px;bottom:-46px;color:var(--ok);font-size:.86rem;opacity:0}
-  .cursor{position:absolute;left:0;top:0;width:24px;height:24px;margin:-2px 0 0 -3px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.5));opacity:0;will-change:transform,opacity;z-index:2}
+  .check{display:flex;align-items:center;gap:10px}
+  .box{position:relative;width:16px;height:16px;border:1px solid #8E96A3;border-radius:4px}
+  .btns{display:flex;justify-content:flex-end;gap:var(--s2)}
+  .b{position:relative;height:32px;padding:0 var(--s4);border-radius:6px;display:grid;place-items:center;font-weight:500;background:#E9ECF0;transition:transform var(--fast) var(--out)}
+  .b.save{background:var(--ink);color:var(--paper)}
+  .b.down{transform:scale(.94)}
+  .tag{position:absolute;left:-1px;bottom:calc(100% + 6px);font:500 .68rem var(--mono);color:var(--paper);background:var(--ink);padding:2px 7px;border-radius:var(--r1);white-space:nowrap;opacity:0;transform:translateY(4px);transition:opacity var(--fast) var(--in),transform var(--fast) var(--in);pointer-events:none}
+  .tag::after{content:"";position:absolute;left:8px;top:100%;border:4px solid transparent;border-top-color:var(--ink)}
+  .ring{position:absolute;inset:-4px;border:1.5px dashed var(--accent);border-radius:8px;opacity:0;transition:opacity var(--fast) var(--in);pointer-events:none}
+  .reading .tag{opacity:1;transform:none;transition:opacity var(--normal) var(--out) calc(var(--i) * 140ms + 200ms),transform var(--normal) var(--out) calc(var(--i) * 140ms + 200ms)}
+  .reading .ring{opacity:1;transition:opacity var(--normal) var(--out) calc(var(--i) * 140ms + 200ms)}
+  .toast{position:absolute;left:50%;top:16px;font:500 .78rem var(--mono);background:var(--white);border:1px solid var(--rule);padding:6px 12px;border-radius:999px;opacity:0;transform:translate(-50%,6px);transition:opacity var(--normal) var(--out),transform var(--normal) var(--out)}
+  .toast.on{opacity:1;transform:translate(-50%,0)}
+  .keycap{position:absolute;right:20px;top:16px;width:88px;height:64px;border-radius:12px;border:1px solid #C6CCD5;border-bottom:5px solid #AAB2BE;background:var(--white);font:500 1.05rem var(--mono);display:grid;place-items:center;opacity:0;transform:translateY(8px);transition:opacity var(--normal) var(--out),transform var(--normal) var(--out),border-bottom-width var(--fast) var(--out)}
+  .keycap.on{opacity:1;transform:none}
+  .keycap.down{transform:translateY(4px);border-bottom-width:1px}
+  .keycap:disabled{cursor:default}
 
-  /* chapter: Esc */
-  .esc{height:260svh}
-  .esc .pin{place-items:center}
-  .edge{position:absolute;inset:0;pointer-events:none;opacity:0;box-shadow:inset 0 0 120px 30px rgba(106,168,255,.55),inset 0 0 260px 60px rgba(176,140,255,.35);will-change:opacity}
-  .dimmer{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none}
-  .ebar{position:absolute;top:calc(52px + 4svh);left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:12px;padding:10px 18px;border-radius:999px;background:rgba(24,28,35,.85);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid #333b48;white-space:nowrap}
-  .ebar .t{display:grid;line-height:1.2}
-  .ebar b{font-size:.9rem;color:#cfe0ff}
-  .ebar small{font:400 .76rem var(--mono);color:var(--mist)}
-  .ebar.stopped b{color:var(--stop)}
-  .ebar i{width:28px;height:28px;border-radius:50%;background:#2a313d;display:grid;place-items:center}
-  .ebar i::before{content:"";width:10px;height:10px;border-radius:2px;background:var(--paper)}
-  .ecopy{text-align:center;padding:0 16px;position:relative}
-  .key{width:clamp(96px,14vw,140px);height:clamp(72px,10vw,104px);margin:0 auto 34px;border-radius:18px;background:linear-gradient(#2a2f38,#1d2129);border:1px solid #3d4552;border-bottom:6px solid #0f1217;display:grid;place-items:center;font:700 clamp(1.3rem,2.4vw,1.9rem) var(--mono);color:var(--paper);transition:transform 90ms ease-out,border-bottom-width 90ms ease-out;box-shadow:0 20px 50px rgba(0,0,0,.5)}
-  .key.down{transform:translateY(5px);border-bottom-width:1px}
-  .ecopy p{color:var(--dim);font-size:clamp(1rem,1.6vw,1.25rem);max-width:36ch;margin:14px auto 0}
-
-  /* install */
-  .install{padding:18svh 0 14svh;background:var(--black)}
-  .wrap{width:min(1000px,calc(100% - 32px));margin:0 auto}
-  .install h2{text-align:center}
-  .install .lead{text-align:center;color:var(--dim);font-size:clamp(1rem,1.6vw,1.25rem);margin-top:12px}
-  .cards{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:52px}
-  .card{background:#101318;border:1px solid #20252d;border-radius:20px;padding:28px}
-  .card h3{font-size:1.25rem;letter-spacing:-.015em}
-  .card p{color:var(--mist);font-size:.92rem;margin-top:6px}
-  .code{position:relative;margin-top:16px;background:#06080b;border:1px solid #1f242c;border-radius:12px}
-  .code pre{font:500 .84rem/1.6 var(--mono);padding:14px 96px 14px 16px;white-space:pre-wrap;word-break:break-word;color:#e3e7ec}
-  .copy{position:absolute;top:8px;right:8px;height:34px;min-width:74px;border-radius:8px;border:1px solid #2a3039;background:#171b22;color:var(--paper);font:600 .8rem var(--ui);cursor:pointer;display:grid;place-items:center;transition:transform var(--fast) var(--out)}
+  /* ---------- 4. install ---------- */
+  .install{padding:var(--s10) 0 var(--s9);border-top:1px solid var(--rule)}
+  .install h2{max-width:14ch}
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:var(--s4);margin-top:var(--s7)}
+  .card{background:var(--white);border:1px solid var(--rule);border-radius:var(--r3);padding:var(--s6)}
+  .card h3{font:700 1.35rem/1.2 var(--display);letter-spacing:-.02em}
+  .card p{color:var(--graphite);font-size:.92rem;margin-top:var(--s2)}
+  .code{position:relative;margin-top:var(--s4);background:var(--ink);border-radius:var(--r2)}
+  .code pre{font:400 .82rem/1.6 var(--mono);padding:14px 92px 14px 16px;white-space:pre-wrap;word-break:break-word;color:#EEF1F5}
+  .copy{position:absolute;top:8px;right:8px;height:34px;min-width:72px;border-radius:8px;border:1px solid #2C3442;background:#1C222C;color:#EEF1F5;font:500 .8rem var(--ui);display:grid;place-items:center;transition:transform var(--fast) var(--out)}
   .copy:active{transform:scale(.96)}
-  .copy span{grid-area:1/1;transition:opacity var(--normal) var(--out),transform var(--normal) var(--out),filter var(--normal) var(--out)}
-  .copy .done{opacity:0;transform:scale(.9);filter:blur(2px);color:var(--ok)}
-  .copy.copied .idle{opacity:0;filter:blur(2px)}
-  .copy.copied .done{opacity:1;transform:none;filter:none}
-  .tabs{display:inline-flex;gap:4px;margin-top:16px;padding:4px;border-radius:999px;background:#06080b;border:1px solid #1f242c}
-  .tabs button{height:34px;padding:0 14px;border-radius:999px;border:0;background:transparent;color:var(--mist);font:600 .84rem var(--ui);cursor:pointer;transition:background var(--fast) ease,color var(--fast) ease}
-  .tabs button[aria-selected="true"]{background:#1c2129;color:var(--paper)}
-  .then{text-align:center;color:var(--mist);margin-top:34px;font-size:.95rem}
-  .then code{color:var(--paper)}
-  footer{border-top:1px solid #1d2128;padding:26px 0 40px;color:var(--mist);font-size:.82rem}
-  footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 18px}
+  .copy span{grid-area:1/1;transition:opacity var(--normal) var(--out),transform var(--normal) var(--out)}
+  .copy .done{opacity:0;transform:scale(.9)}
+  .copy.copied .idle{opacity:0}
+  .copy.copied .done{opacity:1;transform:none}
+  .os{display:inline-flex;gap:var(--s1);margin-top:var(--s4);padding:var(--s1);border-radius:999px;background:#EDF0F3;border:1px solid var(--rule)}
+  .os button{height:36px;padding:0 var(--s4);border-radius:999px;border:0;background:transparent;color:var(--graphite);font-weight:500;font-size:.86rem;transition:background-color var(--fast) ease,color var(--fast) ease}
+  .os button[aria-selected="true"]{background:var(--white);color:var(--ink);box-shadow:0 0 0 1px var(--rule)}
+  .then{color:var(--graphite);margin-top:var(--s6);font-size:.95rem}
+  .then code{color:var(--ink)}
+  footer{border-top:1px solid var(--rule);padding:var(--s5) 0 var(--s7);color:var(--graphite);font-size:.82rem}
+  footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:var(--s2) var(--s5)}
   footer a{display:inline-block;padding:12px 0}
 
-  /* reduced motion: no pinning or scrubbing, every chapter shown in its finished state */
-  .still .hero .pin,.still .work .pin,.still .esc .pin{display:flex;flex-direction:column;align-items:center;gap:36px}
-  .still .htext,.still .frame,.still .note,.still .stats,.still .stat,.still .wtitle,.still .wtitle>div,.still .dialog,.still .ebar{position:relative!important;inset:auto!important;top:auto!important;left:auto!important;right:auto!important;transform:none!important;opacity:1!important}
-  .still .frame{height:70svh;--fh:70svh}
-  .still .stats{display:flex;flex-wrap:wrap;justify-content:center;gap:28px 44px}
-  .still .stat{text-align:center!important}
-  .still .labels{opacity:1;position:relative;inset:auto;margin-top:10px}
-  .still .wtitle{display:grid;gap:28px}
-  @media (max-width:760px){
+  @media (max-width:900px){
+    .hero{grid-template-columns:1fr;gap:var(--s7);min-height:0;padding-top:var(--s6)}
+    .art-col{--ah:min(64svh,620px);justify-self:center}
+    .exhibit .wrap{grid-template-columns:1fr}
+    .cmp{height:min(72svh,640px);justify-self:center}
+    .how-pin{grid-template-columns:1fr;gap:var(--s5);align-content:center}
+    .desk{aspect-ratio:1/1;max-height:52svh;width:100%;justify-self:center}
+    .dots{margin-top:var(--s5)}
     .cards{grid-template-columns:1fr}
-    .frow{grid-template-columns:1fr;gap:6px}
-    .dialog{top:calc(52px + 7svh + 9rem)}
+    .top nav a:not(.cta){display:none}
   }
-  @media (prefers-reduced-motion:reduce){.box.focus .caret{animation:none}}
+  @media (max-width:420px){.row{grid-template-columns:1fr;gap:var(--s1)}.win .body{gap:var(--s4);padding:var(--s4)}.keycap{width:72px;height:54px;right:12px;bottom:12px}}
+  /* reduced motion: movement becomes an instant change, the feedback stays */
+  .rm *,.rm *::before,.rm *::after{transition-duration:1ms!important;transition-delay:0ms!important;animation:none!important}
 </style>
 </head>
 <body>
 <a class="skip" href="#install">Skip to install</a>
 <header class="top">
-  <a class="brand" href="./">Antigravity Computer Use</a>
-  <nav aria-label="Primary"><a href="#install">Install</a><a href="https://github.com/shayann07/antigravity-computer-use">GitHub</a></nav>
+  <div class="wrap">
+    <a class="brand" href="./"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 2l15.5 9.2-6.8 1.6-3.6 6.4z"/></svg>Antigravity Computer Use</a>
+    <nav aria-label="Primary"><a href="#how">How it works</a><a href="https://github.com/shayann07/antigravity-computer-use">GitHub</a><a class="cta" href="#install">Install</a></nav>
+  </div>
 </header>
 
 <main>
-  <!-- 1. The real run -->
-  <section class="ch hero" id="top" data-ch="hero">
-    <div class="pin">
-      <div class="htext" id="htext">
-        <p class="eyebrow">Antigravity Computer Use</p>
-        <h1>Give your agent <span class="grad">hands.</span></h1>
-        <div class="ctas"><a class="pill" href="#install">Install</a><a href="#work">See how it works &rsaquo;</a></div>
+  <!-- 1. hero: the real stroke plan, replayed live -->
+  <section class="wrap hero" aria-labelledby="h1">
+    <div>
+      <p class="eyebrow">The <code>/computer-use</code> skill for Google Antigravity</p>
+      <h1 id="h1">2,553 mouse strokes. <em>No&nbsp;hands.</em></h1>
+      <p class="lede">Your agent sees the screen and works real Windows and macOS apps with your mouse and keyboard. You can stop it the moment you want to.</p>
+      <div class="actions"><a class="btn primary" href="#install">Install, free</a><a class="btn quiet" href="#how">How it works</a></div>
+    </div>
+    <div class="art-col">
+      <div class="art" id="art">
+        <span class="glow" aria-hidden="true"><span><i></i><i></i></span></span>
+        <canvas id="paint" role="img" aria-label="A portrait being painted stroke by stroke, replaying the real stroke plan from the Microsoft Paint run"></canvas>
+        <span class="pill" id="pill"><i></i><span id="pillText">Antigravity is working</span></span>
+        <span class="agent" id="agent" aria-hidden="true"><svg viewBox="0 0 24 24"><defs><linearGradient id="pf1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FAFBFC"/><stop offset="1" stop-color="#82AFC9"/></linearGradient></defs><path d="M4 2l15.5 9.2-6.8 1.6-3.6 6.4z" fill="url(#pf1)" stroke="#1B2735" stroke-width="1.4" stroke-linejoin="round"/></svg><b>Antigravity</b></span>
       </div>
-      <figure class="frame" id="frame">
-        <div class="halo" aria-hidden="true"></div>
-        <div class="shot">
-          <video id="film" src="media/hero.mp4" poster="media/hero-first.jpg" muted playsinline preload="auto" aria-label="The real run: the portrait being painted in Microsoft Paint, 400 times faster"></video>
-          <img class="photo" id="photo" src="media/photo.jpg" alt="The original photo, revealed over the painting" width="648" height="1152">
-          <span class="seam" id="seam" aria-hidden="true"></span>
-        </div>
-        <figcaption class="labels" id="labels"><span>Painted in Paint</span><span>Original photo</span></figcaption>
-      </figure>
-      <div class="stats" id="stats">
-        <div class="stat"><b>1</b><span>prompt</span></div>
-        <div class="stat"><b>2,553</b><span>real mouse strokes</span></div>
-        <div class="stat"><b>40</b><span>exact colours</span></div>
-        <div class="stat"><b>65 min</b><span>unattended</span></div>
+      <div class="readout">
+        <span class="count" aria-hidden="true"><span class="swatch" id="swatch"></span><span id="count">Stroke 0 / 2,553</span></span>
+        <button class="stop" id="stop" type="button"><kbd>Esc</kbd><span id="stopText">Stop it</span></button>
       </div>
-      <p class="note" id="note">Gemini 4 Hydrogen in Microsoft Paint, following a stroke plan scripted from the photo. The real recording, cropped to the canvas, about 400&times; faster.</p>
+      <p class="placard"><b>Portrait, 2026.</b> Microsoft Paint. Painted by Gemini 4 Hydrogen in Antigravity, following a stroke plan scripted from the photo. Replayed here from that plan, about 280&times; faster.</p>
+      <p class="sr" id="live" aria-live="polite"></p>
     </div>
   </section>
 
-  <!-- 2. Reads the app, then uses it -->
-  <section class="ch work" id="work" data-ch="work">
-    <div class="pin">
-      <div class="wtitle" aria-live="off">
-        <div id="wa"><h2>It reads the app first.</h2><p>Every button and field has a role and a name. It reads those before it looks at pixels.</p></div>
-        <div id="wb"><h2>Then it uses it. For real.</h2><p>Your mouse, your keyboard, only in apps you approve.</p></div>
-      </div>
-      <div class="dialog" id="dialog" aria-hidden="true">
-        <div class="dtitle"><span>Save as</span><i>Paint</i></div>
-        <div class="dbody">
-          <div class="frow"><span>File name</span><div class="box" id="name"><span id="typed"></span><span class="caret"></span><span class="ring"></span><span class="tag">Edit "File name"</span></div></div>
-          <div class="frow"><span>Save as type</span><div class="box">PNG (*.png)<span class="ring"></span><span class="tag">ComboBox "Save as type"</span></div></div>
-          <div class="crow"><div class="cb"><span class="ring"></span><span class="tag">CheckBox "Open after saving"</span></div><span>Open after saving</span></div>
-          <div class="brow"><div class="b">Cancel</div><div class="b save" id="save">Save<span class="ring"></span><span class="tag">Button "Save"</span></div></div>
-        </div>
-        <span class="toast" id="toast">Saved portrait.png</span>
-        <svg class="cursor" id="cursor" viewBox="0 0 24 24"><path d="M4 2l15.5 9.2-6.8 1.6-3.6 6.4z" fill="#fff" stroke="#000" stroke-width="1.6" stroke-linejoin="round"/></svg>
-      </div>
-    </div>
-  </section>
-
-  <!-- 3. Esc -->
-  <section class="ch esc" id="esc" data-ch="esc">
-    <div class="pin">
-      <div class="edge" id="edge" aria-hidden="true"></div>
-      <div class="ebar" id="ebar" aria-hidden="true"><span class="t"><b id="ebt">Antigravity is working</b><small id="ebl">Typing</small></span><i></i></div>
-      <div class="ecopy">
-        <div class="key" id="key" aria-hidden="true">Esc</div>
-        <h2>Esc stops it at once.</h2>
-        <p>Wherever you are. It lets go of every key and button, and the next task starts fresh.</p>
-      </div>
-      <div class="dimmer" id="dimmer" aria-hidden="true"></div>
-    </div>
-  </section>
-
-  <!-- 4. Install -->
-  <section class="install" id="install">
+  <!-- 2. the exhibit -->
+  <section class="exhibit" aria-labelledby="h2a">
     <div class="wrap">
-      <h2>Ready when you are.</h2>
-      <p class="lead">Free and open source, for Windows and macOS.</p>
+      <div>
+        <h2 id="h2a">Every stroke was a <em>real drag.</em></h2>
+        <p class="sub">The finished painting from that run, next to the photo it came from. Drag across it to compare.</p>
+        <div class="stats" id="stats">
+          <div><b data-to="1">1</b><span>prompt</span></div>
+          <div><b data-to="2553">2,553</b><span>real mouse strokes</span></div>
+          <div><b data-to="40">40</b><span>exact colours, typed in</span></div>
+          <div><b data-to="65" data-unit=" min">65 min</b><span>unattended</span></div>
+        </div>
+      </div>
+      <div class="cmp" id="cmp" role="slider" tabindex="0" aria-label="Compare the painting with the original photo" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="Photo hidden">
+        <img src="media/painting.jpg" alt="" width="648" height="1152" decoding="async">
+        <div class="rv" id="rv"><img id="rvImg" src="media/photo.jpg" alt="" width="648" height="1152" decoding="async"></div>
+        <div class="handle" id="handle"><span>&harr;</span></div>
+        <div class="tags" aria-hidden="true"><span>Painted in Paint</span><span>The photo</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. how it works: three beats -->
+  <section class="how" id="how" aria-label="How it works">
+    <div class="trig" style="top:0" data-b="0"></div>
+    <div class="trig" style="top:100svh" data-b="1"></div>
+    <div class="trig" style="top:200svh" data-b="2"></div>
+    <div class="wrap how-pin">
+      <div>
+        <div class="beats">
+          <div class="beat on" data-b="0"><p class="n">01 &mdash; Read</p><h2>It reads the app <em>first.</em></h2><p class="sub">Every button and field has a role and a name. It reads those before it looks at pixels, so it clicks the right thing.</p></div>
+          <div class="beat" data-b="1"><p class="n">02 &mdash; Act</p><h2>Then it uses it. <em>For real.</em></h2><p class="sub">Your mouse, your keyboard, only in the apps you approve.</p></div>
+          <div class="beat" data-b="2"><p class="n">03 &mdash; Stop</p><h2>Esc stops it <em>at once.</em></h2><p class="sub">Wherever you are. It lets go of every key and button, and the next task starts fresh.</p><p class="try" id="try">Try it now: press <kbd>Esc</kbd></p></div>
+        </div>
+        <div class="dots" aria-hidden="true"><i class="on"></i><i></i><i></i></div>
+      </div>
+      <div class="desk" id="desk" aria-hidden="true">
+        <span class="pill" id="dpill"><i></i><span id="dpillText">Antigravity is working</span></span>
+        <div class="win" id="win">
+          <div class="bar"><b>Save as</b><span>Paint</span></div>
+          <div class="body">
+            <div class="row"><span>File name</span><div class="field" id="field"><span id="typed"></span><span class="caret"></span><span class="ring" style="--i:0"></span><span class="tag" style="--i:0">Edit &ldquo;File name&rdquo;</span></div></div>
+            <div class="row"><span>Save as type</span><div class="field">PNG (*.png)<span class="ring" style="--i:1"></span><span class="tag" style="--i:1">ComboBox &ldquo;Save as type&rdquo;</span></div></div>
+            <div class="check"><div class="box"><span class="ring" style="--i:2"></span><span class="tag" style="--i:2">CheckBox &ldquo;Open after saving&rdquo;</span></div><span>Open after saving</span></div>
+            <div class="btns"><div class="b">Cancel</div><div class="b save" id="save">Save<span class="ring" style="--i:3"></span><span class="tag" style="--i:3">Button &ldquo;Save&rdquo;</span></div></div>
+          </div>
+        </div>
+        <div class="taskbar"><i></i><i class="app"></i><i></i><i></i></div>
+        <span class="toast" id="toast">Saved portrait.png</span>
+        <span class="agent" id="dagent"><svg viewBox="0 0 24 24"><defs><linearGradient id="pf2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FAFBFC"/><stop offset="1" stop-color="#82AFC9"/></linearGradient></defs><path d="M4 2l15.5 9.2-6.8 1.6-3.6 6.4z" fill="url(#pf2)" stroke="#1B2735" stroke-width="1.4" stroke-linejoin="round"/></svg><b>Antigravity</b></span>
+        <button class="keycap" id="keycap" type="button" tabindex="-1">Esc</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. install -->
+  <section class="install" id="install" aria-labelledby="h2i">
+    <div class="wrap">
+      <h2 id="h2i">Ready when <em>you are.</em></h2>
+      <p class="sub">Free and open source, for Windows and macOS.</p>
       <div class="cards">
         <div class="card">
           <h3>Ask your agent</h3>
@@ -244,7 +327,7 @@
         <div class="card">
           <h3>Or run one line</h3>
           <p>It checks the release's SHA-256 before installing anything.</p>
-          <div class="tabs" role="tablist" aria-label="Operating system">
+          <div class="os" role="tablist" aria-label="Operating system">
             <button role="tab" id="tab-win" aria-controls="os-win" aria-selected="true">Windows</button>
             <button role="tab" id="tab-mac" aria-controls="os-mac" aria-selected="false" tabindex="-1">macOS</button>
           </div>
@@ -264,148 +347,7 @@
   </div>
 </footer>
 
-<script>
-(() => {
-  const $ = id => document.getElementById(id);
-  const still = document.documentElement.classList.contains('still');
-  const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
-  const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;     // in-out cubic
-  const span = (p, a, b) => ease(clamp((p - a) / (b - a)));                          // 0..1 inside [a,b]
-  const mix = (a, b, t) => a + (b - a) * t;
-
-  /* ---------- 1. hero: the real recording, then the reveal ---------- */
-  const film = $('film'), frame = $('frame'), htext = $('htext'), photo = $('photo'), seam = $('seam');
-  const labels = $('labels'), note = $('note'), stats = [...document.querySelectorAll('.stat')];
-  let filmDone = false;
-  film.addEventListener('ended', () => { filmDone = true; frame.classList.add('done'); });
-  if (still) { film.removeAttribute('autoplay'); film.poster = 'media/hero-last.jpg'; frame.classList.add('done'); }
-  else film.play().catch(() => {});
-
-  function heroLayout() {
-    const vw = document.documentElement.clientWidth, vh = innerHeight, narrow = vw < 760;
-    const textBottom = htext.getBoundingClientRect().height + 52 + vh * .05 + 16;
-    const startH = Math.max(220, vh - textBottom - 24);                 // fits under the headline
-    const endH = narrow ? vh * .56 : Math.min(vh * .84, 820);           // centred, larger
-    frame.style.setProperty('--fh', endH + 'px');
-    return {vw, vh, narrow, startScale: startH / endH, startY: textBottom, endY: narrow ? 52 + vh * .06 : (vh - endH) / 2 + 10, endH};
-  }
-  let L = heroLayout();
-  addEventListener('resize', () => { L = heroLayout(); render(); });
-
-  function hero(p) {
-    // headline lifts away
-    const t1 = span(p, .04, .26);
-    htext.style.opacity = 1 - t1;
-    htext.style.transform = `translateY(${-50 * t1}px) scale(${1 - .04 * t1})`;
-    // the frame rises to the centre and grows
-    const t2 = span(p, .06, .32);
-    const s = mix(L.startScale, 1, t2), y = mix(L.startY, L.endY, t2);
-    frame.style.transform = `translate(-50%, ${y}px) scale(${s})`;
-    frame.style.transformOrigin = '50% 0';
-    // the finished painting holds, then the photo wipes in to half
-    if (p > .28 && !filmDone && film.duration) { film.pause(); film.currentTime = film.duration; filmDone = true; frame.classList.add('done'); }
-    const t3 = span(p, .36, .58), cut = mix(100, 50, t3);
-    photo.style.clipPath = `inset(0 0 0 ${cut}%)`;
-    seam.style.left = cut + '%'; seam.style.opacity = t3 > 0 && t3 < 1 ? 1 : t3 >= 1 ? .9 : 0;
-    labels.style.opacity = span(p, .5, .6);
-    // the numbers arrive, one at a time, beside the frame (below it on phones)
-    const fw = L.endH * 9 / 16, left = L.vw / 2 - fw / 2, right = L.vw / 2 + fw / 2;
-    stats.forEach((el, i) => {
-      const t = span(p, .58 + i * .06, .7 + i * .06);
-      el.style.opacity = t;
-      if (L.narrow) {
-        const col = i % 2, row = i >> 1, top = L.endY + L.endH + 34 + row * 74;
-        el.style.left = (col ? L.vw / 2 + 8 : 16) + 'px'; el.style.top = top + 'px'; el.style.right = 'auto';
-      } else {
-        const side = i % 2 ? right + 56 : left - 56, top = L.endY + L.endH * (.18 + (i >> 1) * .42);
-        el.style.top = top + 'px';
-        if (i % 2) { el.style.left = side + 'px'; el.style.right = 'auto'; el.style.textAlign = 'left'; }
-        else { el.style.right = (L.vw - side) + 'px'; el.style.left = 'auto'; el.style.textAlign = 'right'; }
-      }
-      el.style.transform = `translateY(${(1 - t) * 24}px)`;
-    });
-    note.style.opacity = span(p, .82, .92);
-  }
-
-  /* ---------- 2. reads the app, then uses it ---------- */
-  const dialog = $('dialog'), wa = $('wa'), wb = $('wb'), cursor = $('cursor'), name = $('name'), typed = $('typed'), save = $('save'), toast = $('toast');
-  const tags = [...dialog.querySelectorAll('.tag')], rings = [...dialog.querySelectorAll('.ring')];
-  const word = 'portrait.png';
-  const pointIn = el => { const d = dialog.getBoundingClientRect(), r = el.getBoundingClientRect(); return [r.left - d.left + r.width * .35, r.top - d.top + r.height * .6]; };
-  function work(p) {
-    const tin = span(p, 0, .1);
-    dialog.style.opacity = tin;
-    dialog.style.transform = `translateY(${(1 - tin) * 60}px) scale(${mix(.94, 1, tin)})`;
-    const ta = 1 - span(p, .42, .48), tb = span(p, .48, .54);
-    wa.style.opacity = ta; wa.style.transform = `translateY(${(1 - ta) * -16}px)`;
-    wb.style.opacity = tb; wb.style.transform = `translateY(${(1 - tb) * 16}px)`;
-    // the tree: labels appear one by one, then step back
-    const fade = 1 - span(p, .44, .5);
-    tags.forEach((el, i) => {
-      const t = span(p, .1 + i * .07, .16 + i * .07) * fade;
-      el.style.opacity = t; el.style.transform = `translateY(-100%) translateY(${(1 - t) * 6}px)`;
-      rings[i].style.opacity = t;
-    });
-    // the act: move to the field, type, move to Save, press
-    const start = [dialog.clientWidth * .5, dialog.clientHeight + 40];
-    const a = pointIn(name), b = pointIn(save);
-    let x = start[0], y = start[1];
-    const m1 = span(p, .54, .62), m2 = span(p, .8, .88);
-    x = mix(mix(start[0], a[0], m1), b[0], m2); y = mix(mix(start[1], a[1], m1), b[1], m2);
-    cursor.style.opacity = span(p, .52, .56);
-    cursor.style.transform = `translate(${x}px,${y}px)`;
-    name.classList.toggle('focus', p > .62 && p < .88);
-    const n = Math.round(clamp((p - .63) / .15) * word.length);
-    if (typed.textContent.length !== n) typed.textContent = word.slice(0, n);
-    save.classList.toggle('pressed', p > .89 && p < .91);
-    toast.style.opacity = span(p, .91, .95);
-  }
-
-  /* ---------- 3. Esc ---------- */
-  const edge = $('edge'), ebar = $('ebar'), ebt = $('ebt'), ebl = $('ebl'), key = $('key'), dimmer = $('dimmer');
-  let stopped = null;
-  function esc(p) {
-    const press = p >= .55;
-    edge.style.opacity = press ? 0 : span(p, .05, .35);
-    edge.style.transition = press ? 'opacity 500ms var(--out)' : 'none';
-    key.classList.toggle('down', p >= .55 && p < .6);
-    dimmer.style.opacity = press ? mix(.0, .35, span(p, .55, .62)) : 0;
-    if (press !== stopped) {
-      stopped = press;
-      ebar.classList.toggle('stopped', press);
-      ebt.textContent = press ? 'Stopped' : 'Antigravity is working';
-      ebl.textContent = press ? 'You pressed Esc' : 'Typing';
-    }
-  }
-
-  /* ---------- the scroll engine: one rAF, writes transforms directly ---------- */
-  const chapters = [...document.querySelectorAll('[data-ch]')].map(el => ({el, fn: {hero, work, esc}[el.dataset.ch]}));
-  function render() {
-    for (const c of chapters) {
-      if (still) { c.fn(c.el.dataset.ch === 'esc' ? 1 : c.el.dataset.ch === 'work' ? 1 : 1); continue; }
-      const r = c.el.getBoundingClientRect(), len = r.height - innerHeight;
-      if (r.bottom < -innerHeight || r.top > innerHeight * 2) continue;
-      c.fn(clamp(-r.top / len));
-    }
-  }
-  let queued = false;
-  addEventListener('scroll', () => { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; render(); }); } }, {passive: true});
-  if (still) { frame.style.position = 'relative'; }
-  render();
-
-  /* ---------- install: OS tabs and copy ---------- */
-  const tabs = [...document.querySelectorAll('[role=tab]')];
-  const select = tab => tabs.forEach(t => { const on = t === tab; t.setAttribute('aria-selected', on); t.tabIndex = on ? 0 : -1; $(t.getAttribute('aria-controls')).hidden = !on; });
-  tabs.forEach((t, i) => {
-    t.addEventListener('click', () => select(t));
-    t.addEventListener('keydown', e => { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { const n = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]; select(n); n.focus(); } });
-  });
-  if (/Mac/i.test(navigator.platform || navigator.userAgent)) select($('tab-mac'));
-  document.querySelectorAll('.copy').forEach(b => b.addEventListener('click', async () => {
-    try { await navigator.clipboard.writeText($(b.dataset.copy).textContent); } catch { return; }
-    b.classList.add('copied'); setTimeout(() => b.classList.remove('copied'), 1600);
-  }));
-})();
-</script>
+<script src="plan.js" defer></script>
+<script src="app.js" defer></script>
 </body>
 </html>
