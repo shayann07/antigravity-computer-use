@@ -159,7 +159,8 @@ enum MacTier {
         }
     }
     static func frontmostKey() -> String? {
-        guard let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier,
+        let pid = macFrontmostPid()
+        guard pid > 0,
               let identity = try? macIdentity(pid) else { return nil }
         return identity["key"] as? String
     }
@@ -251,7 +252,7 @@ enum MacFence {
         // Checked again at dispatch (dispatched() re-runs check()).
         try MacTier.check(operation, current, appKey: targetKey, clickGrants: state.clickGrants, frontmostKey: MacTier.frontmostKey)
         if current["hwnd"] != nil {
-            if keyboardPID != 0 && NSWorkspace.shared.frontmostApplication?.processIdentifier != keyboardPID {
+            if keyboardPID != 0 && macFrontmostPid() != keyboardPID {
                 throw AxonError("focus_changed", "Keyboard focus left the approved application. No further input was sent.")
             }
             if keyboardPID != 0, let window=keyboardWindow {
