@@ -60,7 +60,7 @@
   /* on a mouse, your pointer is the same arrow the agent uses */
   @media (hover:hover) and (pointer:fine){
     html{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23FAFBFC'/%3E%3Cstop offset='1' stop-color='%2382AFC9'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M4 2l15.5 9.2-6.8 1.6-3.6 6.4z' fill='url(%23g)' stroke='%231B2735' stroke-width='1.4' stroke-linejoin='round'/%3E%3C/svg%3E") 4 2,auto}
-    a,button,summary,label,.cmp,.cmp.done,pre{cursor:inherit}
+    a,button,summary,label,.cmp,.cmp.comparing,pre{cursor:inherit}
   }
   img{display:block;max-width:100%}
   button{font:inherit;color:inherit;cursor:pointer}
@@ -166,8 +166,14 @@
   .cmp{position:relative;height:min(calc(100svh - 120px),820px);aspect-ratio:9/16;overflow:hidden;border-radius:var(--r3);box-shadow:var(--hang);touch-action:pan-y;cursor:ew-resize;user-select:none;-webkit-user-select:none;background:var(--white)}
   .cmp img,.cmp canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none}
   .cmp .rv,.cmp .handle,.cmp .tags{opacity:0;transition:opacity var(--normal) var(--in)}
-  .cmp.done .rv,.cmp.done .handle,.cmp.done .tags{opacity:1;transition:opacity var(--slow) var(--out)}
-  .cmp:not(.done){cursor:default}
+  .cmp.comparing .rv,.cmp.comparing .handle,.cmp.comparing .tags{opacity:1;transition:opacity var(--slow) var(--out)}
+  .cmp:not(.comparing){cursor:default}
+  /* the comparison opens on request, never in the middle of a scroll (revealing it mid-scroll caused hitches) */
+  .cmpwrap{position:relative;justify-self:center}
+  .cmpbtn{position:absolute;left:50%;bottom:20px;z-index:4;display:inline-flex;align-items:center;gap:var(--s2);height:44px;padding:0 var(--s4);border:0;border-radius:999px;background:rgba(248,249,251,.95);color:var(--ink);font:600 .88rem var(--ui);box-shadow:0 0 0 1px rgba(18,22,29,.12),0 2px 6px rgba(18,22,29,.28);opacity:0;transform:translate(-50%,8px);pointer-events:none;transition:opacity var(--normal) var(--in),transform var(--normal) var(--in)}
+  .cmpbtn.on{opacity:1;transform:translate(-50%,0);pointer-events:auto;transition:opacity var(--slow) var(--out),transform var(--slow) var(--out)}
+  .cmpbtn:active{transform:translate(-50%,0) scale(.97)}
+  .cmpbtn svg{width:16px;height:16px}
   .rv{position:absolute;inset:0;overflow:hidden;transform:translateX(100%);will-change:transform}
   .rv img{transform:translateX(-100%);will-change:transform}
   /* the handle is a zero-width layer moved in pixels: no full-size layer, no blurred shadows to re-raster */
@@ -347,7 +353,7 @@
     <div class="wrap ex-pin">
       <div>
         <h2 class="cut" id="h2a"><span>Every stroke was a <em>real drag.</em></span></h2>
-        <p class="sub">Scroll to replay the run stroke by stroke. When it's finished, drag across it to compare with the photo.</p>
+        <p class="sub">Scroll to replay the run stroke by stroke. When it's finished, compare it with the photo.</p>
         <p class="scrubhint" aria-hidden="true"><i><b id="scrubBar"></b></i><span id="scrubText">Stroke 0</span></p>
         <div class="stats" id="stats">
           <div><b data-to="1">1</b><span>prompt</span></div>
@@ -356,11 +362,14 @@
           <div><b data-to="65" data-unit=" min">65 min</b><span>unattended</span></div>
         </div>
       </div>
+      <div class="cmpwrap">
       <div class="cmp" id="cmp" data-tilt role="slider" tabindex="0" aria-label="Compare the painting with the original photo" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="Photo hidden" aria-disabled="true">
         <canvas id="scrub" role="img" aria-label="The painting, redrawn stroke by stroke as you scroll"></canvas>
         <div class="rv" id="rv"><img id="rvImg" src="media/photo.jpg" alt="" width="648" height="1152" decoding="async"></div>
         <div class="handle" id="handle"><span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4.5L2.5 8 6 11.5M10 4.5L13.5 8 10 11.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
         <div class="tags" aria-hidden="true"><span>Painted in Paint</span><span>The photo</span></div>
+      </div>
+      <button class="cmpbtn" id="cmpbtn" type="button" tabindex="-1"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4.5L2.5 8 6 11.5M10 4.5L13.5 8 10 11.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Compare with the photo</button>
       </div>
     </div>
   </section>

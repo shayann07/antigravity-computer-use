@@ -146,7 +146,7 @@
     // cross-fades two neighbouring frames, so no brush stroke is drawn during a scroll
     // (live strokes there stalled the GPU and showed as scroll hitches).
     const FRAMES = 24;
-    let ctx, cssW = 0, cmpW = 0, frames = [], gen = 0, want = -1, shown = '', top = 0, len = 1, x = 100, touched = false, swept = false, sweeping = 0, rect = null, ready = false;
+    let ctx, cssW = 0, cmpW = 0, frames = [], gen = 0, want = -1, shown = '', top = 0, len = 1, x = 100, touched = false, sweeping = 0, rect = null, ready = false;
     const strokesAt = k => Math.round(k / FRAMES * STROKES.length);
     const idle = window.requestIdleCallback ? fn => requestIdleCallback(fn, {timeout: 300}) : fn => setTimeout(() => fn({timeRemaining: () => 10}), 30);
     function build() {
@@ -211,22 +211,26 @@
       text.textContent = want < 0 ? 'Scroll to paint' : want === 0 ? 'Bucket fill' : `Stroke ${fmt(want)} / ${fmt(STROKES.length)}`;
       const done = want === STROKES.length;
       if (done !== cmp.classList.contains('done')) {
-        cmp.classList.toggle('done', done); cmp.setAttribute('aria-disabled', String(!done));
-        if (!done && !touched) { swept = false; cancelAnimationFrame(sweeping); setX(100); }
+        cmp.classList.toggle('done', done); btn.tabIndex = done ? 0 : -1; btn.classList.toggle('on', done && !cmp.classList.contains('comparing'));
+        if (!done) close();
       }
-      if (done && !swept && !touched && p >= .82) { swept = true; sweep(50); }
     }
     const at = e => { touched = true; cancelAnimationFrame(sweeping); setX((e.clientX - rect.left) / rect.width * 100); };
-    cmp.addEventListener('pointerdown', e => { if (!cmp.classList.contains('done')) return; rect = cmp.getBoundingClientRect(); cmp.setPointerCapture(e.pointerId); cmp.classList.add('dragging'); at(e); });
+    cmp.addEventListener('pointerdown', e => { if (!cmp.classList.contains('comparing')) return; rect = cmp.getBoundingClientRect(); cmp.setPointerCapture(e.pointerId); cmp.classList.add('dragging'); at(e); });
     cmp.addEventListener('pointermove', e => { if (rect && cmp.hasPointerCapture(e.pointerId)) at(e); });
     const release = () => { rect = null; cmp.classList.remove('dragging'); };
     cmp.addEventListener('pointerup', release); cmp.addEventListener('pointercancel', release);
     cmp.addEventListener('keydown', e => {
       const d = {ArrowLeft: -5, ArrowRight: 5, Home: -100, End: 100}[e.key];
-      if (d === undefined || !cmp.classList.contains('done')) return;
+      if (d === undefined || !cmp.classList.contains('comparing')) return;
       e.preventDefault(); touched = true; cancelAnimationFrame(sweeping); setX(x + d);
     });
     setX(100);
+    // the comparison opens on request: one sweep to the middle, then it is yours to drag
+    const btn = $('cmpbtn');
+    function open() { btn.classList.remove('on'); btn.tabIndex = -1; cmp.classList.add('comparing'); cmp.setAttribute('aria-disabled', 'false'); touched = false; sweep(50); cmp.focus({preventScroll: true}); }
+    function close() { cmp.classList.remove('comparing'); cmp.setAttribute('aria-disabled', 'true'); cancelAnimationFrame(sweeping); touched = false; setX(100); }
+    btn.addEventListener('click', e => { e.stopPropagation(); open(); });
 
     const nums = [...document.querySelectorAll('#stats b')];
     new IntersectionObserver((es, io) => {
@@ -248,7 +252,8 @@
       // where the narrator should be: on the brush while it paints, on the handle once it is finished
       point() {
         const r = cmp.getBoundingClientRect();
-        if (want === STROKES.length) return [r.left + r.width * x / 100 + 10, r.top + r.height * .5 + 26];
+        if (want === STROKES.length && cmp.classList.contains('comparing')) return [r.left + r.width * x / 100 + 10, r.top + r.height * .5 + 26];
+        if (want === STROKES.length) { const b = btn.getBoundingClientRect(); return [b.right - 18, b.bottom - 8]; }
         if (want <= 0) return [r.left + r.width * .5, r.top + r.height * .5];
         const [px, py] = endOf(want - 1), s = r.width / W; return [r.left + px * s, r.top + py * s];
       }
