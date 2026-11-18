@@ -57,6 +57,11 @@
   }
   html:not(.rm){scroll-behavior:smooth}
   a{color:inherit}
+  /* on a mouse, your pointer is the same arrow the agent uses */
+  @media (hover:hover) and (pointer:fine){
+    html{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23FAFBFC'/%3E%3Cstop offset='1' stop-color='%2382AFC9'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M4 2l15.5 9.2-6.8 1.6-3.6 6.4z' fill='url(%23g)' stroke='%231B2735' stroke-width='1.4' stroke-linejoin='round'/%3E%3C/svg%3E") 4 2,auto}
+    a,button,summary,label,.cmp,.cmp.done,pre{cursor:inherit}
+  }
   img{display:block;max-width:100%}
   button{font:inherit;color:inherit;cursor:pointer}
   kbd{font:500 .8em var(--mono);background:var(--white);border:1px solid var(--rule);border-bottom-width:2px;border-radius:var(--r1);padding:.08em .45em}
@@ -99,8 +104,13 @@
   .trust a svg{width:13px;height:13px}
   .linkish{display:inline;border:0;background:none;padding:10px 0;font:600 .8rem var(--ui);color:var(--accent);text-decoration:underline;text-underline-offset:3px}
   .art-col{--ah:min(74svh,780px);width:calc(var(--ah) * 9 / 16);display:grid;gap:var(--s4);justify-items:start}
-  .art{position:relative;height:var(--ah);aspect-ratio:9/16;background:var(--white);border-radius:2px;box-shadow:var(--hang)}
-  .art canvas{position:absolute;inset:0;width:100%;height:100%;border-radius:2px}
+  .art{position:relative;height:var(--ah);aspect-ratio:9/16;border-radius:var(--r3);box-shadow:var(--hang)}
+  .art canvas{position:absolute;inset:0;width:100%;height:100%;border-radius:var(--r3)}
+  /* 3D tilt on hover (mouse only): the frame leans toward the pointer and a soft light follows it */
+  [data-tilt]{transform-style:preserve-3d;will-change:transform}
+  .sheen{position:absolute;inset:0;border-radius:var(--r3);overflow:hidden;pointer-events:none;z-index:3;opacity:0;transition:opacity var(--normal) var(--in)}
+  .sheen.on{opacity:1;transition:opacity var(--slow) var(--out)}
+  .sheen i{position:absolute;inset:-50%;background:radial-gradient(closest-side,rgba(255,255,255,.26),rgba(255,255,255,0) 70%)}
   /* the product's edge glow, baked from its six Aurora tones: it breathes (7 s) and drifts round the loop (30 s), and goes out on Esc */
   .glow{position:absolute;left:-30.56%;right:-30.56%;top:-17.19%;bottom:-17.19%;pointer-events:none;opacity:0;transition:opacity var(--normal) var(--in)}
   .art.working .glow{opacity:1;transition:opacity var(--slow) var(--out)}
@@ -153,7 +163,7 @@
   .stats div{border-top:1px solid var(--ink);padding-top:var(--s3)}
   .stats b{display:block;font:700 clamp(2.2rem,3.6vw,3rem)/1 var(--display);letter-spacing:-.04em;font-variant-numeric:tabular-nums}
   .stats span{font-size:.88rem;color:var(--graphite)}
-  .cmp{position:relative;height:min(calc(100svh - 120px),820px);aspect-ratio:9/16;overflow:hidden;border-radius:2px;box-shadow:var(--hang);touch-action:pan-y;cursor:ew-resize;user-select:none;-webkit-user-select:none;background:var(--white)}
+  .cmp{position:relative;height:min(calc(100svh - 120px),820px);aspect-ratio:9/16;overflow:hidden;border-radius:var(--r3);box-shadow:var(--hang);touch-action:pan-y;cursor:ew-resize;user-select:none;-webkit-user-select:none;background:var(--white)}
   .cmp img,.cmp canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none}
   .cmp .rv,.cmp .handle,.cmp .tags{opacity:0;transition:opacity var(--normal) var(--in)}
   .cmp.done .rv,.cmp.done .handle,.cmp.done .tags{opacity:1;transition:opacity var(--slow) var(--out)}
@@ -161,8 +171,10 @@
   .rv{position:absolute;inset:0;overflow:hidden;transform:translateX(100%)}
   .rv img{transform:translateX(-100%)}
   .handle{position:absolute;inset:0;transform:translateX(100%);pointer-events:none}
-  .handle::before{content:"";position:absolute;left:-1px;top:0;bottom:0;width:2px;background:var(--white)}
-  .handle span{position:absolute;left:-20px;top:50%;width:40px;height:40px;margin-top:-20px;border-radius:50%;background:var(--white);box-shadow:0 2px 10px rgba(0,0,0,.25);display:grid;place-items:center;font:500 .8rem var(--mono);color:var(--ink)}
+  .handle::before{content:"";position:absolute;left:-1px;top:0;bottom:0;width:2px;background:rgba(255,255,255,.96);box-shadow:0 0 0 .5px rgba(18,22,29,.18),0 0 14px rgba(0,0,0,.28)}
+  .handle span{position:absolute;left:-15px;top:50%;width:30px;height:60px;margin-top:-30px;border-radius:999px;background:rgba(248,249,251,.95);box-shadow:0 0 0 1px rgba(18,22,29,.1),0 8px 20px -6px rgba(18,22,29,.5);display:grid;place-items:center;color:var(--ink);transition:transform var(--fast) var(--out)}
+  .handle svg{width:16px;height:16px}
+  .cmp.dragging .handle span{transform:scale(1.08)}
   .tags{position:absolute;inset:auto 12px 12px;display:flex;justify-content:space-between;pointer-events:none}
   .tags span{font:500 .7rem var(--mono);background:rgba(27,24,19,.78);color:var(--paper);padding:3px 8px;border-radius:var(--r1)}
   /* one headline cut per chapter: the line rises out of a mask as the chapter arrives */
@@ -177,7 +189,7 @@
   .how{position:relative;height:300svh;border-top:1px solid var(--rule);view-timeline-name:--how}
   /* letterbox: thin bars close in while the chapter is pinned, like a film going to widescreen */
   .lb{position:absolute;left:50%;width:100vw;margin-left:-50vw;height:4.5svh;background:var(--ink);transform:scaleY(0);pointer-events:none;z-index:4}
-  .lb.t{top:0;transform-origin:50% 0}.lb.b{bottom:0;transform-origin:50% 100%}
+  .lb-top{top:0;transform-origin:50% 0}.lb-bottom{bottom:0;transform-origin:50% 100%}
   @supports (animation-timeline:view()){
     html:not(.rm) .lb{animation:letterbox linear both;animation-timeline:--how;animation-range:contain 0% contain 100%}
     @keyframes letterbox{0%{transform:scaleY(0)}8%{transform:scaleY(1)}92%{transform:scaleY(1)}100%{transform:scaleY(0)}}
@@ -246,7 +258,8 @@
   .install{padding:var(--s10) 0 var(--s9);border-top:1px solid var(--rule)}
   .install h2{max-width:14ch}
   .cards{display:grid;grid-template-columns:1fr 1fr;gap:var(--s4);margin-top:var(--s7)}
-  .card{background:var(--white);border:1px solid var(--rule);border-radius:var(--r3);padding:var(--s6)}
+  .card{display:flex;flex-direction:column;background:var(--white);border:1px solid var(--rule);border-radius:var(--r3);padding:var(--s6)}
+  .card .foot{margin-top:auto;padding-top:var(--s4)}
   .card h3{font:700 1.35rem/1.2 var(--display);letter-spacing:-.02em}
   .card p{color:var(--graphite);font-size:.92rem;margin-top:var(--s2)}
   .code{position:relative;margin-top:var(--s4);background:var(--ink);border-radius:var(--r2)}
@@ -307,10 +320,10 @@
       <h1 id="h1">2,553 mouse strokes. <em>No&nbsp;hands.</em></h1>
       <p class="lede">Your agent sees the screen and works real Windows and macOS apps with your mouse and keyboard. You can stop it the moment you want to.</p>
       <div class="actions"><a class="btn primary" href="#install">Install, free</a><a class="btn quiet" href="#how">How it works</a></div>
-      <p class="trust"><span id="ver">v1.0.3</span><span>Signed updates</span><span>MIT licensed</span><span><a href="https://github.com/shayann07/antigravity-computer-use" aria-label="Star on GitHub"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 .8l2.2 4.6 5 .7-3.6 3.5.9 5L8 12.3 3.5 14.6l.9-5L.8 6.1l5-.7z"/></svg><span id="stars">Star on GitHub</span></a></span></p>
+      <p class="trust"><span><a id="ver" href="https://github.com/shayann07/antigravity-computer-use/releases/latest">Latest release</a></span><span>Signed updates</span><span>MIT licensed</span><span><a href="https://github.com/shayann07/antigravity-computer-use" aria-label="Star on GitHub"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 .8l2.2 4.6 5 .7-3.6 3.5.9 5L8 12.3 3.5 14.6l.9-5L.8 6.1l5-.7z"/></svg><span id="stars">Star on GitHub</span></a></span></p>
     </div>
     <div class="art-col">
-      <div class="art" id="art">
+      <div class="art" id="art" data-tilt>
         <span class="glow" aria-hidden="true"><span><i></i><i></i></span></span>
         <canvas id="paint" role="img" aria-label="A portrait being painted stroke by stroke, replaying the real stroke plan from the Microsoft Paint run"></canvas>
         <span class="pill" id="pill"><i></i><span id="pillText">Antigravity is working</span></span>
@@ -339,10 +352,10 @@
           <div><b data-to="65" data-unit=" min">65 min</b><span>unattended</span></div>
         </div>
       </div>
-      <div class="cmp" id="cmp" role="slider" tabindex="0" aria-label="Compare the painting with the original photo" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="Photo hidden" aria-disabled="true">
+      <div class="cmp" id="cmp" data-tilt role="slider" tabindex="0" aria-label="Compare the painting with the original photo" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="Photo hidden" aria-disabled="true">
         <canvas id="scrub" role="img" aria-label="The painting, redrawn stroke by stroke as you scroll"></canvas>
         <div class="rv" id="rv"><img id="rvImg" src="media/photo.jpg" alt="" width="648" height="1152" decoding="async"></div>
-        <div class="handle" id="handle"><span>&harr;</span></div>
+        <div class="handle" id="handle"><span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4.5L2.5 8 6 11.5M10 4.5L13.5 8 10 11.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
         <div class="tags" aria-hidden="true"><span>Painted in Paint</span><span>The photo</span></div>
       </div>
     </div>
@@ -354,7 +367,7 @@
     <div class="trig" style="top:100svh" data-b="1"></div>
     <div class="trig" style="top:200svh" data-b="2"></div>
     <div class="wrap how-pin">
-      <span class="lb t" aria-hidden="true"></span><span class="lb b" aria-hidden="true"></span>
+      <span class="lb lb-top" aria-hidden="true"></span><span class="lb lb-bottom" aria-hidden="true"></span>
       <div>
         <div class="beats">
           <div class="beat on" data-b="0"><p class="n">01 &mdash; Read</p><h2>It reads the app <em>first.</em></h2><p class="sub">Every button and field has a role and a name. It reads those before it looks at pixels, so it clicks the right thing.</p></div>
@@ -405,6 +418,7 @@
           <h3>Ask your agent</h3>
           <p>Paste this into Antigravity and approve the command it shows you.</p>
           <div class="code"><pre id="prompt">Install the computer use skill from https://github.com/shayann07/antigravity-computer-use with the one-line installer for this computer. Show me the command before you run it.</pre><button class="copy" type="button" data-copy="prompt" id="copyPrompt"><span class="idle">Copy</span><span class="done">Copied</span></button></div>
+          <p class="foot">Works on Windows and macOS. Antigravity shows you each command before it runs.</p>
         </div>
         <div class="card">
           <h3>Or run one line</h3>

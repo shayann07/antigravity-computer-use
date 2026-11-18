@@ -193,9 +193,10 @@
       if (done && !swept && !touched && p >= .82) { swept = true; sweep(50); }
     }
     const at = e => { touched = true; cancelAnimationFrame(sweeping); setX((e.clientX - rect.left) / rect.width * 100); };
-    cmp.addEventListener('pointerdown', e => { if (!cmp.classList.contains('done')) return; rect = cmp.getBoundingClientRect(); cmp.setPointerCapture(e.pointerId); at(e); });
+    cmp.addEventListener('pointerdown', e => { if (!cmp.classList.contains('done')) return; rect = cmp.getBoundingClientRect(); cmp.setPointerCapture(e.pointerId); cmp.classList.add('dragging'); at(e); });
     cmp.addEventListener('pointermove', e => { if (rect && cmp.hasPointerCapture(e.pointerId)) at(e); });
-    cmp.addEventListener('pointerup', () => { rect = null; });
+    const release = () => { rect = null; cmp.classList.remove('dragging'); };
+    cmp.addEventListener('pointerup', release); cmp.addEventListener('pointercancel', release);
     cmp.addEventListener('keydown', e => {
       const d = {ArrowLeft: -5, ArrowRight: 5, Home: -100, End: 100}[e.key];
       if (d === undefined || !cmp.classList.contains('done')) return;
@@ -221,7 +222,7 @@
       // where the narrator should be: on the brush while it paints, on the handle once it is finished
       point() {
         const r = cmp.getBoundingClientRect();
-        if (n === STROKES.length) return [r.left + r.width * x / 100 + 4, r.top + r.height * .5 + 6];
+        if (n === STROKES.length) return [r.left + r.width * x / 100 + 10, r.top + r.height * .5 + 26];
         if (n <= 0) return [r.left + r.width * .5, r.top + r.height * .5];
         const [px, py] = endOf(n - 1), s = r.width / W; return [r.left + px * s, r.top + py * s];
       }
@@ -344,7 +345,7 @@
         const r = m.getBoundingClientRect(); if (r.bottom < 60 || r.top > vh) continue;
         const d = Math.abs(r.top + r.height / 2 - vh * .45); if (d < bestD) { bestD = d; best = r; bestEl = m; }
       }
-      return best ? Object.assign(aimAt(bestEl, best), {bare: true}) : null;
+      return best ? aimAt(bestEl, best) : null;
     }
     function frame(now) {
       const dt = Math.min(64, now - last); last = now;
@@ -352,7 +353,6 @@
       if (!t) { if (shown) { shown = false; el.classList.remove('on'); painter.setAway(false); } raf = 0; return; }
       if (!placed) { cx = t[0]; cy = t[1]; placed = true; }
       if (!shown) { shown = true; el.classList.add('on'); painter.setAway(true); }
-      el.classList.toggle('bare', !!t.bare);
       const a = follow(.16, dt); cx += (t[0] - cx) * a; cy += (t[1] - cy) * a;
       el.style.transform = `translate3d(${cx}px,${cy}px,0)`;
       raf = Math.abs(t[0] - cx) + Math.abs(t[1] - cy) > .4 ? requestAnimationFrame(frame) : 0;
@@ -390,6 +390,33 @@
     }, {passive: false});
   }
 
+  /* ---------- 3D tilt on hover: mouse only, transform only ---------- */
+  if (FINE && !RM) for (const el of document.querySelectorAll('[data-tilt]')) {
+    const sheen = document.createElement('span'); sheen.className = 'sheen'; sheen.setAttribute('aria-hidden', 'true');
+    const light = document.createElement('i'); sheen.appendChild(light); el.appendChild(sheen);
+    const MAX = 5;                              // degrees
+    let rect = null, at = -1, tx = 0, ty = 0, cx = 0, cy = 0, raf = 0, last = 0;
+    function frame(now) {
+      const dt = Math.min(64, now - last); last = now;
+      const a = follow(.12, dt); cx += (tx - cx) * a; cy += (ty - cy) * a;
+      const still = Math.abs(tx - cx) + Math.abs(ty - cy) < .01;
+      el.style.transform = still && tx === 0 && ty === 0 ? '' : `perspective(1100px) rotateX(${cy.toFixed(3)}deg) rotateY(${cx.toFixed(3)}deg)`;
+      raf = still ? 0 : requestAnimationFrame(frame);
+    }
+    const kick = () => { if (!raf) { last = performance.now(); raf = requestAnimationFrame(frame); } };
+    el.addEventListener('pointermove', e => {
+      if (e.pointerType !== 'mouse' || el.classList.contains('dragging')) return;
+      // measure flat, once per scroll position, so the tilt never feeds back into its own geometry
+      if (!rect || at !== scrollY) { const t = el.style.transform; el.style.transform = ''; rect = el.getBoundingClientRect(); el.style.transform = t; at = scrollY; }
+      const px = clamp((e.clientX - rect.left) / rect.width), py = clamp((e.clientY - rect.top) / rect.height);
+      tx = (px - .5) * 2 * MAX; ty = -(py - .5) * 2 * MAX;
+      light.style.transform = `translate3d(${(px - .5) * 100}%,${(py - .5) * 100}%,0)`;
+      sheen.classList.add('on'); kick();
+    });
+    el.addEventListener('pointerleave', () => { tx = ty = 0; rect = null; sheen.classList.remove('on'); kick(); });
+    el.addEventListener('pointerdown', () => { tx = ty = 0; kick(); });
+  }
+
   /* ---------- the real recording, in a dialog ---------- */
   const film = $('film'), video = $('filmVideo');
   $('watch').addEventListener('click', () => { film.showModal(); video.play().catch(() => {}); });
@@ -409,8 +436,11 @@
 
   /* ---------- trust row: live version and stars, if GitHub answers ---------- */
   const api = 'https://api.github.com/repos/shayann07/antigravity-computer-use';
-  fetch(api).then(r => r.ok ? r.json() : null).then(d => { if (d && Number.isFinite(d.stargazers_count)) $('stars').textContent = `${fmt(d.stargazers_count)} stars`; }).catch(() => {});
-  fetch(api + '/releases/latest').then(r => r.ok ? r.json() : null).then(d => { if (d && /^v\d/.test(d.tag_name || '')) $('ver').textContent = d.tag_name; }).catch(() => {});
+  // Read fresh on every visit (never from the HTTP cache). Without an answer the row
+  // says "Latest release" and "Star on GitHub" rather than a number that may be old.
+  const get = url => fetch(url, {cache: 'no-store', headers: {Accept: 'application/vnd.github+json'}}).then(r => r.ok ? r.json() : null).catch(() => null);
+  get(api).then(d => { if (d && Number.isFinite(d.stargazers_count)) $('stars').textContent = `${fmt(d.stargazers_count)} ${d.stargazers_count === 1 ? 'star' : 'stars'}`; });
+  get(api + '/releases/latest').then(d => { if (d && /^v\d/.test(d.tag_name || '')) { $('ver').textContent = d.tag_name; if (/^https:\/\/github\.com\//.test(d.html_url || '')) $('ver').href = d.html_url; } });
 
   /* ---------- install: OS tabs and copy ---------- */
   const tabs = [...document.querySelectorAll('[role=tab]')];
