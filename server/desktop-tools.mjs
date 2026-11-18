@@ -94,7 +94,10 @@ export async function call(r,name,a){
  if(name==='computer_run'){
   // Validate the whole plan before sending the first input. A typo in step8
   // must not execute steps1-7 and then throw away their delivery evidence.
-  const plan=a.steps.map(({kind,...rest},i)=>{
+  // A step that fails validation reports which step and why, with a code the
+  // agent can act on, instead of a bare refusal.
+  const invalid=(e,i,kind)=>Object.assign(e,{code:e.code||'invalid_steps',message:(i!=null?`Step ${i+1}${kind?' ('+kind+')':''}: `:'')+e.message.replace(/\s*No input was sent\.?$/i,'').replace(/([^.!?])$/,'$1.')+' No input was sent.'});
+  let plan;try{plan=a.steps.map(({kind,...rest},i)=>{try{
    const n='computer_'+kind;if(!OPS[n]&&!['computer_wait','computer_wait_change'].includes(n))throw new Error('Unsupported batch step '+kind);
    const properties=TOOLS.find(t=>t.name===n).inputSchema.properties;
    if(!Object.hasOwn(properties,'hwnd'))throw new Error('Batch steps must target their owner window; use explicit paste for text instead of a window-free clipboard step.');
@@ -114,15 +117,16 @@ export async function call(r,name,a){
    const pureFollowing=nextPixel&&!['index','name','role','automation_id'].some(k=>Object.hasOwn(following,k));
    if(kind==='drag'&&pureFollowing&&properties.observe&&!Object.hasOwn(rest.observe||{},'settle_ms'))args.observe.settle_ms=0;
    validate(n,args);return {kind,n,args,framed};
-  });
+  }catch(e){throw invalid(e,i,kind);}});
   const waitBudget=plan.filter(step=>['computer_wait','computer_wait_change'].includes(step.n)).reduce((sum,step)=>sum+(step.args.timeout_ms??15000),0);
-  if(waitBudget>contract.batch_wait_ms)throw new Error('Combined batch waits must not exceed30seconds. No input was sent.');
+  if(waitBudget>contract.batch_wait_ms)throw new Error('Combined batch waits must not exceed30seconds.');
   for(let i=0;i<plan.length;i++)if(['computer_wait','computer_wait_change'].includes(plan[i].n)){
    const next=plan[i+1];
    const needsImage=!!next&&(['computer_move','computer_drag'].includes(next.n)||Object.hasOwn(next.args,'x')||Object.hasOwn(next.args,'y'));
-   if(needsImage)throw new Error('A pixel action cannot use an unseen batch observation. End the batch, inspect a fresh screenshot, then act. No input was sent.');
+   if(needsImage)throw invalid(new Error('A pixel action cannot use an unseen batch observation. End the batch, inspect a fresh screenshot, then act.'),i+1,plan[i+1].kind);
    if(plan[i].n==='computer_wait'&&!Object.hasOwn(plan[i].args,'with_image'))plan[i].args.with_image=a.images==='all'||!next;
   }
+  }catch(e){throw e.code?e:invalid(e);}
   const completed=[];let last=null;let observation=a.observation_id;
   for(let i=0;i<plan.length;i++){
    const {kind,n,args,framed}=plan[i];

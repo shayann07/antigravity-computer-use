@@ -59,11 +59,12 @@ Finish with `end`. `ready` starts a task; to check state after `end`, use `statu
 If you noticed a skill or runtime problem, keep private notes during the task and, after `end`, follow the report step in [finishing and reports](references/finishing-and-reports.md).
 Report only what the app showed. If it shows no output path, use at most one visible control that opens the output folder, or say the path was not shown. Do not explore history panels, hover for tooltips or search the disk to find it.
 For physical handoff (a human presses Esc or takes over): at most one bounded input attempt, then stop issuing controller calls and wait for the human. Details in the handoff reference below.
+If any result shows `state: stopped` or `control_reason: escape`, the human stopped you: say so plainly in your reply (for example "You pressed Esc, so I stopped after X"), never call it a clean finish, and do not resume until asked.
 These common command shapes are complete; use them directly without schema setup. H/F/N are observed handle/frame/index values. Optional flags are in brackets; replace placeholders, not the command names.
 
 | Command | Named arguments |
 | --- | --- |
-| `launch` | `--app EXE_OR_APP_BUNDLE --observe --reason TEXT` |
+| `launch` | `--app EXE_OR_APP_BUNDLE --observe --reason TEXT`; on a Mac an app name such as `TextEdit` also works |
 | `snapshot` | `--hwnd H --reason TEXT [--query TEXT] [--max-nodes 500] [--image] [--settle-ms 600]` |
 | `click` | `--hwnd H --observation-id F --name TEXT --role Button --risk routine --reason TEXT [--physical true] [--image] [--max-nodes 500]`; or `--index N` in place of name/role |
 | `click` (pixels) | `--hwnd H --observation-id F --x X --y Y --risk routine --reason TEXT [--image]`; X/Y come from that frame's freshly viewed image |

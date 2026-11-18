@@ -5,6 +5,10 @@
 - macOS installs in one line: `curl -fsSL https://raw.githubusercontent.com/shayann07/antigravity-computer-use/main/install.sh | sh` picks the archive for Apple silicon or Intel, checks its SHA-256 and stops if it differs, installs, then opens the permission setup. Files fetched with curl are not quarantined, so Gatekeeper does not block the setup scripts.
 - The Windows ZIP has a double-click installer, `Install.Computer.Use.cmd`, with the recommended defaults (global skill and background startup).
 - The README's Install section opens with a prompt to paste into Antigravity, or any coding agent that can run commands, so the agent installs the skill, showing each command first and leaving macOS permission prompts to you.
+- On a Mac, `launch` accepts an app name such as `TextEdit`: it is looked up in /Applications, /System/Applications (and Utilities) and ~/Applications. A path is still used exactly as given (#122).
+- An invalid `computer_run` step now names the step and the reason, with the `invalid_steps` code and "No input was sent.", instead of a bare refusal (#122).
+- When you press Esc, the agent says that you stopped it rather than reporting a clean finish (#122).
+- macOS docs: why there is no access card with the default install and how to choose standalone, Gatekeeper and curl downloads, the `stopped` status after Esc, and removal steps that name every path (#123).
 
 ## 1.0.3 - Freed tasks, step pictures and short recordings
 
