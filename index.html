@@ -168,11 +168,12 @@
   .cmp .rv,.cmp .handle,.cmp .tags{opacity:0;transition:opacity var(--normal) var(--in)}
   .cmp.done .rv,.cmp.done .handle,.cmp.done .tags{opacity:1;transition:opacity var(--slow) var(--out)}
   .cmp:not(.done){cursor:default}
-  .rv{position:absolute;inset:0;overflow:hidden;transform:translateX(100%)}
-  .rv img{transform:translateX(-100%)}
-  .handle{position:absolute;inset:0;transform:translateX(100%);pointer-events:none}
-  .handle::before{content:"";position:absolute;left:-1px;top:0;bottom:0;width:2px;background:rgba(255,255,255,.96);box-shadow:0 0 0 .5px rgba(18,22,29,.18),0 0 6px rgba(0,0,0,.24)}
-  .handle span{position:absolute;left:-15px;top:50%;width:30px;height:60px;margin-top:-30px;border-radius:999px;background:rgba(248,249,251,.95);box-shadow:0 0 0 1px rgba(18,22,29,.1),0 8px 20px -6px rgba(18,22,29,.5);display:grid;place-items:center;color:var(--ink);transition:transform var(--fast) var(--out)}
+  .rv{position:absolute;inset:0;overflow:hidden;transform:translateX(100%);will-change:transform}
+  .rv img{transform:translateX(-100%);will-change:transform}
+  /* the handle is a zero-width layer moved in pixels: no full-size layer, no blurred shadows to re-raster */
+  .handle{position:absolute;top:0;bottom:0;left:0;width:0;will-change:transform;pointer-events:none}
+  .handle::before{content:"";position:absolute;left:-1px;top:0;bottom:0;width:2px;background:rgba(255,255,255,.96);box-shadow:0 0 0 1px rgba(18,22,29,.2)}
+  .handle span{position:absolute;left:-15px;top:50%;width:30px;height:60px;margin-top:-30px;border-radius:999px;background:rgba(248,249,251,.95);box-shadow:0 0 0 1px rgba(18,22,29,.12),0 2px 6px rgba(18,22,29,.28);display:grid;place-items:center;color:var(--ink);transition:transform var(--fast) var(--out)}
   .handle svg{width:16px;height:16px}
   .cmp.dragging .handle span{transform:scale(1.08)}
   .tags{position:absolute;inset:auto 12px 12px;display:flex;justify-content:space-between;pointer-events:none}

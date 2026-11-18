@@ -142,33 +142,51 @@
   const exhibit = (() => {
     const sec = $('exhibit'), cmp = $('cmp'), canvas = $('scrub'), rv = $('rv'), rvImg = $('rvImg'), handle = $('handle');
     const bar = $('scrubBar'), text = $('scrubText');
-    const SNAP = 256;                         // keep a snapshot every 256 strokes, so scrubbing back never redraws more than that
-    let ctx, cssW = 0, n = -2, snaps = [], top = 0, len = 1, x = 100, touched = false, swept = false, sweeping = 0, rect = null, ready = false;
-
-    function snap(k) { const c = document.createElement('canvas'); c.width = canvas.width; c.height = canvas.height; c.getContext('2d').drawImage(canvas, 0, 0); snaps[k] = c; }
-    function restore(k) { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(snaps[k], 0, 0); ctx.restore(); n = k * SNAP; }
-    // n: -1 blank canvas, 0 bucket-filled, m = filled plus m strokes
-    function render(want, budget = Infinity) {
-      if (want === n) return;
-      if (want < 0) { fillWith(ctx, '#fff'); n = -1; return; }
-      if (n < 0) { fillWith(ctx, PAL[0]); n = 0; if (!snaps[0]) snap(0); }
-      const k = Math.floor(want / SNAP);
-      if (want < n || (k * SNAP > n && snaps[k])) restore(k);
-      while (n < want && budget > 0) {
-        const next = Math.min(want, (Math.floor(n / SNAP) + 1) * SNAP, n + budget);
-        budget -= next - n;
-        strokes(ctx, n, next); n = next;
-        if (n % SNAP === 0 && !snaps[n / SNAP]) snap(n / SNAP);
-      }
+    // The run is pre-rendered into still frames while the page is idle. Scrolling only
+    // cross-fades two neighbouring frames, so no brush stroke is drawn during a scroll
+    // (live strokes there stalled the GPU and showed as scroll hitches).
+    const FRAMES = 24;
+    let ctx, cssW = 0, cmpW = 0, frames = [], gen = 0, want = -1, shown = '', top = 0, len = 1, x = 100, touched = false, swept = false, sweeping = 0, rect = null, ready = false;
+    const strokesAt = k => Math.round(k / FRAMES * STROKES.length);
+    const idle = window.requestIdleCallback ? fn => requestIdleCallback(fn, {timeout: 300}) : fn => setTimeout(() => fn({timeRemaining: () => 10}), 30);
+    function build() {
+      const my = ++gen; frames = [];
+      const work = document.createElement('canvas'); work.width = canvas.width; work.height = canvas.height;
+      const w = work.getContext('2d', {alpha: false}), k0 = work.width / W;
+      w.setTransform(k0, 0, 0, k0, 0, 0); w.lineWidth = BRUSH; w.lineCap = 'round'; w.lineJoin = 'round';
+      fillWith(w, PAL[0]);
+      let k = 0;
+      const step = deadline => {
+        if (my !== gen) return;
+        while (k <= FRAMES) {
+          if (k > 0) strokes(w, strokesAt(k - 1), strokesAt(k));
+          const at = k++;
+          createImageBitmap(work).then(bitmap => { if (my === gen) { frames[at] = bitmap; paint(); } });
+          if (deadline.timeRemaining() < 6) break;
+        }
+        if (k <= FRAMES) idle(step);
+      };
+      idle(step);
+    }
+    // want: -1 blank canvas, 0 bucket-filled, m = filled plus m strokes
+    function paint() {
+      if (want < 0) { if (shown !== 'blank') { fillWith(ctx, '#fff'); shown = 'blank'; } return; }
+      const f = want / STROKES.length * FRAMES, a = Math.min(FRAMES, Math.floor(f));
+      let lo = a; while (lo >= 0 && !frames[lo]) lo--;
+      const hi = lo === a && a < FRAMES && frames[a + 1] ? a + 1 : -1, mix = hi < 0 ? 0 : Math.round((f - a) * 32) / 32;
+      const key = lo + ':' + mix; if (key === shown) return; shown = key;
+      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+      if (lo < 0) { ctx.fillStyle = PAL[0]; ctx.fillRect(0, 0, canvas.width, canvas.height); } else ctx.drawImage(frames[lo], 0, 0);
+      if (mix > 0) { ctx.globalAlpha = mix; ctx.drawImage(frames[hi], 0, 0); }
+      ctx.restore();
     }
     function size() {
-      cssW = cmp.clientWidth; ctx = prep(canvas, cssW, 1.25); snaps = [];
-      const want = n; n = -2; render(Math.max(-1, want));
+      cssW = cmpW = cmp.clientWidth; ctx = prep(canvas, cssW, 1); shown = ''; build(); paint(); setX(x);
       const r = sec.getBoundingClientRect(); top = r.top + scrollY; len = Math.max(1, sec.offsetHeight - innerHeight);
     }
     function setX(v) {
       x = clamp(v, 0, 100);
-      rv.style.transform = `translateX(${x}%)`; rvImg.style.transform = `translateX(${-x}%)`; handle.style.transform = `translateX(${x}%)`;
+      rv.style.transform = `translateX(${x}%)`; rvImg.style.transform = `translateX(${-x}%)`; handle.style.transform = `translate3d(${(x / 100 * cmpW).toFixed(1)}px,0,0)`;
       const shown = Math.round(100 - x);
       cmp.setAttribute('aria-valuenow', shown); cmp.setAttribute('aria-valuetext', `${shown}% of the photo shown`);
     }
@@ -187,12 +205,11 @@
     function update() {
       if (!ready) return;
       const p = clamp((scrollY - top) / len);
-      const want = RM ? STROKES.length : p < .03 ? -1 : p < .06 ? 0 : Math.round(clamp((p - .06) / .7) * STROKES.length);
-      render(want, 150);                       // at most 150 strokes a frame; a fast scroll catches up over the next frames
-      if (n !== want) requestAnimationFrame(update);
-      bar.style.transform = `scaleX(${Math.max(0, n) / STROKES.length})`;
-      text.textContent = n < 0 ? 'Scroll to paint' : n === 0 ? 'Bucket fill' : `Stroke ${fmt(n)} / ${fmt(STROKES.length)}`;
-      const done = n === STROKES.length;
+      want = RM ? STROKES.length : p < .03 ? -1 : p < .06 ? 0 : Math.round(clamp((p - .06) / .7) * STROKES.length);
+      paint();
+      bar.style.transform = `scaleX(${Math.max(0, want) / STROKES.length})`;
+      text.textContent = want < 0 ? 'Scroll to paint' : want === 0 ? 'Bucket fill' : `Stroke ${fmt(want)} / ${fmt(STROKES.length)}`;
+      const done = want === STROKES.length;
       if (done !== cmp.classList.contains('done')) {
         cmp.classList.toggle('done', done); cmp.setAttribute('aria-disabled', String(!done));
         if (!done && !touched) { swept = false; cancelAnimationFrame(sweeping); setX(100); }
@@ -231,9 +248,9 @@
       // where the narrator should be: on the brush while it paints, on the handle once it is finished
       point() {
         const r = cmp.getBoundingClientRect();
-        if (n === STROKES.length) return [r.left + r.width * x / 100 + 10, r.top + r.height * .5 + 26];
-        if (n <= 0) return [r.left + r.width * .5, r.top + r.height * .5];
-        const [px, py] = endOf(n - 1), s = r.width / W; return [r.left + px * s, r.top + py * s];
+        if (want === STROKES.length) return [r.left + r.width * x / 100 + 10, r.top + r.height * .5 + 26];
+        if (want <= 0) return [r.left + r.width * .5, r.top + r.height * .5];
+        const [px, py] = endOf(want - 1), s = r.width / W; return [r.left + px * s, r.top + py * s];
       }
     };
   })();
