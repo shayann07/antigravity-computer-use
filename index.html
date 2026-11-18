@@ -36,7 +36,7 @@
     /* radius: chips, controls, surfaces */
     --r1:4px;--r2:10px;--r3:16px;
     /* shadow: only the artwork on the wall and floating app windows */
-    --hang:0 1px 2px rgba(27,24,19,.08),0 28px 56px -18px rgba(27,24,19,.32);
+    --hang:0 1px 2px rgba(18,22,29,.08),0 28px 56px -18px rgba(18,22,29,.34);
     /* motion tokens: every transition below uses these names */
     --fast:100ms; --normal:200ms; --slow:300ms;
     --out:cubic-bezier(.23,1,.32,1); --in:cubic-bezier(.55,0,1,.45); --inout:cubic-bezier(.77,0,.175,1);
@@ -45,8 +45,17 @@
   html{background:var(--paper);color:var(--ink);font:400 17px/1.55 var(--ui);-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%;scroll-padding-top:72px}
   body{overflow-x:clip}
   /* the smoke sits on its own fixed layer and drifts on the compositor, so scrolling never repaints it */
-  body::before{content:"";position:fixed;inset:-6%;z-index:-1;background:var(--paper) url("media/smoke.webp") center/cover;animation:drift 70s ease-in-out infinite alternate;will-change:transform}
+  body::before{content:"";position:fixed;inset:-6% -6% -22%;z-index:-2;background:var(--paper) url("media/smoke.webp") center/cover;animation:drift 70s ease-in-out infinite alternate;will-change:transform}
   @keyframes drift{to{transform:translate3d(-3%,-2%,0) scale(1.04)}}
+  /* depth: a sparse near layer of wisps moves faster than the far smoke as you scroll; both run on the compositor */
+  body::after{content:"";position:fixed;left:-8%;right:-8%;top:0;height:190vh;z-index:-1;background:url("media/smoke-near.webp") center/cover;pointer-events:none;opacity:.9}
+  @supports (animation-timeline:scroll()){
+    html:not(.rm) body::before{animation:drift 70s ease-in-out infinite alternate,far linear both;animation-timeline:auto,scroll(root);animation-composition:replace,add}
+    html:not(.rm) body::after{animation:near linear both;animation-timeline:scroll(root)}
+    @keyframes far{to{transform:translate3d(0,-12%,0)}}
+    @keyframes near{to{transform:translate3d(0,-45%,0)}}
+  }
+  html:not(.rm){scroll-behavior:smooth}
   a{color:inherit}
   img{display:block;max-width:100%}
   button{font:inherit;color:inherit;cursor:pointer}
@@ -74,7 +83,7 @@
   .btn:active{transform:scale(.97)}
   .btn.primary{background:var(--aurora);color:var(--ink)}
   .btn.quiet{background:transparent;color:var(--ink);box-shadow:inset 0 0 0 1px var(--rule)}
-  @media (hover:hover) and (pointer:fine){.btn.primary:hover{background:var(--accent-press)}.btn.quiet:hover{background:var(--white)}}
+  @media (hover:hover) and (pointer:fine){.btn.primary:hover{background:var(--aurora-press)}.btn.quiet:hover{background:var(--white)}}
 
   /* ---------- 1. hero: the exhibit paints itself ---------- */
   .hero{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:var(--s8);min-height:calc(100svh - 56px);padding:var(--s7) 0 var(--s8)}
@@ -84,6 +93,11 @@
   h1 em,h2 em{font-style:normal;color:var(--accent)}
   .lede{font-size:clamp(1.05rem,1.5vw,1.25rem);color:var(--graphite);max-width:34ch;margin-top:var(--s5)}
   .actions{display:flex;flex-wrap:wrap;gap:var(--s3);margin-top:var(--s6)}
+  .trust{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2) var(--s3);margin-top:var(--s5);font:500 .78rem var(--mono);color:var(--graphite)}
+  .trust span+span::before{content:"";display:inline-block;width:3px;height:3px;border-radius:50%;background:currentColor;margin-right:var(--s3);vertical-align:middle;opacity:.6}
+  .trust a{display:inline-flex;align-items:center;gap:6px;padding:10px 0;text-decoration:none;color:var(--ink)}
+  .trust a svg{width:13px;height:13px}
+  .linkish{display:inline;border:0;background:none;padding:10px 0;font:600 .8rem var(--ui);color:var(--accent);text-decoration:underline;text-underline-offset:3px}
   .art-col{--ah:min(74svh,780px);width:calc(var(--ah) * 9 / 16);display:grid;gap:var(--s4);justify-items:start}
   .art{position:relative;height:var(--ah);aspect-ratio:9/16;background:var(--white);border-radius:2px;box-shadow:var(--hang)}
   .art canvas{position:absolute;inset:0;width:100%;height:100%;border-radius:2px}
@@ -97,6 +111,20 @@
   @keyframes lap{from{opacity:0}to{opacity:1}}
   .agent{position:absolute;left:0;top:0;z-index:2;pointer-events:none;will-change:transform;opacity:0;transition:opacity var(--normal) var(--out)}
   .agent.on{opacity:1}
+  .agent.away{visibility:hidden}
+  /* the narrator: the same pointer, leading you down the page */
+  .narrator{position:fixed;left:0;top:0;z-index:6;pointer-events:none;will-change:transform;opacity:0;transition:opacity var(--normal) var(--in)}
+  .narrator.on{opacity:1;transition:opacity var(--slow) var(--out)}
+  .narrator svg{width:22px;height:22px;display:block;filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.35))}
+  .narrator.bare b{opacity:0}
+  .narrator b{transition:opacity var(--normal) var(--out);position:absolute;left:18px;top:18px;font:500 .7rem var(--mono);background:var(--aurora);color:var(--ink);padding:2px 7px;border-radius:var(--r1);white-space:nowrap}
+  .film{border:0;padding:0;background:transparent;max-width:calc(100vw - 32px);max-height:calc(100svh - 32px);overflow:visible}
+  .film::backdrop{background:rgba(18,22,29,.72)}
+  .film[open]{animation:pop var(--slow) var(--out)}
+  @keyframes pop{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
+  .film-in{display:grid;gap:var(--s3);justify-items:center}
+  .film video{height:min(76svh,820px);max-width:calc(100vw - 32px);aspect-ratio:9/16;object-fit:contain;background:#000;border-radius:2px}
+  .film p{max-width:46ch;text-align:center;font-size:.85rem;color:#E2E6EA}
   .desk .agent b{left:auto;right:6px}
   .agent svg{width:22px;height:22px;display:block;filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.35))}
   .agent b{position:absolute;left:18px;top:18px;font:500 .7rem var(--mono);background:var(--aurora);color:var(--ink);padding:2px 7px;border-radius:var(--r1);white-space:nowrap}
@@ -105,24 +133,31 @@
   .pill i{width:7px;height:7px;border-radius:50%;background:var(--accent)}
   .pill.stopped i{background:var(--rose)}
   .readout{display:flex;align-items:center;justify-content:space-between;gap:var(--s4);width:100%}
-  .count{font:400 .8rem var(--mono);color:var(--graphite);font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:var(--s2)}
+  .count{white-space:nowrap;font:400 .8rem var(--mono);color:var(--graphite);font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:var(--s2)}
   .swatch{width:12px;height:12px;border-radius:3px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15);background:#0D0D08}
-  .stop{display:inline-flex;align-items:center;gap:var(--s2);height:40px;padding:0 var(--s3) 0 var(--s2);border-radius:var(--r2);border:1px solid var(--rule);background:var(--white);font-size:.86rem;font-weight:500;transition:transform var(--fast) var(--out)}
+  .stop{white-space:nowrap;display:inline-flex;align-items:center;gap:var(--s2);height:40px;padding:0 var(--s3) 0 var(--s2);border-radius:var(--r2);border:1px solid var(--rule);background:var(--white);font-size:.86rem;font-weight:500;transition:transform var(--fast) var(--out)}
   .stop:active{transform:scale(.97)}
   .placard{font-size:.8rem;line-height:1.5;color:var(--graphite);border-left:2px solid var(--ink);padding-left:var(--s3)}
   .placard b{display:block;color:var(--ink);font:700 .95rem var(--display)}
+  .placard .linkish{display:block;padding:8px 0 0}
 
   /* ---------- 2. the exhibit: painting against the photo ---------- */
-  .exhibit{padding:var(--s9) 0;border-top:1px solid var(--rule)}
-  .exhibit .wrap{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s8);align-items:center}
+  .exhibit{position:relative;height:230svh;border-top:1px solid var(--rule)}
+  .ex-pin{position:sticky;top:56px;height:calc(100svh - 56px);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s8);align-items:center}
+  .scrubhint{display:flex;align-items:center;gap:var(--s2);margin-top:var(--s5);font:500 .78rem var(--mono);color:var(--graphite)}
+  .scrubhint i{width:120px;height:2px;border-radius:2px;background:var(--rule);overflow:hidden;position:relative}
+  .scrubhint i b{position:absolute;inset:0;background:var(--ink);transform-origin:0 50%;transform:scaleX(0)}
   h2{font:800 clamp(2.2rem,4.4vw,4rem)/1 var(--display);letter-spacing:-.04em}
   .sub{color:var(--graphite);font-size:clamp(1rem,1.4vw,1.15rem);max-width:38ch;margin-top:var(--s4)}
   .stats{display:grid;grid-template-columns:1fr 1fr;gap:var(--s6) var(--s5);margin-top:var(--s7);max-width:460px}
   .stats div{border-top:1px solid var(--ink);padding-top:var(--s3)}
   .stats b{display:block;font:700 clamp(2.2rem,3.6vw,3rem)/1 var(--display);letter-spacing:-.04em;font-variant-numeric:tabular-nums}
   .stats span{font-size:.88rem;color:var(--graphite)}
-  .cmp{position:relative;height:min(80svh,820px);aspect-ratio:9/16;overflow:hidden;border-radius:2px;box-shadow:var(--hang);touch-action:pan-y;cursor:ew-resize;user-select:none;-webkit-user-select:none;background:var(--white)}
-  .cmp img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none}
+  .cmp{position:relative;height:min(calc(100svh - 120px),820px);aspect-ratio:9/16;overflow:hidden;border-radius:2px;box-shadow:var(--hang);touch-action:pan-y;cursor:ew-resize;user-select:none;-webkit-user-select:none;background:var(--white)}
+  .cmp img,.cmp canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none}
+  .cmp .rv,.cmp .handle,.cmp .tags{opacity:0;transition:opacity var(--normal) var(--in)}
+  .cmp.done .rv,.cmp.done .handle,.cmp.done .tags{opacity:1;transition:opacity var(--slow) var(--out)}
+  .cmp:not(.done){cursor:default}
   .rv{position:absolute;inset:0;overflow:hidden;transform:translateX(100%)}
   .rv img{transform:translateX(-100%)}
   .handle{position:absolute;inset:0;transform:translateX(100%);pointer-events:none}
@@ -130,14 +165,23 @@
   .handle span{position:absolute;left:-20px;top:50%;width:40px;height:40px;margin-top:-20px;border-radius:50%;background:var(--white);box-shadow:0 2px 10px rgba(0,0,0,.25);display:grid;place-items:center;font:500 .8rem var(--mono);color:var(--ink)}
   .tags{position:absolute;inset:auto 12px 12px;display:flex;justify-content:space-between;pointer-events:none}
   .tags span{font:500 .7rem var(--mono);background:rgba(27,24,19,.78);color:var(--paper);padding:3px 8px;border-radius:var(--r1)}
-  /* the one scroll-linked moment, run by the compositor where supported */
+  /* one headline cut per chapter: the line rises out of a mask as the chapter arrives */
+  .cut{overflow:clip;overflow-clip-margin:.12em;padding-bottom:.06em;view-timeline-name:--cut}
+  .cut>span{display:block}
   @supports (animation-timeline:view()){
-    html:not(.rm) .cmp{animation:hang linear both;animation-timeline:view();animation-range:entry 10% cover 45%}
-    @keyframes hang{from{transform:translateY(64px) scale(.94);opacity:.4}to{transform:none;opacity:1}}
+    html:not(.rm) .cut>span{animation:cutin linear both;animation-timeline:--cut;animation-range:entry 30% entry 100%}
+    @keyframes cutin{from{transform:translateY(105%)}to{transform:none}}
   }
 
   /* ---------- 3. how: pinned, three beats, each a timed sequence ---------- */
-  .how{position:relative;height:300svh;border-top:1px solid var(--rule)}
+  .how{position:relative;height:300svh;border-top:1px solid var(--rule);view-timeline-name:--how}
+  /* letterbox: thin bars close in while the chapter is pinned, like a film going to widescreen */
+  .lb{position:absolute;left:50%;width:100vw;margin-left:-50vw;height:4.5svh;background:var(--ink);transform:scaleY(0);pointer-events:none;z-index:4}
+  .lb.t{top:0;transform-origin:50% 0}.lb.b{bottom:0;transform-origin:50% 100%}
+  @supports (animation-timeline:view()){
+    html:not(.rm) .lb{animation:letterbox linear both;animation-timeline:--how;animation-range:contain 0% contain 100%}
+    @keyframes letterbox{0%{transform:scaleY(0)}8%{transform:scaleY(1)}92%{transform:scaleY(1)}100%{transform:scaleY(0)}}
+  }
   .trig{position:absolute;left:0;right:0;height:100svh;pointer-events:none}
   .how-pin{position:sticky;top:56px;height:calc(100svh - 56px);display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:var(--s8);align-items:center}
   .beats{display:grid}
@@ -145,9 +189,12 @@
   .beat.on{opacity:1;transform:none;transition:opacity var(--slow) var(--out) 80ms,transform var(--slow) var(--out) 80ms;pointer-events:auto}
   .beat .n{font:500 .8rem var(--mono);color:var(--accent);margin-bottom:var(--s4)}
   .try{display:inline-flex;align-items:center;gap:var(--s2);margin-top:var(--s5);font-size:.95rem;color:var(--ink)}
-  .dots{display:flex;gap:var(--s2);margin-top:var(--s7)}
-  .dots i{width:28px;height:3px;border-radius:2px;background:var(--rule);transition:background-color var(--normal) ease}
-  .dots i.on{background:var(--ink)}
+  .steps{display:flex;gap:var(--s2);margin-top:var(--s7)}
+  .steps button{display:grid;gap:var(--s2);min-width:72px;min-height:44px;padding:var(--s2) 0;border:0;background:none;text-align:left;font:600 .8rem var(--ui);color:var(--graphite);transition:color var(--fast) ease}
+  .steps button::before{content:"";height:3px;border-radius:2px;background:var(--rule);transition:background-color var(--normal) ease}
+  .steps button[aria-current="step"]{color:var(--ink)}
+  .steps button.past::before,.steps button[aria-current="step"]::before{background:var(--ink)}
+  @media (hover:hover) and (pointer:fine){.steps button:hover{color:var(--ink)}}
   .desk{position:relative;aspect-ratio:4/3;max-height:calc(100svh - 160px);border-radius:var(--r3);background:var(--desk);border:1px solid var(--rule);display:grid;place-items:center;overflow:hidden}
   .desk::after{content:"";position:absolute;inset:0;border-radius:var(--r3);box-shadow:inset 0 0 0 1.5px rgba(124,206,255,.95),inset 0 0 56px 6px rgba(84,150,255,.42);opacity:0;transition:opacity var(--slow) var(--out);pointer-events:none}
   .desk.working::after{opacity:1}
@@ -184,7 +231,18 @@
   .keycap.down{transform:translateY(4px);border-bottom-width:1px}
   .keycap:disabled{cursor:default}
 
-  /* ---------- 4. install ---------- */
+  /* ---------- 4. before you install ---------- */
+  .faq{padding:var(--s10) 0 0;border-top:1px solid var(--rule)}
+  .qa{margin-top:var(--s7);max-width:760px}
+  .qa details{border-top:1px solid var(--rule)}
+  .qa details:last-child{border-bottom:1px solid var(--rule)}
+  .qa summary{display:flex;justify-content:space-between;align-items:center;gap:var(--s4);min-height:56px;padding:var(--s3) 0;font:700 1.1rem var(--display);letter-spacing:-.01em;cursor:pointer;list-style:none}
+  .qa summary::-webkit-details-marker{display:none}
+  .qa summary::after{content:"+";font:400 1.5rem/1 var(--ui);color:var(--accent);transition:transform var(--normal) var(--out)}
+  .qa details[open] summary::after{transform:rotate(45deg)}
+  .qa p{color:var(--graphite);max-width:62ch;padding:0 0 var(--s5)}
+
+  /* ---------- 5. install ---------- */
   .install{padding:var(--s10) 0 var(--s9);border-top:1px solid var(--rule)}
   .install h2{max-width:14ch}
   .cards{display:grid;grid-template-columns:1fr 1fr;gap:var(--s4);margin-top:var(--s7)}
@@ -209,17 +267,25 @@
   footer a{display:inline-block;padding:12px 0}
 
   @media (max-width:900px){
-    .hero{grid-template-columns:1fr;gap:var(--s7);min-height:0;padding-top:var(--s6)}
-    .art-col{--ah:min(64svh,620px);justify-self:center}
-    .exhibit .wrap{grid-template-columns:1fr}
-    .cmp{height:min(72svh,640px);justify-self:center}
+    /* the painting is the hook, so on a phone it comes straight after the headline */
+    .hero{grid-template-columns:1fr;gap:0;min-height:0;padding-top:var(--s5)}
+    .hero-copy{display:contents}
+    .eyebrow{order:1}h1{order:2;font-size:clamp(2.6rem,11vw,3.4rem)}.art-col{order:3;margin-top:var(--s5)}.lede{order:4}.actions{order:5}.trust{order:6}
+    .art-col{--ah:min(52svh,480px);width:100%;max-width:420px;justify-self:center;justify-items:center}
+    .art-col .readout,.art-col .placard{width:100%}
+    .ex-pin{grid-template-columns:1fr;gap:var(--s4);align-content:center}
+    .ex-pin .sub{display:none}
+    .stats{grid-template-columns:repeat(4,auto);gap:var(--s3);margin-top:var(--s4);max-width:none}
+    .stats b{font-size:1.35rem}.stats span{font-size:.7rem;line-height:1.3;display:block}
+    .scrubhint{margin-top:var(--s3)}
+    .cmp{height:min(46svh,460px);justify-self:center}
     .how-pin{grid-template-columns:1fr;gap:var(--s5);align-content:center}
     .desk{aspect-ratio:1/1;max-height:52svh;width:100%;justify-self:center}
-    .dots{margin-top:var(--s5)}
+    .steps{margin-top:var(--s5)}
     .cards{grid-template-columns:1fr}
     .top nav a:not(.cta){display:none}
   }
-  @media (max-width:420px){.row{grid-template-columns:1fr;gap:var(--s1)}.win .body{gap:var(--s4);padding:var(--s4)}.keycap{width:72px;height:54px;right:12px;bottom:12px}}
+  @media (max-width:420px){.row{grid-template-columns:1fr;gap:var(--s1)}.win .body{gap:var(--s4);padding:var(--s4)}.keycap{width:72px;height:54px;right:12px;top:12px}}
   /* reduced motion: movement becomes an instant change, the feedback stays */
   .rm *,.rm *::before,.rm *::after{transition-duration:1ms!important;transition-delay:0ms!important;animation:none!important}
 </style>
@@ -236,11 +302,12 @@
 <main>
   <!-- 1. hero: the real stroke plan, replayed live -->
   <section class="wrap hero" aria-labelledby="h1">
-    <div>
+    <div class="hero-copy">
       <p class="eyebrow">The <code>/computer-use</code> skill for Google Antigravity</p>
       <h1 id="h1">2,553 mouse strokes. <em>No&nbsp;hands.</em></h1>
       <p class="lede">Your agent sees the screen and works real Windows and macOS apps with your mouse and keyboard. You can stop it the moment you want to.</p>
       <div class="actions"><a class="btn primary" href="#install">Install, free</a><a class="btn quiet" href="#how">How it works</a></div>
+      <p class="trust"><span id="ver">v1.0.3</span><span>Signed updates</span><span>MIT licensed</span><span><a href="https://github.com/shayann07/antigravity-computer-use" aria-label="Star on GitHub"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 .8l2.2 4.6 5 .7-3.6 3.5.9 5L8 12.3 3.5 14.6l.9-5L.8 6.1l5-.7z"/></svg><span id="stars">Star on GitHub</span></a></span></p>
     </div>
     <div class="art-col">
       <div class="art" id="art">
@@ -253,17 +320,18 @@
         <span class="count" aria-hidden="true"><span class="swatch" id="swatch"></span><span id="count">Stroke 0 / 2,553</span></span>
         <button class="stop" id="stop" type="button"><kbd>Esc</kbd><span id="stopText">Stop it</span></button>
       </div>
-      <p class="placard"><b>Portrait, 2026.</b> Microsoft Paint. Painted by Gemini 4 Hydrogen in Antigravity, following a stroke plan scripted from the photo. Replayed here from that plan, about 280&times; faster.</p>
+      <p class="placard"><b>Portrait, 2026.</b> Microsoft Paint. Painted by Gemini 4 Hydrogen in Antigravity, following a stroke plan scripted from the photo. Replayed here from that plan, about 280&times; faster.<button class="linkish" id="watch" type="button">Watch the real screen recording</button></p>
       <p class="sr" id="live" aria-live="polite"></p>
     </div>
   </section>
 
   <!-- 2. the exhibit -->
-  <section class="exhibit" aria-labelledby="h2a">
-    <div class="wrap">
+  <section class="exhibit" id="exhibit" aria-labelledby="h2a">
+    <div class="wrap ex-pin">
       <div>
-        <h2 id="h2a">Every stroke was a <em>real drag.</em></h2>
-        <p class="sub">The finished painting from that run, next to the photo it came from. Drag across it to compare.</p>
+        <h2 class="cut" id="h2a"><span>Every stroke was a <em>real drag.</em></span></h2>
+        <p class="sub">Scroll to replay the run stroke by stroke. When it's finished, drag across it to compare with the photo.</p>
+        <p class="scrubhint" aria-hidden="true"><i><b id="scrubBar"></b></i><span id="scrubText">Stroke 0</span></p>
         <div class="stats" id="stats">
           <div><b data-to="1">1</b><span>prompt</span></div>
           <div><b data-to="2553">2,553</b><span>real mouse strokes</span></div>
@@ -271,8 +339,8 @@
           <div><b data-to="65" data-unit=" min">65 min</b><span>unattended</span></div>
         </div>
       </div>
-      <div class="cmp" id="cmp" role="slider" tabindex="0" aria-label="Compare the painting with the original photo" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="Photo hidden">
-        <img src="media/painting.jpg" alt="" width="648" height="1152" decoding="async">
+      <div class="cmp" id="cmp" role="slider" tabindex="0" aria-label="Compare the painting with the original photo" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="Photo hidden" aria-disabled="true">
+        <canvas id="scrub" role="img" aria-label="The painting, redrawn stroke by stroke as you scroll"></canvas>
         <div class="rv" id="rv"><img id="rvImg" src="media/photo.jpg" alt="" width="648" height="1152" decoding="async"></div>
         <div class="handle" id="handle"><span>&harr;</span></div>
         <div class="tags" aria-hidden="true"><span>Painted in Paint</span><span>The photo</span></div>
@@ -286,13 +354,14 @@
     <div class="trig" style="top:100svh" data-b="1"></div>
     <div class="trig" style="top:200svh" data-b="2"></div>
     <div class="wrap how-pin">
+      <span class="lb t" aria-hidden="true"></span><span class="lb b" aria-hidden="true"></span>
       <div>
         <div class="beats">
           <div class="beat on" data-b="0"><p class="n">01 &mdash; Read</p><h2>It reads the app <em>first.</em></h2><p class="sub">Every button and field has a role and a name. It reads those before it looks at pixels, so it clicks the right thing.</p></div>
           <div class="beat" data-b="1"><p class="n">02 &mdash; Act</p><h2>Then it uses it. <em>For real.</em></h2><p class="sub">Your mouse, your keyboard, only in the apps you approve.</p></div>
           <div class="beat" data-b="2"><p class="n">03 &mdash; Stop</p><h2>Esc stops it <em>at once.</em></h2><p class="sub">Wherever you are. It lets go of every key and button, and the next task starts fresh.</p><p class="try" id="try">Try it now: press <kbd>Esc</kbd></p></div>
         </div>
-        <div class="dots" aria-hidden="true"><i class="on"></i><i></i><i></i></div>
+        <div class="steps" aria-label="Steps"><button type="button" data-go="0" aria-current="step">Read</button><button type="button" data-go="1">Act</button><button type="button" data-go="2">Stop</button></div>
       </div>
       <div class="desk" id="desk" aria-hidden="true">
         <span class="pill" id="dpill"><i></i><span id="dpillText">Antigravity is working</span></span>
@@ -313,16 +382,29 @@
     </div>
   </section>
 
-  <!-- 4. install -->
+  <!-- 4. before you install -->
+  <section class="faq" aria-labelledby="h2f">
+    <div class="wrap">
+      <h2 class="cut" id="h2f"><span>Before you <em>install.</em></span></h2>
+      <div class="qa">
+        <details><summary>What does it see?</summary><p>The app it's working in: each button and field's role and name from the accessibility tree, plus screenshots of that window. The project has no separate model or telemetry connection; your Antigravity provider's own retention still applies.</p></details>
+        <details><summary>Can it act without asking?</summary><p>No. Nothing runs without your OK: through Antigravity's own approvals with the one-line install, or an access card for each app in standalone mode, where saving, pasting and deleting ask again.</p></details>
+        <details><summary>Can it type into my terminal?</summary><p>No. Terminals and code editors are always click-only, so it can't type commands into them. Sign-ins and admin prompts are always left to you.</p></details>
+        <details><summary>Do I need an API key or another model?</summary><p>No. It uses the model you already have in Antigravity: no API key, no second LLM, no MCP server.</p></details>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. install -->
   <section class="install" id="install" aria-labelledby="h2i">
     <div class="wrap">
-      <h2 id="h2i">Ready when <em>you are.</em></h2>
+      <h2 class="cut" id="h2i"><span>Ready when <em>you are.</em></span></h2>
       <p class="sub">Free and open source, for Windows and macOS.</p>
       <div class="cards">
         <div class="card">
           <h3>Ask your agent</h3>
           <p>Paste this into Antigravity and approve the command it shows you.</p>
-          <div class="code"><pre id="prompt">Install the computer use skill from https://github.com/shayann07/antigravity-computer-use with the one-line installer for this computer. Show me the command before you run it.</pre><button class="copy" type="button" data-copy="prompt"><span class="idle">Copy</span><span class="done">Copied</span></button></div>
+          <div class="code"><pre id="prompt">Install the computer use skill from https://github.com/shayann07/antigravity-computer-use with the one-line installer for this computer. Show me the command before you run it.</pre><button class="copy" type="button" data-copy="prompt" id="copyPrompt"><span class="idle">Copy</span><span class="done">Copied</span></button></div>
         </div>
         <div class="card">
           <h3>Or run one line</h3>
@@ -347,6 +429,14 @@
   </div>
 </footer>
 
+<div class="narrator" id="narrator" aria-hidden="true"><svg viewBox="0 0 24 24"><defs><linearGradient id="pf3" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FAFBFC"/><stop offset="1" stop-color="#82AFC9"/></linearGradient></defs><path d="M4 2l15.5 9.2-6.8 1.6-3.6 6.4z" fill="url(#pf3)" stroke="#1B2735" stroke-width="1.4" stroke-linejoin="round"/></svg><b>Antigravity</b></div>
+<dialog class="film" id="film" aria-labelledby="filmCap">
+  <div class="film-in">
+    <video id="filmVideo" src="media/real-run.mp4" poster="media/real-run.jpg" muted playsinline loop preload="none" controls></video>
+    <p id="filmCap">The real screen recording of the run, cropped to the Paint canvas, about 400&times; faster. Gemini 4 Hydrogen followed a stroke plan scripted from the photo.</p>
+    <form method="dialog"><button class="stop" type="submit">Close</button></form>
+  </div>
+</dialog>
 <script src="plan.js" defer></script>
 <script src="app.js" defer></script>
 </body>

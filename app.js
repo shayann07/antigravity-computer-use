@@ -2,51 +2,67 @@
   'use strict';
   const $ = id => document.getElementById(id);
   const RM = document.documentElement.classList.contains('rm');
+  const FINE = matchMedia('(hover: hover) and (pointer: fine)').matches;
   // Motion tokens, mirrored from the CSS custom properties of the same names.
-  const T = {fast: 100, normal: 200, slow: 300, inout: 'cubic-bezier(.77,0,.175,1)', out: 'cubic-bezier(.23,1,.32,1)'};
+  const T = {fast: 100, normal: 200, slow: 300, inout: 'cubic-bezier(.77,0,.175,1)'};
   const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
   const fmt = n => n.toLocaleString('en-US');
   const easeInOut = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
   const easeOut = t => 1 - Math.pow(1 - t, 3);
+  const follow = (k, dt) => 1 - Math.pow(1 - k, dt / 16.7);       // frame-rate independent lerp factor
   const live = $('live');
   const say = text => { live.textContent = ''; requestAnimationFrame(() => { live.textContent = text; }); };
 
-  /* ---------- 1. the painter: replays the real stroke plan ---------- */
+  /* ---------- the stroke plan, shared by the hero and the exhibit ---------- */
+  const W = 468, H = 832, BRUSH = 2.9;     // plan units; the 4 px Paint brush at the plan's scale
+  let PAL = [], STROKES = [];
+  function parsePlan() {
+    const plan = window.PAINT_PLAN; if (!plan) return false;
+    PAL = plan.pal; let colour = 0;
+    for (const s of plan.steps) {
+      if (typeof s === 'string') { if (s[0] === 'H') colour = +s.slice(1); }
+      else STROKES.push([colour, s]);
+    }
+    return true;
+  }
+  function prep(canvas, cssW) {
+    const k = cssW / W * Math.min(devicePixelRatio || 1, 2);
+    canvas.width = Math.round(W * k); canvas.height = Math.round(H * k);
+    const ctx = canvas.getContext('2d', {alpha: false});
+    ctx.setTransform(k, 0, 0, k, 0, 0);
+    ctx.lineWidth = BRUSH; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    return ctx;
+  }
+  function strokes(ctx, from, to) {
+    let colour = -1;
+    for (let i = from; i < to; i++) {
+      const [c, p] = STROKES[i];
+      if (c !== colour) { colour = c; ctx.strokeStyle = PAL[c]; }
+      ctx.beginPath(); ctx.moveTo(p[0], p[1]);
+      for (let j = 2; j < p.length; j += 2) ctx.lineTo(p[j], p[j + 1]);
+      if (p.length === 2) ctx.lineTo(p[0] + .01, p[1]);
+      ctx.stroke();
+    }
+  }
+  const endOf = i => { const p = STROKES[i][1]; return [p[p.length - 2], p[p.length - 1]]; };
+  const fillWith = (ctx, colour) => { ctx.fillStyle = colour; ctx.fillRect(0, 0, W, H); };
+
+  /* ---------- 1. the hero painter: replays the plan once it is in view ---------- */
   const painter = (() => {
-    const art = $('art'), canvas = $('paint'), ctx = canvas.getContext('2d', {alpha: false});
-    const agent = $('agent'), pill = $('pill'), pillText = $('pillText'), count = $('count'), swatch = $('swatch');
-    const stopBtn = $('stop'), stopText = $('stopText'), stopKey = stopBtn.querySelector('kbd');
-    const W = 468, H = 832, BRUSH = 2.9;   // plan units; the 4 px Paint brush at the plan's scale
-    const DURATION = 14000;                  // the 65 minute run, about 280x faster
-    const FILL_AT = 700;                     // the run opens with a bucket fill in the first colour
-    let strokes = [], pal = [], drawn = 0, filled = false, elapsed = 0, state = 'idle', last = 0, raf = 0;
+    const art = $('art'), canvas = $('paint'), agent = $('agent'), pill = $('pill'), pillText = $('pillText');
+    const count = $('count'), swatch = $('swatch'), stopBtn = $('stop'), stopText = $('stopText'), stopKey = stopBtn.querySelector('kbd');
+    const DURATION = 14000, FILL_AT = 700;  // the 65 minute run, about 280x faster; it opens with a bucket fill
+    let ctx, drawn = 0, filled = false, elapsed = 0, state = 'idle', last = 0, raf = 0, away = false;
     let cssW = 0, cx = 0, cy = 0, tx = 0, ty = 0;
 
     function size() {
-      cssW = art.clientWidth;
-      const k = cssW / W * Math.min(devicePixelRatio || 1, 2);
-      canvas.width = Math.round(W * k); canvas.height = Math.round(H * k);
-      ctx.setTransform(k, 0, 0, k, 0, 0);
-      ctx.lineWidth = BRUSH; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-      blank(); if (filled) fill();
-      const upTo = drawn; drawn = 0; draw(upTo);
-    }
-    function blank() { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H); }
-    function fill() { filled = true; ctx.fillStyle = pal[0]; ctx.fillRect(0, 0, W, H); }
-    function draw(upTo) {
-      let colour = -1;
-      for (; drawn < upTo; drawn++) {
-        const [c, p] = strokes[drawn];
-        if (c !== colour) { colour = c; ctx.strokeStyle = pal[c]; }
-        ctx.beginPath(); ctx.moveTo(p[0], p[1]);
-        for (let j = 2; j < p.length; j += 2) ctx.lineTo(p[j], p[j + 1]);
-        if (p.length === 2) ctx.lineTo(p[0] + .01, p[1]);
-        ctx.stroke();
-      }
+      cssW = art.clientWidth; ctx = prep(canvas, cssW);
+      fillWith(ctx, '#fff'); if (filled) fillWith(ctx, PAL[0]);
+      strokes(ctx, 0, drawn);
     }
     function readout() {
-      count.textContent = `Stroke ${fmt(drawn)} / ${fmt(strokes.length)}`;
-      if (drawn) swatch.style.background = pal[strokes[drawn - 1][0]];
+      count.textContent = `Stroke ${fmt(drawn)} / ${fmt(STROKES.length)}`;
+      swatch.style.background = drawn ? PAL[STROKES[drawn - 1][0]] : filled ? PAL[0] : '#fff';
     }
     function setButton(mode) {
       stopKey.hidden = mode !== 'stop';
@@ -56,22 +72,21 @@
       const dt = Math.min(64, now - last); last = now;
       if (state === 'running') {
         elapsed += dt;
-        if (!filled && elapsed >= FILL_AT) { fill(); swatch.style.background = pal[0]; }
-        const target = Math.min(strokes.length, Math.floor(Math.max(0, elapsed - FILL_AT) / (DURATION - FILL_AT) * strokes.length));
+        if (!filled && elapsed >= FILL_AT) { filled = true; fillWith(ctx, PAL[0]); readout(); }
+        const target = Math.min(STROKES.length, Math.floor(Math.max(0, elapsed - FILL_AT) / (DURATION - FILL_AT) * STROKES.length));
         if (target > drawn) {
-          draw(target); readout();
-          const p = strokes[drawn - 1][1], s = cssW / W;
-          tx = p[p.length - 2] * s; ty = p[p.length - 1] * s;
+          strokes(ctx, drawn, target); drawn = target; readout();
+          const [x, y] = endOf(drawn - 1), s = cssW / W; tx = x * s; ty = y * s;
         }
-        if (drawn >= strokes.length) finish();
+        if (drawn >= STROKES.length) finish();
       }
       // the hand trails its brush a little, so it glides instead of teleporting
-      const a = 1 - Math.pow(1 - .3, dt / 16.7);
-      cx += (tx - cx) * a; cy += (ty - cy) * a;
+      const a = follow(.3, dt); cx += (tx - cx) * a; cy += (ty - cy) * a;
       agent.style.transform = `translate3d(${cx}px,${cy}px,0)`;
       raf = state === 'running' || Math.abs(tx - cx) + Math.abs(ty - cy) > .5 ? requestAnimationFrame(frame) : 0;
     }
     function loop() { if (!raf) { last = performance.now(); raf = requestAnimationFrame(frame); } }
+    function aim() { tx = cssW * .5; ty = cssW * 16 / 9 * .5; }
     function start() {
       state = 'running'; art.classList.add('working'); agent.classList.add('on');
       pill.classList.remove('stopped'); pillText.textContent = 'Antigravity is working'; pill.classList.add('on');
@@ -81,71 +96,112 @@
       if (state !== 'running') return;
       state = 'stopped'; art.classList.remove('working'); agent.classList.remove('on');
       pill.classList.add('stopped'); pillText.textContent = `Stopped at stroke ${fmt(drawn)}. You pressed Esc.`;
-      setButton('resume'); say(`Stopped at stroke ${fmt(drawn)} of ${fmt(strokes.length)}.`);
+      setButton('resume'); say(`Stopped at stroke ${fmt(drawn)} of ${fmt(STROKES.length)}.`);
     }
     function finish() {
       state = 'done'; art.classList.remove('working'); agent.classList.remove('on');
-      pill.classList.add('stopped'); pillText.textContent = `Done. ${fmt(strokes.length)} strokes.`;
+      pill.classList.add('stopped'); pillText.textContent = `Done. ${fmt(STROKES.length)} strokes.`;
       setButton('again');
     }
-    function restart() {
-      drawn = 0; elapsed = 0; filled = false; blank(); readout(); aim(); start();
-    }
+    function restart() { drawn = 0; elapsed = 0; filled = false; fillWith(ctx, '#fff'); readout(); aim(); start(); }
     stopBtn.addEventListener('click', () => {
       if (state === 'running') stop();
       else if (state === 'stopped') start();
       else if (state === 'done') restart();
+      else if (state === 'ready') start();
     });
     function init() {
-      const plan = window.PAINT_PLAN;
-      if (!plan) return;
-      pal = plan.pal; let colour = 0;
-      for (const s of plan.steps) {
-        if (typeof s === 'string') { if (s[0] === 'H') colour = +s.slice(1); }
-        else strokes.push([colour, s]);
-      }
       size();
       let rw = cssW; new ResizeObserver(() => { if (art.clientWidth !== rw) { rw = art.clientWidth; size(); } }).observe(art);
-      if (RM) { fill(); draw(strokes.length); readout(); finish(); return; }
-      readout(); cx = cssW * .9; cy = cssW * 1.6; aim(); start();
+      if (RM) { filled = true; fillWith(ctx, PAL[0]); strokes(ctx, 0, STROKES.length); drawn = STROKES.length; readout(); finish(); return; }
+      readout(); cx = cssW * .9; cy = cssW * 1.6; aim(); state = 'ready'; setButton('stop');
+      // start when the canvas is in view; replay a finished painting when you come back to it
+      let left = false;
+      new IntersectionObserver(([e]) => {
+        if (e.intersectionRatio >= .4) {
+          if (state === 'ready') start();
+          else if (state === 'done' && left) { left = false; restart(); }
+        } else if (e.intersectionRatio === 0 && state === 'done') left = true;
+      }, {threshold: [0, .4]}).observe(art);
     }
-    // before the fill, the hand travels to the middle of the canvas to click the bucket
-    function aim() { tx = cssW * .5; ty = cssW * 16 / 9 * .5; }
-    return {init, stop, get running() { return state === 'running'; }};
+    return {
+      init, stop,
+      get running() { return state === 'running'; },
+      // while the narrator has left the canvas, the painter's own pointer steps aside
+      setAway(v) { if (v !== away) { away = v; agent.classList.toggle('away', v); } },
+      point() { const r = art.getBoundingClientRect(); return state === 'running' || state === 'stopped' ? [r.left + cx, r.top + cy] : [r.left + r.width * .62, r.top + r.height * .78]; }
+    };
   })();
 
-  /* ---------- 2. the exhibit: painting against the photo ---------- */
-  (() => {
-    const cmp = $('cmp'), rv = $('rv'), rvImg = $('rvImg'), handle = $('handle');
-    let x = 100, touched = false, rect = null;
-    function set(v) {
+  /* ---------- 2. the exhibit: scroll replays the run, then the photo comparison opens ---------- */
+  const exhibit = (() => {
+    const sec = $('exhibit'), cmp = $('cmp'), canvas = $('scrub'), rv = $('rv'), rvImg = $('rvImg'), handle = $('handle');
+    const bar = $('scrubBar'), text = $('scrubText');
+    const SNAP = 256;                         // keep a snapshot every 256 strokes, so scrubbing back never redraws more than that
+    let ctx, cssW = 0, n = -2, snaps = [], top = 0, len = 1, x = 100, touched = false, swept = false, sweeping = 0, rect = null, ready = false;
+
+    function snap(k) { const c = document.createElement('canvas'); c.width = canvas.width; c.height = canvas.height; c.getContext('2d').drawImage(canvas, 0, 0); snaps[k] = c; }
+    function restore(k) { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(snaps[k], 0, 0); ctx.restore(); n = k * SNAP; }
+    // n: -1 blank canvas, 0 bucket-filled, m = filled plus m strokes
+    function render(want) {
+      if (want === n) return;
+      if (want < 0) { fillWith(ctx, '#fff'); n = -1; return; }
+      if (n < 0) { fillWith(ctx, PAL[0]); n = 0; if (!snaps[0]) snap(0); }
+      const k = Math.floor(want / SNAP);
+      if (want < n || (k * SNAP > n && snaps[k])) restore(k);
+      while (n < want) {
+        const next = Math.min(want, (Math.floor(n / SNAP) + 1) * SNAP);
+        strokes(ctx, n, next); n = next;
+        if (n % SNAP === 0 && !snaps[n / SNAP]) snap(n / SNAP);
+      }
+    }
+    function size() {
+      cssW = cmp.clientWidth; ctx = prep(canvas, cssW); snaps = [];
+      const want = n; n = -2; render(Math.max(-1, want));
+      const r = sec.getBoundingClientRect(); top = r.top + scrollY; len = Math.max(1, sec.offsetHeight - innerHeight);
+    }
+    function setX(v) {
       x = clamp(v, 0, 100);
       rv.style.transform = `translateX(${x}%)`; rvImg.style.transform = `translateX(${-x}%)`; handle.style.transform = `translateX(${x}%)`;
       const shown = Math.round(100 - x);
       cmp.setAttribute('aria-valuenow', shown); cmp.setAttribute('aria-valuetext', `${shown}% of the photo shown`);
     }
-    function sweep() {
-      if (touched) return;
-      if (RM) { set(50); return; }
+    function sweep(to) {
+      cancelAnimationFrame(sweeping);
+      if (RM) { setX(to); return; }
       const t0 = performance.now(), from = x;
       const step = now => {
         if (touched) return;
-        const t = clamp((now - t0) / 1400);
-        set(from + (50 - from) * easeInOut(t));
-        if (t < 1) requestAnimationFrame(step);
+        const t = clamp((now - t0) / 1100);
+        setX(from + (to - from) * easeInOut(t));
+        if (t < 1) sweeping = requestAnimationFrame(step);
       };
-      requestAnimationFrame(step);
+      sweeping = requestAnimationFrame(step);
     }
-    const at = e => set((e.clientX - rect.left) / rect.width * 100);
-    cmp.addEventListener('pointerdown', e => { touched = true; rect = cmp.getBoundingClientRect(); cmp.setPointerCapture(e.pointerId); at(e); });
+    function update() {
+      if (!ready) return;
+      const p = clamp((scrollY - top) / len);
+      const want = RM ? STROKES.length : p < .03 ? -1 : p < .06 ? 0 : Math.round(clamp((p - .06) / .7) * STROKES.length);
+      render(want);
+      bar.style.transform = `scaleX(${Math.max(0, n) / STROKES.length})`;
+      text.textContent = n < 0 ? 'Scroll to paint' : n === 0 ? 'Bucket fill' : `Stroke ${fmt(n)} / ${fmt(STROKES.length)}`;
+      const done = n === STROKES.length;
+      if (done !== cmp.classList.contains('done')) {
+        cmp.classList.toggle('done', done); cmp.setAttribute('aria-disabled', String(!done));
+        if (!done && !touched) { swept = false; cancelAnimationFrame(sweeping); setX(100); }
+      }
+      if (done && !swept && !touched && p >= .82) { swept = true; sweep(50); }
+    }
+    const at = e => { touched = true; cancelAnimationFrame(sweeping); setX((e.clientX - rect.left) / rect.width * 100); };
+    cmp.addEventListener('pointerdown', e => { if (!cmp.classList.contains('done')) return; rect = cmp.getBoundingClientRect(); cmp.setPointerCapture(e.pointerId); at(e); });
     cmp.addEventListener('pointermove', e => { if (rect && cmp.hasPointerCapture(e.pointerId)) at(e); });
     cmp.addEventListener('pointerup', () => { rect = null; });
     cmp.addEventListener('keydown', e => {
       const d = {ArrowLeft: -5, ArrowRight: 5, Home: -100, End: 100}[e.key];
-      if (d === undefined) return; e.preventDefault(); touched = true; set(x + d);
+      if (d === undefined || !cmp.classList.contains('done')) return;
+      e.preventDefault(); touched = true; cancelAnimationFrame(sweeping); setX(x + d);
     });
-    set(100);
-    new IntersectionObserver((es, io) => { if (es[0].isIntersecting) { io.disconnect(); setTimeout(sweep, RM ? 0 : 250); } }, {threshold: .55}).observe(cmp);
+    setX(100);
 
     const nums = [...document.querySelectorAll('#stats b')];
     new IntersectionObserver((es, io) => {
@@ -158,13 +214,25 @@
       };
       requestAnimationFrame(step);
     }, {threshold: .6}).observe($('stats'));
+
+    return {
+      init() { ready = true; size(); update(); let rw = cmp.clientWidth; new ResizeObserver(() => { if (cmp.clientWidth !== rw) { rw = cmp.clientWidth; size(); update(); } }).observe(cmp); },
+      update, resize() { if (ready) { const r = sec.getBoundingClientRect(); top = r.top + scrollY; len = Math.max(1, sec.offsetHeight - innerHeight); } },
+      // where the narrator should be: on the brush while it paints, on the handle once it is finished
+      point() {
+        const r = cmp.getBoundingClientRect();
+        if (n === STROKES.length) return [r.left + r.width * x / 100 + 4, r.top + r.height * .5 + 6];
+        if (n <= 0) return [r.left + r.width * .5, r.top + r.height * .5];
+        const [px, py] = endOf(n - 1), s = r.width / W; return [r.left + px * s, r.top + py * s];
+      }
+    };
   })();
 
   /* ---------- 3. how it works: each beat is a timed sequence ---------- */
   const how = (() => {
-    const desk = $('desk'), agent = $('dagent'), field = $('field'), typed = $('typed'), save = $('save'), toast = $('toast');
+    const sec = $('how'), desk = $('desk'), agent = $('dagent'), field = $('field'), typed = $('typed'), save = $('save'), toast = $('toast');
     const pill = $('dpill'), pillText = $('dpillText'), keycap = $('keycap'), tryLine = $('try');
-    const beats = [...document.querySelectorAll('.beat')], dots = [...document.querySelectorAll('.dots i')];
+    const beats = [...document.querySelectorAll('.beat')], steps = [...document.querySelectorAll('.steps button')];
     const tryText = tryLine.innerHTML;
     let beat = -1, run = 0, inView = false, working = false, pos = [0, 0], autoTimer = 0;
 
@@ -181,9 +249,7 @@
       await a.finished.catch(() => {});
       if (id !== run) throw 0;
     }
-    async function type(text, ms, id) {
-      for (const ch of text) { typed.textContent += ch; await wait(ms, id); }
-    }
+    async function type(text, ms, id) { for (const ch of text) { typed.textContent += ch; await wait(ms, id); } }
     function reset() {
       run++; clearTimeout(autoTimer);
       agent.getAnimations().forEach(a => a.cancel());
@@ -217,7 +283,7 @@
       typed.textContent = kept;
       keycap.classList.add('on', 'down'); setTimeout(() => keycap.classList.remove('down'), T.fast + 40);
       pill.classList.add('on', 'stopped'); pillText.textContent = auto ? 'Stopped. Esc was pressed for you.' : 'Stopped. You pressed Esc.';
-      tryLine.innerHTML = auto ? 'That one was automatic. <button class="stop" type="button" id="again">Run it again</button>' : 'Instant, wherever focus is. <button class="stop" type="button" id="again">Run it again</button>';
+      tryLine.innerHTML = (auto ? 'That one was automatic. ' : 'Instant, wherever focus is. ') + '<button class="stop" type="button" id="again">Run it again</button>';
       $('again').addEventListener('click', () => { const id = reset(); stopDemo(id).catch(() => {}); });
       say(auto ? 'The demo stopped. Esc was pressed for you.' : 'Stopped. You pressed Esc.');
     }
@@ -226,7 +292,7 @@
     function play() {
       const id = reset();
       beats.forEach((b, i) => b.classList.toggle('on', i === beat));
-      dots.forEach((d, i) => d.classList.toggle('on', i <= beat));
+      steps.forEach((b, i) => { b.classList.toggle('past', i < beat); if (i === beat) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current'); });
       if (!inView) return;
       [read, act, stopDemo][beat](id).catch(() => {});
     }
@@ -238,19 +304,115 @@
       if (beat < 0) beat = 0;
       if (inView) play(); else reset();
     }, {threshold: .35}).observe(desk);
+    // the steps are buttons: each jumps to the middle of its beat
+    steps.forEach((b, i) => b.addEventListener('click', () => {
+      const r = sec.getBoundingClientRect();
+      scrollTo({top: r.top + scrollY + i * innerHeight + innerHeight * .15, behavior: RM ? 'auto' : 'smooth'});
+    }));
     return {get working() { return working; }, press};
   })();
 
+  /* ---------- the narrator: the same pointer leads you down the page ---------- */
+  const narrator = (() => {
+    if (RM) return {kick() {}};
+    const el = $('narrator'), art = $('art'), ex = $('exhibit'), hw = $('how'), desk = $('desk');
+    const marks = [...document.querySelectorAll('.qa summary'), $('copyPrompt')];
+    let cx = 0, cy = 0, shown = false, placed = false, raf = 0, last = 0;
+    const bez = (a, c, b, t) => { const u = 1 - t; return [u * u * a[0] + 2 * u * t * c[0] + t * t * b[0], u * u * a[1] + 2 * u * t * c[1] + t * t * b[1]]; };
+    // after the exhibit it only points: at a question's + sign, or just under the Copy button
+    const aimAt = (m, r) => m.tagName === 'SUMMARY' ? [r.right - 14, r.top + r.height * .5 + 2] : [r.left + r.width * .5, r.bottom - 3];
+    function target() {
+      const vh = innerHeight, exR = ex.getBoundingClientRect(), hwR = hw.getBoundingClientRect();
+      // still in the hero: the painter's own pointer is the one on screen
+      if (exR.top > vh * .92) return null;
+      // leaving the painting for the exhibit, along a gentle arc
+      if (exR.top > 57) {
+        const t = easeInOut(clamp((vh * .92 - exR.top) / (vh * .92 - 57))), a = painter.point(), b = exhibit.point();
+        return bez(a, [Math.max(a[0], b[0]) + 160, (a[1] + b[1]) / 2], b, t);
+      }
+      // inside the exhibit: on the brush, then on the handle
+      if (exR.bottom > vh) return exhibit.point();
+      // on to the desk, where the demo's own pointer takes over
+      if (hwR.top > 57) {
+        const t = easeInOut(clamp((vh - exR.bottom) / (vh - 57 + (hwR.top - exR.bottom)))), a = exhibit.point(), d = desk.getBoundingClientRect(), b = [d.left + d.width * .78, d.top + d.height * .86];
+        return bez(a, [(a[0] + b[0]) / 2, Math.min(a[1], b[1]) - 80], b, t);
+      }
+      if (hwR.bottom > vh * .6) return null;
+      // then whatever deserves a look: each question, and finally the Copy button
+      let best = null, bestEl = null, bestD = Infinity;
+      for (const m of marks) {
+        const r = m.getBoundingClientRect(); if (r.bottom < 60 || r.top > vh) continue;
+        const d = Math.abs(r.top + r.height / 2 - vh * .45); if (d < bestD) { bestD = d; best = r; bestEl = m; }
+      }
+      return best ? Object.assign(aimAt(bestEl, best), {bare: true}) : null;
+    }
+    function frame(now) {
+      const dt = Math.min(64, now - last); last = now;
+      const t = target();
+      if (!t) { if (shown) { shown = false; el.classList.remove('on'); painter.setAway(false); } raf = 0; return; }
+      if (!placed) { cx = t[0]; cy = t[1]; placed = true; }
+      if (!shown) { shown = true; el.classList.add('on'); painter.setAway(true); }
+      el.classList.toggle('bare', !!t.bare);
+      const a = follow(.16, dt); cx += (t[0] - cx) * a; cy += (t[1] - cy) * a;
+      el.style.transform = `translate3d(${cx}px,${cy}px,0)`;
+      raf = Math.abs(t[0] - cx) + Math.abs(t[1] - cy) > .4 ? requestAnimationFrame(frame) : 0;
+    }
+    return {kick() { if (!raf) { last = performance.now(); raf = requestAnimationFrame(frame); } }};
+  })();
+
+  /* ---------- one scroll handler: the exhibit scrub and the narrator ---------- */
+  let queued = false;
+  const onScroll = () => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; exhibit.update(); narrator.kick(); }); };
+  addEventListener('scroll', onScroll, {passive: true});
+  addEventListener('resize', () => { exhibit.resize(); onScroll(); });
+
+  /* ---------- smooth wheel: only for notched mouse wheels; trackpads, keys, Find and anchors stay native ---------- */
+  if (FINE && !RM) {
+    let target = scrollY, current = scrollY, raf = 0, last = 0, mine = -1;
+    const max = () => document.documentElement.scrollHeight - innerHeight;
+    function frame(now) {
+      const dt = Math.min(64, now - last); last = now;
+      if (Math.abs(scrollY - mine) > 2) { raf = 0; return; }       // something else scrolled: let it win
+      current += (target - current) * follow(.16, dt);
+      if (Math.abs(target - current) < .5) current = target;
+      mine = Math.round(current); scrollTo({top: current, behavior: 'instant'});
+      raf = current !== target ? requestAnimationFrame(frame) : 0;
+    }
+    addEventListener('wheel', e => {
+      if (e.ctrlKey || e.defaultPrevented || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      const notched = e.deltaMode === 1 || (Number.isInteger(e.deltaY) && Math.abs(e.deltaY) >= 50);
+      if (!notched || e.target.closest('dialog,pre,.cmp')) return;
+      e.preventDefault();
+      if (!raf) { current = scrollY; target = scrollY; mine = scrollY; }
+      const step = e.deltaMode === 1 ? e.deltaY * 40 : e.deltaY;
+      target = clamp(target + step, 0, max());
+      if (!raf) { last = performance.now(); raf = requestAnimationFrame(frame); }
+    }, {passive: false});
+  }
+
+  /* ---------- the real recording, in a dialog ---------- */
+  const film = $('film'), video = $('filmVideo');
+  $('watch').addEventListener('click', () => { film.showModal(); video.play().catch(() => {}); });
+  film.addEventListener('close', () => video.pause());
+  film.addEventListener('click', e => { if (e.target === film) film.close(); });
+
   addEventListener('keydown', e => {
-    if (e.key !== 'Escape') return;
+    if (e.key !== 'Escape' || film.open) return;               // a open dialog closes on its own
     if (how.working) how.press(false);
     else if (painter.running) painter.stop();
   });
 
-  if (window.PAINT_PLAN) painter.init();
-  else document.querySelector('script[src="plan.js"]').addEventListener('load', painter.init, {once: true});
+  /* ---------- the plan arrives, then both canvases start ---------- */
+  const boot = () => { if (!parsePlan()) return; painter.init(); exhibit.init(); onScroll(); };
+  if (window.PAINT_PLAN) boot();
+  else document.querySelector('script[src="plan.js"]').addEventListener('load', boot, {once: true});
 
-  /* ---------- 4. install: OS tabs and copy ---------- */
+  /* ---------- trust row: live version and stars, if GitHub answers ---------- */
+  const api = 'https://api.github.com/repos/shayann07/antigravity-computer-use';
+  fetch(api).then(r => r.ok ? r.json() : null).then(d => { if (d && Number.isFinite(d.stargazers_count)) $('stars').textContent = `${fmt(d.stargazers_count)} stars`; }).catch(() => {});
+  fetch(api + '/releases/latest').then(r => r.ok ? r.json() : null).then(d => { if (d && /^v\d/.test(d.tag_name || '')) $('ver').textContent = d.tag_name; }).catch(() => {});
+
+  /* ---------- install: OS tabs and copy ---------- */
   const tabs = [...document.querySelectorAll('[role=tab]')];
   const select = tab => tabs.forEach(t => { const on = t === tab; t.setAttribute('aria-selected', on); t.tabIndex = on ? 0 : -1; $(t.getAttribute('aria-controls')).hidden = !on; });
   tabs.forEach((t, i) => {
