@@ -148,16 +148,43 @@ func macTypingEvents(source: CGEventSource?, scalar: Unicode.Scalar) -> [CGEvent
         return event
     }
 }
-// The app that receives keystrokes right now, asked live from the
-// accessibility server rather than from a cached workspace notification.
+// The app that receives keystrokes right now, or 0 when that is unknown.
+// Every input gate uses this, never NSWorkspace.frontmostApplication: that
+// value is cached and refreshed only by workspace notifications, which this
+// helper does not reliably receive. On an Intel Mac with macOS 26.6 it read
+// "TextEdit" for seconds while Claude was in front, so typing meant for
+// TextEdit went into Claude. Accessibility answers live; Electron apps such as
+// Claude can return no focused application (kAXErrorNoValue), and then the
+// window server's front-most normal window decides. 0 makes callers refuse.
+private let macSystemWide: AXUIElement = {
+    let element = AXUIElementCreateSystemWide()
+    AXUIElementSetMessagingTimeout(element, 0.25)   // a hung app must not stall input checks
+    return element
+}()
 func macFrontmostPid() -> pid_t {
     var value: CFTypeRef?
-    if AXUIElementCopyAttributeValue(AXUIElementCreateSystemWide(), kAXFocusedApplicationAttribute as CFString, &value) == .success,
+    if AXUIElementCopyAttributeValue(macSystemWide, kAXFocusedApplicationAttribute as CFString, &value) == .success,
        let value, CFGetTypeID(value) == AXUIElementGetTypeID() {
         var pid: pid_t = 0
-        if AXUIElementGetPid(value as! AXUIElement, &pid) == .success { return pid }
+        if AXUIElementGetPid(value as! AXUIElement, &pid) == .success, pid > 0 { return pid }
     }
-    return NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0
+    return macWindowServerFrontPid() ?? 0
+}
+// The owner of the front-most ordinary window, skipping this project's own
+// bar, glow and cursor windows, which share the helper's bundle.
+func macWindowServerFrontPid() -> pid_t? {
+    guard let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else { return nil }
+    let own = Bundle.main.bundlePath + "/"
+    for window in windows {
+        guard (window[kCGWindowLayer as String] as? Int) == 0,
+              (window[kCGWindowAlpha as String] as? Double ?? 1) > 0,
+              let bounds = window[kCGWindowBounds as String] as? [String: Any],
+              (bounds["Width"] as? Double ?? 0) >= 1, (bounds["Height"] as? Double ?? 0) >= 1,
+              let owner = window[kCGWindowOwnerPID as String] as? Int, owner > 0 else { continue }
+        if let path = macExecutablePath(pid_t(owner)), path.hasPrefix(own) { continue }
+        return pid_t(owner)
+    }
+    return nil
 }
 func macExecutablePath(_ pid: pid_t) -> String? {
     guard pid > 0 else { return nil }
@@ -292,7 +319,7 @@ func macBringToFront(_ args: [String: Any]) throws {
     }
     let app = NSRunningApplication(processIdentifier: pid)
     let needsRestore = state.minimized || state.hidden
-    let needsFront = NSWorkspace.shared.frontmostApplication?.processIdentifier != pid || axBool(window, kAXMainAttribute as String) != true
+    let needsFront = macFrontmostPid() != pid || axBool(window, kAXMainAttribute as String) != true
     if needsRestore || needsFront {
         try MacFence.dispatched()
         if state.hidden { _ = app?.unhide() }
@@ -304,7 +331,7 @@ func macBringToFront(_ args: [String: Any]) throws {
         _ = AXUIElementPerformAction(window, kAXRaiseAction as CFString)
         let deadline = Date().addingTimeInterval(0.35)
         while Date() < deadline {
-            if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
+            if macFrontmostPid() == pid,
                axBool(window, kAXMinimizedAttribute as String) != true,
                app?.isHidden != true {
                 break
@@ -312,7 +339,7 @@ func macBringToFront(_ args: [String: Any]) throws {
             Thread.sleep(forTimeInterval: 0.03)
         }
     }
-    guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { throw AxonError("focus_changed", "The approved app did not become foreground.") }
+    guard macFrontmostPid() == pid else { throw AxonError("focus_changed", "The approved app did not become foreground.") }
     guard windowNumber(window: window, pid: pid, title: title, rect: axRect(window), onScreenOnly: true) != nil else {
         throw AxonError("other_desktop", "The approved window is not on the current Space after activation. Move it to the current Space yourself; no Space was switched.")
     }
@@ -1135,7 +1162,7 @@ func macElementInWindow(_ element: AXUIElement, _ window: AXUIElement) -> Bool {
 
 func macEnsureTyping(_ args: [String: Any]) throws {
     let (window, pid, _, _) = try resolveWindow(args)
-    guard !IsSecureEventInputEnabled(), NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else {
+    guard !IsSecureEventInputEnabled(), macFrontmostPid() == pid else {
         throw AxonError("focus_changed", "Keyboard input requires the foreground approved app and nonsecure input.")
     }
     macEnableWebAccessibility(pid)
@@ -1374,7 +1401,7 @@ func macFileDialog(_ args: [String: Any]) throws -> [String: Any] {
     let ownSubrole = axString(owner, kAXSubroleAttribute as String) ?? ""
     let ownId = axString(owner, kAXIdentifierAttribute as String) ?? ""
     let candidates = sheets + ((ownRole == "AXSheet" || ownSubrole == "AXDialog" || ownId == "open-panel" || ownId == "save-panel") ? [owner] : [])
-    guard candidates.count == 1, NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else {
+    guard candidates.count == 1, macFrontmostPid() == pid else {
         throw AxonError("file_dialog_not_found", "Observe an already-open native file picker attached to this owner.")
     }
     let dialog = candidates[0], path = str(args["path"]) ?? ""

@@ -127,7 +127,9 @@ final class Presence {
         lastKind = (type == .keyDown || type == .flagsChanged) ? "keyboard" : "mouse"
         if type != .mouseMoved {
             lastCommit = now
-            commitWindowPid = NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0
+            // The window server, not the cached workspace value, and no
+            // accessibility round trip inside the event tap.
+            commitWindowPid = macWindowServerFrontPid() ?? 0
         }
         if type == .keyDown && event.getIntegerValueField(.keyboardEventKeycode) == 53 && (acting > 0 || taskActive) {
             stopRequested = true
@@ -431,7 +433,7 @@ func guardSameWindow(_ a: [String: Any], _ targetPid: pid_t) throws {
     if !Presence.shared.monitoring || targetPid == 0 { return }
     if !Presence.shared.busy(idleThresholdMs) { return }
     if Presence.shared.userPid != targetPid { return }
-    if NSWorkspace.shared.frontmostApplication?.processIdentifier != targetPid { return }
+    if macFrontmostPid() != targetPid { return }
     throw AxonError("user_in_window", "The user is working in that app right now.",
                     "Work somewhere else, wait for them to stop, or pass mode:\"take\".")
 }
@@ -474,7 +476,7 @@ func opListApps(_ a: [String: Any]) throws -> [String: Any] {
     try requireTrust()
     registry.prune()
     var out: [[String: Any]] = []
-    let front = NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0
+    let front = macFrontmostPid()
     for w in enumerateWindows() {
         let rect = axRect(w.el)
         let state = macInspectWindowState(window: w.el, pid: w.pid, title: w.title, rect: rect, app: w.app)
@@ -972,14 +974,14 @@ func opDrag(_ a: [String: Any]) throws -> [String: Any] {
     try checkStop()
     // A drag is physical and lands wherever the pointer is, so the app has to
     // be in front; a drag into the wrong app is the failure worse than nothing.
-    if (NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0) != pid {
+    if macFrontmostPid() != pid {
         let m = modeOf(a)
         if m == "take" || m == "exclusive" {
             NSRunningApplication(processIdentifier: pid)?.activate(options: [])
             AXUIElementPerformAction(win, kAXRaiseAction as CFString)
             Thread.sleep(forTimeInterval: 0.15)
         }
-        if (NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0) != pid {
+        if macFrontmostPid() != pid {
             throw AxonError("window_not_focused", "That window's app is not in front, so the drag would land in whatever is.",
                             "Call focus on it first, or pass mode:\"take\".")
         }
@@ -1077,7 +1079,7 @@ func opType(_ a: [String: Any]) throws -> [String: Any] {
         // event tap - land in whatever app is actually in front. Windows avoids
         // this by posting straight to the control and reading it back; there is
         // no equivalent here, so refuse rather than type into the wrong app.
-        let front = NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0
+        let front = macFrontmostPid()
         if front != pid {
             throw AxonError("background_unavailable",
                 "That element is in an app that is not in front, and plain typing goes wherever the keyboard focus is, so the text would land in another app.",
@@ -1133,14 +1135,14 @@ func opKey(_ a: [String: Any]) throws -> [String: Any] {
     if a["hwnd"] != nil || a["title"] != nil {
         let (win, pid, _, _) = try resolveWindow(a)
         try guardSameWindow(a, pid)
-        if (NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0) != pid {
+        if macFrontmostPid() != pid {
             let m = modeOf(a)
             if m == "take" || m == "exclusive" {
                 NSRunningApplication(processIdentifier: pid)?.activate(options: [])
                 AXUIElementPerformAction(win, kAXRaiseAction as CFString)
                 Thread.sleep(forTimeInterval: 0.15)
             }
-            if (NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0) != pid {
+            if macFrontmostPid() != pid {
                 throw AxonError("window_not_focused", "That window's app is not in front, so the keys would go to whatever is.",
                                 "Call focus on it first, or pass mode:\"take\" to bring it forward.")
             }
@@ -1399,8 +1401,9 @@ func opPresence(_ a: [String: Any]) throws -> [String: Any] {
     r["mode"] = defaultMode
     // Protocol parity with the Windows host: no BlockInput here.
     r["input_blocked"] = false
-    let front = NSWorkspace.shared.frontmostApplication
-    r["foreground_hwnd"] = Int(front?.processIdentifier ?? 0)
+    let frontPid = macFrontmostPid()
+    let front = frontPid > 0 ? NSRunningApplication(processIdentifier: frontPid) : nil
+    r["foreground_hwnd"] = Int(frontPid)
     r["foreground_process"] = front?.localizedName as Any
     r["foreground_title"] = front?.localizedName as Any
     return r

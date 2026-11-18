@@ -328,6 +328,8 @@ export function recoveryAdvice(result,operation){
   ...(result.repeated_failure===true?{repeated_failure:true}:{}),
   ...(Number.isSafeInteger(result.recovery_attempts_remaining)?{recovery_attempts_remaining:result.recovery_attempts_remaining}:{})
  };
+ // A human stop outranks every other reading of the failure it caused.
+ if(result.stopped_by_human===true)return {...extra,next_action:'report_and_wait_for_human',replay_allowed:false};
  if(['input_cleanup_failed','guardian_end_unconfirmed','guardian_stop_unconfirmed','stop_cleanup_unverified'].includes(code))return {...extra,next_action:'inspect_input_cleanup',replay_allowed:false};
  if(result.delivery_unknown===true||result.input_completed===true&&code||code==='input_outcome_unknown')return {...extra,next_action:'inspect_effect_without_replay',replay_allowed:false};
  if(['wait_failure_observed','wait_observation_incomplete','wait_observation_timeout','wait_condition_timeout','wait_change_timeout','op_timeout','capture_preparation_timeout'].includes(code))return {...extra,next_action:'inspect_effect_without_replay',replay_allowed:false};
