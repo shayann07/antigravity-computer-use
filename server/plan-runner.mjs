@@ -29,12 +29,12 @@ export function landedCount(reply, chunkLength) {
     if (reply.batch && Array.isArray(reply.batch.completed)) return Math.min(chunkLength, reply.batch.completed.length);
     if (reply.ok === true) return chunkLength;
     if (Number.isInteger(reply.failed_index)) {
-      const landed = reply.delivery_unknown === true || reply.input_completed === true || UNCERTAIN.has(reply.error?.code);
+      const landed = reply.delivery_unknown === true || reply.input_completed === true || reply.stopped_by_human === true || UNCERTAIN.has(reply.error?.code);
       return Math.min(chunkLength, reply.failed_index + (landed ? 1 : 0));
     }
     // No step index (the CLI's own request timeout, a dropped connection):
     // any of the batch may have landed, so none of it is sent again.
-    if (reply.delivery_unknown === true || UNCERTAIN.has(reply.error?.code)) return chunkLength;
+    if (reply.delivery_unknown === true || reply.stopped_by_human === true || UNCERTAIN.has(reply.error?.code)) return chunkLength;
   }
   return 0;
 }

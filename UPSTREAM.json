@@ -66,7 +66,7 @@
     {
       "path": "server/native/AxonHost.swift",
       "upstream_sha256": "b50c68feff8bd783ba2f92580358c69491c0ffee31f6182b76543f3aba9f962f",
-      "local_sha256": "4c58043d6d71a60723062da9569166c22fb1e3329103e559ac1266687f864467",
+      "local_sha256": "287d6794418a2d1f358d3c67d6544389c4eb2429dd5cb8be5fbdf1a47afe21eb",
       "modified": true
     },
     {
@@ -256,7 +256,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "158be57472afccd42ef6e75c57dc0b0d5ebec0f7394213e9c42906ea57f04f3e"
+      "sha256": "15940b637d41115f780b3e0afaa88418bbc4dc1b96937425bcdf456ac95ab215"
     },
     {
       "path": "server/mcp.mjs",
@@ -296,7 +296,7 @@
     },
     {
       "path": "server/desktop-service.mjs",
-      "sha256": "ca6ba894ef546d1b196c365dd5160e347321e82b8a9936da2a40822ffdb6faa2"
+      "sha256": "78fcd9163895366fbb526ec7cd58e275f4992d698738654a20debe3a573868c9"
     },
     {
       "path": "server/desktop-tools.mjs",
@@ -568,7 +568,7 @@
     },
     {
       "path": "server/native/macos/MacControl.swift",
-      "sha256": "17639ead5719e8c4d47b96700a45947c2091a6a0f645211107eb9303037cb4b5"
+      "sha256": "e1783803395397416ba9d8964002726ef3163a96a43506bdd2294f4c3d5a3175"
     },
     {
       "path": "server/native/macos/MacGuardian.swift",
@@ -576,7 +576,7 @@
     },
     {
       "path": "server/native/macos/MacOperations.swift",
-      "sha256": "b66b91c833edb2a37a838f5aec591a66870af9d959ae9da2ad4f014d9ba6b37b"
+      "sha256": "c864c01854dbcc97ff051436c348a5b45b7349f8325c33201423c70f180df287"
     },
     {
       "path": "server/native/macos/MacVisuals.swift",
@@ -712,7 +712,7 @@
     },
     {
       "path": "server/recovery.mjs",
-      "sha256": "130b2f28055c710517ad45c0155a8baf9b6391d6881aec81a32a6d649d6a80dd"
+      "sha256": "16f9c578a5bc44a30c108a3c9704dc414957c8442dfe6494bc91c00926992471"
     },
     {
       "path": "scripts/qualify-guardian-desktop.mjs",
@@ -924,7 +924,7 @@
     },
     {
       "path": "package.json",
-      "sha256": "5a78f214e9dd48bb3fa7326f595eb6c63bc4e3cca9357902ad69e73afc2e7d1e"
+      "sha256": "e0136fe673cb1a8afdbe02cca126adaaf8b208dc2899cc9a9c5d0f68c6cc1429"
     },
     {
       "path": "server/native/macos/MacPhosphorIcons.swift",

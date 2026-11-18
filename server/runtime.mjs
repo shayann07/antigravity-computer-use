@@ -71,6 +71,15 @@ function attachWaitMetrics(error,started,budget,observations){
 // Stop halts input and ends the current task. There is no latch to re-arm:
 // the agent reports and waits, and the next ready starts a fresh task.
 const STOP_ENDS_TASK=Object.freeze({task_ended:true,next_action:'report_and_wait_for_human'});
+// Stops only a person can cause: Esc (or the Mac's Control+Option+F12), the
+// bar's Stop button and the Windows Ctrl+Alt+F12 hotkey. Agent-sent stop is
+// requested_stop and is not on this list.
+export const HUMAN_STOP_REASONS=Object.freeze(new Set(['escape','button','hotkey']));
+// After a human stop, ready refuses for this long. The agent's in-flight call
+// used to come back as a crash (host_exited) and agents restarted on their own
+// within seconds; this keeps a fresh task for when the human asks again.
+export const HUMAN_STOP_HOLD_MS=60_000;
+const HUMAN_STOP_WORDS={escape:'pressed Esc',button:'pressed Stop',hotkey:'pressed the stop shortcut'};
 const persistenceFailure=reason=>['stop_persistence_failed','guard_persistence_failed'].includes(reason);
 function initializeInputLedger(guardFile){
   const ledger=guardFile+'.inputs';let fd;
@@ -207,6 +216,7 @@ export class Runtime {
       }
     }
     this.guardian.on('state',(s,reason)=>{
+      if(s==='stopped'&&HUMAN_STOP_REASONS.has(reason))this.humanStop={reason,at:Date.now()};
       const previousState=this.state;
       // A delayed idle/active notification must never undo an emergency Stop.
       // Native human re-arm is acknowledged separately by the resume event.
@@ -334,6 +344,9 @@ export class Runtime {
   }
   async ready({session_handle}={}){
     Runtime.prototype.bindSession.call(this,session_handle);
+    // A human stopped the last task moments ago: report and wait for them.
+    const hold=Runtime.prototype.humanStopHold.call(this);
+    if(hold)return {...this.status(),ready:false,controls_visible:null,next_action:'report_and_wait_for_human',replay_allowed:false,stopped_by_human:true,stop_reason:hold.reason,retry_after_ms:hold.remaining,error:{code:'human_stopped',message:`The human ${HUMAN_STOP_WORDS[hold.reason]} to stop this task. Do not start again on your own: report what was done and wait for the human to ask. A new task can start in ${Math.ceil(hold.remaining/1000)} s.`}};
     // Another copy held the input lock last time. That ends when the other
     // copy closes, so ask again instead of repeating the old refusal.
     if(this.recoveryFailure?.code==='input_lease_held')this.recoveryFailure=null;
@@ -388,6 +401,30 @@ export class Runtime {
       // task this call opened is closed again; a later end has nothing to do.
       if(error.code==='input_lease_held'&&taskStarted&&!this.dispatchStarted){try{if(this.taskFile)writeAtomicJSON(this.taskFile,{schema:1,open:false});this.taskOpen=false;}catch{}}
       this.recoveryVisibility=controls?.controls_visible===false?false:null;this.recoveryFailure={code:error.code||'guardian_unavailable',message:error.code==='input_lease_held'?'Another copy of Computer Use is controlling this PC; multiple copies are not supported yet. Close the other copy (or end its task), then run ready again. No input was sent.':error.code==='desktop_context_unavailable'?'Start the installed local launcher on the visible desktop. No desktop was switched and Stop remains latched.':'Local controls failed to start. Run diagnostics; do not repeat launch commands.'};return unavailable();}
+  }
+  // The human stop that still holds ready back, or null.
+  humanStopHold(now=Date.now()){
+    const stop=this.humanStop;if(!stop||this.state!=='stopped'||!HUMAN_STOP_REASONS.has(this.lastControlReason))return null;
+    const remaining=stop.at+HUMAN_STOP_HOLD_MS-now;return remaining>0?{reason:stop.reason,remaining}:null;
+  }
+  // What a call cut short by a human stop reports instead of its own error.
+  // Esc ends the native worker, so the call itself only sees host_exited or a
+  // similar uncertain failure, which reads like a crash. null when no human
+  // stop is in force or the error already says the task was stopped.
+  humanStopError(error){
+    if(this.state!=='stopped'||!HUMAN_STOP_REASONS.has(this.lastControlReason))return null;
+    const reason=this.humanStop?.reason||this.lastControlReason;
+    return {stopped_by_human:true,stop_reason:reason,error:{code:'control_stopped',message:`The human ${HUMAN_STOP_WORDS[reason]||'stopped the task'} while this was running, so input stopped. Part of this action may already have been sent. Do not call ready or retry: report what was done and wait for the human to ask again.`,...(error?.code&&error.code!=='control_stopped'?{interrupted:error.code}:{})}};
+  }
+  // Esc can end the native worker a moment before the guardian's stopped
+  // state arrives, so a failure Esc typically causes waits briefly for it.
+  async awaitHumanStopError(error,{waitMs=750,stepMs=50}={}){
+    const waits=['host_exited','input_outcome_unknown','control_changed','control_stopped','focus_changed'].includes(error?.code);
+    for(const end=Date.now()+(waits?waitMs:0);;){
+      const human=Runtime.prototype.humanStopError.call(this,error);
+      if(human||Date.now()>=end)return human;
+      await new Promise(resolve=>setTimeout(resolve,stepMs));
+    }
   }
   // Returns null once a confirmed Stop is cleared, or a ready refusal.
   async clearStop(){
@@ -1102,6 +1139,6 @@ export class Runtime {
     }
     return {task_age_ms:open&&this.taskOpenedAt?Math.max(0,Math.round(now-this.taskOpenedAt)):null,last_activity_ms_ago:open?idle:null,actions_used:this.token&&Number.isFinite(this.remaining)?Math.max(0,contract.action_budget-this.remaining):0,actions_limit:contract.action_budget,held_resources:held,task_origin:!open?'none':recovered?'previous_controller':'this_controller',controller_uptime_ms:Math.round(process.uptime()*1000),task_liveness:liveness,task_liveness_rule:rule};
   }
-  status(){return {...Runtime.prototype.taskInfo.call(this),state:this.state,task_open:this.taskOpen===true,recovered_task:this.recoveredTask===true,remaining_actions:this.remaining,approved_apps:[...this.grants.values()].map(w=>({pid:w.pid,path:w.path,tier:w.tier??accessTier(w,Runtime.prototype.callerPolicy.call(this))})),runtime:nativePlatform().runtime,build_version:VERSION,build_id:BUILD_ID,private_data_storage:this.privateDataStorage,real_cursor:true,custom_cursor:this.guardian.customCursor??null,permission_mode:this.permissionMode,...(this.approvalsSaved===false?{approvals_saved:false}:{}),takeover_mode:this.guardian.takeoverMode||savedTakeoverMode(path.join(dataDir(),'control-preferences.json'),this.takeoverMode),control_reason:this.lastControlReason,...Runtime.prototype.callerReport.call(this)};}
+  status(){return {...Runtime.prototype.taskInfo.call(this),state:this.state,task_open:this.taskOpen===true,recovered_task:this.recoveredTask===true,remaining_actions:this.remaining,approved_apps:[...this.grants.values()].map(w=>({pid:w.pid,path:w.path,tier:w.tier??accessTier(w,Runtime.prototype.callerPolicy.call(this))})),runtime:nativePlatform().runtime,build_version:VERSION,build_id:BUILD_ID,private_data_storage:this.privateDataStorage,real_cursor:true,custom_cursor:this.guardian.customCursor??null,permission_mode:this.permissionMode,...(this.approvalsSaved===false?{approvals_saved:false}:{}),takeover_mode:this.guardian.takeoverMode||savedTakeoverMode(path.join(dataDir(),'control-preferences.json'),this.takeoverMode),control_reason:this.lastControlReason,...(this.state==='stopped'&&HUMAN_STOP_REASONS.has(this.lastControlReason)?{stopped_by_human:true}:{}),...Runtime.prototype.callerReport.call(this)};}
   async close(){const normal=this.state==='idle';if(!normal)await this.stop();else await this.driver.abort?.();await this.guardian.close({normal});this.sessions.close();}
 }
