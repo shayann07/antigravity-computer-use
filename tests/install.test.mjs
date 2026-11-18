@@ -135,7 +135,7 @@ test('a live desktop service blocks update before backups, executable or configu
  fs.mkdirSync(path.join(bundle,'skills/computer-use'),{recursive:true});
  writeFixture(bundle);fs.writeFileSync(path.join(bundle,'skills/computer-use/SKILL.md'),'fixture');seal(bundle);
  fs.mkdirSync(path.join(target,'data'),{recursive:true});const session=JSON.stringify({pid:process.pid,secret:'must not be printed or consumed'});fs.writeFileSync(path.join(target,'data/desktop-session.json'),session);
- assert.throws(()=>install({bundle,target,home}),/still running/);assert(!fs.existsSync(path.join(target,'backups')));assert(!fs.existsSync(path.join(target,'releases')));assert(!fs.existsSync(home));assert.equal(fs.readFileSync(path.join(target,'data/desktop-session.json'),'utf8'),session);
+ assert.throws(()=>install({bundle,target,home}),/still running.*(shutdown|Quit Antigravity)/);assert(!fs.existsSync(path.join(target,'backups')));assert(!fs.existsSync(path.join(target,'releases')));assert(!fs.existsSync(home));assert.equal(fs.readFileSync(path.join(target,'data/desktop-session.json'),'utf8'),session);
 });
 
 test('unsealed extra code is refused before any installation write',()=>{
@@ -238,5 +238,18 @@ test('rollback refuses a recovered open or malformed task before changing deploy
    fs.writeFileSync(marker,state);const result=spawnSync(process.execPath,['scripts/rollback.mjs',path.join(installed.backup,'rollback.json')],{windowsHide:true,encoding:'utf8'});
    assert.equal(result.status,1);assert.match(result.stderr,/task_open_finish_before_rollback|task_state_invalid/);assert.equal(fs.readFileSync(path.join(installed.skills[0],'SKILL.md'),'utf8'),before);assert.equal(fs.readFileSync(marker,'utf8'),state);
   }
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
+
+test('install and rollback refusals name the commands that free the folder',async()=>{
+ const {serviceStopHint}=await import('../server/recovery.mjs');
+ const dir=fs.mkdtempSync(path.join(testDirectory('install-stop-hint'),'x-'));
+ try{
+  assert.equal(serviceStopHint(dir),'Quit Antigravity, then try again.');
+  const node=path.join(dir,'cu-node'+(process.platform==='win32'?'.exe':''));
+  fs.writeFileSync(node,'');fs.writeFileSync(path.join(dir,'cu.mjs'),'');
+  const hint=serviceStopHint(dir);
+  assert(hint.includes(`"${node}" "${path.join(dir,'cu.mjs')}" end`));
+  assert(hint.includes(' shutdown (or quit Antigravity)'));
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });

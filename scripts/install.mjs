@@ -7,7 +7,7 @@ import {spawnSync} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
 import {writeAtomicJSON,writeAtomicText,flushPreparedTree,flushPreparedFile,readTaskState} from '../server/atomic-json.mjs';
 import {deploymentPinned} from '../server/update-core.mjs';
-import {preserveStopLatch,readStopLatch,settleOrphanMacStop} from '../server/recovery.mjs';
+import {preserveStopLatch,readStopLatch,settleOrphanMacStop,serviceStopHint} from '../server/recovery.mjs';
 const here=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 export function renameRetrying(from,to,{rename=fs.renameSync,sleep=ms=>Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,ms),attempts=30}={}){
  for(let attempt=1;;attempt++){
@@ -95,7 +95,7 @@ export function install({bundle=here,target,home=os.homedir(),workspace=null,leg
   const live=JSON.parse(fs.readFileSync(sessionFile,'utf8'));
   if(!Number.isSafeInteger(live.pid)||live.pid<=0)throw new Error('Existing session metadata is invalid. Inspect it before installing.');
   let alive=true;try{process.kill(live.pid,0);}catch(error){if(error.code==='ESRCH')alive=false;}
-  if(alive)throw new Error('A desktop service is still running. End its task and shutdown that service before installing; no installation files were changed.');
+  if(alive)throw new Error(`A desktop service is still running; no installation files were changed. ${serviceStopHint(root)}`);
  }}
  const release=path.join(target,'releases',version+'-'+stamp);
  // A project-local update must not repoint an already installed global skill.
@@ -141,7 +141,7 @@ export function install({bundle=here,target,home=os.homedir(),workspace=null,leg
    const preferences=path.join(previousData,'control-preferences.json'),destination=path.join(data,'control-preferences.json');
    if(!fs.existsSync(destination)&&fs.existsSync(preferences)){const saved=JSON.parse(fs.readFileSync(preferences,'utf8'));if(['manual','smart'].includes(saved.takeover_mode)){ensureData();fs.writeFileSync(destination,JSON.stringify({takeover_mode:saved.takeover_mode},null,2));}}
   }
-  if(open)throw Error('task_open_finish_before_install');
+  if(open)throw Error(`task_open_finish_before_install: a task is still open; no installation files were changed. ${serviceStopHint(target)}`);
  };
  preserveControl();
  const backup=path.join(target,'backups',stamp);fs.mkdirSync(backup,{recursive:true});

@@ -2,7 +2,7 @@ import fs from 'node:fs';import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {readTaskState} from '../server/atomic-json.mjs';
 import {acquireServiceLease} from '../server/service-lease.mjs';
-import {readStopLatch} from '../server/recovery.mjs';
+import {readStopLatch,serviceStopHint} from '../server/recovery.mjs';
 export function rollbackPlan(file){
 if(!file)throw new Error('Pass the exact backups/<timestamp>/rollback.json to restore.');
 const data=JSON.parse(fs.readFileSync(path.resolve(file),'utf8'));
@@ -39,11 +39,11 @@ guard();
 for(const root of roots){
 const stop=readStopLatch(path.join(root,'data','emergency.stop'));
 if(stop?.unconfirmed||stop?.invalid)throw Error('stop_recovery_required_before_rollback');
-if(readTaskState(path.join(root,'data','task-state.json')))throw Error('task_open_finish_before_rollback');
+if(readTaskState(path.join(root,'data','task-state.json')))throw Error(`task_open_finish_before_rollback: a task is still open; no configuration was changed. ${serviceStopHint(root)}`);
 const sessionFile=path.join(root,'data/desktop-session.json');if(fs.existsSync(sessionFile)){
  const session=JSON.parse(fs.readFileSync(sessionFile,'utf8'));if(!Number.isSafeInteger(session.pid)||session.pid<=0)throw Error('Invalid live-session metadata; inspect before rollback.');
  let alive=true;try{process.kill(session.pid,0);}catch(error){if(error.code==='ESRCH')alive=false;}
- if(alive)throw Error('A desktop service is still running. End and shutdown its task before rollback; no configuration was changed.');
+ if(alive)throw Error(`A desktop service is still running; no configuration was changed. ${serviceStopHint(root)}`);
 }
 }
 for(const r of data.records){

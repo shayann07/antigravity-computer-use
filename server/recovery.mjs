@@ -34,6 +34,14 @@ function stopRecordOnce(file,io){
  }catch(error){if(error.code==='ENOENT'&&fd===undefined)return null;throw error;}
  finally{if(fd!==undefined)io.closeSync(fd);}
 }
+// Names the commands that free an installation folder, so an install or
+// rollback refusal tells the person how to get past it.
+export function serviceStopHint(root){
+  const node=path.join(root,'cu-node'+(process.platform==='win32'?'.exe':'')),launcher=path.join(root,'cu.mjs');
+  if(!fs.existsSync(node)||!fs.existsSync(launcher))return 'Quit Antigravity, then try again.';
+  const run=`"${node}" "${launcher}"`;
+  return `Run ${run} end, then ${run} shutdown (or quit Antigravity), and try again.`;
+}
 export function readStopLatch(file,{io=fs}={}){
  try{
   const pending=stopRecord(file+'.unconfirmed',io),primary=stopRecord(file,io);
