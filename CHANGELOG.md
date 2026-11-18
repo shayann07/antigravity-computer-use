@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.0.5 - Mac input stays in the approved app; Esc stays a stop
+
+- On a Mac, typing, keys and drags no longer follow you into another app. The helper used to read the front-most app from a cached value that could stay stale for seconds, so keystrokes meant for TextEdit could land in whatever you had switched to. Every input check now asks Accessibility which app has focus right now, falls back to the front-most window on screen, and refuses when neither answers (#122).
+- When you press Esc (or the Stop button, or the stop shortcut) during an action, that action now returns `control_stopped` with `stopped_by_human: true` instead of a crash-like `host_exited`, so the agent reports that you stopped it instead of restarting. `ready` refuses for 60 seconds after a human stop, `status` shows `stopped_by_human`, and `plan` treats the interrupted step as sent and never replays it (#122).
+- When a running service or an open task blocks an install or rollback, the message names the commands that free it (`end`, then `shutdown`, with the launcher's full path), or says to quit Antigravity.
+
 ## 1.0.4 - Easier install, launch by name on Mac, clearer errors
 
 - macOS installs in one line: `curl -fsSL https://raw.githubusercontent.com/shayann07/antigravity-computer-use/main/install.sh | sh` picks the archive for Apple silicon or Intel, checks its SHA-256 and stops if it differs, installs, then opens the permission setup. Files fetched with curl are not quarantined, so Gatekeeper does not block the setup scripts.
