@@ -608,7 +608,7 @@
     },
     {
       "path": "docs/MACOS.md",
-      "sha256": "8bee9b0738e94254d557adca74622d7052940d8570265bef7b5545e40486287c"
+      "sha256": "ac1c56a993a6d03d39dd9c4dfa0db79cd475ef27356eeacda19cc0e63d02e78d"
     },
     {
       "path": "server/update-core.mjs",
@@ -924,7 +924,7 @@
     },
     {
       "path": "package.json",
-      "sha256": "7285c98de03b5e506cbd003f23fc544542a232420bca58e9c063fbfd9e039b4a"
+      "sha256": "5a78f214e9dd48bb3fa7326f595eb6c63bc4e3cca9357902ad69e73afc2e7d1e"
     },
     {
       "path": "server/native/macos/MacPhosphorIcons.swift",

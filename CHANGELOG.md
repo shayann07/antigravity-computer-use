@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.0.4 - Easier install, launch by name on Mac, clearer errors
+
 - macOS installs in one line: `curl -fsSL https://raw.githubusercontent.com/shayann07/antigravity-computer-use/main/install.sh | sh` picks the archive for Apple silicon or Intel, checks its SHA-256 and stops if it differs, installs, then opens the permission setup. Files fetched with curl are not quarantined, so Gatekeeper does not block the setup scripts.
 - The Windows ZIP has a double-click installer, `Install.Computer.Use.cmd`, with the recommended defaults (global skill and background startup).
 - The README's Install section opens with a prompt to paste into Antigravity, or any coding agent that can run commands, so the agent installs the skill, showing each command first and leaving macOS permission prompts to you.
