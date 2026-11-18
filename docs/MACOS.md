@@ -48,7 +48,7 @@ curl -fsSL https://raw.githubusercontent.com/shayann07/antigravity-computer-use/
 To do it by hand instead:
 
 Download the macOS archive for your Mac (arm64 for Apple silicon, x64 for Intel)
-from the [1.0.4 release](https://github.com/shayann07/antigravity-computer-use/releases/tag/v1.0.4)
+from the [1.0.5 release](https://github.com/shayann07/antigravity-computer-use/releases/tag/v1.0.5)
 with curl (see [Gatekeeper](#gatekeeper) for why), for example
 `curl -LO <archive link copied from the release page>`, and check it against the
 release's checksums.
