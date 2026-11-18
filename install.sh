@@ -12,7 +12,7 @@
 #   curl -fsSL .../install.sh | sh -s -- --permission-mode host-managed
 set -eu
 
-VERSION=1.0.3
+VERSION=1.0.4
 BASE="https://github.com/shayann07/antigravity-computer-use/releases/download/v$VERSION"
 
 fail() { echo "$1" >&2; exit 1; }
