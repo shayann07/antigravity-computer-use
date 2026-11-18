@@ -45,12 +45,13 @@ runs `install.command`, then opens the permission setup:
 curl -fsSL https://raw.githubusercontent.com/shayann07/antigravity-computer-use/main/install.sh | sh
 ```
 
-Files fetched with curl carry no download quarantine, so Gatekeeper does not block
-the two `.command` scripts. To do it by hand instead:
+To do it by hand instead:
 
 Download the macOS archive for your Mac (arm64 for Apple silicon, x64 for Intel)
 from the [1.0.3 release](https://github.com/shayann07/antigravity-computer-use/releases/tag/v1.0.3)
-and check it against the release's checksums.
+with curl (see [Gatekeeper](#gatekeeper) for why), for example
+`curl -LO <archive link copied from the release page>`, and check it against the
+release's checksums.
 
 1. Extract the archive. Keep the complete
    `macos-bundle` directory together.
@@ -69,21 +70,68 @@ From a terminal in the extracted folder, installation is also one command:
 ./install.command
 ```
 
-Sidecar installations use host-managed permissions by default so Antigravity's
-host/Turbo policy can authorize ordinary actions without repeated native
-approval modals. For a manual direct installation, only an operator should opt
-into host-managed permissions:
+### Permission mode
+
+`install.command` (and so the one-line installer) always installs the Sidecar,
+and Sidecar installations use **host-managed** permissions: Antigravity's own
+approvals authorize ordinary actions, so you will not see the native access
+card. This is expected, not a fault.
+
+To get the native access card and the approval dialogs for saving, pasting and
+deleting instead, install in standalone mode:
 
 ```sh
-./install.command --permission-mode host-managed
+./install.command --permission-mode standalone
 ```
 
-The default standalone mode uses native app-session and sensitive-action
-approval dialogs. Host-managed deployment relies on host execution review;
-neither platform claims to authenticate Turbo. Release helpers are signed with
-the project's own certificate, not an Apple Developer ID (owner decision), and
-are not notarized. Do not disable Gatekeeper or system security to run them. A
-permission/quarantine refusal needs human review.
+With the one-line installer, pass the same option after `sh -s --`:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/shayann07/antigravity-computer-use/main/install.sh | sh -s -- --permission-mode standalone
+```
+
+A later install without `--permission-mode` keeps the mode you chose.
+Host-managed deployment relies on host execution review; neither mode claims to
+authenticate Turbo.
+
+### Gatekeeper
+
+Release helpers are signed with the project's own certificate, not an Apple
+Developer ID (owner decision), and are not notarized, so `spctl` rejects them.
+Gatekeeper checks only quarantined files, and files fetched with curl carry no
+quarantine flag: the one-line installer and a `curl -LO` download both work.
+
+A browser download is quarantined, and macOS will likely refuse to open
+`install.command` or the helper from it. If that happens, delete the extracted
+folder and download the archive again with curl. Do not disable Gatekeeper or
+system security to run them; any other permission or quarantine refusal needs
+human review.
+
+### Status after Esc
+
+After you press Esc, `status` reports `state: stopped` with `task_open: false`
+instead of `idle`. That is intended: the Stop is kept on record until the next
+task begins, and that task's `ready` clears it once it has confirmed that every
+key and button was released. An unconfirmed Stop or a storage failure is never
+cleared automatically; `status` then names what to inspect.
+
+### Remove from a Mac
+
+1. End any running task, then quit Antigravity so the Sidecar stops. If the
+   service is still running afterwards, quit its `node` process (from the
+   installation folder) in Activity Monitor.
+2. In `~/.gemini/config/config.json`, delete only the
+   `"antigravity-computer-use"` entry under `"sidecars"`, and keep the rest of
+   the file. Then delete `~/.gemini/config/sidecars/antigravity-computer-use/`.
+3. Delete the skill: `~/.gemini/config/skills/computer-use/` (and
+   `<project>/.agents/skills/computer-use/` for any project-local install).
+4. Delete `~/Library/Application Support/AntigravityComputerUse`. It holds the
+   releases, the service data and the rollback backups, so keep a copy if you
+   may want to roll back.
+5. Optionally, remove the helper (AxonHost) from Accessibility, Input
+   Monitoring and Screen Recording in System Settings.
+
+Never delete the whole `~/.gemini` folder.
 
 **Which app's permissions count.** macOS charges the helper's Accessibility
 and Screen Recording checks to the *responsible* app: the app that started the

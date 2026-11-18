@@ -102,7 +102,9 @@ Use the exact printed backup path. Rollback restores this project's prior entry/
 
 ## Removal and troubleshooting
 
-End/shutdown control. Remove only this project's MCP entry if present and its global/project skill. After processes exit, remove only the chosen installation folder if desired; retain backups for recovery. Never delete the whole `.gemini` or `.agents` folder.
+End/shutdown control. Remove only this project's MCP entry if present and its global/project skill. After processes exit, remove only the chosen installation folder if desired; retain backups for recovery. Never delete the whole `.gemini` or `.agents` folder. On a Mac, follow [Remove from a Mac](MACOS.md#remove-from-a-mac), which names every path.
+
+- Status reads `stopped` after Esc: intended. The Stop stays on record until the next task's `ready` confirms that inputs were released and clears it. An unconfirmed Stop or a storage failure is never cleared automatically.
 
 - Missing slash command: verify the intended App global/project skill path, then open a fresh conversation.
 - Missing screenshots: open the returned actual `image.path` with the host image viewer. Text alone is not visual verification.
