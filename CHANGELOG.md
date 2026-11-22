@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- `plan` records each batch before sending it. If the CLI dies before the outcome is saved, the next run halts with `plan_batch_unconfirmed` instead of sending the same input again; check the window, then rerun with `--resolve-pending landed` or `--resolve-pending none` (#133).
+- Rollback writes Antigravity's `config.json` and `mcp_config.json` atomically, so an interrupted rollback can no longer truncate settings you added after installing (#134). It also reads configuration the way the installer does, so a file with a byte-order mark or a blank backup no longer stops it, and it checks every file before changing the first (#135).
+- In notify mode, a pending update is downloaded once and re-verified on later checks instead of being staged again every day; a newer release replaces the old stage (#136).
+- A paste on Windows no longer puts the old clipboard back over a copy you made while the target was getting focus; it stops before typing anything (#137).
+- A failed same-build quick reinstall no longer leaves the Sidecar enabled without its definition: the definition is written first and any partial change is undone (#139).
+- Physical Esc does the slow part of stopping off the keyboard hook, and the hooks are reinstalled for every task, so Windows cannot silently drop Esc monitoring after a slow stop.
+
 ## 1.0.5 - Mac input stays in the approved app; Esc stays a stop
 
 - On a Mac, typing, keys and drags no longer follow you into another app. The helper used to read the front-most app from a cached value that could stay stale for seconds, so keystrokes meant for TextEdit could land in whatever you had switched to. Every input check now asks Accessibility which app has focus right now, falls back to the front-most window on screen, and refuses when neither answers (#122).

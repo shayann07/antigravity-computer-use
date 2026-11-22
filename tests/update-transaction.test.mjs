@@ -500,3 +500,20 @@ test('a staged note that expires before apply is dropped quietly without shutdow
   assert(!f.calls.includes('shutdown'));const status=await update(f.target,'status',f);assert.equal(status.update_note_expired,true);assert.equal(status.available,false);assert.equal(status.last_error,undefined);
  }finally{f.cleanup();}
 });
+test('repeated checks reuse the verified stage and a newer note retires the old one (#136)',async()=>{
+ const f=fixture();try{
+  const stages=()=>fs.readdirSync(path.join(f.target,'updates')).filter(name=>!name.startsWith('.'));
+  await update(f.target,'check',f);const first=JSON.parse(fs.readFileSync(path.join(f.target,'update-state.json'))).staged;
+  const fetched=f.fetches();
+  await update(f.target,'check',f);const second=JSON.parse(fs.readFileSync(path.join(f.target,'update-state.json')));
+  assert.equal(second.staged,first,'the same signed note keeps the same stage');assert.equal(second.available,true);
+  assert.equal(f.fetches()-fetched,2,'only the release listing and the signed note are fetched again');
+  assert.deepEqual(stages(),[path.basename(first)]);
+  f.setNote(3,'2099-01-01');await update(f.target,'check',f);const third=JSON.parse(fs.readFileSync(path.join(f.target,'update-state.json')));
+  assert.notEqual(third.staged,first);assert.equal(fs.existsSync(first),false,'the superseded stage is removed');
+  assert.deepEqual(stages(),[path.basename(third.staged)]);
+  fs.writeFileSync(path.join(third.staged,'server/runtime.mjs'),'tampered');
+  await update(f.target,'check',f);const fourth=JSON.parse(fs.readFileSync(path.join(f.target,'update-state.json')));
+  assert.notEqual(fourth.staged,third.staged,'a stage that no longer verifies is replaced by a fresh download');
+ }finally{f.cleanup();}
+});

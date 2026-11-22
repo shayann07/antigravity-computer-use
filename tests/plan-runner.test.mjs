@@ -136,3 +136,35 @@ test('a covered target or a frame without a screenshot is observed again, with a
     assert.equal(calls.at(-1).args.steps.length, 6, code);   // resumes at the step that was refused
   }
 });
+
+test('a batch whose outcome was never recorded is not sent again until the caller says so (#133)', async () => {
+  const d = dir(); const ledger = path.join(d, 'ledger.json');
+  // The first run lands, then the CLI dies before it can record the outcome.
+  let sent = 0;
+  const dying = async (name, args) => { if (name === 'run') { sent += args.steps.length; throw Object.assign(Error('process killed'), {code: 'killed'}); } return {ok: true, observation_id: 's'}; };
+  await assert.rejects(runPlan({steps: steps(12), hwnd: 1, observationId: 'f0', reason: 't', ledgerFile: ledger, call: dying}), /process killed/);
+  assert.equal(sent, 8);
+  const {calls, call} = fakeService([{ok: true, observation_id: 'a'}, {ok: true, observation_id: 'b'}]);
+  const halted = await runPlan({steps: steps(12), hwnd: 1, observationId: 'f1', reason: 't', ledgerFile: ledger, call});
+  assert.equal(halted.ok, false); assert.equal(halted.halted, 'plan_batch_unconfirmed'); assert.deepEqual(halted.pending, {from: 0, count: 8});
+  assert.equal(calls.length, 0, 'nothing is sent while the outcome is unknown');
+  const resumed = await runPlan({steps: steps(12), hwnd: 1, observationId: 'f1', reason: 't', ledgerFile: ledger, call, resolvePending: 'landed'});
+  assert.equal(resumed.ok, true); assert.equal(resumed.plan.next, 12);
+  assert.deepEqual(calls.map(c => c.args.steps.length), [4], 'only the steps after the landed batch are sent');
+});
+
+test('a caller who sees the pending batch did not land can send it again (#133)', async () => {
+  const d = dir(); const ledger = path.join(d, 'ledger.json');
+  fs.writeFileSync(ledger, JSON.stringify({plan_sha256: planHash(steps(5)), total: 5, next: 0, batches: 0, renewals: 0, pending: {from: 0, count: 5}}));
+  const {calls, call} = fakeService([{ok: true, observation_id: 'a'}]);
+  const r = await runPlan({steps: steps(5), hwnd: 1, observationId: 'f1', reason: 't', ledgerFile: ledger, call, resolvePending: 'none'});
+  assert.equal(r.ok, true); assert.deepEqual(calls.map(c => c.args.steps.length), [5]);
+  assert.equal(JSON.parse(fs.readFileSync(ledger, 'utf8')).pending, undefined);
+});
+
+test('no input is sent when the pending record cannot be written (#133)', async () => {
+  const d = dir(); const ledger = path.join(d, 'missing-folder', 'ledger.json');
+  const {calls, call} = fakeService([{ok: true}]);
+  await assert.rejects(runPlan({steps: steps(3), hwnd: 1, observationId: 'f0', reason: 't', ledgerFile: ledger, call}));
+  assert.equal(calls.length, 0);
+});

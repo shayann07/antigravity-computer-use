@@ -1,6 +1,13 @@
 import fs from 'node:fs';import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {readTaskState} from '../server/atomic-json.mjs';
+import {readTaskState,writeAtomicText} from '../server/atomic-json.mjs';
+// Same normalisation the installer applies, so any file it accepted can be rolled back.
+export function readConfigFile(file){
+ const text=fs.existsSync(file)?fs.readFileSync(file,'utf8').replace(/^﻿/,'').trim():'';
+ const value=text?JSON.parse(text):{};
+ if(!value||typeof value!=='object'||Array.isArray(value))throw new Error('Invalid configuration: '+file);
+ return value;
+}
 import {acquireServiceLease} from '../server/service-lease.mjs';
 import {readStopLatch,serviceStopHint} from '../server/recovery.mjs';
 export function rollbackPlan(file){
@@ -46,21 +53,18 @@ const sessionFile=path.join(root,'data/desktop-session.json');if(fs.existsSync(s
  if(alive)throw Error(`A desktop service is still running; no configuration was changed. ${serviceStopHint(root)}`);
 }
 }
+// Parse every configuration file, live and backed up, before restoring the
+// first record, so one unreadable file cannot leave a half-finished rollback (#135).
+const configs=new Map();
+for(const r of data.records)if(r.kind==='sidecar-config'||r.kind==='config')configs.set(r,{current:readConfigFile(r.file),previous:r.existed?readConfigFile(r.saved):{}});
 for(const r of data.records){
  guard();
- if(r.kind==='sidecar-config'){
-  const current=fs.existsSync(r.file)?JSON.parse(fs.readFileSync(r.file)):{};
-  const previous=r.existed?JSON.parse(fs.readFileSync(r.saved)):{};
-  current.sidecars??={};const old=previous.sidecars?.['antigravity-computer-use'];
-  if(old)current.sidecars['antigravity-computer-use']=old;else delete current.sidecars['antigravity-computer-use'];
-  fs.mkdirSync(path.dirname(r.file),{recursive:true});fs.writeFileSync(r.file,JSON.stringify(current,null,2)+'\n');
- }
- else if(r.kind==='config'){
-  const c=fs.existsSync(r.file)?JSON.parse(fs.readFileSync(r.file)):{};
-  const previous=r.existed?JSON.parse(fs.readFileSync(r.saved)):{};
-  c.mcpServers??={};const old=previous.mcpServers?.['antigravity-computer-use'];
-  if(old)c.mcpServers['antigravity-computer-use']=old;else delete c.mcpServers['antigravity-computer-use'];
-  fs.mkdirSync(path.dirname(r.file),{recursive:true});fs.writeFileSync(r.file,JSON.stringify(c,null,2)+'\n');
+ if(r.kind==='sidecar-config'||r.kind==='config'){
+  const {current,previous}=configs.get(r),key=r.kind==='config'?'mcpServers':'sidecars';
+  current[key]??={};const old=previous[key]?.['antigravity-computer-use'];
+  if(old)current[key]['antigravity-computer-use']=old;else delete current[key]['antigravity-computer-use'];
+  // Publish atomically: the user's complete file stays readable until the merged one is durable (#134).
+  fs.mkdirSync(path.dirname(r.file),{recursive:true});writeAtomicText(r.file,JSON.stringify(current,null,2)+'\n');
  }
  else if(r.existed){
   if(fs.statSync(r.saved).isDirectory())fs.cpSync(r.saved,r.file,{recursive:true});

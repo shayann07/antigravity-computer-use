@@ -69,6 +69,11 @@ the plan; a changed plan needs a new ledger file. Tell the human how many steps
 there are and roughly how long they will take (about 1–1.5 s per step) before
 starting a long plan.
 
+If `plan` halts with `plan_batch_unconfirmed`, a batch was sent but its outcome
+was never recorded (the CLI was interrupted). Take a snapshot and check whether
+those steps took effect, then run the same command with `--resolve-pending
+landed` (they did) or `--resolve-pending none` (they did not). Never guess.
+
 ## 4. Compare with the goal
 
 When the plan finishes, capture the result and compare it with the goal in the

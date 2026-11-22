@@ -55,13 +55,23 @@ export async function quickInstall({bundle,home=os.homedir(),target,permissionMo
     const template=fs.readFileSync(path.join(release,'skills/computer-use/SKILL.md'),'utf8').replaceAll('{{DESKTOP_COMMAND}}',command).replaceAll('{{CONTROLLER_START}}',path.join(root,'Start Computer Use.cmd'));
     if(fs.readFileSync(path.join(skill,'SKILL.md'),'utf8')!==template)throw Error('Installed skill differs from its release.');
     const config=path.join(profile,'config.json'),definition=path.join(profile,'sidecars/antigravity-computer-use/sidecar.json');
-    const updates=[[config,dep.mergeSidecarConfig(config,{enable:true})],[definition,JSON.stringify(dep.sidecarDefinition(path.join(release,'node.exe'),path.join(release,'scripts/desktop.mjs')),null,2)+'\n']].filter(([file,text])=>!fs.existsSync(file)||!isDeepStrictEqual(read(file),JSON.parse(text)));
+    const updates=[[definition,JSON.stringify(dep.sidecarDefinition(path.join(release,'node.exe'),path.join(release,'scripts/desktop.mjs')),null,2)+'\n'],[config,dep.mergeSidecarConfig(config,{enable:true})]].filter(([file,text])=>!fs.existsSync(file)||!isDeepStrictEqual(read(file),JSON.parse(text)));
     let backup;
     if(updates.length){
      backup=path.join(root,'backups','quick-enable-'+new Date().toISOString().replace(/[:.]/g,'-'));fs.mkdirSync(backup,{recursive:true});
      const records=updates.map(([file],i)=>{const existed=fs.existsSync(file),saved=path.join(backup,i+'.json');if(existed)fs.copyFileSync(file,saved);return {file,existed,saved};});
      fs.writeFileSync(path.join(backup,'sidecar-backup.json'),JSON.stringify({records},null,2));
-     for(const [file,text]of updates){fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file+'.agcu.tmp',text);fs.renameSync(file+'.agcu.tmp',file);}
+     // The definition is published before the enable flag, and a failed write
+     // puts back what this repair already changed, so the Sidecar is never
+     // left enabled without its definition (#139).
+     const published=[];
+     try{
+      for(const [file,text]of updates){fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file+'.agcu.tmp',text);fs.renameSync(file+'.agcu.tmp',file);published.push(file);}
+     }catch(error){
+      for(const file of published.reverse()){const record=records.find(r=>r.file===file);try{if(record.existed)fs.copyFileSync(record.saved,file);else fs.unlinkSync(file);}catch{}}
+      for(const [file]of updates)try{fs.unlinkSync(file+'.agcu.tmp');}catch{}
+      throw error;
+     }
     }
     return {ok:true,already_installed:true,version:manifest.version,build_id:manifest.build_id,files:count,sidecar_enabled:true,...(backup?{backup}:{}),target:root};
    }

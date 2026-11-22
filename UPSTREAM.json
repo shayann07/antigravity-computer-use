@@ -60,7 +60,7 @@
     {
       "path": "server/native/AxonHost.cs",
       "upstream_sha256": "bef101afecbdf8f75df2a1f8b45d224eade39f09e3c8e25cf7b450e3fa49a8ef",
-      "local_sha256": "a564109befec8675f7b812bed48938be1b29e9848b0a2e238bc31d5ea1d131ce",
+      "local_sha256": "1c38bc9e5f426eb5e96909516b5fe4a33b0b8865ef6946aaa0ef542c54e57ab1",
       "modified": true
     },
     {
@@ -78,7 +78,7 @@
     {
       "path": "server/native/Presence.cs",
       "upstream_sha256": "b8af4f75a36a1045c8eef0f8af52dd4142c4efb87797c094b913a3da8715fece",
-      "local_sha256": "39db4d2d0174a7edd5895e62a76ac737a50551dda5f81fe0590d3894a331ed7e",
+      "local_sha256": "fafc5468f12ff7a777120f50121dadbb0fc812d4f97f83eec8964480dfd0cb90",
       "modified": true
     },
     {
@@ -268,7 +268,7 @@
     },
     {
       "path": "server/native/Guardian.cs",
-      "sha256": "767a5b664877797cfa45c734abd4574d46c602c9f94eaae3c16fd9f331df37df"
+      "sha256": "16b8d26ab41bc2258dc07d3d209ab753a121d83545f509e2074eb50d4fc810b5"
     },
     {
       "path": "server/native/CursorSafety.cs",
@@ -304,7 +304,7 @@
     },
     {
       "path": "scripts/desktop.mjs",
-      "sha256": "fa30a7f4659b0562e45de8d23eb5c5652cb01df644c66151ac0941e547cab56b"
+      "sha256": "10c255c8dedb848203c8eb7faf984fff68496fc506591497b98c6ad3b665a387"
     },
     {
       "path": "server/version.mjs",
@@ -356,7 +356,7 @@
     },
     {
       "path": "scripts/rollback.mjs",
-      "sha256": "2be83cd5119301b57b82e214069e5b91523a2dfebc8a6fd3fafca7bee38c2112"
+      "sha256": "513ded37878835985be7db28d774f9ba03dd72001454d9ed8f4aeea59ac1993e"
     },
     {
       "path": "scripts/verify-install.mjs",
@@ -520,11 +520,11 @@
     },
     {
       "path": "scripts/quick-install.mjs",
-      "sha256": "4f2548620e136c7c84ea39b348a279ab611f302c9e53aa9d03d24553d1fc0889"
+      "sha256": "ec2c3d0305bdbaaa953b01fcecab7028a0472feac01529d7f4e69f1c54fcdb81"
     },
     {
       "path": "tests/quick-install.test.mjs",
-      "sha256": "7cdcd4e7d75bf20ae2565d3734987c48c4b255426b6758650ebc7445524b477b"
+      "sha256": "f38e62cecafbf3a6243a18d61ff588de922c91772fc85f9f2b2ee325f3efcd8c"
     },
     {
       "path": "install.ps1",
@@ -624,7 +624,7 @@
     },
     {
       "path": "scripts/update.mjs",
-      "sha256": "e616a33c9acd9d32335f6871522a2d6e618428c231c899c1ab7db3298e44656f"
+      "sha256": "96ce6446c21b7656cf80c5ff4f3021614c7b70eabc7f543545bef9951784ce96"
     },
     {
       "path": "scripts/sign-update.mjs",
@@ -640,7 +640,7 @@
     },
     {
       "path": "tests/update-transaction.test.mjs",
-      "sha256": "35280e396cf7298a27cfb43296b3ae74def1a867bfec7068e2c80da2454a3122"
+      "sha256": "564264bbe54ad79515bb260987ad1a4310397b062bc6b23615577b862a957179"
     },
     {
       "path": "docs/RELIABILITY-IMPLEMENTATION.md",
