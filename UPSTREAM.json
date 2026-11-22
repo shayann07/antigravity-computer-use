@@ -228,7 +228,7 @@
     },
     {
       "path": "tests/physical-escape.mjs",
-      "sha256": "886e9c2f258ae76984d1e11bf19dc314a18cfb9a93adb19b030463a9d7a647b6"
+      "sha256": "5c233bb24c948fcd9702d0857f8e7fc1cdec46ee3ce8c46fe1dba79ea95cb22a"
     },
     {
       "path": "tests/InputLedgerTests.cs",
