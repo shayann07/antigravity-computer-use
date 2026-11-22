@@ -14,6 +14,6 @@
       <LogicalName>Icons.%(Filename)%(Extension)</LogicalName>
     </EmbeddedResource>
     <PackageReference Include="LiquidGlass" Version="1.0.0" />
-    <PackageReference Include="SkiaSharp" Version="4.156.1" />
+    <PackageReference Include="SkiaSharp" Version="4.157.0" />
   </ItemGroup>
 </Project>
