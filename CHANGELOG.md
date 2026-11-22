@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- On Windows, state files (the input record, the guardian's state, the watchdog and saved approvals) are replaced with a short retry while another program briefly holds them, and the service's own readers no longer block that replace. Clicks and Stop no longer fail with `input_cleanup_failed` or `stop_persistence_failed` because a scanner or reader touched the file at the wrong moment (#132).
+- `install.sh` stages each run in its own private folder, so two installers running at once no longer delete each other's verified download (#140).
+- On a Mac, `fit_window` fits windows to the area the Dock and the menu bar leave free, instead of the whole display (#138).
+- The `plan` help now gives the real `--renew-budget` default, 1.
 - `plan` records each batch before sending it. If the CLI dies before the outcome is saved, the next run halts with `plan_batch_unconfirmed` instead of sending the same input again; check the window, then rerun with `--resolve-pending landed` or `--resolve-pending none` (#133).
 - Rollback writes Antigravity's `config.json` and `mcp_config.json` atomically, so an interrupted rollback can no longer truncate settings you added after installing (#134). It also reads configuration the way the installer does, so a file with a byte-order mark or a blank backup no longer stops it, and it checks every file before changing the first (#135).
 - In notify mode, a pending update is downloaded once and re-verified on later checks instead of being staged again every day; a newer release replaces the old stage (#136).

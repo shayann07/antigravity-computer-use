@@ -19,14 +19,14 @@ namespace Axon {
         static bool Enter(Mutex mutex) {
             try {return mutex.WaitOne(2000);}catch(AbandonedMutexException){return true;}
         }
-        static HashSet<string> Read() {return new HashSet<string>(File.ReadAllLines(FileName));}
+        static HashSet<string> Read() {return new HashSet<string>(AtomicFile.ReadAllLines(FileName));}
         static void Save(HashSet<string> held) {
             string temp=FileName+"."+System.Diagnostics.Process.GetCurrentProcess().Id+".tmp";
             // Flush before injection: a hard-killed worker must leave a record.
             using(FileStream stream=new FileStream(temp,FileMode.Create,FileAccess.Write,FileShare.None)) {
                 byte[] bytes=Encoding.UTF8.GetBytes(String.Join("\n",held));stream.Write(bytes,0,bytes.Length);stream.Flush(true);
             }
-            if(File.Exists(FileName))File.Replace(temp,FileName,null);else File.Move(temp,FileName);
+            AtomicFile.Publish(temp,FileName);
         }
         static string Key(Native.INPUT input,out bool down) {
             down=false;

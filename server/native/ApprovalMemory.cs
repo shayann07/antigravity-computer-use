@@ -68,7 +68,7 @@ namespace Axon {
             try {
                 FileInfo info=new FileInfo(file);
                 if(!info.Exists||(info.Attributes&(FileAttributes.ReparsePoint|FileAttributes.Directory))!=0||info.Length>MaxBytes)return memory;
-                Dictionary<string,object> root=new JavaScriptSerializer().DeserializeObject(File.ReadAllText(file)) as Dictionary<string,object>;
+                Dictionary<string,object> root=new JavaScriptSerializer().DeserializeObject(AtomicFile.ReadAllText(file)) as Dictionary<string,object>;
                 if(root==null||!root.ContainsKey("schema")||Convert.ToInt32(root["schema"])!=1)return memory;
                 Dictionary<string,object> sessions=root.ContainsKey("sessions")?root["sessions"] as Dictionary<string,object>:null;
                 if(sessions==null)return memory;
@@ -105,7 +105,7 @@ namespace Axon {
                 File.WriteAllText(temp,text);
                 if(File.Exists(file)) {
                     if((File.GetAttributes(file)&(FileAttributes.ReparsePoint|FileAttributes.Directory))!=0){File.Delete(temp);return false;}
-                    File.Replace(temp,file,null);
+                    AtomicFile.Publish(temp,file);
                 } else File.Move(temp,file);
                 return true;
             } catch {return false;}

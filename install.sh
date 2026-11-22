@@ -31,9 +31,13 @@ else
 fi
 
 ARCHIVE="AntigravityComputerUse-$VERSION-$ARCH.tar.gz"
-STAGE="$HOME/Library/Caches/AntigravityComputerUse/install-$VERSION-$ARCH"
-rm -rf "$STAGE"
-mkdir -p "$STAGE"
+CACHE="$HOME/Library/Caches/AntigravityComputerUse"
+mkdir -p "$CACHE"
+# Each run gets its own private folder, so a second installer running at the
+# same time cannot delete this one's verified archive (#140). Folders from
+# runs more than a day old are removed; a running install is never that old.
+find "$CACHE" -maxdepth 1 -type d -name 'install-*' -mtime +1 -exec rm -rf {} + 2>/dev/null || true
+STAGE=$(mktemp -d "$CACHE/install-$VERSION-$ARCH.XXXXXX") || fail "Could not create a private staging folder. Nothing was installed."
 chmod 700 "$STAGE"
 cd "$STAGE"
 
