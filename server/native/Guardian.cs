@@ -32,8 +32,25 @@ namespace Axon {
     }
     internal static class ControlFence {
         [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out int pid);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string cls, string title);
+        // The process that owns what a window shows. A packaged (UWP) app's
+        // top-level window belongs to the shared ApplicationFrameHost; the app
+        // itself is the CoreWindow inside it. Without this every packaged app,
+        // Settings and Windows Security included, shared one identity and one
+        // grant. A frame whose app cannot be found (a minimised app can move
+        // its CoreWindow out) keeps the frame host's identity, which policy
+        // blocks, so it is refused rather than guessed.
+        internal static int WindowProcess(IntPtr hwnd) {
+            int pid; GetWindowThreadProcessId(hwnd, out pid);
+            StringBuilder cls = new StringBuilder(64); Native.GetClassName(hwnd, cls, cls.Capacity);
+            if (cls.ToString() != "ApplicationFrameWindow") return pid;
+            IntPtr core = FindWindowEx(hwnd, IntPtr.Zero, "Windows.UI.Core.CoreWindow", null);
+            if (core == IntPtr.Zero) return pid;
+            int hosted; GetWindowThreadProcessId(core, out hosted);
+            return hosted > 0 ? hosted : pid;
+        }
         internal static Dictionary<string, object> Identity(long hwnd) {
-            int pid; GetWindowThreadProcessId(new IntPtr(hwnd), out pid);
+            int pid = WindowProcess(new IntPtr(hwnd));
             if (pid <= 0) throw new AxonError("window_not_found", "Window closed.", null);
             using (Process p=Process.GetProcessById(pid)) {
                 string exe=p.MainModule.FileName;

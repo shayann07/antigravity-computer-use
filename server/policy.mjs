@@ -23,6 +23,12 @@ const BLOCKED = [
   // Security tooling, and the Windows Security app itself (SecurityHealthUI),
   // which Codex refuses too: an agent must never turn protection off.
   'mmc', 'secpol', 'gpedit', 'certmgr', 'bitlockerwizard', 'securityhealth',
+  // Windows 11 runs the Windows Security app as SecHealthUI.exe.
+  'sechealthui',
+  // A packaged app's frame whose app could not be identified. The native
+  // layer reports the hosted app for every frame it can resolve, so a window
+  // still named after the shared frame host is refused, never guessed.
+  'applicationframehost',
   // The lock screen. A locked desktop is the user's, full stop; Codex stops
   // and asks them to unlock, and so does this.
   'lockapp',

@@ -30,7 +30,7 @@
     {
       "path": "server/policy.mjs",
       "upstream_sha256": "673a749426c458b254d991d7f6fc75e7e5415f32b64e05011476a90803d7001b",
-      "local_sha256": "c7ba9f255c21c106f13196e487fbc654abe7d936dcaa3c2e9b26c3aba060fda3",
+      "local_sha256": "e41ae86b32a50f96a9a97f439bae16546935cad88fcea3e429774c5610571260",
       "modified": true
     },
     {
@@ -60,7 +60,7 @@
     {
       "path": "server/native/AxonHost.cs",
       "upstream_sha256": "bef101afecbdf8f75df2a1f8b45d224eade39f09e3c8e25cf7b450e3fa49a8ef",
-      "local_sha256": "1c38bc9e5f426eb5e96909516b5fe4a33b0b8865ef6946aaa0ef542c54e57ab1",
+      "local_sha256": "45940474ad973120344f6f4852abe64f78505e8a42015f3003ef23ed56f6bbe9",
       "modified": true
     },
     {
@@ -228,7 +228,7 @@
     },
     {
       "path": "tests/physical-escape.mjs",
-      "sha256": "886e9c2f258ae76984d1e11bf19dc314a18cfb9a93adb19b030463a9d7a647b6"
+      "sha256": "5c233bb24c948fcd9702d0857f8e7fc1cdec46ee3ce8c46fe1dba79ea95cb22a"
     },
     {
       "path": "tests/InputLedgerTests.cs",
@@ -276,7 +276,7 @@
     },
     {
       "path": "server/native/Guardian.cs",
-      "sha256": "ef22edf091f0a491b76283dda758bc2f3f7d300d62b6cfa44c14adce75d7eaa5"
+      "sha256": "4895925a7bcc9e26598f216e5f941e8880c87b7b8d850c5b0928a64801762ef1"
     },
     {
       "path": "server/native/CursorSafety.cs",

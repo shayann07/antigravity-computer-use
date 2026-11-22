@@ -953,7 +953,7 @@ namespace Axon
             int rw = rr.Right - rr.Left, rh = rr.Bottom - rr.Top;
             if (rw < 40 || rh < 40 || rr.Left < -30000 || rr.Top < -30000) return null;
             uint wpid;
-            Native.GetWindowThreadProcessId(h, out wpid);
+            wpid = (uint)ControlFence.WindowProcess(h);
             if ((int)wpid == _selfPid) return null;
             System.Text.StringBuilder cb = new System.Text.StringBuilder(128);
             Native.GetClassName(h, cb, cb.Capacity);
@@ -1051,12 +1051,13 @@ namespace Axon
                     e["hwnd"] = (long)c.NativeWindowHandle;
                     e["title"] = c.Name;
                     e["class"] = c.ClassName;
-                    e["pid"] = c.ProcessId;
+                    int ownerPid = ControlFence.WindowProcess(h);
+                    e["pid"] = ownerPid;
                     string pname, ppath;
-                    ProcessInfo(c.ProcessId, out pname, out ppath);
+                    ProcessInfo(ownerPid, out pname, out ppath);
                     e["process"] = pname;
                     e["path"] = ppath;
-                    try { e["started"] = System.Diagnostics.Process.GetProcessById(c.ProcessId).StartTime.ToUniversalTime().Ticks.ToString(); } catch { e["started"] = ""; }
+                    try { e["started"] = System.Diagnostics.Process.GetProcessById(ownerPid).StartTime.ToUniversalTime().Ticks.ToString(); } catch { e["started"] = ""; }
                     e["rect"] = RectOf(w);
                     e["minimized"] = Native.IsIconic(h);
                     // A window on another virtual desktop is cloaked, and so are
@@ -1109,7 +1110,7 @@ namespace Axon
                             if (rw < 40 || rh < 40) return true;
 
                             uint wpid;
-                            Native.GetWindowThreadProcessId(h, out wpid);
+                            wpid = (uint)ControlFence.WindowProcess(h);
                             if ((int)wpid == _selfPid) return true;
 
                             System.Text.StringBuilder cb2 = new System.Text.StringBuilder(128);
@@ -1164,7 +1165,7 @@ namespace Axon
                         // Tooltips share a class with browser menus; height tells them apart.
                         if (rw < 40 || rh < (cls == "Chrome_WidgetWin_2" ? 60 : 24)) return true;
                         uint wpid;
-                        Native.GetWindowThreadProcessId(h, out wpid);
+                        wpid = (uint)ControlFence.WindowProcess(h);
                         if ((int)wpid == _selfPid) return true;
                         string pname, ppath;
                         ProcessInfo((int)wpid, out pname, out ppath);
@@ -1224,7 +1225,7 @@ namespace Axon
                         int rw = rr.Right - rr.Left, rh = rr.Bottom - rr.Top;
                         if (rw < 40 || rh < 40) return true;
                         uint wpid;
-                        Native.GetWindowThreadProcessId(h, out wpid);
+                        wpid = (uint)ControlFence.WindowProcess(h);
                         if ((int)wpid == _selfPid) return true;
                         string pname, ppath;
                         ProcessInfo((int)wpid, out pname, out ppath);
