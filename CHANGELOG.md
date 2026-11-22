@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.0.6 - Packaged Windows apps keep their own approval; safer rollback, plans and paste
+
 - On Windows, packaged apps such as Calculator, Settings and Windows Security are identified by their own process rather than the shared window frame, so each keeps its own approval and access tier. A packaged window whose app cannot be identified is refused.
 - On Windows, state files (the input record, the guardian's state, the watchdog and saved approvals) are replaced with a short retry while another program briefly holds them, and the service's own readers no longer block that replace. Clicks and Stop no longer fail with `input_cleanup_failed` or `stop_persistence_failed` because a scanner or reader touched the file at the wrong moment (#132).
 - `install.sh` stages each run in its own private folder, so two installers running at once no longer delete each other's verified download (#140).
