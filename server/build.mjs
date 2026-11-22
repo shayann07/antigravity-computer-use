@@ -29,6 +29,7 @@ const WIN_SOURCES = [
   path.join(HERE, 'native', 'TakeoverPolicy.cs'),
   path.join(HERE, 'native', 'CursorMotion.cs'),
   path.join(HERE, 'native', 'InputLedger.cs'),
+  path.join(HERE, 'native', 'AtomicFile.cs'),
   path.join(HERE, 'native', 'SnapshotText.cs'),
   path.join(HERE, 'native', 'KeyboardTargetPolicy.cs'),
   path.join(HERE, 'native', 'DesktopContext.cs'),

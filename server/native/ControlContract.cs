@@ -16,7 +16,7 @@ namespace Axon {
             // contract. Their historical defaults remain testable. Production
             // Runtime always supplies the installed contract path.
             if(String.IsNullOrEmpty(file))return new Dictionary<string,object>();
-            var data=new JavaScriptSerializer().DeserializeObject(File.ReadAllText(file)) as Dictionary<string,object>;
+            var data=new JavaScriptSerializer().DeserializeObject(AtomicFile.ReadAllText(file)) as Dictionary<string,object>;
             if(data==null || !data.ContainsKey("version") || Convert.ToInt32(data["version"])!=1)throw new InvalidOperationException("Native control contract is missing or incompatible.");
             return data;
         }

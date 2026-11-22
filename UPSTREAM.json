@@ -5,7 +5,7 @@
     {
       "path": "server/build.mjs",
       "upstream_sha256": "81260b378fffb46573cfe475a3a336930113c8abc465d3d278bbb0851d8a4377",
-      "local_sha256": "04547d6a59bc1ff78fb577041df52112edbd1599b9cd2e7eb25c7bb074fa3ffc",
+      "local_sha256": "b2f12786d8292e520f819424b4f99960e8b05a68fe063496ea59edceda3fee66",
       "modified": true
     },
     {
@@ -236,7 +236,15 @@
     },
     {
       "path": "tests/input-ledger.test.mjs",
-      "sha256": "2429797dc3329173d0ec9bce21adc7fe897151b7f577352eb984a709f60c825f"
+      "sha256": "3b851641bb58ef33dfe205a195ba186a88db869a74a809c6706ed359228b1288"
+    },
+    {
+      "path": "tests/AtomicFileTests.cs",
+      "sha256": "81b3bd0ba054bcf39488b7af561b5903d62e3a8ad5658a73eea4f71be12093e9"
+    },
+    {
+      "path": "tests/atomic-file.test.mjs",
+      "sha256": "9271380fc9bae951a2cdaa40f31f233826e9cf3a8351e52c75afffcb38b38f71"
     },
     {
       "path": "tests/NativeWatchdogMetadataTests.cs",
@@ -268,11 +276,11 @@
     },
     {
       "path": "server/native/Guardian.cs",
-      "sha256": "16b8d26ab41bc2258dc07d3d209ab753a121d83545f509e2074eb50d4fc810b5"
+      "sha256": "ef22edf091f0a491b76283dda758bc2f3f7d300d62b6cfa44c14adce75d7eaa5"
     },
     {
       "path": "server/native/CursorSafety.cs",
-      "sha256": "04bb4e718ab482c91b2dd8cdff217707f8c701438f2b28bf9007b26e65e9ba2d"
+      "sha256": "4fce6f1ce763531cd2c4fd81a1f2612e4fea2a2e10913d15325702acf1accc2f"
     },
     {
       "path": "server/native/DesktopVisuals.cs",
@@ -284,7 +292,11 @@
     },
     {
       "path": "server/native/InputLedger.cs",
-      "sha256": "3e976dd11908f62f8f2f43c2661831a228072d5b1e367b5ac582c3b5478ca55d"
+      "sha256": "969f6ed8916cbede90d0416f90281e14c749623c93992b75654b7fa5f0012f3f"
+    },
+    {
+      "path": "server/native/AtomicFile.cs",
+      "sha256": "5422fac1c56d0b58e548a8f23e0a2ff9b5dc579f5c3b457590c26638dd045028"
     },
     {
       "path": "server/native/CursorMotion.cs",
@@ -304,7 +316,7 @@
     },
     {
       "path": "scripts/desktop.mjs",
-      "sha256": "10c255c8dedb848203c8eb7faf984fff68496fc506591497b98c6ad3b665a387"
+      "sha256": "8709769fd6e273caa0a9fcb44a55355db417606a992e0bde785908393f9b5179"
     },
     {
       "path": "server/version.mjs",
@@ -388,7 +400,7 @@
     },
     {
       "path": "server/native/StorageGuard.cs",
-      "sha256": "ed24057db043f23358edd59cf2b0645803e9a78452cf5b7eb6ca06e56f13bb84"
+      "sha256": "fb3046e0b1bea4e43f177454b72a4b4905693c9cff8ac4b2b923f0aff7fc25f3"
     },
     {
       "path": "server/storage.mjs",
@@ -576,7 +588,7 @@
     },
     {
       "path": "server/native/macos/MacOperations.swift",
-      "sha256": "c864c01854dbcc97ff051436c348a5b45b7349f8325c33201423c70f180df287"
+      "sha256": "2b98e724b766ba227163736559dde54e33126bcb5222449eecf599e33ff7ab5f"
     },
     {
       "path": "server/native/macos/MacVisuals.swift",
@@ -596,7 +608,7 @@
     },
     {
       "path": "server/native/ControlContract.cs",
-      "sha256": "18fe213a1a4923f154bb48a8c0dd7cb01aea9ab1908c97791c670ef7cdf39edc"
+      "sha256": "4f0f88fb385169dcfdfd0e67b50c22bbd7258ca84e93d1f2ee6d78f502872781"
     },
     {
       "path": "scripts/macos-install-check.mjs",

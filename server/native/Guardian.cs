@@ -107,7 +107,7 @@ namespace Axon {
             return keys;
         }
         internal static bool ClickTierGranted(string appKey) {
-            try {return ClickTierKeys(File.ReadAllText(FileName).Split('|')).Contains(appKey);}catch {return false;}
+            try {return ClickTierKeys(AtomicFile.ReadAllText(FileName).Split('|')).Contains(appKey);}catch {return false;}
         }
         static void CheckTier(string op,Dictionary<string,object> a,string appKey,string[] state) {
             HashSet<string> click=ClickTierKeys(state);
@@ -183,7 +183,7 @@ namespace Axon {
             string latch=Environment.GetEnvironmentVariable("AGCU_STOP_LATCH");
             if(LatchBlocks(latch))throw new AxonError("control_stopped","The human stopped this task. No input was sent. Report and wait; the next ready starts a fresh task.",null);
             string[] state;string original;
-            try { original=File.ReadAllText(FileName);state = original.Split('|'); }
+            try { original=AtomicFile.ReadAllText(FileName);state = original.Split('|'); }
             catch { throw new AxonError("control_stopped", "Permission process is unavailable.", null); }
             long until;ulong bootUntil;
             if (state.Length < 5 || state[0] != "active" || state[1] != Token ||
@@ -194,7 +194,7 @@ namespace Axon {
             // A Stop or state transition may occur while watchdog identity is
             // being revalidated. Never use the earlier state after it changed.
             try {
-                if(!GuardUnchanged(original,File.ReadAllText(FileName),LatchBlocks(latch)))
+                if(!GuardUnchanged(original,AtomicFile.ReadAllText(FileName),LatchBlocks(latch)))
                     throw new AxonError("control_stopped","Control changed during watchdog verification. No further input is allowed.",null);
             } catch(AxonError) { throw; }
               catch { throw new AxonError("control_stopped","Control state is unavailable. No further input is allowed.",null); }
@@ -244,7 +244,7 @@ namespace Axon {
             Token = a.TryGetValue("__session", out v) ? Convert.ToString(v) : null;
             keyboardTarget=a.ContainsKey("hwnd")?Convert.ToInt64(a["hwnd"]):0; keyboardOwner=0; focusing=op=="focus";
             Check();
-            string[] state=File.ReadAllText(FileName).Split('|');
+            string[] state=AtomicFile.ReadAllText(FileName).Split('|');
             string appKey="";
             if(a.ContainsKey("hwnd")) {
                 Dictionary<string,object> identity=Identity(Convert.ToInt64(a["hwnd"]));
@@ -267,7 +267,7 @@ namespace Axon {
                 if(!Guid.TryParseExact(permit,"N",out guid)) throw new AxonError("confirmation_required","Native action-time approval required.",null);
                 string f=Path.Combine(FileName+".permits",permit);
                 string[] approval;
-                try { approval=File.ReadAllLines(f); File.Delete(f); }
+                try { approval=AtomicFile.ReadAllLines(f); File.Delete(f); }
                 catch { throw new AxonError("confirmation_required","Approval missing, expired or consumed.",null); }
                 long until;
                 if(approval.Length!=4 || approval[0]!=Token || approval[1]!=Fingerprint(op,a,label) || approval[2]!=appKey ||
@@ -291,7 +291,7 @@ namespace Axon {
             if (!Int32.TryParse(Environment.GetEnvironmentVariable("AGCU_PARENT_PID"), out pid)) return;
             Thread t = new Thread(delegate() {
                 try { using (Process p = Process.GetProcessById(pid)) p.WaitForExit(); } catch { }
-                bool wasIdle=false;try {wasIdle=File.ReadAllText(FileName).StartsWith("idle|");}catch {}
+                bool wasIdle=false;try {wasIdle=AtomicFile.ReadAllText(FileName).StartsWith("idle|");}catch {}
                 try { File.WriteAllText(FileName,"stopped||0|"); } catch { }
                 if(!wasIdle)LatchStop();
                 try { Recover(); } catch { }
@@ -920,7 +920,7 @@ namespace Axon {
         }
         string PreferenceFile {get {return Path.Combine(Path.GetDirectoryName(ControlFence.FileName),"control-preferences.json");}}
         void LoadTakeoverMode() {
-            try {var prefs=js.DeserializeObject(File.ReadAllText(PreferenceFile)) as Dictionary<string,object>;
+            try {var prefs=js.DeserializeObject(AtomicFile.ReadAllText(PreferenceFile)) as Dictionary<string,object>;
                 // A saved "smart" takeover preference from an older build is
                 // ignored; the next save rewrites it as manual.
                 recordVisuals=prefs.ContainsKey("record_visuals")&&Convert.ToBoolean(prefs["record_visuals"]);
@@ -936,7 +936,7 @@ namespace Axon {
             ApplyGlowLevel();
         }
         void SavePreferences() {
-            try {string file=PreferenceFile,temp=file+".tmp";File.WriteAllText(temp,js.Serialize(new {takeover_mode=takeover.Mode,record_visuals=recordVisuals,bar_dock=dock,bar_x=dockX,bar_y=dockY,glow_brightness=glowLevel}));if(File.Exists(file))File.Replace(temp,file,null);else File.Move(temp,file);}catch {Emit(new {ev="visual_warning",message="Could not save control preference"});}
+            try {string file=PreferenceFile,temp=file+".tmp";File.WriteAllText(temp,js.Serialize(new {takeover_mode=takeover.Mode,record_visuals=recordVisuals,bar_dock=dock,bar_x=dockX,bar_y=dockY,glow_brightness=glowLevel}));AtomicFile.Publish(temp,file);}catch {Emit(new {ev="visual_warning",message="Could not save control preference"});}
         }
         void ApplyRecordingPreference() {
             // Unlike the recording chrome, permission dialogs always remain excluded.
@@ -1419,7 +1419,7 @@ namespace Axon {
             if (String.IsNullOrEmpty(f)) return;
             string temp = f + ".tmp";
             File.WriteAllText(temp, state+"|"+token+"|"+deadline.ToString()+"|"+Convert.ToBase64String(Encoding.UTF8.GetBytes(String.Join("\n",grants)))+"|"+bootDeadline.ToString()+"|"+Convert.ToBase64String(Encoding.UTF8.GetBytes(String.Join("\n",clickGrants))));
-            if (File.Exists(f)) File.Replace(temp, f, null); else File.Move(temp,f);
+            AtomicFile.Publish(temp,f);
         } }
         void SetState(string next,string reason=null,bool updateVisibility=true,long humanRearmEpoch=-1) {
             long capturedStop=humanRearmEpoch>=0?humanRearmEpoch:Interlocked.Read(ref stopEpoch);
@@ -1493,7 +1493,7 @@ namespace Axon {
             List<string> live=new List<string>();
             foreach(Process p in workers)try {if(!p.HasExited)live.Add(p.Id+":"+p.StartTime.ToUniversalTime().Ticks);}catch {}
             string file=ControlFence.FileName+".workers",temp=file+".tmp";File.WriteAllLines(temp,live);
-            if(File.Exists(file))File.Replace(temp,file,null);else File.Move(temp,file);
+            AtomicFile.Publish(temp,file);
         }
         void Tick(object sender, EventArgs e) {
             if(controlsRequested && DateTime.UtcNow>=controlsUntil) {
@@ -1618,7 +1618,7 @@ namespace Axon {
                     else {
                         try {
                             if(ControlFence.LatchEntryBlocks(StopLatch)) {
-                                string marker=File.ReadAllText(StopLatch);
+                                string marker=AtomicFile.ReadAllText(StopLatch);
                                 if(marker.StartsWith("unconfirmed:",StringComparison.Ordinal))why="guardian_stop_unconfirmed";
                                 else if(marker!="stopped")why="stop_persistence_failed";
                                 else File.Delete(StopLatch);
@@ -1637,7 +1637,7 @@ namespace Axon {
                 string nonce=m.ContainsKey("stop_nonce")?Convert.ToString(m["stop_nonce"]):null;
                 if(NativeStopReceipt.ValidNonce(nonce)){
                     bool exited=WorkersExited(2000),clean=false;
-                    try{clean=exited&&!InputLedger.HasHeld()&&File.ReadAllText(ControlFence.FileName).StartsWith("stopped|",StringComparison.Ordinal)&&ControlFence.LatchBlocks(StopLatch);}catch{}
+                    try{clean=exited&&!InputLedger.HasHeld()&&AtomicFile.ReadAllText(ControlFence.FileName).StartsWith("stopped|",StringComparison.Ordinal)&&ControlFence.LatchBlocks(StopLatch);}catch{}
                     Emit(new {id=id,state="stopped",stop_nonce=nonce,guardian_pid=Process.GetCurrentProcess().Id,guard_file=Path.GetFileName(ControlFence.FileName),workers_stopped=exited,input_cleanup_confirmed=clean});
                 }
                 return;
@@ -1648,7 +1648,7 @@ namespace Axon {
                 string nonce=m.ContainsKey("end_nonce")?Convert.ToString(m["end_nonce"]):null;
                 if(NativeStopReceipt.ValidNonce(nonce)){
                     bool exited=WorkersExited(2000),clean=false;
-                    try{clean=exited&&!InputLedger.HasHeld()&&File.ReadAllText(ControlFence.FileName).StartsWith(state+"|",StringComparison.Ordinal)&&state!="active"&&!BarShown;}catch{}
+                    try{clean=exited&&!InputLedger.HasHeld()&&AtomicFile.ReadAllText(ControlFence.FileName).StartsWith(state+"|",StringComparison.Ordinal)&&state!="active"&&!BarShown;}catch{}
                     if(!clean){Emergency();DismissControls();}
                     Emit(new {id=id,state=state,end_nonce=nonce,guardian_pid=Process.GetCurrentProcess().Id,guard_file=Path.GetFileName(ControlFence.FileName),workers_stopped=exited,input_cleanup_confirmed=clean,controls_visible=BarShown});
                 }else Emit(new {id=id,state=state,controls_visible=BarShown});

@@ -42,7 +42,7 @@ namespace Axon {
             try {
                 byte[] bytes=System.Text.Encoding.UTF8.GetBytes(pid+"|"+started);
                 using(var stream=new FileStream(temp,FileMode.CreateNew,FileAccess.Write,FileShare.None)){stream.Write(bytes,0,bytes.Length);stream.Flush(true);}
-                if(File.Exists(file))File.Replace(temp,file,null);else File.Move(temp,file);
+                AtomicFile.Publish(temp,file);
             } finally {try{if(File.Exists(temp))File.Delete(temp);}catch{}}
         }
         static bool EnsureWatchdog() {
@@ -77,7 +77,7 @@ namespace Axon {
                     Task<string> acknowledgement=Task.Factory.StartNew(delegate {return armProcess.StandardOutput.ReadLine();});
                     if(!acknowledgement.Wait(2000)||watchdog!=armProcess||armProcess.HasExited||!ArmReceiptMatches(acknowledgement.Result,armNonce,armProcess.Id))throw new InvalidOperationException("Cursor watchdog did not acknowledge this arming request");
                     monitoring=true;armingFailed=false;
-                    if(!File.ReadAllText(ControlFence.FileName).StartsWith("active|")){Restore();return false;}
+                    if(!AtomicFile.ReadAllText(ControlFence.FileName).StartsWith("active|")){Restore();return false;}
                     int size=Math.Max(32,GetSystemMetrics(13));
                     foreach(uint role in new uint[]{32512,32649,32513,32650})
                     using(Bitmap bitmap=new Bitmap(size,size,PixelFormat.Format32bppArgb)) {
@@ -88,13 +88,13 @@ namespace Axon {
                         IntPtr color=bitmap.GetHbitmap(Color.Transparent),mask=CreateBitmap(size,size,1,1,IntPtr.Zero),cursor=IntPtr.Zero;
                         try {
                             IconInfo icon=new IconInfo();icon.icon=false;icon.x=(uint)Math.Round((role==32513?16:4)*size/32f);icon.y=(uint)Math.Round((role==32513?16:2)*size/32f);icon.color=color;icon.mask=mask;
-                            if(!File.ReadAllText(ControlFence.FileName).StartsWith("active|"))throw new InvalidOperationException("Control ended during cursor setup");
+                            if(!AtomicFile.ReadAllText(ControlFence.FileName).StartsWith("active|"))throw new InvalidOperationException("Control ended during cursor setup");
                             cursor=CreateIconIndirect(ref icon);
                             if(cursor==IntPtr.Zero || !SetSystemCursor(cursor,role))throw new InvalidOperationException("Windows refused custom cursor role");
                             cursor=IntPtr.Zero;applied=true;
                         } finally {if(cursor!=IntPtr.Zero)DestroyCursor(cursor);DeleteObject(color);DeleteObject(mask);}
                     }
-                    if(!File.ReadAllText(ControlFence.FileName).StartsWith("active|")){Restore();return false;}
+                    if(!AtomicFile.ReadAllText(ControlFence.FileName).StartsWith("active|")){Restore();return false;}
                     return true;
                 }catch {
                     // A cursor rendering failure must not disarm the independent
@@ -163,7 +163,7 @@ namespace Axon {
             ControlFence.LatchStop();
             try {File.WriteAllText(file,"stopped||0|");}catch {}
             try {
-                foreach(string line in File.ReadAllLines(file+".workers")) {
+                foreach(string line in AtomicFile.ReadAllLines(file+".workers")) {
                     string[] parts=line.Split(':');if(parts.Length!=2)continue;
                     using(Process p=Process.GetProcessById(Int32.Parse(parts[0])))
                         if(p.StartTime.ToUniversalTime().Ticks.ToString()==parts[1] &&
@@ -208,7 +208,7 @@ namespace Axon {
                                 if(armed&&armEpoch==epoch){CrashCleanup();armed=false;armEpoch++;return 3;}
                             }
                             ulong now=NativeDeadline.GetTickCount64();string status,text="";
-                            try {text=File.ReadAllText(file);status=WatchdogState(text,now);}catch {status="invalid";}
+                            try {text=AtomicFile.ReadAllText(file);status=WatchdogState(text,now);}catch {status="invalid";}
                             if(status=="active"){problem="";problemState="";problemSince=0;}
                             else {
                                 if(problem!=status||problemState!=text){problem=status;problemState=text;problemSince=now;}
@@ -219,7 +219,7 @@ namespace Axon {
                                     if(armed&&armEpoch==epoch){
                                         // A new state or disarm may have arrived
                                         // while the guard was being inspected.
-                                        string latest="";try{latest=File.ReadAllText(file);}catch{}
+                                        string latest="";try{latest=AtomicFile.ReadAllText(file);}catch{}
                                         if(latest==text){CrashCleanup();armed=false;armEpoch++;return 3;}
                                     }
                                 }

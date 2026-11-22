@@ -20,7 +20,7 @@ Read this for the detail behind the command table in SKILL.md: targets, batches,
 - **Long or complex work (dozens to hundreds of steps: drawing, repetitive data entry, many similar edits): compute the steps with a script, then run them with `plan`**, not one `run` per model turn.
   `plan --hwnd H --observation-id F --plan-file STEPS.json --ledger LEDGER.json --reason TEXT [--checkpoint-every 6] [--renew-budget N]` sends the steps as consecutive `run` batches of 8, records progress in the ledger, re-observes after a spoiled frame, never replays a step that may have run, and halts on any other refusal.
   Every `--checkpoint-every` batches it returns a frame: look at it, then run the same command again with its `observation_id` and it resumes from the ledger. A changed plan needs a new ledger file.
-  `--renew-budget N` lets it end and restart the task at most N times when the 200-action budget runs out; the reply then carries the new `task_token`, which you must use from then on. Do not write your own loop around `run`.
+  `--renew-budget N` (default 1) lets it end and restart the task at most N times when the 200-action budget runs out; the reply then carries the new `task_token`, which you must use from then on. Do not write your own loop around `run`.
   Read [complex tasks](complex-tasks.md) first: plan offline, preview, calibrate by measuring, run, then compare the result with the goal.
 
 A steps file for the same idea holds `[{"kind":"click","name":"Green","role":"ListItem","risk":"routine"},{"kind":"drag","points":[[300,500],[360,470],[430,480]],"risk":"routine"}]`.

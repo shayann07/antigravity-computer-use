@@ -68,7 +68,7 @@ internal static class StorageGuard {
                         // Only the lease holder may recover this reserved file.
                         if(File.Exists(temp)){Verify(temp,false);File.Delete(temp);}
                         try{using(var stream=new FileStream(temp,FileMode.CreateNew,FileAccess.Write,FileShare.None)){stream.Write(bytes,0,bytes.Length);stream.Flush(true);}Verify(temp,false);
-                            if(File.Exists(target))File.Replace(temp,target,null);else File.Move(temp,target);
+                            PublishRetrying(temp,target);
                         }finally{if(File.Exists(temp))File.Delete(temp);}
                         Console.WriteLine(new JavaScriptSerializer().Serialize(new {ok=true,published=true}));Console.Out.Flush();
                     }
@@ -149,6 +149,20 @@ internal static class StorageGuard {
             var acl=new FileSecurity();acl.SetAccessRuleProtection(true,false);
             foreach(var sid in new SecurityIdentifier[]{Me,SystemSid,AdminSid})acl.AddAccessRule(new FileSystemAccessRule(sid,FileSystemRights.FullControl,AccessControlType.Allow));
             new FileInfo(path).SetAccessControl(acl);
+        }
+    }
+    // Same retry as AtomicFile.Publish in the host: a reader or a scan can hold
+    // the target for a moment, and ReplaceFile then fails with 1175-1177 (#132).
+    static void PublishRetrying(string temp,string target){
+        DateTime deadline=DateTime.UtcNow.AddMilliseconds(2000);int delay=10;
+        while(true){
+            try{if(File.Exists(target))File.Replace(temp,target,null);else File.Move(temp,target);return;}
+            catch(Exception error){
+                IOException io=error as IOException;int code=io!=null?io.HResult&0xFFFF:0;
+                bool transient=error is UnauthorizedAccessException||(io!=null&&!(io is FileNotFoundException)&&!(io is DirectoryNotFoundException)&&(code==5||code==32||code==33||code==1175||code==1176||code==1177));
+                if(!transient||DateTime.UtcNow>=deadline||!File.Exists(temp))throw;
+            }
+            System.Threading.Thread.Sleep(delay);delay=Math.Min(delay*2,100);
         }
     }
     static void Verify(string path,bool root){

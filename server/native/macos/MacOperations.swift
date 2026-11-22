@@ -129,6 +129,21 @@ func macDisplayRects() -> [CGRect] {
     guard CGGetActiveDisplayList(32, &displays, &count) == .success else { return [] }
     return displays.prefix(Int(count)).map { CGDisplayBounds($0) }
 }
+
+// The part of a display that windows may use: its bounds minus the menu bar and
+// the Dock, in the same top-left coordinates as Accessibility (#138). Falls back
+// to the full bounds if no NSScreen matches.
+func macWorkRect(_ display: CGRect) -> CGRect {
+    let primaryHeight = NSScreen.screens.first?.frame.height ?? display.height
+    for screen in NSScreen.screens {
+        guard let id = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber,
+              CGDisplayBounds(CGDirectDisplayID(id.uint32Value)) == display else { continue }
+        let v = screen.visibleFrame
+        let work = CGRect(x: v.minX, y: primaryHeight - v.maxY, width: v.width, height: v.height)
+        return work.width > 0 && work.height > 0 ? work : display
+    }
+    return display
+}
 // The events that type one character. Flags are set explicitly: an event
 // created from the HID system state otherwise inherits whatever modifiers that
 // state last saw (for example Command from an earlier cmd+down chord), and the
@@ -1293,9 +1308,12 @@ func macFitWindow(_ args: [String: Any]) throws -> [String: Any] {
         throw AxonError("other_desktop", "Restore the app on the current Space yourself before fitting it. No Space was switched.")
     }
     let current = CGRect(x: r[0], y: r[1], width: r[2], height: r[3])
-    guard let screen = macDisplayRects().max(by: { $0.intersection(current).width * $0.intersection(current).height < $1.intersection(current).width * $1.intersection(current).height }) else {
+    guard let display = macDisplayRects().max(by: { $0.intersection(current).width * $0.intersection(current).height < $1.intersection(current).width * $1.intersection(current).height }) else {
         throw AxonError("display_unavailable", "No display is available.")
     }
+    // Fit to the working area, not the whole display: controls behind the Dock
+    // or the menu bar are not visible to the person (#138).
+    let screen = macWorkRect(display)
     var size = CGSize(width: min(current.width, screen.width), height: min(current.height, screen.height))
     var point = CGPoint(x: max(screen.minX, min(current.minX, screen.maxX-size.width)), y: max(screen.minY, min(current.minY, screen.maxY-size.height)))
     guard let sizeValue = AXValueCreate(.cgSize, &size), let pointValue = AXValueCreate(.cgPoint, &point) else { throw AxonError("window_geometry_failed", "Cannot represent window bounds.") }
