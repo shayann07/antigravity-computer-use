@@ -5046,7 +5046,13 @@ namespace Axon
             GuardSameWindow(a, HwndArg(a));
 
             int kept, lost;
+            // The sequence number taken with the snapshot is what "theirs" means.
+            // A copy made after this point is newer than the snapshot and must
+            // never be overwritten by it (#137).
+            uint snapshotSeq = Native.GetClipboardSequenceNumber();
             DataObject saved = SaveClipboard(out kept, out lost);
+            if (Native.GetClipboardSequenceNumber() != snapshotSeq)
+                throw new AxonError("clipboard_unsafe", "The clipboard changed while it was being saved.", "Nothing was typed. Use computer_type to enter the text instead.");
             // Any uncopyable format would be lost by overwriting it. Refusing is
             // the entire reason this operation exists, so it refuses instead of
             // pasting and apologising afterwards.
@@ -5068,6 +5074,9 @@ namespace Axon
                     if(!HasTypingFocus(target.El)){Quick(delegate { target.El.SetFocus(); }, ClickProbeMs);System.Threading.Thread.Sleep(120);}
                     RequireTypingFocus(target.El,HwndArg(a));
                 }
+                // Refuse before any input if a newer copy arrived while focus settled.
+                if (Native.GetClipboardSequenceNumber() != snapshotSeq)
+                    throw new AxonError("clipboard_unsafe", "The clipboard changed before the paste started, so it was left alone.", "Nothing was typed. Use computer_type to enter the text instead.");
                 ClipboardSTA(setClipboard);
                 mine = Native.GetClipboardSequenceNumber();
 

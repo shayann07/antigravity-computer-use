@@ -118,12 +118,25 @@ async function updateLocked(target,command,{fetcher,adapters}){
    catch(error){if(error.message!=='release_metadata_expired')throw error;save({...state,available:false,attempt_at:Date.now(),checked_at:Date.now(),update_note_expired:true,last_error:null});return {available:false,next_action:'continue_task'};}
    const {update_note_expired,...prior}=state;
    if(m.sequence<=(state.sequence||0)||!newerVersion(m.version,bundle.version)){save({...prior,available:false,attempt_at:Date.now()});return {available:false};}
+   const updatesDir=path.join(target,'updates');
+   const ownStage=dir=>typeof dir==='string'&&path.dirname(path.resolve(dir))===updatesDir&&fs.existsSync(dir)&&!fs.lstatSync(dir).isSymbolicLink();
+   // The same signed manifest is already staged: re-verify those bytes and keep
+   // them instead of downloading another full copy every day (#136).
+   if(ownStage(prior.staged)&&prior.envelope?.manifest===envelope.manifest){
+    try{verifyStaged(prior.staged,m);verifyUpdateBundle(prior.staged,m,nativePlatform());
+     save({...prior,attempt_at:Date.now(),checked_at:Date.now(),envelope,available:true,available_version:m.version,last_error:null});
+     return {available:true,version:m.version,next_action:settings.mode==='automatic'?'apply_when_idle':'update_available'};
+    }catch{/* fall through to a fresh download */}
+   }
    // A fresh directory lets an interrupted download retry without adopting partial bytes.
    const stage=path.join(target,'updates',String(m.sequence)+'-'+randomUUID());fs.mkdirSync(stage,{recursive:true,mode:0o700});
    try{
    const required=Object.values(m.files).reduce((n,f)=>n+f.size,0)*2+100*1024*1024;const disk=adapters.diskInfo?adapters.diskInfo(stage):fs.statfsSync(stage);if(disk.bavail*disk.bsize<required)throw Error('update_insufficient_space');
    for(const [name,f]of Object.entries(m.files)){const destination=path.join(stage,name);fs.mkdirSync(path.dirname(destination),{recursive:true});await downloadFile(f.url,destination,{size:f.size,hash:f.sha256,fetcher});if(process.platform!=='win32'&&(name==='node'||name.startsWith('bin/')||name.endsWith('.command')))fs.chmodSync(destination,0o700);}
-   verifyStaged(stage,m);verifyUpdateBundle(stage,m,nativePlatform());save({...prior,attempt_at:Date.now(),checked_at:Date.now(),staged:stage,envelope,available:true,available_version:m.version,last_error:null});return {available:true,version:m.version,next_action:settings.mode==='automatic'?'apply_when_idle':'update_available'};
+   verifyStaged(stage,m);verifyUpdateBundle(stage,m,nativePlatform());save({...prior,attempt_at:Date.now(),checked_at:Date.now(),staged:stage,envelope,available:true,available_version:m.version,last_error:null});
+   // The new stage is recorded; retire the one it supersedes (updater-owned only).
+   if(ownStage(prior.staged)&&path.resolve(prior.staged)!==path.resolve(stage))try{fs.rmSync(prior.staged,{recursive:true,force:true});}catch{}
+   return {available:true,version:m.version,next_action:settings.mode==='automatic'?'apply_when_idle':'update_available'};
    }catch(error){
     // Only this invocation's freshly created stage may be removed. Never touch
     // retained releases, rollback journals, previous stages or user folders.

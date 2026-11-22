@@ -35,3 +35,12 @@ test('portable payload inventory rejects extra files, links and path traversal b
 test('a changed installation permission policy uses the normal installer rather than mutating a live policy',async()=>{
  const f=fixture();try{const {release}=f.installed();const original=fs.readFileSync(path.join(release,'desktop-policy.json'),'utf8');const r=await quickInstall({bundle:f.bundle,home:f.home,permissionMode:'standalone',dependencies:f.dependencies});assert.equal(r.already_installed,false);assert.equal(r.options.permissionMode,'standalone');assert.equal(fs.readFileSync(path.join(release,'desktop-policy.json'),'utf8'),original);}finally{fs.rmSync(f.dir,{recursive:true,force:true});}
 });
+for(const blocked of ['definition','enable flag'])test(`a failed same-build repair never leaves the Sidecar enabled without its definition: ${blocked} write fails (#139)`,async()=>{
+ const f=fixture();try{const {config}=f.installed();const before=fs.readFileSync(config,'utf8');
+  const definition=path.join(path.dirname(config),'sidecars/antigravity-computer-use/sidecar.json');
+  fs.mkdirSync((blocked==='definition'?definition:config)+'.agcu.tmp',{recursive:true});
+  await assert.rejects(quickInstall({bundle:f.bundle,home:f.home,dependencies:f.dependencies}));
+  assert.equal(fs.readFileSync(config,'utf8'),before,'the enable flag is unchanged');
+  assert.equal(fs.existsSync(definition),false,'no definition is left behind');
+ }finally{fs.rmSync(f.dir,{recursive:true,force:true});}
+});

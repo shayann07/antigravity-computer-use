@@ -503,8 +503,18 @@ namespace Axon {
                 if(leaseAbandoned)try {ControlFence.Recover();}catch {}
                 registered = RegisterHotKey(Handle, 1, 0x4003, 0x7B);
                 if (!registered) { Emit(new { ev="error", message="Ctrl+Alt+F12 is unavailable; refusing control" }); return false; }
-                Presence.Start();
-                Presence.OnPanic = delegate { if(state=="active"||state=="paused"||prompting)Emergency("escape"); };
+                // Reinstall the hooks for every activation: Windows can remove a
+                // low-level hook silently after a slow callback, and HooksOk
+                // would still report the original install.
+                Presence.Restart();
+                // The hook callback only revokes control; the slower cleanup runs
+                // off the hook thread so Windows never times the hook out.
+                Presence.OnPanic = delegate {
+                    if(state=="active"||state=="paused"||prompting){
+                        Interlocked.Increment(ref stopEpoch); ControlFence.LatchStop();
+                        ThreadPool.QueueUserWorkItem(delegate { Emergency("escape"); });
+                    }
+                };
                 if (!Presence.HooksOk) { Emit(new { ev="error", message="Physical-input monitoring unavailable" }); UnregisterHotKey(Handle,1);Presence.Stop();return false; }
                 Overlay.Configure(1, "Antigravity", 0); Overlay.Start(true);
                 Overlay.RecordVisuals(recordVisuals);

@@ -169,6 +169,16 @@ namespace Axon
             _hooksOk = false;
         }
 
+        // Stop the hook thread, wait for it to unhook, then install fresh hooks.
+        // If the old thread does not exit, monitoring is reported unavailable.
+        internal static void Restart()
+        {
+            Thread old = _thread;
+            Stop();
+            if (old != null && old.IsAlive && !old.Join(1000)) { _hooksOk = false; return; }
+            Start();
+        }
+
         internal static void Stop()
         {
             if (!_started) return;

@@ -63,18 +63,32 @@ const writeLedger = (file, ledger) => { const tmp = file + '.tmp'; fs.writeFileS
 
 // call(command, args) sends one request to the service and resolves to its reply.
 // renew() ends the task and starts a new one, resolving to the `ready` reply.
-export async function runPlan({steps, hwnd, observationId, reason, ledgerFile, call, renew, checkpointEvery = 6, maxRenewals = 0}) {
+export async function runPlan({steps, hwnd, observationId, reason, ledgerFile, call, renew, checkpointEvery = 6, maxRenewals = 0, resolvePending}) {
   const hash = planHash(steps);
   const ledger = readLedger(ledgerFile, hash, steps.length);
+  // A batch recorded as pending was dispatched, but its outcome never reached
+  // the ledger (the CLI died or the write failed). Its input may have landed, so
+  // it is never sent again automatically: the caller looks first and says (#133).
+  if (ledger.pending) {
+    const {from, count} = ledger.pending;
+    if (resolvePending === 'landed') ledger.next = Math.max(ledger.next, from + count);
+    else if (resolvePending !== 'none')
+      return {ok: false, halted: 'plan_batch_unconfirmed', error: {code: 'plan_batch_unconfirmed', message: `Steps ${from + 1}-${from + count} were sent, but their outcome was not recorded. They may have landed.`},
+        pending: {from, count}, plan: {total: steps.length, next: ledger.next, done: false, batches: ledger.batches, renewals: ledger.renewals, ledger: ledgerFile},
+        next_hint: 'Take a snapshot and check whether those steps took effect. Then run the same plan command with --resolve-pending landed (skip them) or --resolve-pending none (send them again).'};
+    delete ledger.pending; writeLedger(ledgerFile, ledger);
+  }
   let obs = observationId, retries = 0, sinceCheckpoint = 0, last = null, renewed = null;
   const progress = done => ({plan: {total: steps.length, next: ledger.next, done, batches: ledger.batches, renewals: ledger.renewals, ledger: ledgerFile}});
   const observe = async () => { const s = await call('snapshot', {hwnd, with_image: true, reason: 'Observe before resuming the plan'}); if (s.ok && frameOf(s)) obs = frameOf(s); return s; };
   while (ledger.next < steps.length) {
     const chunk = steps.slice(ledger.next, ledger.next + BATCH);
+    // Record the batch before any input; if this write fails nothing is sent.
+    ledger.pending = {from: ledger.next, count: chunk.length, at: new Date().toISOString()}; writeLedger(ledgerFile, ledger);
     const reply = await call('run', {hwnd, observation_id: obs, steps: chunk, reason});
     last = reply;
     const landed = landedCount(reply, chunk.length);
-    ledger.next += landed; ledger.batches++;
+    delete ledger.pending; ledger.next += landed; ledger.batches++;
     ledger.last = {at: new Date().toISOString(), sent: chunk.length, landed, ok: reply.ok, code: reply.error?.code || reply.verification_error?.code};
     writeLedger(ledgerFile, ledger);
     if (reply.ok && !reply.verification_error) {
