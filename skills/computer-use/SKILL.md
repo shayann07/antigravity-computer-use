@@ -65,8 +65,8 @@ These common command shapes are complete; use them directly without schema setup
 | Command | Named arguments |
 | --- | --- |
 | `launch` | `--app EXE_OR_APP_BUNDLE --observe --reason TEXT`; on a Mac an app name such as `TextEdit` also works |
-| `snapshot` | `--hwnd H --reason TEXT [--query TEXT] [--max-nodes 500] [--image] [--settle-ms 600]` |
-| `click` | `--hwnd H --observation-id F --name TEXT --role Button --risk routine --reason TEXT [--physical true] [--image] [--max-nodes 500]`; or `--index N` in place of name/role |
+| `snapshot` | `--hwnd H --reason TEXT [--query TEXT] [--max-nodes 500] [--image] [--settle-ms 0..2000]` |
+| `click` | `--hwnd H --observation-id F --name TEXT --role Button --risk routine --reason TEXT [--physical true] [--image] [--max-nodes 500] [--settle-ms 0..2000]`; or `--index N` in place of name/role |
 | `click` (pixels) | `--hwnd H --observation-id F --x X --y Y --risk routine --reason TEXT [--image]`; X/Y come from that frame's freshly viewed image |
 | `move` | `--hwnd H --observation-id F --x X --y Y --risk routine --reason TEXT`; hover without clicking |
 | `drag` | `--hwnd H --observation-id F --from X,Y --to X,Y --risk routine --reason TEXT` (write an array once: `X,Y` or JSON `'[X,Y]'`) |
