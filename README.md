@@ -138,7 +138,7 @@ unattended for about 65 minutes.
 ## Learn more
 
 [Install guide](docs/INSTALLATION.md) · [Mac guide](docs/MACOS.md) ·
-[Security](SECURITY.md) · [Changelog](CHANGELOG.md) ·
+[Security](SECURITY.md) · [Code signing](docs/CODE-SIGNING.md) · [Changelog](CHANGELOG.md) ·
 [Contributing](CONTRIBUTING.md)
 
 MIT licensed. Not affiliated with Google.
