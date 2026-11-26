@@ -40,7 +40,12 @@ export const TOOLS=[
  tool('computer_status','Read status without permission prompts or screenshots.')
 ];
 const OPS={computer_move:'move',computer_click:'click',computer_type:'type',computer_paste:'paste',computer_key:'key',computer_scroll:'scroll',computer_drag:'drag',computer_focus:'focus',computer_fit_window:'fit_window',computer_resize_window:'resize_window',computer_close_window:'close_window',computer_set_value:'set_value',computer_clipboard:'clipboard',computer_open:'open',computer_file_dialog:'file_dialog'};
+// Schema and argument errors are raised before any input is sent, so they carry
+// bad_arguments and route to fix_arguments_and_retry instead of diagnostics.
 export function validate(name,args){
+ try{validateArgs(name,args);}catch(e){if(!e.code)e.code='bad_arguments';throw e;}
+}
+function validateArgs(name,args){
  const s=TOOLS.find(t=>t.name===name)?.inputSchema;if(!s)throw new Error('Unknown tool');
  const visit=(t,v,k)=>{
   if(t.type==='integer'&&!Number.isSafeInteger(v))throw new Error(k+' must be integer');

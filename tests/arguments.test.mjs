@@ -72,3 +72,12 @@ test('named batches cross actual Windows PowerShell without JSON quoting or Unic
   const r=spawnSync(ps,['-NoProfile','-NonInteractive','-EncodedCommand',Buffer.from(script,'utf16le').toString('base64')],{windowsHide:true,encoding:'utf8'});assert.equal(r.status,0,r.stderr);const a=JSON.parse(r.stdout);assert.equal(a.steps[1].path,sample);assert.equal(a.steps[1].observe.with_image,true);assert.equal(a.hwnd,123);
  }finally{fs.unlinkSync(file);fs.rmdirSync(dir);}
 });
+test('out-of-range arguments are fixable, not a diagnostics lockout (#151)',async()=>{
+ const {recoveryAdvice}=await import('../server/recovery.mjs');
+ let error;try{parse('click',['--hwnd','123','--observation-id','fresh','--index','7','--risk','routine','--reason','Start','--settle-ms','2400']);}catch(e){error=e;}
+ assert.equal(error?.code,'bad_arguments');
+ assert.match(error.message,/0 to 2000.*no input was sent/);
+ const advice=recoveryAdvice({ok:false,error:{code:error.code,message:error.message}},'click');
+ assert.equal(advice.next_action,'fix_arguments_and_retry');
+ assert.equal(advice.replay_allowed,true);
+});
