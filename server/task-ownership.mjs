@@ -6,12 +6,18 @@ const denied=(code,message)=>{throw Object.assign(Error(message),{code});};
 // Model think time between actions has been measured above 12 minutes, so the
 // takeover threshold sits well past the 10-minute orphaned hint.
 export const ORPHAN_TAKEOVER_MS=30*60*1000;
+function denyOwned(state,message){
+ const orphan=state?.task_open===true&&state.recovered_task!==true&&state.task_liveness==='orphaned'&&
+  state.held_resources?.grants===0&&state.held_resources?.input_held===false&&!state.approved_apps?.length;
+ const hint=orphan?' If this was your task and you lost its token, run stop or use Stop on the control bar.':'';
+ denied('task_owned',message+hint);
+}
 export class TaskOwnership {
  constructor({now=()=>performance.now()}={}){this.now=now;this.owner=null;}
  claim(state){
   if(state?.recovered_task===true)denied('recovered_cleanup_unverified','A previous task survived restart. Inspect prior cleanup; do not acquire or replay its input.');
   if(this.owner&&!this.owner.used&&this.now()>this.owner.until)this.owner=null;
-  if(this.owner||state?.task_open!==false||!['idle','stopped'].includes(state?.state))denied('task_owned','Another task or recovery record owns this controller. Do not end it or acquire its token.');
+  if(this.owner||state?.task_open!==false||!['idle','stopped'].includes(state?.state))denyOwned(state,'Another task or recovery record owns this controller. Do not end it or acquire its token.');
   const token=randomBytes(32).toString('hex');this.owner={token,used:false,until:this.now()+30000};return token;
  }
  authorize(name,token,state){
@@ -25,7 +31,7 @@ export class TaskOwnership {
   if(this.owner&&!this.owner.used&&this.now()>this.owner.until)this.owner=null;
   const owner=this.owner;
   if(!owner)denied('task_required','Run ready once and use its task_token with --task on subsequent task commands.');
-  if(typeof token!=='string'||!/^[a-f0-9]{64}$/.test(token)||token.length!==64||!timingSafeEqual(Buffer.from(token),Buffer.from(owner.token)))denied('task_owned','This call does not own the current task. Wait for its owner to end it; emergency Stop remains available.');
+  if(typeof token!=='string'||!/^[a-f0-9]{64}$/.test(token)||token.length!==64||!timingSafeEqual(Buffer.from(token),Buffer.from(owner.token)))denyOwned(state,'This call does not own the current task. Wait for its owner to end it; emergency Stop remains available.');
   owner.used=true;
  }
  // Who holds the task relative to this caller: self (token matches), other (a

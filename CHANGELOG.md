@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Windows typing and text paste verify the edit against the target field. If the field cannot confirm delivery, the controller reports an unknown outcome and asks for observation before further input. The skill also covers delayed publish confirmation and recovering a lost task token (#146).
+- After a controller restart, `ready` can recommend `end` for a verified, undispatched task under an unconfirmed Stop. It checks the original Stop episode, input ledger and recorded actors. End repeats the checks before closing the task (#151).
+- The Mac and Windows bootstrap scripts pin archive SHA-256 digests. The global direct installer supports an additional Claude Code skill, prints concise reinstall errors and skips creating an empty MCP configuration. Installed examples use the platform's shell (#148).
+
 ## 1.0.6 - Packaged Windows apps keep their own approval; safer rollback, plans and paste
 
 - On Windows, packaged apps such as Calculator, Settings and Windows Security are identified by their own process rather than the shared window frame, so each keeps its own approval and access tier. A packaged window whose app cannot be identified is refused.

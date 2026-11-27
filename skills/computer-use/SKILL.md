@@ -5,12 +5,10 @@ description: Operate and visually verify real desktop applications, including de
 
 # Computer use
 
-Antigravity is the agent: you do the task yourself by running these commands, not by writing instructions for the user.
-The local native runtime supplies screenshots, accessibility and real mouse/keyboard input.
-Windows and macOS use the same tools, observation/action loop, batch limits and permission lifecycle.
-Use its installed direct terminal command. No MCP or separate model is needed. Do not mix it with Cua Driver or another controller.
+Run these commands in your terminal to do the desktop task yourself.
+Use the installed terminal command on Windows or macOS. Use one controller per task.
 
-```powershell
+```{{SHELL}}
 {{DESKTOP_COMMAND}} ready
 ```
 
@@ -22,14 +20,11 @@ The first controller call is always the installed command above. Run exactly one
 `.localdata` to decide how to operate the desktop. The `ready` reply is the
 runtime's authority.
 
-Keep the returned `task_token` private. Prefer copying `task_command_prefix`
-from the ready response and appending the next command to that prefix; it
-already includes the correct installed launcher and task context. Do not call
+Keep the returned `task_token` private. Append each command to the returned `task_command_prefix`. Do not call
 `status` before `ready`; `ready` already reports the state you need.
 Alternatively, append `--task <task_token>` to
 all subsequent task commands, including `ready` after a human handoff and
-`end`. The CLI obtains this token inside the first `ready` call; no separate
-model/tool round trip is needed. For example:
+`end`. For example:
 
 `{{DESKTOP_COMMAND}} snapshot --task <task_token> --hwnd <observed-window>`
 
@@ -37,6 +32,7 @@ On `task_owned`, wait for the owning task to finish. Never fetch another
 conversation's token or issue End on its behalf. Status, app discovery and
 emergency Stop remain available without the task token. After successful End,
 discard the old token; a new task starts with `ready` without `--task`.
+If your own task is orphaned with zero grants and no input held, and you lost its token, use `stop` or the bar’s Stop.
 A lost response does not justify replaying an input action.
 
 - If `ready:true`, continue directly with `apps`/`launch`, then `snapshot`, action/verification and `end`.
@@ -44,10 +40,7 @@ A lost response does not justify replaying an input action.
 - Every blocked reply carries a `recovery` object (`actor`, the exact `command` or a `reason`, and `safe_when`). Follow it instead of guessing.
 - `human_start_on_visible_desktop`: ask the human to open **`{{CONTROLLER_START}}`** once on their normal desktop. Do not switch desktops or repeatedly start helpers.
   If controls still fail, collect diagnostics and report the incident instead of inventing another launch method.
-- If the command cannot be resolved or returns an error, report that exact error and stop. Source exploration is never a substitute for the controller.
-
-This short path is mandatory for Flash, low-effort and other models that may
-otherwise turn a desktop task into repository analysis.
+- If the launcher fails, report its exact error and stop.
 
 ## The loop
 
@@ -60,7 +53,7 @@ If you noticed a skill or runtime problem, keep private notes during the task an
 Report only what the app showed. If it shows no output path, use at most one visible control that opens the output folder, or say the path was not shown. Do not explore history panels, hover for tooltips or search the disk to find it.
 For physical handoff (a human presses Esc or takes over): at most one bounded input attempt, then stop issuing controller calls and wait for the human. Details in the handoff reference below.
 If any result shows `state: stopped` or `control_reason: escape`, the human stopped you: say so plainly in your reply (for example "You pressed Esc, so I stopped after X"), never call it a clean finish, and do not resume until asked.
-These common command shapes are complete; use them directly without schema setup. H/F/N are observed handle/frame/index values. Optional flags are in brackets; replace placeholders, not the command names.
+H/F/N are the observed handle, frame and index. Brackets mark optional flags.
 
 | Command | Named arguments |
 | --- | --- |
@@ -74,7 +67,7 @@ These common command shapes are complete; use them directly without schema setup
 | `key` | `--hwnd H --observation-id F --keys CHORD --risk routine --reason TEXT [--index N] [--image]`; the flag is `--keys`, also inside `run --step key` |
 | `set_value` | `--hwnd H --observation-id F --name TEXT --role Edit --text VALUE --risk routine --reason TEXT`; or `--index N` |
 | `file_dialog` | `--hwnd OWNER --observation-id F --path FILE --action open` (or `save`) `--entry-method clipboard --reason TEXT` |
-| `run` | `--hwnd H --observation-id F --reason TEXT --step COMMAND` followed by that step's flags; repeat at most 8 times, omitting per-step owner/frame |
+| `run` | `--hwnd H --observation-id F --reason TEXT --step COMMAND` followed by that step's flags; repeat at most 8 times, omitting per-step owner/frame. Add `--images all` before the first step for per-step images |
 | `wait` | `--hwnd H --until TEXT --timeout-ms 30000 --reason TEXT [--abort-on 'Failed,Cancelled'] [--image]`; or `--until-gone OBSERVED_TEXT` in place of `--until` |
 | `wait_change` | `--hwnd H --observation-id F --timeout-ms 30000 --reason TEXT` |
 | `close_window` | `--hwnd H --reason TEXT` |
@@ -86,13 +79,16 @@ These common command shapes are complete; use them directly without schema setup
 - Every action consumes its `observation_id` and returns a **fresh frame and tree**. Use that reply directly. Do not take another snapshot merely to get a frame you already have.
   Pixel targets require a fresh viewed image. Ordinary named actions are tree-only; add `--image` when pixels or visual verification are needed.
 - Combine predictable steps in one bounded `run` with 1–8 `--step` groups. For dozens to hundreds of steps, compute the steps with a script, then run them with `plan`, never one `run` per model turn.
+- An app’s “Posted” confirmation or View link confirms publication. A feed can lag after a successful post. Never publish again because a list has not refreshed.
 - Never guess an observation id, index or pixel position across a layout change. Never replay an input action after a lost reply or `delivery_unknown:true`.
+
+For a dev-build smoke test, launch with `--observe`, then use the returned window and frame for one `run --images all` with the observed controls. Close the disposable window with `close_window` and finish with `end`.
 
 Examples only: replace handles, frames, indexes, names and paths with values from the current task and its fresh observation.
 
-```powershell
+```{{SHELL}}
 {{DESKTOP_COMMAND}} click --hwnd 123 --observation-id FRAME --name Settings --role Button --risk routine --reason 'Open observed settings' --max-nodes 500
-{{DESKTOP_COMMAND}} run --hwnd 123 --observation-id FRAME --reason 'Import, start and wait' --step click --name 'Choose files' --role Button --risk routine --step file_dialog --path 'D:\Samples\cat.jpg' --action open --entry-method clipboard --settle-ms 600 --step click --name Start --role Button --risk routine --step wait --until 'Done' --timeout-ms 30000
+{{DESKTOP_COMMAND}} run --hwnd 123 --observation-id FRAME --reason 'Import, start and wait' --step click --name 'Choose files' --role Button --risk routine --step file_dialog --path 'OBSERVED_FILE_PATH' --action open --entry-method clipboard --settle-ms 600 --step click --name Start --role Button --risk routine --step wait --until 'Done' --timeout-ms 30000
 {{DESKTOP_COMMAND}} set_value --hwnd 123 --observation-id FRAME --index 9 --text 'Sample' --risk routine --reason 'Set the observed field'
 {{DESKTOP_COMMAND}} run --hwnd 123 --observation-id FRAME --reason 'Pick a colour and draw two curves' --step click --name Green --role ListItem --risk routine --step drag --points '[[300,500],[360,470],[430,480],[500,450]]' --risk routine --step drag --points '[[300,560],[380,530],[460,545]]' --risk routine
 ```

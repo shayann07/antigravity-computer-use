@@ -31,7 +31,7 @@ for(const file of install.configs){
 for(const dir of install.skills){
  const template=fs.readFileSync(path.join(install.release,'skills/computer-use/SKILL.md'),'utf8');
  const command=desktopCommand(install.launcher_node||path.join(install.release,platform.node),install.launcher||path.join(install.release,'scripts','desktop.mjs'));
- assert.equal(fs.readFileSync(path.join(dir,'SKILL.md'),'utf8'),template.replaceAll('{{DESKTOP_COMMAND}}',command).replaceAll('{{CONTROLLER_START}}',install.controller_start||''));
+ assert.equal(fs.readFileSync(path.join(dir,'SKILL.md'),'utf8'),template.replaceAll('{{SHELL}}',process.platform==='win32'?'powershell':'sh').replaceAll('{{DESKTOP_COMMAND}}',command).replaceAll('{{CONTROLLER_START}}',install.controller_start||''));
  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir,'deployment.json'),'utf8')),{target,release:install.release,workspace:install.workspace,permission_mode:install.permission_mode});
 }
 console.log(JSON.stringify({verified:true,release:install.release,build_id:manifest.build_id,files:Object.keys(manifest.files).length,skill_matches:true},null,2));

@@ -14,7 +14,7 @@
 - Publish the source tree, portable ZIP, checksums and matching signed Windows
   update assets only after the applicable Windows checks and release notes have
   been reviewed. A Windows-only release must not claim a newly qualified Mac
-  bundle. The bootstrap pin must point to an existing, verified public asset.
+  bundle. When updating the bootstrap version, pin the verified archive SHA-256 for Windows x64 in `install.ps1` and both Mac architectures in `install.sh`.
 - Record hardware coverage precisely. Physical mixed-DPI/multi-monitor validation remains outstanding.
 
 Public repository: https://github.com/shayann07/antigravity-computer-use. Release assets must correspond to a commit whose Windows checks passed.

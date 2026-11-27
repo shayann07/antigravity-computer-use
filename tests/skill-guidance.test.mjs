@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 import {describeCommand} from '../scripts/desktop.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const skill = fs.readFileSync(path.join(root, 'skills', 'computer-use', 'SKILL.md'), 'utf8');
+const skill = fs.readFileSync(path.join(root, 'skills', 'computer-use', 'SKILL.md'), 'utf8').replaceAll('{{SHELL}}', 'powershell');
 const referenceDir = path.join(root, 'skills', 'computer-use', 'references');
 const references = Object.fromEntries(fs.readdirSync(referenceDir).filter(name => name.endsWith('.md'))
   .map(name => [name, fs.readFileSync(path.join(referenceDir, name), 'utf8')]));

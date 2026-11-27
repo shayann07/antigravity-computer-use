@@ -22,6 +22,12 @@ class NativeValueWriteTests {
         try {
             var a=Assembly.LoadFrom(args[0]);
             method=a.GetType("Axon.Program",true).GetMethod("WriteValuePattern",BindingFlags.NonPublic|BindingFlags.Static);
+            var verify=a.GetType("Axon.Program",true).GetMethod("ConfirmsTextEdit",BindingFlags.NonPublic|BindingFlags.Static);
+            Func<string,string,string,bool> confirmed=(before,after,text)=>(bool)verify.Invoke(null,new object[]{before,after,text});
+            Require(confirmed("", "post", "post") && confirmed("ac","abc","b"),"inserted text was not confirmed");
+            Require(confirmed("aOLDc","aNEWc","NEW"),"selection replacement was not confirmed");
+            Require(!confirmed("","","post") && !confirmed(null,"post","post"),"unreadable or empty editor confirmed a write");
+            Require(!confirmed("post xxx","post yyy","post") && !confirmed("","po","post"),"unrelated or partial change confirmed a write");
             int writes=0; string value="old";
             var exact=Run(()=>{writes++;value="new";},()=>value,()=>{},()=>{});
             Require(writes==1 && (string)exact["value"]=="new", "exact value was not confirmed");

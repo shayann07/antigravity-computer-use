@@ -69,6 +69,10 @@ test('a used capability is released only by a human Stop or a long orphan with n
  assert.equal(owner.releasable({...orphan,approved_apps:['notepad']}),false,'a held grant keeps the owner');
  assert.equal(owner.releasable({...orphan,held_resources:{grants:0,input_held:true}}),false,'held input keeps the owner');
  assert.equal(owner.releasable({...orphan,recovered_task:true}),false,'recovery keeps its own path');
+ for(const attempt of [state=>owner.claim(state),state=>owner.authorize('computer_end',null,state)]){
+  assert.throws(()=>attempt(orphan),e=>e.code==='task_owned'&&e.message.includes('run stop'));
+  assert.throws(()=>attempt({...orphan,held_resources:{grants:1,input_held:false}}),e=>e.code==='task_owned'&&!e.message.includes('run stop'));
+ }
  assert.equal(owner.releasable(orphan),true);
  assert.equal(owner.releasable({state:'stopped',task_open:true}),true,'a human Stop ends ownership');
  assert.equal(new TaskOwnership().releasable({state:'stopped',task_open:true}),false,'nothing to release without an owner');

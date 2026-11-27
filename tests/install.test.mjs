@@ -146,6 +146,21 @@ test('unsealed extra code is refused before any installation write',()=>{
  assert.throws(()=>install({bundle,target,home:path.join(dir,'home')}),/inventory differs/);assert(!fs.existsSync(target));
 });
 
+test('opt-in Claude Code skill follows global updates and rolls back with its launcher',async()=>{
+ const dir=fs.mkdtempSync(path.join(root,'claude-skill-')),bundle=path.join(dir,'bundle'),target=path.join(dir,'installed'),home=path.join(dir,'home');
+ try{
+  fs.mkdirSync(path.join(bundle,'skills/computer-use'),{recursive:true});writeFixture(bundle);
+  fs.writeFileSync(path.join(bundle,'skills/computer-use/SKILL.md'),'{{SHELL}} {{DESKTOP_COMMAND}}');seal(bundle);
+  const first=install({bundle,target,home,alsoClaudeCode:true}),skill=path.join(home,'.claude/skills/computer-use/SKILL.md');
+  assert.deepEqual(first.configs,[]);assert(!fs.existsSync(path.join(home,'.gemini/config/mcp_config.json')));
+  const original=fs.readFileSync(skill,'utf8');assert(original.startsWith(process.platform==='win32'?'powershell ':'sh '));assert(original.includes(first.launcher));
+  fs.writeFileSync(path.join(bundle,'skills/computer-use/SKILL.md'),'updated {{DESKTOP_COMMAND}}');seal(bundle,'9.2.0-test');
+  const next=install({bundle,target,home});assert(fs.readFileSync(skill,'utf8').startsWith('updated '));
+  await rollbackGuarded(path.join(next.backup,'rollback.json'));assert.equal(fs.readFileSync(skill,'utf8'),original);
+  await rollbackGuarded(path.join(first.backup,'rollback.json'));assert(!fs.existsSync(skill));
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
+
 test('direct updates retain the previously chosen permission policy',()=>{
  const dir=fs.mkdtempSync(path.join(root,'policy-')),bundle=path.join(dir,'bundle'),target=path.join(dir,'installed'),home=path.join(dir,'home');
  fs.mkdirSync(path.join(bundle,'skills/computer-use'),{recursive:true});writeFixture(bundle);fs.writeFileSync(path.join(bundle,'skills/computer-use/SKILL.md'),'Use {{DESKTOP_COMMAND}}');seal(bundle);
@@ -156,6 +171,7 @@ test('direct updates retain the previously chosen permission policy',()=>{
 test('failed post-copy storage verification leaves the prior launcher, pointer and host config in place',()=>{
  const dir=fs.mkdtempSync(path.join(root,'staged-')),bundle=path.join(dir,'bundle'),target=path.join(dir,'installed'),home=path.join(dir,'home');
  fs.mkdirSync(path.join(bundle,'skills/computer-use'),{recursive:true});writeFixture(bundle,'v1');fs.writeFileSync(path.join(bundle,'skills/computer-use/SKILL.md'),'Use {{DESKTOP_COMMAND}}');seal(bundle);
+ const config=path.join(home,'.gemini/config/mcp_config.json');fs.mkdirSync(path.dirname(config),{recursive:true});fs.writeFileSync(config,JSON.stringify({mcpServers:{keep:{}}}));
  const first=install({bundle,target,home});const before={launcher:fs.readFileSync(first.launcher,'utf8'),node:fs.readFileSync(first.launcher_node,'utf8'),pointer:fs.readFileSync(path.join(target,'installation.json'),'utf8'),config:fs.readFileSync(first.configs[0],'utf8'),skill:fs.readFileSync(path.join(first.skills[0],'SKILL.md'),'utf8')};
  fs.writeFileSync(path.join(bundle,platform.node),'v2');seal(bundle,'9.2.0-test');let phases=0;
  assert.throws(()=>productionInstall({bundle,target,home,prepareStorage(){if(++phases===2)throw Error('Injected copied-tree ACL refusal');}}),/ACL refusal/);
