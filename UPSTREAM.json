@@ -364,11 +364,11 @@
     },
     {
       "path": "scripts/install.mjs",
-      "sha256": "34168d8ea2003722f368a50a71340a3793e25982d5a1432674d5ec3d4a4a4113"
+      "sha256": "01f692f7cf2f136a2e823c6833689b56f219e436d6aefcdc8b5f817fd63626ca"
     },
     {
       "path": "scripts/rollback.mjs",
-      "sha256": "513ded37878835985be7db28d774f9ba03dd72001454d9ed8f4aeea59ac1993e"
+      "sha256": "0b37f6fb9e8a4c09d9bf7f97fa94a4b35caf5f72d15ed1f3c07c17c8d01e586e"
     },
     {
       "path": "scripts/verify-install.mjs",
@@ -380,7 +380,7 @@
     },
     {
       "path": "tests/install.test.mjs",
-      "sha256": "d5bd9589dfeb1736b2aa65602aa1f75d00957ffa77bfc63401f7fc811f6878f6"
+      "sha256": "1e42fef6484e764b10e11d45157fa4dd611c651a595636398581cb15c85984fb"
     },
     {
       "path": "tests/core.test.mjs",
@@ -612,7 +612,7 @@
     },
     {
       "path": "scripts/macos-install-check.mjs",
-      "sha256": "086c0b9b51f0cff5e51a3d10b6d53546b46b2b300350b4a41e9fea2a4ecced1c"
+      "sha256": "d7f2807364e238d04c0aee4b883b0d2d5f0dc66fd6db4a335e8e3d6b704c8684"
     },
     {
       "path": "skills/computer-use/SKILL.md",
@@ -620,7 +620,7 @@
     },
     {
       "path": "docs/MACOS.md",
-      "sha256": "e5e852cc3952a561602eba43e3b4293161098a91eb19e2ad699e8dc994f1eca4"
+      "sha256": "ae139fc6c6cb8e15b123d3cb840c0b1b61b8b0e9ee41a86d4e9528d4f19513c1"
     },
     {
       "path": "server/update-core.mjs",

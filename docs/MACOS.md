@@ -95,6 +95,8 @@ additional skill and the installation's rollback journal covers both copies.
 
 To add the controller to Codex, run `./install.command --also-codex --permission-mode standalone`. This installs `~/.agents/skills/antigravity-computer-use/`. Invoke `$antigravity-computer-use` in Codex. You can combine both host flags. Updates and rollback cover each selected skill.
 
+For other agents, pass `--skill-root "$HOME/MyAgent/skills"` to `install.command`, using a directory the agent searches. [Other local agents](INSTALLATION.md#other-local-agents)
+
 ### Permission mode
 
 `install.command` (and so the one-line installer) always installs the Sidecar,

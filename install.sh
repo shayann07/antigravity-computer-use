@@ -51,7 +51,7 @@ echo "SHA-256 verified."
 tar -xzf "$ARCHIVE"
 for option in "$@"; do
   case "$option" in
-    --also-codex|--also-claude-code)
+    --also-codex|--also-claude-code|--skill-root)
       grep -Fq -- "$option" ./macos-bundle/scripts/install.mjs || fail "Release $VERSION does not support $option. Use a bundle that includes this option." ;;
   esac
 done

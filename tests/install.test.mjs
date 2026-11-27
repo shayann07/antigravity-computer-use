@@ -167,6 +167,36 @@ for(const host of ['codex','claude'])test(host+' skill is opt-in, survives updat
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
 
+test('custom roots add independent agents, retain references on update, and roll back the new registration',async()=>{
+ const dir=fs.mkdtempSync(path.join(root,'custom-hosts-')),bundle=path.join(dir,'bundle'),target=path.join(dir,'installed'),home=path.join(dir,'home');
+ const firstRoot=path.join(home,'A local agent','skills'),codexRoot=path.join(home,'.agents','skills'),secondRoot=path.join(home,'other','skills');
+ const installed=root=>path.join(root,'antigravity-computer-use');
+ try{
+  const source=path.join(bundle,'skills/computer-use');fs.mkdirSync(path.join(source,'references'),{recursive:true});writeFixture(bundle);
+  fs.writeFileSync(path.join(source,'SKILL.md'),'---\nname: computer-use\ndescription: Fixture\n---\n{{DESKTOP_COMMAND}}');
+  fs.writeFileSync(path.join(source,'references','action.md'),'instructions');seal(bundle);
+  assert.throws(()=>install({bundle,target,home,skillRoots:['relative']}),/absolute skills directory/);
+  assert.throws(()=>install({bundle,target,home,skillRoots:[target]}),/overlap/);
+  assert.throws(()=>install({bundle,target,home,skillRoots:[firstRoot,installed(firstRoot)]}),/overlap/);
+  const foreign=installed(secondRoot);fs.mkdirSync(foreign,{recursive:true});fs.writeFileSync(path.join(foreign,'SKILL.md'),'user skill');
+  assert.throws(()=>install({bundle,target,home,skillRoots:[secondRoot]}),/different skill/);assert.equal(fs.readFileSync(path.join(foreign,'SKILL.md'),'utf8'),'user skill');
+  fs.unlinkSync(path.join(foreign,'SKILL.md'));fs.writeFileSync(path.join(foreign,'keep.txt'),'local');
+  const first=install({bundle,target,home,alsoCodex:true,skillRoots:[firstRoot,codexRoot,firstRoot]});
+  assert.equal(first.skills.length,3);
+  const next=install({bundle,target,home,skillRoots:[secondRoot]});
+  for(const root of [firstRoot,codexRoot,secondRoot]){
+   const folder=installed(root),text=fs.readFileSync(path.join(folder,'SKILL.md'),'utf8');
+   assert(text.includes('name: antigravity-computer-use')&&text.includes(next.launcher));
+   assert.equal(fs.readFileSync(path.join(folder,'references','action.md'),'utf8'),'instructions');
+   assert.equal(JSON.parse(fs.readFileSync(path.join(folder,'deployment.json'))).release,next.release);
+  }
+  await rollbackGuarded(path.join(next.backup,'rollback.json'));
+  assert(!fs.existsSync(path.join(foreign,'SKILL.md')));assert.equal(fs.readFileSync(path.join(foreign,'keep.txt'),'utf8'),'local');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(installed(firstRoot),'deployment.json'))).release,first.release);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(target,'deployments.json'))).global.skill_roots,[firstRoot,codexRoot].map(folder=>fs.realpathSync.native(folder)));
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
+
 test('direct updates retain the previously chosen permission policy',()=>{
  const dir=fs.mkdtempSync(path.join(root,'policy-')),bundle=path.join(dir,'bundle'),target=path.join(dir,'installed'),home=path.join(dir,'home');
  fs.mkdirSync(path.join(bundle,'skills/computer-use'),{recursive:true});writeFixture(bundle);fs.writeFileSync(path.join(bundle,'skills/computer-use/SKILL.md'),'Use {{DESKTOP_COMMAND}}');seal(bundle);

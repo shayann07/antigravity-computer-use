@@ -22,9 +22,19 @@ export function mergeConfig(file,entry){
  current.mcpServers??={};if(entry)current.mcpServers['antigravity-computer-use']=entry;else delete current.mcpServers['antigravity-computer-use'];
  return JSON.stringify(current,null,2)+'\n';
 }
+// Resolve existing links before comparing destinations. New host profiles often
+// have one or more directories that the installer will create for the first time.
+function canonicalDestination(directory){
+ try{return fs.realpathSync.native(directory);}
+ catch(error){
+  const parent=path.dirname(directory);
+  if(error.code!=='ENOENT'||parent===directory)throw error;
+  return path.join(canonicalDestination(parent),path.basename(directory));
+ }
+}
 // Inert installer unit fixtures inject this filesystem boundary, like the
 // runtime's mock driver. No CLI/environment/model argument can disable it.
-export function install({bundle=here,target,home=os.homedir(),workspace=null,legacyProfiles=false,alsoClaudeCode,alsoCodex,integration='direct',permissionMode,sidecar,stagedUpdate=false,updateMode,updateChannel,updatePin,reporting,journalCreated,prepareStorage=(folder,helper,purpose='install')=>storageOperation(purpose,folder,{helper})}={}){
+export function install({bundle=here,target,home=os.homedir(),workspace=null,legacyProfiles=false,alsoClaudeCode,alsoCodex,skillRoots=[],integration='direct',permissionMode,sidecar,stagedUpdate=false,updateMode,updateChannel,updatePin,reporting,journalCreated,prepareStorage=(folder,helper,purpose='install')=>storageOperation(purpose,folder,{helper})}={}){
  if(!['direct','mcp'].includes(integration)||permissionMode!=null&&!['standalone','host-managed'].includes(permissionMode))throw new Error('Invalid integration/permission mode');
  bundle=path.resolve(bundle);
  const stamp=new Date().toISOString().replace(/[:.]/g,'-')+'-'+randomUUID().slice(0,8);
@@ -55,7 +65,8 @@ export function install({bundle=here,target,home=os.homedir(),workspace=null,leg
  }
  for(const required of [platform.node,'bin/'+platform.host,'bin/'+platform.storage,'skills/computer-use/SKILL.md'])if(!Object.hasOwn(metadata.files,required))throw new Error('Bundle manifest omits '+required);
  const storageHelper=path.join(bundle,'bin',platform.storage);
- if((alsoClaudeCode||alsoCodex)&&(workspace||integration!=='direct'))throw Error('Additional host skills require a global direct install.');
+ if(!Array.isArray(skillRoots))throw Error('--skill-root requires an absolute skills directory.');
+ if((alsoClaudeCode||alsoCodex||skillRoots.length)&&(workspace||integration!=='direct'))throw Error('Additional host skills require a global direct install.');
  if(!target){
   const pointer=path.join(home,'.gemini/config/skills/computer-use/deployment.json');
   if(fs.existsSync(pointer))target=JSON.parse(fs.readFileSync(pointer,'utf8')).target;
@@ -78,9 +89,22 @@ export function install({bundle=here,target,home=os.homedir(),workspace=null,leg
  const previous=registry[scope||'global']||(prior?.workspace===resolvedWorkspace?prior:null);
  alsoClaudeCode=integration==='direct'&&!workspace&&(alsoClaudeCode===true||previous?.also_claude_code===true);
  alsoCodex=integration==='direct'&&!workspace&&(alsoCodex===true||previous?.also_codex===true);
+ const retainedRoots=integration==='direct'&&!workspace?(previous?.skill_roots??[]):[];
+ if(!Array.isArray(retainedRoots))throw Error('Invalid skill roots in the deployment registry.');
+ const customRoots=[];
+ for(const root of [...retainedRoots,...skillRoots]){
+  if(typeof root!=='string'||!path.isAbsolute(root))throw Error('--skill-root requires an absolute skills directory.');
+  const resolved=canonicalDestination(path.resolve(root));
+  if(!customRoots.some(other=>path.relative(other,resolved)===''))customRoots.push(resolved);
+ }
  const additionalSkills=[];
  if(alsoClaudeCode)additionalSkills.push(path.join(home,'.claude','skills','computer-use'));
  if(alsoCodex)additionalSkills.push(path.join(home,'.agents','skills','antigravity-computer-use'));
+ const customSkills=customRoots.map(root=>path.join(root,'antigravity-computer-use'));
+ for(const directory of customSkills){
+  if(fs.lstatSync(directory,{throwIfNoEntry:false})?.isSymbolicLink())throw Error('The installed skill directory must not be a symbolic link: '+directory);
+  if(!additionalSkills.some(other=>path.relative(canonicalDestination(other),directory)===''))additionalSkills.push(directory);
+ }
  const profiles=[path.join(home,'.gemini/config/skills/computer-use'),...additionalSkills,...(workspace?[path.join(path.resolve(workspace),'.agents/skills/computer-use')]:[])];
  const previousRoots=new Set();
  for(const dir of profiles){
@@ -114,6 +138,15 @@ export function install({bundle=here,target,home=os.homedir(),workspace=null,leg
  const entry={command:path.join(release,platform.node),args:[path.join(release,'server','index.mjs')],env:{AGCU_DATA_DIR:path.join(target,'data'),AGCU_PERMISSION_MODE:permissionMode,AGCU_TAKEOVER_MODE:'manual'}};
  const skillDirs=workspace?[path.join(base,'skills','computer-use')]:[path.join(base,'skills','computer-use'),...(legacyProfiles?['antigravity','antigravity-cli','antigravity-ide'].map(p=>path.join(home,'.gemini',p,'skills','computer-use')):[])];
  skillDirs.push(...additionalSkills);
+ if(customSkills.length){
+  const protectedDirs=[bundle,target,...previousRoots].map(canonicalDestination);
+  const destinations=skillDirs.map(canonicalDestination);
+  for(const directory of customSkills){
+   const otherDirs=destinations.filter(other=>path.relative(other,directory)!=='');
+   if([...protectedDirs,...otherDirs].some(other=>within(directory,other)||within(other,directory)))throw Error('Skill directories must not overlap a bundle, installation or another skill: '+directory);
+   if(fs.existsSync(path.join(directory,'SKILL.md'))&&!fs.existsSync(path.join(directory,'deployment.json')))throw Error('A different skill already occupies '+directory);
+  }
+ }
  // Parse every config BEFORE writing anything. Keep exact backup bytes for rollback.
  const updates=configs.filter(file=>integration==='mcp'||fs.existsSync(file)).map(file=>({file,text:mergeConfig(file,integration==='mcp'?entry:null)}));
  const sidecarFiles=sidecar||previous?.sidecar===true?{definition:path.join(home,'.gemini/config/sidecars',SIDECAR_ID,'sidecar.json'),config:path.join(home,'.gemini/config/config.json')}:null;
@@ -209,7 +242,7 @@ export function install({bundle=here,target,home=os.homedir(),workspace=null,leg
  }
  if(updatePin!=null&&typeof updatePin!=='boolean')throw Error('Version pin must be boolean.');
  const priorScope=registry[scope||'global']||previous;
- registry[scope||'global']={release,integration,permission_mode:permissionMode,workspace:resolvedWorkspace,sidecar,also_claude_code:alsoClaudeCode,also_codex:alsoCodex,update_pin:updatePin??(priorScope?deploymentPinned(priorScope,registry.global):false)};
+ registry[scope||'global']={release,integration,permission_mode:permissionMode,workspace:resolvedWorkspace,sidecar,also_claude_code:alsoClaudeCode,also_codex:alsoCodex,skill_roots:customRoots,update_pin:updatePin??(priorScope?deploymentPinned(priorScope,registry.global):false)};
  writeAtomicJSON(registryFile,registry);
  writeAtomicJSON(updateFile,updateSettings);
  writeAtomicJSON(path.join(target,'installation.json'),{...manifest,backup});
@@ -237,6 +270,6 @@ export function desktopCommand(node,launcher,platform=process.platform){const qu
 export function launcherSource(release){return `import {main,encodeReply,recordedFailureReply} from ${JSON.stringify(pathToFileURL(path.join(release,'scripts','desktop.mjs')).href)};\nawait main().catch(async error=>{console.log(encodeReply(await recordedFailureReply(error)));process.exitCode=1;});\n`;}
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
  const args=process.argv.slice(2);const take=k=>{const i=args.indexOf(k);return i<0?undefined:args[i+1];};
- try{console.log(JSON.stringify(install({alsoCodex:args.includes('--also-codex'),alsoClaudeCode:args.includes('--also-claude-code'),bundle:take('--bundle')||here,target:take('--target'),workspace:take('--workspace'),legacyProfiles:args.includes('--legacy-profiles'),integration:take('--integration')||'direct',permissionMode:take('--permission-mode'),sidecar:args.includes('--sidecar')?true:undefined,updatePin:args.includes('--pin-version')?true:args.includes('--unpin-version')?false:undefined,updateMode:take('--updates'),updateChannel:take('--update-channel'),reporting:args.includes('--report-incidents')?true:args.includes('--no-report-incidents')?false:undefined}),null,2));}
+ try{console.log(JSON.stringify(install({skillRoots:args.flatMap((arg,i)=>arg==='--skill-root'?[args[i+1]]:[]),alsoCodex:args.includes('--also-codex'),alsoClaudeCode:args.includes('--also-claude-code'),bundle:take('--bundle')||here,target:take('--target'),workspace:take('--workspace'),legacyProfiles:args.includes('--legacy-profiles'),integration:take('--integration')||'direct',permissionMode:take('--permission-mode'),sidecar:args.includes('--sidecar')?true:undefined,updatePin:args.includes('--pin-version')?true:args.includes('--unpin-version')?false:undefined,updateMode:take('--updates'),updateChannel:take('--update-channel'),reporting:args.includes('--report-incidents')?true:args.includes('--no-report-incidents')?false:undefined}),null,2));}
  catch(error){console.error(error.message);process.exitCode=1;}
 }

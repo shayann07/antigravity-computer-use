@@ -1,6 +1,6 @@
 <h1 align="center">Antigravity Computer Use</h1>
 
-<p align="center"><b>The computer use skill for Google Antigravity.</b><br>Your agent sees the screen and drives real apps on Windows and macOS: desktop automation with your real mouse and keyboard.</p>
+<p align="center"><b>Desktop computer use for agents on Windows and macOS.</b><br>Your agent sees the screen and drives real apps on Windows and macOS: desktop automation with your real mouse and keyboard.</p>
 
 <p align="center">
   <a href="https://github.com/shayann07/antigravity-computer-use/releases/latest"><img src="https://img.shields.io/github/v/release/shayann07/antigravity-computer-use?label=release&amp;color=80abcf" alt="Latest release"></a>
@@ -45,7 +45,7 @@ irm https://raw.githubusercontent.com/shayann07/antigravity-computer-use/main/in
 curl -fsSL https://raw.githubusercontent.com/shayann07/antigravity-computer-use/main/install.sh | sh
 ```
 
-**Codex and Claude Code.** In bundles built after 1.0.6, pass `--also-codex` or `--also-claude-code` to the global direct installer. You can select both. In Codex, invoke `$antigravity-computer-use`. See [Windows installation](docs/INSTALLATION.md#windows-portable-bundle-manual) or [Mac installation](docs/MACOS.md#install-locations-and-claude-code).
+**Using another agent?** Any agent with a local terminal and access to the interactive Windows or macOS desktop can follow the installed skill. In bundles built after 1.0.6, use `--also-codex`, `--also-claude-code`, or repeat `--skill-root` for other agents that load `SKILL.md`. In Codex, invoke `$antigravity-computer-use`. [Install for your agent](docs/INSTALLATION.md#other-local-agents)
 
 <details>
 <summary><b>Or by hand</b>, checking the SHA-256 yourself</summary>

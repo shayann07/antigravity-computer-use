@@ -14,9 +14,12 @@ const config=path.join(home,'.gemini/config/config.json');fs.mkdirSync(path.dirn
 fs.writeFileSync(config,JSON.stringify({permissions:{preset:'preserve'},sidecars:{unrelated:{enabled:true}}}));
 // Explicit update calls below own qualification; prevent scheduled production
 // network checks from racing the isolated signing fixture.
-const first=install({bundle,target,home,sidecar:true,alsoClaudeCode:true,alsoCodex:true,updateMode:'manual'});
+const customRoot=path.join(home,'Other Agent','skills');
+const setup=spawnSync(path.join(bundle,'install.command'),['--target',target,'--also-claude-code','--also-codex','--skill-root',customRoot,'--skill-root',path.join(home,'.agents','skills'),'--updates','manual'],{env:{...process.env,HOME:home},encoding:'utf8',timeout:60000});
+assert.equal(setup.status,0,setup.stderr||setup.stdout);
+const first=JSON.parse(setup.stdout);
 function checkAdditionalSkills(deployment){
- for(const skill of ['.claude/skills/computer-use','.agents/skills/antigravity-computer-use']){
+ for(const skill of ['.claude/skills/computer-use','.agents/skills/antigravity-computer-use','Other Agent/skills/antigravity-computer-use']){
   const directory=path.join(home,skill);
   assert(deployment.skills.includes(directory));
   const text=fs.readFileSync(path.join(directory,'SKILL.md'),'utf8');
@@ -50,5 +53,5 @@ try {
  const signedUpdate=await qualifySignedUpdate({target,bundle,directory});
  command([path.join(first.release,'scripts/verify-install.mjs'),target]);
  console.log(JSON.stringify(signedUpdate));
- console.log(JSON.stringify({ok:true,checks:['sealed prebuilt installation','Codex and Claude Code skill install, update and rollback','passive native-macos listener','End cleanup','Stop persisted across restart','no guardian during passive Stop','update','rollback','unrelated host settings preserved'],interactive_desktop_qualified:false}));
+ console.log(JSON.stringify({ok:true,checks:['sealed prebuilt installation','Codex, Claude Code and custom skill install, update and rollback','passive native-macos listener','End cleanup','Stop persisted across restart','no guardian during passive Stop','update','rollback','unrelated host settings preserved'],interactive_desktop_qualified:false}));
 } finally {try{desktop('shutdown');}catch{} }
