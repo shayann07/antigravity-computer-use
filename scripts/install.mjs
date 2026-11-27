@@ -24,7 +24,7 @@ export function mergeConfig(file,entry){
 }
 // Inert installer unit fixtures inject this filesystem boundary, like the
 // runtime's mock driver. No CLI/environment/model argument can disable it.
-export function install({bundle=here,target,home=os.homedir(),workspace=null,legacyProfiles=false,alsoClaudeCode,integration='direct',permissionMode,sidecar,stagedUpdate=false,updateMode,updateChannel,updatePin,reporting,journalCreated,prepareStorage=(folder,helper,purpose='install')=>storageOperation(purpose,folder,{helper})}={}){
+export function install({bundle=here,target,home=os.homedir(),workspace=null,legacyProfiles=false,alsoClaudeCode,alsoCodex,integration='direct',permissionMode,sidecar,stagedUpdate=false,updateMode,updateChannel,updatePin,reporting,journalCreated,prepareStorage=(folder,helper,purpose='install')=>storageOperation(purpose,folder,{helper})}={}){
  if(!['direct','mcp'].includes(integration)||permissionMode!=null&&!['standalone','host-managed'].includes(permissionMode))throw new Error('Invalid integration/permission mode');
  bundle=path.resolve(bundle);
  const stamp=new Date().toISOString().replace(/[:.]/g,'-')+'-'+randomUUID().slice(0,8);
@@ -55,8 +55,7 @@ export function install({bundle=here,target,home=os.homedir(),workspace=null,leg
  }
  for(const required of [platform.node,'bin/'+platform.host,'bin/'+platform.storage,'skills/computer-use/SKILL.md'])if(!Object.hasOwn(metadata.files,required))throw new Error('Bundle manifest omits '+required);
  const storageHelper=path.join(bundle,'bin',platform.storage);
- if(alsoClaudeCode&&(workspace||integration!=='direct'))throw Error('--also-claude-code requires a global direct install.');
- const claudeSkill=path.join(home,'.claude','skills','computer-use');
+ if((alsoClaudeCode||alsoCodex)&&(workspace||integration!=='direct'))throw Error('Additional host skills require a global direct install.');
  if(!target){
   const pointer=path.join(home,'.gemini/config/skills/computer-use/deployment.json');
   if(fs.existsSync(pointer))target=JSON.parse(fs.readFileSync(pointer,'utf8')).target;
@@ -78,7 +77,11 @@ export function install({bundle=here,target,home=os.homedir(),workspace=null,leg
  if(!registry||typeof registry!=='object'||Array.isArray(registry))throw new Error('Invalid private deployment registry.');
  const previous=registry[scope||'global']||(prior?.workspace===resolvedWorkspace?prior:null);
  alsoClaudeCode=integration==='direct'&&!workspace&&(alsoClaudeCode===true||previous?.also_claude_code===true);
- const profiles=[path.join(home,'.gemini/config/skills/computer-use'),...(alsoClaudeCode?[claudeSkill]:[]),...(workspace?[path.join(path.resolve(workspace),'.agents/skills/computer-use')]:[])];
+ alsoCodex=integration==='direct'&&!workspace&&(alsoCodex===true||previous?.also_codex===true);
+ const additionalSkills=[];
+ if(alsoClaudeCode)additionalSkills.push(path.join(home,'.claude','skills','computer-use'));
+ if(alsoCodex)additionalSkills.push(path.join(home,'.agents','skills','antigravity-computer-use'));
+ const profiles=[path.join(home,'.gemini/config/skills/computer-use'),...additionalSkills,...(workspace?[path.join(path.resolve(workspace),'.agents/skills/computer-use')]:[])];
  const previousRoots=new Set();
  for(const dir of profiles){
   const pointer=path.join(dir,'deployment.json');
@@ -110,7 +113,7 @@ export function install({bundle=here,target,home=os.homedir(),workspace=null,leg
  const configs=workspace?[path.join(base,'mcp_config.json')]:[...new Set([path.join(base,'mcp_config.json'),...(legacyProfiles?['antigravity','antigravity-ide','antigravity-cli'].filter(p=>fs.existsSync(path.join(home,'.gemini',p))).map(p=>path.join(home,'.gemini',p,'mcp_config.json')):[])])];
  const entry={command:path.join(release,platform.node),args:[path.join(release,'server','index.mjs')],env:{AGCU_DATA_DIR:path.join(target,'data'),AGCU_PERMISSION_MODE:permissionMode,AGCU_TAKEOVER_MODE:'manual'}};
  const skillDirs=workspace?[path.join(base,'skills','computer-use')]:[path.join(base,'skills','computer-use'),...(legacyProfiles?['antigravity','antigravity-cli','antigravity-ide'].map(p=>path.join(home,'.gemini',p,'skills','computer-use')):[])];
- if(alsoClaudeCode)skillDirs.push(claudeSkill);
+ skillDirs.push(...additionalSkills);
  // Parse every config BEFORE writing anything. Keep exact backup bytes for rollback.
  const updates=configs.filter(file=>integration==='mcp'||fs.existsSync(file)).map(file=>({file,text:mergeConfig(file,integration==='mcp'?entry:null)}));
  const sidecarFiles=sidecar||previous?.sidecar===true?{definition:path.join(home,'.gemini/config/sidecars',SIDECAR_ID,'sidecar.json'),config:path.join(home,'.gemini/config/config.json')}:null;
@@ -201,12 +204,12 @@ export function install({bundle=here,target,home=os.homedir(),workspace=null,leg
   fs.mkdirSync(file,{recursive:true});fs.cpSync(path.join(release,'skills','computer-use'),file,{recursive:true});
   const instructions=path.join(file,'SKILL.md');
   const command=desktopCommand(launcherNode,launcher);
-  writeAtomicText(instructions,fs.readFileSync(instructions,'utf8').replaceAll('{{SHELL}}',process.platform==='win32'?'powershell':'sh').replaceAll('{{DESKTOP_COMMAND}}',command).replaceAll('{{CONTROLLER_START}}',controllerStart));
+  writeAtomicText(instructions,renderInstalledSkill(fs.readFileSync(instructions,'utf8'),file,command,controllerStart));
   writeAtomicJSON(path.join(file,'deployment.json'),{target,release,workspace:resolvedWorkspace,permission_mode:permissionMode});
  }
  if(updatePin!=null&&typeof updatePin!=='boolean')throw Error('Version pin must be boolean.');
  const priorScope=registry[scope||'global']||previous;
- registry[scope||'global']={release,integration,permission_mode:permissionMode,workspace:resolvedWorkspace,sidecar,also_claude_code:alsoClaudeCode,update_pin:updatePin??(priorScope?deploymentPinned(priorScope,registry.global):false)};
+ registry[scope||'global']={release,integration,permission_mode:permissionMode,workspace:resolvedWorkspace,sidecar,also_claude_code:alsoClaudeCode,also_codex:alsoCodex,update_pin:updatePin??(priorScope?deploymentPinned(priorScope,registry.global):false)};
  writeAtomicJSON(registryFile,registry);
  writeAtomicJSON(updateFile,updateSettings);
  writeAtomicJSON(path.join(target,'installation.json'),{...manifest,backup});
@@ -224,10 +227,16 @@ export function install({bundle=here,target,home=os.homedir(),workspace=null,leg
 }
 // Fixed, argument-free human entrypoint; no model text or command forwarding.
 export function controllerStartSource(scope,platform=process.platform){const stem=scope?`cu-${scope}`:'cu';return platform==='win32'?`@echo off\r\n"%~dp0${stem}-node.exe" "%~dp0${stem}.mjs" start\r\nif errorlevel 1 (\r\n  pause\r\n  exit /b 1\r\n)\r\n"%~dp0${stem}-node.exe" "%~dp0${stem}.mjs" controls\r\nif errorlevel 1 pause\r\n`:`#!/bin/sh\nset -eu\ncd -- "$(dirname -- "$0")"\n"./${stem}-node" "./${stem}.mjs" start\nexec "./${stem}-node" "./${stem}.mjs" controls\n`;}
+export function renderInstalledSkill(template,directory,command,controllerStart){
+ if(path.basename(directory)==='antigravity-computer-use'){
+  template=template.replace(/^name: computer-use$/m,'name: antigravity-computer-use');
+ }
+ return template.replaceAll('{{SHELL}}',process.platform==='win32'?'powershell':'sh').replaceAll('{{DESKTOP_COMMAND}}',command).replaceAll('{{CONTROLLER_START}}',controllerStart);
+}
 export function desktopCommand(node,launcher,platform=process.platform){const quote=s=>"'"+s.replaceAll("'","'\\''")+"'";return platform==='win32'?`& '${node.replaceAll("'","''")}' '${launcher.replaceAll("'","''")}'`:`${quote(node)} ${quote(launcher)}`;}
 export function launcherSource(release){return `import {main,encodeReply,recordedFailureReply} from ${JSON.stringify(pathToFileURL(path.join(release,'scripts','desktop.mjs')).href)};\nawait main().catch(async error=>{console.log(encodeReply(await recordedFailureReply(error)));process.exitCode=1;});\n`;}
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
  const args=process.argv.slice(2);const take=k=>{const i=args.indexOf(k);return i<0?undefined:args[i+1];};
- try{console.log(JSON.stringify(install({alsoClaudeCode:args.includes('--also-claude-code'),bundle:take('--bundle')||here,target:take('--target'),workspace:take('--workspace'),legacyProfiles:args.includes('--legacy-profiles'),integration:take('--integration')||'direct',permissionMode:take('--permission-mode'),sidecar:args.includes('--sidecar')?true:undefined,updatePin:args.includes('--pin-version')?true:args.includes('--unpin-version')?false:undefined,updateMode:take('--updates'),updateChannel:take('--update-channel'),reporting:args.includes('--report-incidents')?true:args.includes('--no-report-incidents')?false:undefined}),null,2));}
+ try{console.log(JSON.stringify(install({alsoCodex:args.includes('--also-codex'),alsoClaudeCode:args.includes('--also-claude-code'),bundle:take('--bundle')||here,target:take('--target'),workspace:take('--workspace'),legacyProfiles:args.includes('--legacy-profiles'),integration:take('--integration')||'direct',permissionMode:take('--permission-mode'),sidecar:args.includes('--sidecar')?true:undefined,updatePin:args.includes('--pin-version')?true:args.includes('--unpin-version')?false:undefined,updateMode:take('--updates'),updateChannel:take('--update-channel'),reporting:args.includes('--report-incidents')?true:args.includes('--no-report-incidents')?false:undefined}),null,2));}
  catch(error){console.error(error.message);process.exitCode=1;}
 }

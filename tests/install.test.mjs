@@ -146,16 +146,22 @@ test('unsealed extra code is refused before any installation write',()=>{
  assert.throws(()=>install({bundle,target,home:path.join(dir,'home')}),/inventory differs/);assert(!fs.existsSync(target));
 });
 
-test('opt-in Claude Code skill follows global updates and rolls back with its launcher',async()=>{
- const dir=fs.mkdtempSync(path.join(root,'claude-skill-')),bundle=path.join(dir,'bundle'),target=path.join(dir,'installed'),home=path.join(dir,'home');
+for(const host of ['codex','claude'])test(host+' skill is opt-in, survives updates, and rolls back',async()=>{
+ const dir=fs.mkdtempSync(path.join(root,'host-skill-')),bundle=path.join(dir,'bundle'),target=path.join(dir,'installed'),home=path.join(dir,'home');
+ const codex=path.join(home,'.agents/skills/antigravity-computer-use/SKILL.md'),claude=path.join(home,'.claude/skills/computer-use/SKILL.md');
+ const skill=host==='codex'?codex:claude,other=host==='codex'?claude:codex;
  try{
   fs.mkdirSync(path.join(bundle,'skills/computer-use'),{recursive:true});writeFixture(bundle);
-  fs.writeFileSync(path.join(bundle,'skills/computer-use/SKILL.md'),'{{SHELL}} {{DESKTOP_COMMAND}}');seal(bundle);
-  const first=install({bundle,target,home,alsoClaudeCode:true}),skill=path.join(home,'.claude/skills/computer-use/SKILL.md');
+  const template='---\nname: computer-use\ndescription: Test skill\n---\n{{SHELL}} {{DESKTOP_COMMAND}}';
+  const source=path.join(bundle,'skills/computer-use/SKILL.md');fs.writeFileSync(source,template);seal(bundle);
+  install({bundle,target,home});assert(!fs.existsSync(skill));assert(!fs.existsSync(other));
+  const first=install({bundle,target,home,alsoCodex:host==='codex',alsoClaudeCode:host==='claude'});
   assert.deepEqual(first.configs,[]);assert(!fs.existsSync(path.join(home,'.gemini/config/mcp_config.json')));
-  const original=fs.readFileSync(skill,'utf8');assert(original.startsWith(process.platform==='win32'?'powershell ':'sh '));assert(original.includes(first.launcher));
-  fs.writeFileSync(path.join(bundle,'skills/computer-use/SKILL.md'),'updated {{DESKTOP_COMMAND}}');seal(bundle,'9.2.0-test');
-  const next=install({bundle,target,home});assert(fs.readFileSync(skill,'utf8').startsWith('updated '));
+  const original=fs.readFileSync(skill,'utf8');
+  assert(original.split('\n').includes('name: '+path.basename(path.dirname(skill))));
+  assert(original.includes((process.platform==='win32'?'powershell ':'sh ')));assert(original.includes(first.launcher));
+  fs.writeFileSync(source,template+'\nupdated');seal(bundle,'9.2.0-test');
+  const next=install({bundle,target,home});assert(fs.readFileSync(skill,'utf8').endsWith('updated'));assert(!fs.existsSync(other));
   await rollbackGuarded(path.join(next.backup,'rollback.json'));assert.equal(fs.readFileSync(skill,'utf8'),original);
   await rollbackGuarded(path.join(first.backup,'rollback.json'));assert(!fs.existsSync(skill));
  }finally{fs.rmSync(dir,{recursive:true,force:true});}

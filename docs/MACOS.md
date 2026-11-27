@@ -93,6 +93,8 @@ additional skill and the installation's rollback journal covers both copies.
 ./install.command --also-claude-code --permission-mode standalone
 ```
 
+To add the controller to Codex, run `./install.command --also-codex --permission-mode standalone`. This installs `~/.agents/skills/antigravity-computer-use/`. Invoke `$antigravity-computer-use` in Codex. You can combine both host flags. Updates and rollback cover each selected skill.
+
 ### Permission mode
 
 `install.command` (and so the one-line installer) always installs the Sidecar,
@@ -148,7 +150,7 @@ cleared automatically; `status` then names what to inspect.
    the file. Then delete `~/.gemini/config/sidecars/antigravity-computer-use/`.
 3. Delete the skill: `~/.gemini/config/skills/computer-use/` (and
    `<project>/.agents/skills/computer-use/` for any project-local install).
-   If you enabled Claude Code, remove `~/.claude/skills/computer-use/` too.
+   If enabled, remove the additional skill folder for Claude Code (`~/.claude/skills/computer-use/`) or Codex (`~/.agents/skills/antigravity-computer-use/`).
 4. Delete `~/Library/Application Support/AntigravityComputerUse`. It holds the
    releases, the service data and the rollback backups, so keep a copy if you
    may want to roll back.

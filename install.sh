@@ -50,9 +50,10 @@ echo "SHA-256 verified."
 
 tar -xzf "$ARCHIVE"
 for option in "$@"; do
-  if [ "$option" = --also-claude-code ] && ! grep -Fq -- '--also-claude-code' ./macos-bundle/scripts/install.mjs; then
-    fail "Release $VERSION does not include the Claude Code install option. Use a newer bundle that supports --also-claude-code."
-  fi
+  case "$option" in
+    --also-codex|--also-claude-code)
+      grep -Fq -- "$option" ./macos-bundle/scripts/install.mjs || fail "Release $VERSION does not support $option. Use a bundle that includes this option." ;;
+  esac
 done
 ./macos-bundle/install.command "$@"
 
@@ -60,4 +61,7 @@ echo
 echo "Opening the permission setup. Grant Accessibility and Screen Recording when macOS asks;"
 echo "only you can approve these. The setup files stay in $STAGE/macos-bundle."
 ./macos-bundle/Setup.Mac.Permissions.command
-echo "Then type /computer-use in the host where you installed the skill."
+echo "In Antigravity, type /computer-use and describe your task."
+for option in "$@"; do
+  if [ "$option" = --also-codex ]; then echo 'In Codex, invoke $antigravity-computer-use.'; fi
+done
