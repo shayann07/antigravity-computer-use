@@ -25,15 +25,11 @@ test('the core skill stays short and every reference it names exists', () => {
 });
 
 test('computer-use skill documents a supported ready entrypoint and bounded human handoff', () => {
-  const entrypoint = /```powershell\s+\{\{DESKTOP_COMMAND\}\} (\w+)\s+```/.exec(skill);
+  const entrypoint = /```powershell\s+\{\{DESKTOP_COMMAND\}\} (\w+) --apps\s+```/.exec(skill);
   assert(entrypoint, 'the first terminal example needs the installed command');
   assert.equal(describeCommand(entrypoint[1]).command, 'ready', 'the documented entrypoint must resolve in the actual CLI');
-  const fast = skill.indexOf('## Mandatory weak-model fast path');
-  const ready = skill.indexOf('{{DESKTOP_COMMAND}} ready');
-  assert(fast >= 0, 'weak-model fast path is missing');
-  assert(ready >= 0 && ready < fast, 'ready command must precede the fast-path guidance');
-  assert.match(skill.slice(fast, fast + 900), /Run exactly one\s+`ready` call/);
-  assert.match(skill.slice(fast, fast + 900), /runtime's authority/);
+  assert.match(skill, /\{\{DESKTOP_COMMAND\}\} ready --launch/);
+  assert.match(skill, /Run exactly one\s+`ready` call/);
   assert.match(skill, /at\s+most one bounded input attempt/);
   assert.match(skill, /stop issuing controller calls and wait for the human/);
   assert.ok(skill.includes('references/handoff.md'), 'the core points at the handoff reference');
@@ -100,7 +96,7 @@ test('computer-use skill teaches multi-point drags, chained pixel steps and step
 
 test('lifecycle commands accept and ignore --reason so an end is never lost to a habit flag', async () => {
  const {parseArguments} = await import('../scripts/arguments.mjs');
- for (const command of ['end', 'status', 'ready', 'shutdown']) {
+ for (const command of ['end', 'status', 'shutdown']) {
   assert.deepEqual(parseArguments(describeCommand(command).inputSchema, ['--reason', 'done painting']), {}, command);
   assert.deepEqual(parseArguments(describeCommand(command).inputSchema, ['--reason=done']), {}, command);
  }

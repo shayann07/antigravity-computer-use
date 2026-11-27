@@ -5,20 +5,22 @@ description: Operate and visually verify real desktop applications, including de
 
 # Computer use
 
-Run these commands in your terminal to do the desktop task yourself.
-Use the installed terminal command on Windows or macOS. Use one controller per task.
+## Start the task
+
+Run exactly one `ready` call in your terminal. For an already open app, list its windows in that call:
 
 ```{{SHELL}}
-{{DESKTOP_COMMAND}} ready
+{{DESKTOP_COMMAND}} ready --apps
 ```
 
-## Mandatory weak-model fast path
+Use the matching window handle for `snapshot`. If the task calls for opening a known application, start with this instead:
 
-The first controller call is always the installed command above. Run exactly one
-`ready` call through the host's terminal tool before doing anything else. Do
-**not** search the repository, read source files, inspect historical evidence, or enumerate
-`.localdata` to decide how to operate the desktop. The `ready` reply is the
-runtime's authority.
+```{{SHELL}}
+{{DESKTOP_COMMAND}} ready --launch 'APP' --reason 'Open the requested application'
+```
+
+Replace APP with the executable or app bundle. On macOS an app name such as `TextEdit` also works.
+Use the returned frame directly. Use plain `ready` for a readiness check or human handoff.
 
 Keep the returned `task_token` private. Append each command to the returned `task_command_prefix`. Do not call
 `status` before `ready`; `ready` already reports the state you need.
@@ -35,7 +37,7 @@ discard the old token; a new task starts with `ready` without `--task`.
 If your own task is orphaned with zero grants and no input held, and you lost its token, use `stop` or the bar’s Stop.
 A lost response does not justify replaying an input action.
 
-- If `ready:true`, continue directly with `apps`/`launch`, then `snapshot`, action/verification and `end`.
+- If the combined call returned an error, follow its recovery. On plain `ready:true`, use `apps` or `launch --observe` to find the target.
 - If `ready:false`, perform only the returned `next_action`, then stop or wait as instructed. Do not invent a recovery path.
 - Every blocked reply carries a `recovery` object (`actor`, the exact `command` or a `reason`, and `safe_when`). Follow it instead of guessing.
 - `human_start_on_visible_desktop`: ask the human to open **`{{CONTROLLER_START}}`** once on their normal desktop. Do not switch desktops or repeatedly start helpers.
@@ -44,9 +46,7 @@ A lost response does not justify replaying an input action.
 
 ## The loop
 
-Use `ready → apps/launch → snapshot → action/verify → end`.
-Read only unfamiliar command schemas through one `describe` call. Do not inspect implementation/source files to perform a desktop task.
-Launch returns the window, frame and screenshot; reuse them.
+Use one controller per task. Read unfamiliar command schemas in one `describe` call. Use the runtime replies to operate the desktop.
 `observe_pending`, `input_completed:true` or a verification failure after launch means discover the existing process, never launch it again blindly.
 Finish with `end`. `ready` starts a task; to check state after `end`, use `status`, which never opens a task.
 If you noticed a skill or runtime problem, keep private notes during the task and, after `end`, follow the report step in [finishing and reports](references/finishing-and-reports.md).
@@ -83,7 +83,7 @@ H/F/N are the observed handle, frame and index. Brackets mark optional flags.
 - An app’s “Posted” confirmation or View link confirms publication. A feed can lag after a successful post. Never publish again because a list has not refreshed.
 - Never guess an observation id, index or pixel position across a layout change. Never replay an input action after a lost reply or `delivery_unknown:true`.
 
-For a dev-build smoke test, launch with `--observe`, then use the returned window and frame for one `run --images all` with the observed controls. Close the disposable window with `close_window` and finish with `end`.
+For a dev-build smoke test, use `ready --launch`, one `run --images all` with the observed controls, then `close_window` on the disposable window and `end`.
 
 Examples only: replace handles, frames, indexes, names and paths with values from the current task and its fresh observation.
 
