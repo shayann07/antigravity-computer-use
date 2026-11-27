@@ -816,7 +816,7 @@
     },
     {
       "path": "server/liquidglass-host/LiquidGlass.Host.csproj",
-      "sha256": "87d3859a88746ffd7f7cdc0e3f3bf312da96aefdb37237dd1580dcbee818ed9c"
+      "sha256": "d7967d14680fa5fdbe0a027a16b93de390a79bdd2d7f91c4b736b7aca1646947"
     },
     {
       "path": "tests/LiquidGlassClientProbe.cs",
@@ -836,7 +836,7 @@
     },
     {
       "path": "THIRD_PARTY_NOTICES.md",
-      "sha256": "688926824bfa5b51bc38abe1645f563fc16f6f3cc8e77964c489b2c6c9dc8cd0"
+      "sha256": "e340387ca949e254b0b5148d87547c665732abec2f4162ad1e25b881520c4d99"
     },
     {
       "path": "docs/RELEASE.md",
@@ -1019,7 +1019,7 @@
     {
       "path": "licenses/SkiaSharp.txt",
       "source": "NuGet SkiaSharp",
-      "revision": "4.156.1",
+      "revision": "4.157.0",
       "upstream_sha256": "89101e35a8c66fd4d6dffc1763259161d35cb564c169714ec227a768c89f2938",
       "local_sha256": "bc2eb4f37d574f9b1b67da2b17e14d151618850527d78f7323239e7518df5b77",
       "modified": true
@@ -1027,7 +1027,7 @@
     {
       "path": "licenses/SkiaSharp-Third-Party.txt",
       "source": "NuGet SkiaSharp.NativeAssets.Win32",
-      "revision": "4.156.1",
+      "revision": "4.157.0",
       "upstream_sha256": "243f2276bde636931b1cf8517fb11c0451be857996fbe1a2c690a3c7d39502ac",
       "local_sha256": "b70e053cbb26d84ff54dc67076bff5263da30d37172068de35e4d7fbbfcaaed0",
       "modified": true
