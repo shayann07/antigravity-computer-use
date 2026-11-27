@@ -612,11 +612,11 @@
     },
     {
       "path": "scripts/macos-install-check.mjs",
-      "sha256": "0a79e617dea44af4a7f2a017d6b98d735c3c0483e9bcdefd6dc85bee7203cf0b"
+      "sha256": "3d5c917216c56d4e0d413958f53fe7dcb35301ae42f46b7353293f2ddacbef3b"
     },
     {
       "path": "skills/computer-use/SKILL.md",
-      "sha256": "dff4c762e630f2bef2e13e47d41204e522d19b18ff7e36f0916a051577adfd35"
+      "sha256": "eb708f35c9b70733ca623cd5954269b389952a549c2e21505cb49d1d0765c059"
     },
     {
       "path": "docs/MACOS.md",

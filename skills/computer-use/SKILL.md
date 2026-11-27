@@ -59,7 +59,7 @@ H/F/N are the observed handle, frame and index. Brackets mark optional flags.
 | --- | --- |
 | `launch` | `--app EXE_OR_APP_BUNDLE --observe --reason TEXT`; on a Mac an app name such as `TextEdit` also works |
 | `snapshot` | `--hwnd H --reason TEXT [--query TEXT] [--max-nodes 500] [--image] [--settle-ms 0..2000]` |
-| `click` | `--hwnd H --observation-id F --name TEXT --role Button --risk routine --reason TEXT [--physical true] [--image] [--max-nodes 500] [--settle-ms 0..2000]`; or `--index N` in place of name/role |
+| `click` | `--hwnd H --observation-id F --name TEXT --role Button --risk routine --reason TEXT [--physical true] [--park-cursor] [--image] [--max-nodes 500] [--settle-ms 0..2000]`; or `--index N` in place of name/role |
 | `click` (pixels) | `--hwnd H --observation-id F --x X --y Y --risk routine --reason TEXT [--image]`; X/Y come from that frame's freshly viewed image |
 | `move` | `--hwnd H --observation-id F --x X --y Y --risk routine --reason TEXT`; hover without clicking |
 | `drag` | `--hwnd H --observation-id F --from X,Y --to X,Y --risk routine --reason TEXT` (write an array once: `X,Y` or JSON `'[X,Y]'`) |
@@ -69,6 +69,7 @@ H/F/N are the observed handle, frame and index. Brackets mark optional flags.
 | `file_dialog` | `--hwnd OWNER --observation-id F --path FILE --action open` (or `save`) `--entry-method clipboard --reason TEXT` |
 | `run` | `--hwnd H --observation-id F --reason TEXT --step COMMAND` followed by that step's flags; repeat at most 8 times, omitting per-step owner/frame. Add `--images all` before the first step for per-step images |
 | `wait` | `--hwnd H --until TEXT --timeout-ms 30000 --reason TEXT [--abort-on 'Failed,Cancelled'] [--image]`; or `--until-gone OBSERVED_TEXT` in place of `--until` |
+| `burst` | `--hwnd H --frames 6 --interval-ms 150 --reason TEXT` captures a short sequence |
 | `wait_change` | `--hwnd H --observation-id F --timeout-ms 30000 --reason TEXT` |
 | `close_window` | `--hwnd H --reason TEXT` |
 | `end`, `status` | No arguments |

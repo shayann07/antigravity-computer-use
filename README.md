@@ -45,6 +45,8 @@ irm https://raw.githubusercontent.com/shayann07/antigravity-computer-use/main/in
 curl -fsSL https://raw.githubusercontent.com/shayann07/antigravity-computer-use/main/install.sh | sh
 ```
 
+**Claude Code.** Bundles built after 1.0.6 can install the same skill in Claude Code with `--also-claude-code`. See [Mac install locations and permissions](docs/MACOS.md#install-locations-and-claude-code).
+
 <details>
 <summary><b>Or by hand</b>, checking the SHA-256 yourself</summary>
 
