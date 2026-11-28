@@ -39,6 +39,11 @@ export function describeCommand(name){
   const tool=TOOLS.find(tool=>tool.name==='computer_'+normalized);
   if(!tool)throw Object.assign(Error('Unknown desktop command. Run --help for the command list.'),{code:'unknown_command'});
   const properties=tool.inputSchema.properties||{};
+  if(normalized==='ready')return {
+    command:'ready',description:tool.description+' Use --apps to list open windows, or --launch APP to launch and observe a known app in this call.',
+    usage:'ready [--session-handle HANDLE] [--apps | --launch APP [--reason TEXT]]',
+    inputSchema:{...tool.inputSchema,properties:{...properties,apps:{type:'boolean'},launch:{type:'string',minLength:1},reason:{type:'string'}}}
+  };
   const cliAliases=[];
   if(properties.text)cliAliases.push({flag:'--text-file',replaces:'--text',description:'Read UTF-8 text from a local file; do not combine with --text. The same text limit and permissions apply.'});
   if(properties.steps)cliAliases.push({flag:'--steps-file',replaces:'--steps',description:'Read the steps JSON array from a local file; do not combine with --steps.'});
@@ -139,6 +144,36 @@ export async function request(session,command,args={},timeout=100000,expectedPer
   });
 }
 
+function readyOptions(args){
+  if(!args||typeof args!=='object'||Array.isArray(args))validate('computer_ready',args);
+  const {apps,launch,reason,...readyArgs}=args;
+  validate('computer_ready',readyArgs);
+  if((apps!==undefined&&typeof apps!=='boolean')||(reason!==undefined&&typeof reason!=='string')||
+     (launch!==undefined&&(typeof launch!=='string'||!launch.trim()||apps===true))){
+    throw Object.assign(Error('Use ready --apps or ready --launch APP [--reason TEXT]. No desktop request was sent.'),{code:'bad_arguments'});
+  }
+  if(launch!==undefined){
+    const input={app:launch,reason:reason??'Open the requested application',observe:true};
+    validate('computer_launch',input);
+    return {readyArgs,command:'launch',input};
+  }
+  return {readyArgs,command:apps?'apps':undefined,input:{}};
+}
+
+async function printStartup(session,status,options,permissionMode){
+  if(!options){printReply(status);return;}
+  const ready=await request(session,'ready',options.readyArgs,15000,permissionMode);
+  if(!options.command||!ready.ok||ready.ready!==true||ready.error||ready.next_action!=='discover_or_launch'){
+    printReply(ready);return;
+  }
+  // Keep the follow-up outside service discovery retries. A lost reply may
+  // mean that the application already launched.
+  const result=await request(session,options.command,options.input,100000,permissionMode).catch(recordedFailureReply);
+  const {task_token,session_handle,task_started,update_notice}=ready;
+  printReply({ready:true,task_token,session_handle,task_started,update_notice,...result});
+  if(!result.ok)process.exitCode=1;
+}
+
 export async function main(){
   const words=process.argv.slice(2);
   if(words[0]==='--task'){const prefix=words.splice(0,2);if(words.length===0)throw Object.assign(Error('--task needs a token and command'),{code:'bad_arguments'});words.splice(1,0,...prefix);}
@@ -175,13 +210,15 @@ export async function main(){
     else printReply(rest[0]?describeCommand(rest[0]):{commands:[...LIFECYCLE,...TOOLS.map(tool=>({command:tool.name.replace(/^computer_/,''),description:tool.description}))].map(({command,description})=>({command,description}))});return;
   }
   if(!command||command==='--help'){
-    console.log('Native desktop skill (no MCP)\n'+commandList()+'\nAntigravity: reuse the installed App sidecar; isolated exebox terminals cannot start visible-desktop control. The human starter runs on the normal Windows desktop. Interactive external terminals may use start or foreground serve. Fast path: snapshot --hwnd 123; click --hwnd 123 --observation-id FRAME --index 7 --reason "Open settings". Named action flags return a compact tree without a new image unless --image is requested. Read the tree first; open the actual image.path only for pixel targets or visual checks. Use --text-file for generated bulk text. Fast batches: run --hwnd 123 --observation-id FRAME --reason "Import sample" --step click --index 7 --risk routine --step file_dialog --path "D:/sample.png" --action open --entry-method clipboard. Owner/frame/reason precede all --step groups. No JSON/plan file is needed; the final step returns an image by default. No per-action request/result files or JPEG copies are needed. One describe call can fetch multiple schemas; do not interrogate every command at startup. JSON inline and --request FILE remain supported; --json retains full output. Esc stops and ends the task; report and wait for the human, then ready starts fresh.');return;
+    console.log('Native desktop skill (no MCP)\n'+commandList()+'\nAntigravity: reuse the installed App sidecar; isolated exebox terminals cannot start visible-desktop control. The human starter runs on the normal Windows desktop. Interactive external terminals may use start or foreground serve. Start with ready --apps for an open window, or ready --launch APP for the first observed frame of a new app. Fast path: snapshot --hwnd 123; click --hwnd 123 --observation-id FRAME --index 7 --reason "Open settings". Named action flags return a compact tree without a new image unless --image is requested. Read the tree first; open the actual image.path only for pixel targets or visual checks. Use --text-file for generated bulk text. Fast batches: run --hwnd 123 --observation-id FRAME --reason "Import sample" --step click --index 7 --risk routine --step file_dialog --path "D:/sample.png" --action open --entry-method clipboard. Owner/frame/reason precede all --step groups. No JSON/plan file is needed; the final step returns an image by default. No per-action request/result files or JPEG copies are needed. One describe call can fetch multiple schemas; do not interrogate every command at startup. JSON inline and --request FILE remain supported; --json retains full output. Esc stops and ends the task; report and wait for the human, then ready starts fresh.');return;
   }
   const jsonMode=rest[0]==='--json';if(jsonMode)rest.shift();
   replyMode=jsonMode||(rest.length&&(!rest[0].startsWith('--')||rest[0]==='--request'))?'json':'brief';
   const schema=describeCommand(command).inputSchema;
   const args=command==='run'?parseRunArguments(schema,rest,describeCommand):parseArguments(schema,rest);
-  if(TOOLS.some(tool=>tool.name==='computer_'+command))validate('computer_'+command,args);
+  let startup;
+  if(command==='ready')startup=readyOptions(args);
+  else if(TOOLS.some(tool=>tool.name==='computer_'+command))validate('computer_'+command,args);
   else if(command==='plan')validatePlanArguments(args);
   else if(Object.keys(args).length)throw Object.assign(Error('This lifecycle command takes no arguments.'),{code:'bad_arguments'});
   const policy=applyDeployment(loadDeployment());
@@ -196,7 +233,7 @@ export async function main(){
     if(existing?.ok){
       if(existing.build_id!==BUILD_ID||existing.build_version!==VERSION)throw Object.assign(Error('This skill and the running service use different builds. Do not interrupt an active task or change a pinned deployment. Inspect the intended scope and use a matching installed version.'),{code:'version_mismatch'});
       if(existing.permission_mode!==policy.permission_mode)throw Object.assign(Error('A different permission policy owns the live session. Finish and shutdown its task before using this installed policy; no override was applied.'),{code:'deployment_policy_mismatch'});
-      printReply(command==='ready'?await request(saved,'ready',args,15000,policy.permission_mode):existing);return;
+      return printStartup(saved,existing,startup,policy.permission_mode);
     }
     // An unresponsive live service may still be controlling the desktop. Never
     // replace its capability file or create a competing guardian after timeout.
@@ -216,7 +253,12 @@ export async function main(){
     const child=spawn(process.execPath,[fileURLToPath(new URL('../server/desktop-service.mjs',import.meta.url)),'--serve'],{detached:true,windowsHide:true,stdio:'ignore',env:{...process.env,AGCU_PERMISSION_MODE:policy.permission_mode}});child.unref();
     for(let i=0;i<100;i++){
       await new Promise(resolve=>setTimeout(resolve,100));
-      try{const session=JSON.parse(fs.readFileSync(file));session.task_token=taskToken;const found=await request(session,'status',{},1500,policy.permission_mode);if(found.ok&&found.build_id===BUILD_ID&&found.permission_mode===policy.permission_mode){printReply(command==='ready'?await request(session,'ready',args,15000,policy.permission_mode):found);return;}}catch(error){if(command==='ready'&&error.code!=='session_unavailable')throw error;}
+      let session,found;
+      try{
+        session=JSON.parse(fs.readFileSync(file));session.task_token=taskToken;
+        found=await request(session,'status',{},1500,policy.permission_mode);
+      }catch(error){if(command==='ready'&&!['ENOENT','session_unavailable'].includes(error.code))throw error;continue;}
+      if(found.ok&&found.build_id===BUILD_ID&&found.permission_mode===policy.permission_mode)return printStartup(session,found,startup,policy.permission_mode);
     }
     throw Error('Native session did not start; run the service in foreground for diagnostics.');
   }

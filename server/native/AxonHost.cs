@@ -2372,36 +2372,70 @@ namespace Axon
         // change of focus, foreground or cursor. That is how Claude types into
         // Notepad behind the document the user is writing. The write is read
         // back before it is believed; a control that ignores posted characters
-        // reports nothing changed and the caller falls back to real keys.
+        // reports an uncertain outcome so the caller cannot duplicate input.
 
         const uint WM_KEYDOWN = 0x0100, WM_KEYUP = 0x0101, WM_CHAR = 0x0102, WM_MOUSEMOVE = 0x0200;
         const uint WM_LBUTTONDOWN = 0x0201, WM_LBUTTONUP = 0x0202, WM_RBUTTONDOWN = 0x0204, WM_RBUTTONUP = 0x0205;
         const uint WM_MBUTTONDOWN = 0x0207, WM_MBUTTONUP = 0x0208;
 
+        // Keep the original element for both reads. A changed focus or a clipboard
+        // read is not evidence that the requested field received the text.
+        const int TextVerificationLimit = 65536;
         static string ReadElementText(AutomationElement el)
         {
-            try
-            {
-                object vp = null;
-                try { vp = el.GetCurrentPattern(ValuePattern.Pattern); } catch { }
-                if (vp != null) return ((ValuePattern)vp).Current.Value ?? "";
-                object tp = null;
-                try { tp = el.GetCurrentPattern(TextPattern.Pattern); } catch { }
-                if (tp != null) return ((TextPattern)tp).DocumentRange.GetText(8000) ?? "";
-            }
-            catch { }
-            return null;
+            if (el == null) return null;
+            string value = null;
+            bool answered = Quick(delegate {
+                if (el.Current.IsPassword) return;
+                object pattern;
+                if (el.TryGetCurrentPattern(ValuePattern.Pattern, out pattern))
+                    value = ((ValuePattern)pattern).Current.Value;
+                else if (el.TryGetCurrentPattern(TextPattern.Pattern, out pattern))
+                    value = ((TextPattern)pattern).DocumentRange.GetText(TextVerificationLimit + 1);
+            }, ClickProbeMs);
+            // A truncated document cannot prove where an edit happened.
+            return answered && value != null && value.Length <= TextVerificationLimit ? value.Replace("\r\n", "\n").Replace('\r', '\n') : null;
         }
 
-        static string LongestLine(string text)
+        static AutomationElement FocusedTextTarget(IntPtr window)
         {
-            string best = "";
-            foreach (string part in text.Replace("\r", "").Split('\n'))
+            AutomationElement target = null;
+            bool answered = Quick(delegate {
+                AutomationElement focused = AutomationElement.FocusedElement;
+                IntPtr handle = TopWindowOf(focused);
+                if (window != IntPtr.Zero && handle != IntPtr.Zero && ControlFence.SameKeyboardWindow(window, handle))
+                    target = focused;
+            }, ClickProbeMs);
+            return answered ? target : null;
+        }
+
+        // Accept insertion or replacement of a selection. Everything on both
+        // sides of the submitted text must match the original value.
+        internal static bool ConfirmsTextEdit(string before, string after, string text)
+        {
+            if (before == null || after == null || after == before || text.Length == 0 || text.Length > after.Length) return false;
+            int retained = after.Length - text.Length;
+            if (retained > before.Length) return false;
+            int prefix = 0, suffix = 0;
+            while (prefix < retained && before[prefix] == after[prefix]) prefix++;
+            while (suffix < retained && before[before.Length - 1 - suffix] == after[after.Length - 1 - suffix]) suffix++;
+            int start = retained - suffix;
+            return start <= prefix && after.IndexOf(text, start, prefix - start + text.Length, StringComparison.Ordinal) >= 0;
+        }
+
+        static void VerifyTextEdit(AutomationElement el, string before, string text)
+        {
+            string expected = text.Replace("\r\n", "\n").Replace('\r', '\n');
+            var timer = System.Diagnostics.Stopwatch.StartNew();
+            while (before != null)
             {
-                string t = part.Trim();
-                if (t.Length > best.Length) best = t;
+                string after = ReadElementText(el);
+                if (ConfirmsTextEdit(before, after, expected)) return;
+                if (after == null || timer.ElapsedMilliseconds >= 750) break;
+                System.Threading.Thread.Sleep(50);
             }
-            return best.Length > 60 ? best.Substring(0, 60) : best;
+            throw new AxonError("input_outcome_unknown", "The target field did not confirm the submitted text.",
+                "Observe the editor before continuing. Do not repeat typing or paste.");
         }
 
         static string TryPostText(AutomationElement el, IntPtr top, string text, bool force)
@@ -2444,18 +2478,8 @@ namespace Axon
                 if (c == '\t') { Native.PostMessageW(dest, WM_CHAR, new IntPtr(0x09), new IntPtr(1)); continue; }
                 Native.PostMessageW(dest, WM_CHAR, new IntPtr(c), new IntPtr(1));
             }
-            if (before == null) return "posted_unverified";
-            string chunk = LongestLine(text);
-            for (int i = 0; i < 20; i++)
-            {
-                System.Threading.Thread.Sleep(50);
-                string after = ReadElementText(el);
-                if (after != null && after != before)
-                    return after.Contains(chunk) ? "posted" : "posted_changed";
-            }
-            // Nothing moved in a second: the control ignored posted characters,
-            // so nothing was typed and the caller may use real keys.
-            return null;
+            VerifyTextEdit(el, before, text);
+            return "posted";
         }
 
         static object PostedClick(Dictionary<string, object> a, AutomationElement el, string button, int clicks)
@@ -3777,7 +3801,9 @@ namespace Axon
             if (text == null) text = "";
             if(text.Length>400)throw new AxonError("text_limit","Native typing is limited to 400 UTF-16 units per action.","Use explicit clipboard access and a verified Ctrl+V for larger text; do not silently replay partial input.");
             Dictionary<string, object> res = new Dictionary<string, object>();
+            AutomationElement editor = null;
             GuardSameWindow(a, HwndArg(a));
+            if (text.Length == 0) { res["typed"] = 0; return res; }
             if (Get(a, "index") != null || Get(a, "selector") != null)
             {
                 Target t = ResolveTarget(a);
@@ -3808,7 +3834,7 @@ namespace Axon
                         if (force)
                         {
                             throw new AxonError("background_unavailable",
-                                "That control ignored posted text, and background:true means it must not be focused or raised to type into instead.",
+                                "The control has no addressable background typing target. No text was posted.",
                                 "Retry without background, or focus the window yourself first, then use computer_type with no target and no replace.");
                         }
                     }
@@ -3822,15 +3848,19 @@ namespace Axon
                     System.Threading.Thread.Sleep(120);
                 }
                 RequireTypingFocus(t.El, want);
+                editor = t.El;
             }
             else
             {
                 // No element named, so this types into whatever holds focus.
                 RequireForeground(HwndArg(a), a, res);
+                editor = FocusedTextTarget(HwndArg(a));
             }
+            string before = ReadElementText(editor);
             bool held = Exclusive(a) && Native.BeginExclusive();
             try { Native.TypeUnicode(text); }
             finally { if (held) Native.EndExclusive(); }
+            VerifyTextEdit(editor, before, text);
             if (held) res["input_held"] = true;
             res["typed"] = text.Length;
             return res;
@@ -5032,14 +5062,14 @@ namespace Axon
             {
                 if (text.Length == 0) Clipboard.Clear();
                 else Clipboard.SetText(text);
-            });
+            }, text);
             res["pasted"] = text.Length;
             return res;
         }
 
         // The paste itself, shared by the text and the file paste: save the
         // clipboard, put ours on it, Ctrl+V, watch for the read, put theirs back.
-        static void PasteCore(Dictionary<string, object> a, Dictionary<string, object> res, System.Threading.ThreadStart setClipboard)
+        static void PasteCore(Dictionary<string, object> a, Dictionary<string, object> res, System.Threading.ThreadStart setClipboard, string expectedText = null)
         {
             // Same gates as key/type with no element named: this types into
             // whatever holds focus, so it goes through the same "is the user
@@ -5067,13 +5097,20 @@ namespace Axon
             bool restored = false;
             bool userChanged = false;
             bool readObserved = false;
+            AutomationElement editor = null;
+            string before = null;
             uint mine=0;
             try
             {
-                if(Get(a,"index")!=null){
+                if(Get(a,"index")!=null || Get(a,"selector")!=null){
                     Target target=ResolveTarget(a);
                     if(!HasTypingFocus(target.El)){Quick(delegate { target.El.SetFocus(); }, ClickProbeMs);System.Threading.Thread.Sleep(120);}
                     RequireTypingFocus(target.El,HwndArg(a));
+                    editor = target.El;
+                }
+                if (expectedText != null) {
+                    if (editor == null) editor = FocusedTextTarget(HwndArg(a));
+                    before = ReadElementText(editor);
                 }
                 // Refuse before any input if a newer copy arrived while focus settled.
                 if (Native.GetClipboardSequenceNumber() != snapshotSeq)
@@ -5138,6 +5175,7 @@ namespace Axon
                 catch { }
             }
 
+            if (expectedText != null) VerifyTextEdit(editor, before, expectedText);
             res["clipboard_restored"] = restored;
             if (lost > 0) res["clipboard_formats_lost"] = lost;
             if (userChanged) res["clipboard_changed_by_user"] = true;

@@ -52,7 +52,7 @@ export async function quickInstall({bundle,home=os.homedir(),target,permissionMo
     const launcher=path.join(root,'cu.mjs'),node=path.join(root,'cu-node.exe');
     if(fs.readFileSync(launcher,'utf8')!==dep.launcherSource(release)||sha(node)!==manifest.files['node.exe'])throw Error('Installed launcher differs from its release pin.');
     const command=`& '${node.replaceAll("'","''")}' '${launcher.replaceAll("'","''")}'`;
-    const template=fs.readFileSync(path.join(release,'skills/computer-use/SKILL.md'),'utf8').replaceAll('{{DESKTOP_COMMAND}}',command).replaceAll('{{CONTROLLER_START}}',path.join(root,'Start Computer Use.cmd'));
+    const template=fs.readFileSync(path.join(release,'skills/computer-use/SKILL.md'),'utf8').replaceAll('{{SHELL}}','powershell').replaceAll('{{DESKTOP_COMMAND}}',command).replaceAll('{{CONTROLLER_START}}',path.join(root,'Start Computer Use.cmd'));
     if(fs.readFileSync(path.join(skill,'SKILL.md'),'utf8')!==template)throw Error('Installed skill differs from its release.');
     const config=path.join(profile,'config.json'),definition=path.join(profile,'sidecars/antigravity-computer-use/sidecar.json');
     const updates=[[definition,JSON.stringify(dep.sidecarDefinition(path.join(release,'node.exe'),path.join(release,'scripts/desktop.mjs')),null,2)+'\n'],[config,dep.mergeSidecarConfig(config,{enable:true})]].filter(([file,text])=>!fs.existsSync(file)||!isDeepStrictEqual(read(file),JSON.parse(text)));

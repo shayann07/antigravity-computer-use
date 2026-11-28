@@ -60,7 +60,7 @@
     {
       "path": "server/native/AxonHost.cs",
       "upstream_sha256": "bef101afecbdf8f75df2a1f8b45d224eade39f09e3c8e25cf7b450e3fa49a8ef",
-      "local_sha256": "45940474ad973120344f6f4852abe64f78505e8a42015f3003ef23ed56f6bbe9",
+      "local_sha256": "9e1e20231c4fa10bb4a74c4fc9604f70d9e80441ae24cc4c3b7bcdd3021129fa",
       "modified": true
     },
     {
@@ -264,7 +264,7 @@
     },
     {
       "path": "server/runtime.mjs",
-      "sha256": "15940b637d41115f780b3e0afaa88418bbc4dc1b96937425bcdf456ac95ab215"
+      "sha256": "6827d9377131e8f9f959f17c1720d370dc727a295414a37976a1241130a54146"
     },
     {
       "path": "server/mcp.mjs",
@@ -316,7 +316,7 @@
     },
     {
       "path": "scripts/desktop.mjs",
-      "sha256": "8709769fd6e273caa0a9fcb44a55355db417606a992e0bde785908393f9b5179"
+      "sha256": "8ddc4d72a3b8a7457239984480713bb592af7935ab186bc4f2e0d7e9bbd15d85"
     },
     {
       "path": "server/version.mjs",
@@ -364,15 +364,15 @@
     },
     {
       "path": "scripts/install.mjs",
-      "sha256": "f351e3bfbe012ed346ded7eaf4f362275d6505adeb195a1aa39cd941d2cf3082"
+      "sha256": "01f692f7cf2f136a2e823c6833689b56f219e436d6aefcdc8b5f817fd63626ca"
     },
     {
       "path": "scripts/rollback.mjs",
-      "sha256": "513ded37878835985be7db28d774f9ba03dd72001454d9ed8f4aeea59ac1993e"
+      "sha256": "0b37f6fb9e8a4c09d9bf7f97fa94a4b35caf5f72d15ed1f3c07c17c8d01e586e"
     },
     {
       "path": "scripts/verify-install.mjs",
-      "sha256": "e8591509c682a094d0d72efa8db91f6adeaeee7b74e0c8eb60f660d96131afc5"
+      "sha256": "e261b4d6453c5fa44957855657720e95166caf4b5574b6555f2c3220140fd942"
     },
     {
       "path": "scripts/bundle.mjs",
@@ -380,7 +380,7 @@
     },
     {
       "path": "tests/install.test.mjs",
-      "sha256": "ec10de13b716d4441a8798722965059a796df286f3c6748246c9b50dade3445c"
+      "sha256": "1e42fef6484e764b10e11d45157fa4dd611c651a595636398581cb15c85984fb"
     },
     {
       "path": "tests/core.test.mjs",
@@ -532,7 +532,7 @@
     },
     {
       "path": "scripts/quick-install.mjs",
-      "sha256": "ec2c3d0305bdbaaa953b01fcecab7028a0472feac01529d7f4e69f1c54fcdb81"
+      "sha256": "e1071d1043f8f3e8c0c4d9825f05c8aa4682ffa3677898f4bd7709d6cb6da617"
     },
     {
       "path": "tests/quick-install.test.mjs",
@@ -540,7 +540,7 @@
     },
     {
       "path": "install.ps1",
-      "sha256": "0ee154c09aa8a0d912bc2c5127d5132f8f78511e1ee030dc9f37f682fc5dec55"
+      "sha256": "9e7253ff258c64ed2bc3583ef1d5b00295efb4decc1a768c1fc563bc1b7d1152"
     },
     {
       "path": "tests/bootstrap.test.mjs",
@@ -612,15 +612,15 @@
     },
     {
       "path": "scripts/macos-install-check.mjs",
-      "sha256": "0a79e617dea44af4a7f2a017d6b98d735c3c0483e9bcdefd6dc85bee7203cf0b"
+      "sha256": "d7f2807364e238d04c0aee4b883b0d2d5f0dc66fd6db4a335e8e3d6b704c8684"
     },
     {
       "path": "skills/computer-use/SKILL.md",
-      "sha256": "6bf23a2185f5bf9f62655a2ad775e025a8ff239b2f2581cbf45eeb8e145fdcdf"
+      "sha256": "12d44ee0167a0c5afb73d7e63385a9f1c5cb07e5cac2049aa0e2b6ee43118c6f"
     },
     {
       "path": "docs/MACOS.md",
-      "sha256": "dfe0cb8792ae13bfa710b5e835758bb7f97ffa7719813428e497598db4dc0cd9"
+      "sha256": "ae139fc6c6cb8e15b123d3cb840c0b1b61b8b0e9ee41a86d4e9528d4f19513c1"
     },
     {
       "path": "server/update-core.mjs",
@@ -672,7 +672,7 @@
     },
     {
       "path": "tests/lifecycle.test.mjs",
-      "sha256": "b65041c7701fb93eedb1838eb4919be3bab3285a9ddc69cc9fa5fa730c868d20"
+      "sha256": "ad85059970b20728357e2f10588197224f196181cc212dc984d7a93685086010"
     },
     {
       "path": "server/native/GuardCleanup.cs",
@@ -724,7 +724,7 @@
     },
     {
       "path": "server/recovery.mjs",
-      "sha256": "16f9c578a5bc44a30c108a3c9704dc414957c8442dfe6494bc91c00926992471"
+      "sha256": "6c1c49f6a736615ed32a62583021ce96d0e79ec2f03dfdd6bb3709a44e428728"
     },
     {
       "path": "scripts/qualify-guardian-desktop.mjs",
@@ -784,7 +784,7 @@
     },
     {
       "path": "tests/NativeValueWriteTests.cs",
-      "sha256": "69d6d02c8bfd2ec23e829f835e340d892b71ccc58176a6a49bf4be1c0e7b97d2"
+      "sha256": "f48c6de92f5633376980cfa7f0bed8c1c16c9f4fccdd4f47ef74757378cae6e8"
     },
     {
       "path": "tests/native-value-write.test.mjs",
@@ -840,7 +840,7 @@
     },
     {
       "path": "docs/RELEASE.md",
-      "sha256": "36fdfc3139bdeac6ea6d1429235b67b301d03f0b5814dc893b1a179b48acd94a"
+      "sha256": "8b30228c705a282d7b88438837cc2eaf0c02dcdb5df642ecaee0948ecc4d895b"
     },
     {
       "path": "tests/download-deadlines.test.mjs",
@@ -879,8 +879,12 @@
       "sha256": "6c106ef780da4501f02c2a063094f98cbd0f0f54f76f4c41f48432df859d6ee9"
     },
     {
+      "path": "tests/ready-shortcuts.test.mjs",
+      "sha256": "223daf1c39422b3a296fb9d7584c0d74eeac843a3517693baabe31873741ebaf"
+    },
+    {
       "path": "tests/skill-guidance.test.mjs",
-      "sha256": "6db607a04b10ff1df13a394afe43db037ba91f10c518d1ea67ca2a60e34bb6b7"
+      "sha256": "4a1da5080900ce3fbeec86f6341307ce25b773af6420dcae791412d428db33c2"
     },
     {
       "path": "tests/brief-reply.test.mjs",
@@ -900,11 +904,11 @@
     },
     {
       "path": "server/task-ownership.mjs",
-      "sha256": "df9f706f24db27c8fe5ba70d6fccf38ac35a75016827970d4482289640a89546"
+      "sha256": "aa4a89c21027354e694e3dc7cec649d8782f808d4c8647c434c02efe468148d2"
     },
     {
       "path": "tests/task-ownership.test.mjs",
-      "sha256": "07aff10597c430a0f232157cd773b75433846f3df3f814ff1b6c9996cfa1e145"
+      "sha256": "b6463ce951c7c4f0b659af7a1950c6d0f4b5ae623f6be326af5bef20fc50c858"
     },
     {
       "path": "tests/installation-location.test.mjs",

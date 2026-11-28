@@ -67,7 +67,12 @@ for(const r of data.records){
   fs.mkdirSync(path.dirname(r.file),{recursive:true});writeAtomicText(r.file,JSON.stringify(current,null,2)+'\n');
  }
  else if(r.existed){
-  if(fs.statSync(r.saved).isDirectory())fs.cpSync(r.saved,r.file,{recursive:true});
+  if(fs.statSync(r.saved).isDirectory()){
+   fs.cpSync(r.saved,r.file,{recursive:true});
+   // A host can create an empty skill directory before installation. Remove
+   // the discovery marker if the backup had none, preserving sibling files.
+   if(r.kind==='skill'&&!fs.existsSync(path.join(r.saved,'SKILL.md')))fs.rmSync(path.join(r.file,'SKILL.md'),{force:true});
+  }
   else restoreFile(r.saved,r.file);
  }
  else if(['installation','launcher','deployment','deployment-registry','sidecar-definition'].includes(r.kind)&&fs.existsSync(r.file))fs.unlinkSync(r.file);

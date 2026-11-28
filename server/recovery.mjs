@@ -131,13 +131,21 @@ export function currentStopNonce(file,guard){
 }
 // Requires native old-actor/ledger verification again at this boundary. It
 // settles only uncertainty, retaining ordinary Stop for local human re-arm.
-export function settlePriorStop(file,record,{platform=process.platform,probe=process.kill,startOf=macProcessStartSeconds}={}){
- const directory=path.dirname(file),root=fs.lstatSync(directory,{bigint:true});
+export function verifiedPriorStopNonce(file,record,{platform=process.platform,probe=process.kill,startOf=macProcessStartSeconds}={}){
+ const directory=path.dirname(file);
  const context=JSON.parse(readRecoveryFile(file+'.context.json',1024,fs));
  if(!context||context.schema!==1||context.guard!==record?.guard||!guardName.test(context.guard)||Object.keys(context).sort().join(',')!=='guard,nonce,schema')throw Error('Prior Stop context is missing or differs');
+ if(typeof context.nonce!=='string'||!/^[a-f0-9]{32}$/.test(context.nonce))throw Error('Invalid prior Stop nonce');
+ const pending=stopRecord(file+'.unconfirmed',fs),primary=stopRecord(file,fs);
+ if(pending?.value!=='unconfirmed:'+context.nonce||primary&&primary.value!=='stopped'&&primary.value!==pending.value)throw Error('Stop episode changed');
  const verify=()=>priorWindowsCleanupVerified(directory,record,{platform,probe})||priorMacCleanupVerified(directory,record,{platform,probe,startOf})||priorUndispatchedCleanupVerified(directory,record,{platform,probe,startOf})&&(platform==='darwin'||priorUndispatchedActorsGone(directory,record,{probe}));
  if(!verify())throw Error('Prior actors or ledger remain unverified');
- const result=settleFreshStopLatch(file,context.nonce,root);
+ return context.nonce;
+}
+export function settlePriorStop(file,record,options){
+ const root=fs.lstatSync(path.dirname(file),{bigint:true});
+ const nonce=verifiedPriorStopNonce(file,record,options);
+ const result=settleFreshStopLatch(file,nonce,root);
  return {...result,prior_cleanup_verified:true};
 }
 export function safeWaitMetrics(value){

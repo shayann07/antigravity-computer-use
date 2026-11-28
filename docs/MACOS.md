@@ -38,7 +38,7 @@ on every change.
 ## Install
 
 The quickest way is one line in Terminal. It picks the archive for your Mac,
-checks its SHA-256 against the release's `SHA256SUMS.txt` and stops if it differs,
+checks its SHA-256 against the digest in the installer script and stops if it differs,
 runs `install.command`, then opens the permission setup:
 
 ```sh
@@ -69,6 +69,33 @@ From a terminal in the extracted folder, installation is also one command:
 ```sh
 ./install.command
 ```
+
+### Install locations and Claude Code
+
+The one-line installer keeps its download and extracted bundle in
+`~/Library/Caches/AntigravityComputerUse/install-*`. The default installation
+under `~/Library/Application Support/AntigravityComputerUse` contains the
+launchers, releases, deployment registry, update settings, private runtime data
+and rollback backups. In `~/.gemini/config`, the installer writes
+`skills/computer-use/`, the Sidecar definition in
+`sidecars/antigravity-computer-use/sidecar.json`, and the Sidecar entry in
+`config.json`. Antigravity starts the controller from that entry. The direct
+installer can remove this project's old entry from an existing
+`mcp_config.json`. Version 1.0.6 also creates an empty server map on a fresh
+install. Direct mode uses the terminal launcher.
+
+In bundles built after 1.0.6, the following command also installs the skill in
+`~/.claude/skills/computer-use/`. Both skills use the same controller. This
+example selects native permission dialogs for both hosts. Updates retain the
+additional skill and the installation's rollback journal covers both copies.
+
+```sh
+./install.command --also-claude-code --permission-mode standalone
+```
+
+To add the controller to Codex, run `./install.command --also-codex --permission-mode standalone`. This installs `~/.agents/skills/antigravity-computer-use/`. Invoke `$antigravity-computer-use` in Codex. You can combine both host flags. Updates and rollback cover each selected skill.
+
+For other agents, pass `--skill-root "$HOME/MyAgent/skills"` to `install.command`, using a directory the agent searches. [Other local agents](INSTALLATION.md#other-local-agents)
 
 ### Permission mode
 
@@ -125,6 +152,7 @@ cleared automatically; `status` then names what to inspect.
    the file. Then delete `~/.gemini/config/sidecars/antigravity-computer-use/`.
 3. Delete the skill: `~/.gemini/config/skills/computer-use/` (and
    `<project>/.agents/skills/computer-use/` for any project-local install).
+   If enabled, remove the additional skill folder for Claude Code (`~/.claude/skills/computer-use/`) or Codex (`~/.agents/skills/antigravity-computer-use/`).
 4. Delete `~/Library/Application Support/AntigravityComputerUse`. It holds the
    releases, the service data and the rollback backups, so keep a copy if you
    may want to roll back.

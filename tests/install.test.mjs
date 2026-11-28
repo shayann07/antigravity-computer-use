@@ -146,6 +146,57 @@ test('unsealed extra code is refused before any installation write',()=>{
  assert.throws(()=>install({bundle,target,home:path.join(dir,'home')}),/inventory differs/);assert(!fs.existsSync(target));
 });
 
+for(const host of ['codex','claude'])test(host+' skill is opt-in, survives updates, and rolls back',async()=>{
+ const dir=fs.mkdtempSync(path.join(root,'host-skill-')),bundle=path.join(dir,'bundle'),target=path.join(dir,'installed'),home=path.join(dir,'home');
+ const codex=path.join(home,'.agents/skills/antigravity-computer-use/SKILL.md'),claude=path.join(home,'.claude/skills/computer-use/SKILL.md');
+ const skill=host==='codex'?codex:claude,other=host==='codex'?claude:codex;
+ try{
+  fs.mkdirSync(path.join(bundle,'skills/computer-use'),{recursive:true});writeFixture(bundle);
+  const template='---\nname: computer-use\ndescription: Test skill\n---\n{{SHELL}} {{DESKTOP_COMMAND}}';
+  const source=path.join(bundle,'skills/computer-use/SKILL.md');fs.writeFileSync(source,template);seal(bundle);
+  install({bundle,target,home});assert(!fs.existsSync(skill));assert(!fs.existsSync(other));
+  const first=install({bundle,target,home,alsoCodex:host==='codex',alsoClaudeCode:host==='claude'});
+  assert.deepEqual(first.configs,[]);assert(!fs.existsSync(path.join(home,'.gemini/config/mcp_config.json')));
+  const original=fs.readFileSync(skill,'utf8');
+  assert(original.split('\n').includes('name: '+path.basename(path.dirname(skill))));
+  assert(original.includes((process.platform==='win32'?'powershell ':'sh ')));assert(original.includes(first.launcher));
+  fs.writeFileSync(source,template+'\nupdated');seal(bundle,'9.2.0-test');
+  const next=install({bundle,target,home});assert(fs.readFileSync(skill,'utf8').endsWith('updated'));assert(!fs.existsSync(other));
+  await rollbackGuarded(path.join(next.backup,'rollback.json'));assert.equal(fs.readFileSync(skill,'utf8'),original);
+  await rollbackGuarded(path.join(first.backup,'rollback.json'));assert(!fs.existsSync(skill));
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
+
+test('custom roots add independent agents, retain references on update, and roll back the new registration',async()=>{
+ const dir=fs.mkdtempSync(path.join(root,'custom-hosts-')),bundle=path.join(dir,'bundle'),target=path.join(dir,'installed'),home=path.join(dir,'home');
+ const firstRoot=path.join(home,'A local agent','skills'),codexRoot=path.join(home,'.agents','skills'),secondRoot=path.join(home,'other','skills');
+ const installed=root=>path.join(root,'antigravity-computer-use');
+ try{
+  const source=path.join(bundle,'skills/computer-use');fs.mkdirSync(path.join(source,'references'),{recursive:true});writeFixture(bundle);
+  fs.writeFileSync(path.join(source,'SKILL.md'),'---\nname: computer-use\ndescription: Fixture\n---\n{{DESKTOP_COMMAND}}');
+  fs.writeFileSync(path.join(source,'references','action.md'),'instructions');seal(bundle);
+  assert.throws(()=>install({bundle,target,home,skillRoots:['relative']}),/absolute skills directory/);
+  assert.throws(()=>install({bundle,target,home,skillRoots:[target]}),/overlap/);
+  assert.throws(()=>install({bundle,target,home,skillRoots:[firstRoot,installed(firstRoot)]}),/overlap/);
+  const foreign=installed(secondRoot);fs.mkdirSync(foreign,{recursive:true});fs.writeFileSync(path.join(foreign,'SKILL.md'),'user skill');
+  assert.throws(()=>install({bundle,target,home,skillRoots:[secondRoot]}),/different skill/);assert.equal(fs.readFileSync(path.join(foreign,'SKILL.md'),'utf8'),'user skill');
+  fs.unlinkSync(path.join(foreign,'SKILL.md'));fs.writeFileSync(path.join(foreign,'keep.txt'),'local');
+  const first=install({bundle,target,home,alsoCodex:true,skillRoots:[firstRoot,codexRoot,firstRoot]});
+  assert.equal(first.skills.length,3);
+  const next=install({bundle,target,home,skillRoots:[secondRoot]});
+  for(const root of [firstRoot,codexRoot,secondRoot]){
+   const folder=installed(root),text=fs.readFileSync(path.join(folder,'SKILL.md'),'utf8');
+   assert(text.includes('name: antigravity-computer-use')&&text.includes(next.launcher));
+   assert.equal(fs.readFileSync(path.join(folder,'references','action.md'),'utf8'),'instructions');
+   assert.equal(JSON.parse(fs.readFileSync(path.join(folder,'deployment.json'))).release,next.release);
+  }
+  await rollbackGuarded(path.join(next.backup,'rollback.json'));
+  assert(!fs.existsSync(path.join(foreign,'SKILL.md')));assert.equal(fs.readFileSync(path.join(foreign,'keep.txt'),'utf8'),'local');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(installed(firstRoot),'deployment.json'))).release,first.release);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(target,'deployments.json'))).global.skill_roots,[firstRoot,codexRoot].map(folder=>fs.realpathSync.native(folder)));
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
+
 test('direct updates retain the previously chosen permission policy',()=>{
  const dir=fs.mkdtempSync(path.join(root,'policy-')),bundle=path.join(dir,'bundle'),target=path.join(dir,'installed'),home=path.join(dir,'home');
  fs.mkdirSync(path.join(bundle,'skills/computer-use'),{recursive:true});writeFixture(bundle);fs.writeFileSync(path.join(bundle,'skills/computer-use/SKILL.md'),'Use {{DESKTOP_COMMAND}}');seal(bundle);
@@ -156,6 +207,7 @@ test('direct updates retain the previously chosen permission policy',()=>{
 test('failed post-copy storage verification leaves the prior launcher, pointer and host config in place',()=>{
  const dir=fs.mkdtempSync(path.join(root,'staged-')),bundle=path.join(dir,'bundle'),target=path.join(dir,'installed'),home=path.join(dir,'home');
  fs.mkdirSync(path.join(bundle,'skills/computer-use'),{recursive:true});writeFixture(bundle,'v1');fs.writeFileSync(path.join(bundle,'skills/computer-use/SKILL.md'),'Use {{DESKTOP_COMMAND}}');seal(bundle);
+ const config=path.join(home,'.gemini/config/mcp_config.json');fs.mkdirSync(path.dirname(config),{recursive:true});fs.writeFileSync(config,JSON.stringify({mcpServers:{keep:{}}}));
  const first=install({bundle,target,home});const before={launcher:fs.readFileSync(first.launcher,'utf8'),node:fs.readFileSync(first.launcher_node,'utf8'),pointer:fs.readFileSync(path.join(target,'installation.json'),'utf8'),config:fs.readFileSync(first.configs[0],'utf8'),skill:fs.readFileSync(path.join(first.skills[0],'SKILL.md'),'utf8')};
  fs.writeFileSync(path.join(bundle,platform.node),'v2');seal(bundle,'9.2.0-test');let phases=0;
  assert.throws(()=>productionInstall({bundle,target,home,prepareStorage(){if(++phases===2)throw Error('Injected copied-tree ACL refusal');}}),/ACL refusal/);

@@ -56,6 +56,22 @@ New Windows installations use private `D:\Apps\AntigravityComputerUse\<owner-has
 
 The installer verifies manifest file hashes before making changes and refuses to update a live service. A short `cu.mjs` entrypoint with bundled `cu-node.exe` calls the exact installed script without command-shell forwarding. Node uses a hard link to the immutable payload where supported, otherwise a copy. Project-local launchers have separate names so they cannot redirect an existing global skill. Updates and rollback preserve both launcher files alongside the skill and installation pointer. `verify-install.mjs` checks the launcher pin and Node bytes as well as the payload. Only this project's old MCP entry is removed during direct migration. Other servers, host security preferences and unrelated configuration survive. Backups are kept under `backups/<timestamp>`. `--legacy-profiles` is optional and never enabled implicitly.
 
+For Codex, run `.\install.cmd --integration direct --also-codex --permission-mode standalone` from a Windows bundle built after 1.0.6. Invoke `$antigravity-computer-use` in Codex. The installer writes the skill in `%USERPROFILE%\.agents\skills\antigravity-computer-use\` and retains the selection on update.
+
+## Other local agents
+
+Give the global direct installer the absolute path to a skills directory your agent already searches. It creates an `antigravity-computer-use` subdirectory with the rendered `SKILL.md`, references and launcher location. Repeat `--skill-root` to add more hosts, or combine it with the Codex and Claude Code options. Updates remember the selected directories and rollbacks restore the previous installation. These options are available in bundles built after 1.0.6.
+
+```powershell
+.\install.cmd --skill-root "$env:USERPROFILE\MyAgent\skills" --permission-mode standalone
+```
+
+```sh
+./install.command --skill-root "$HOME/MyAgent/skills" --permission-mode standalone
+```
+
+With 1.0.6 or a host without skill discovery, tell your agent to read the installed `~/.gemini/config/skills/computer-use/SKILL.md` and run its first `ready` command. The agent needs a terminal on the computer running the controller. The installed instructions contain the exact launcher and explain task tokens, native approvals, and Stop. Agents that can open local image files can also inspect returned screenshots.
+
 ## Permission policy
 
 Manual direct installations default to standalone native app/session and sensitive-operation dialogs. Sidecar installations default to host-managed mode; to opt into host-managed mode explicitly for a manual direct installation, use:

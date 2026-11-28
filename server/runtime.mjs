@@ -16,7 +16,7 @@ import {storageOperation} from './storage.mjs';
 import {contract,nativePlatform,launchTarget,executableKey} from './platform.mjs';
 import {Incidents} from './incidents.mjs';
 import {updateNotice} from './update-notice.mjs';
-import {settleOrphanMacStop,writeMacControllerMarker,clearConfirmedStop,currentStopNonce,persistRecoveryStop,settlePriorStop,recoveryAdvice,priorWindowsCleanupVerified,priorMacCleanupVerified,priorUndispatchedCleanupVerified,readStopLatch,persistStopLatch,settleFreshStopLatch} from './recovery.mjs';
+import {settleOrphanMacStop,writeMacControllerMarker,clearConfirmedStop,currentStopNonce,persistRecoveryStop,settlePriorStop,verifiedPriorStopNonce,recoveryAdvice,priorWindowsCleanupVerified,priorMacCleanupVerified,priorUndispatchedCleanupVerified,readStopLatch,persistStopLatch,settleFreshStopLatch} from './recovery.mjs';
 import {writeAtomicJSON,readTaskRecord} from './atomic-json.mjs';
 import {loadConversationApprovals,saveConversationApprovals} from './conversation-approvals.mjs';
 
@@ -371,16 +371,27 @@ export class Runtime {
     }
     const wasOpen=this.taskOpen;Runtime.prototype.beginTask.call(this);const taskStarted=!wasOpen&&this.taskOpen===true;
     if(this.state==='stopped'&&this.lastControlReason==='guardian_stop_unconfirmed'&&this.driver?.inputMayBeHeld===true)return {...this.status(),ready:false,controls_visible:null,next_action:'inspect_input_cleanup',replay_allowed:false,error:{code:'input_cleanup_failed',message:'Input cleanup and native Stop delivery are unconfirmed. Inspect diagnostics; do not restart or replay.'}};
-    if(this.state==='stopped'&&this.lastControlReason==='guardian_stop_unconfirmed')return {...this.status(),ready:false,controls_visible:null,next_action:'inspect_diagnostics',replay_allowed:false,error:{code:'guardian_stop_unconfirmed',message:'Stop delivery to native controls is unconfirmed. Inspect diagnostics and input cleanup; do not restart or replay.'}};
     if(this.state==='stopped'&&persistenceFailure(this.lastControlReason))return {...this.status(),ready:false,controls_visible:null,next_action:'inspect_stop_persistence_without_restart',replay_allowed:false,error:{code:this.lastControlReason,message:'Control is stopped because native control storage failed. Inspect private storage; do not restart or send input.'}};
     // A replacement process cannot use its own empty ledger as evidence that
     // the previous process released input. Do not lead the agent toward re-arm
     // or start a new guardian before the recovered task has passed cleanup.
     if(this.recoveredTask&&this.taskFile){
       // Read-only: a leftover that provably never sent input can be ended once.
-      let undispatched=false;try{const record=readTaskRecord(this.taskFile);undispatched=record.guard===this.priorGuard&&priorUndispatchedCleanupVerified(path.dirname(this.taskFile),record);}catch{}
+      let undispatched=false;
+      try{
+        const record=readTaskRecord(this.taskFile);
+        if(record.open&&record.guard===this.priorGuard&&record.dispatched===false&&this.priorDispatched===false&&
+           record.watchdogs_complete===this.priorWatchdogsComplete&&JSON.stringify(record.children)===JSON.stringify(this.priorChildren)){
+          const latch=this.latchFile&&readStopLatch(this.latchFile);
+          if(latch?.unconfirmed){
+            storageOperation('verify-data-tree',path.dirname(this.taskFile));
+            undispatched=!!verifiedPriorStopNonce(this.latchFile,record);
+          }else if(!latch?.invalid&&this.lastControlReason!=='guardian_stop_unconfirmed')undispatched=priorUndispatchedCleanupVerified(path.dirname(this.taskFile),record);
+        }
+      }catch{}
       if(undispatched)return {...this.status(),ready:false,controls_visible:null,next_action:'end_recovered_task',replay_allowed:false,error:{code:'recovered_cleanup_unverified',message:'A previous task was opened but never sent input, and its controller is gone. Run end once to close it, then ready.'}};
     }
+    if(this.state==='stopped'&&this.lastControlReason==='guardian_stop_unconfirmed')return {...this.status(),ready:false,controls_visible:null,next_action:'inspect_diagnostics',replay_allowed:false,error:{code:'guardian_stop_unconfirmed',message:'Stop delivery to native controls is unconfirmed. Inspect diagnostics and input cleanup; do not restart or replay.'}};
     if(this.recoveredTask)return {...this.status(),ready:false,controls_visible:null,next_action:'inspect_prior_input_cleanup',replay_allowed:false,error:{code:'recovered_cleanup_unverified',message:'A previous task survived restart. Inspect its result without replay and verify its native input cleanup before re-arm or a new task.'}};
     const unavailable=()=>({...this.status(),ready:false,controls_visible:this.recoveryVisibility??null,guardian_running:!!this.guardian.proc&&!this.guardian.proc.killed,guardian_exit:this.guardian.lastExit??null,...recoveryAdvice({error:this.recoveryFailure}),error:this.recoveryFailure});
     if(this.recoveryFailure)return unavailable();

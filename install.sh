@@ -2,7 +2,7 @@
 # Installs Antigravity Computer Use on macOS.
 #
 # Downloads the release archive for this Mac (Apple silicon or Intel), checks
-# its SHA-256 against the release's SHA256SUMS.txt and stops if it differs,
+# its SHA-256 against the digest pinned here and stops if it differs,
 # installs the global /computer-use skill with background startup, then opens
 # the permission setup, where you grant Accessibility and Screen Recording.
 #
@@ -23,9 +23,10 @@ fail() { echo "$1" >&2; exit 1; }
 # hardware rather than the current process.
 if [ "$(sysctl -n hw.optional.arm64 2>/dev/null || echo 0)" = 1 ]; then
   ARCH=macos-arm64
+  EXPECTED=83da10769c1e9efe5308503a546390b7d629ee376d8d7c36689b8cde055544ff
 else
   case "$(uname -m)" in
-    x86_64) ARCH=macos-x64 ;;
+    x86_64) ARCH=macos-x64; EXPECTED=00cea6c959822e186c4056f4e9438879b271dc82c62b1b1b6e2f26976cc5d6e8 ;;
     *) fail "Unsupported Mac architecture: $(uname -m)" ;;
   esac
 fi
@@ -43,18 +44,24 @@ cd "$STAGE"
 
 echo "Downloading $ARCHIVE..."
 curl -fsSL --proto '=https' --tlsv1.2 -o "$ARCHIVE" "$BASE/$ARCHIVE" || fail "Download failed. Nothing was installed."
-curl -fsSL --proto '=https' --tlsv1.2 -o SHA256SUMS.txt "$BASE/SHA256SUMS.txt" || fail "Checksum download failed. Nothing was installed."
-
-EXPECTED=$(awk -v name="$ARCHIVE" '$2 == name { print $1 }' SHA256SUMS.txt)
 ACTUAL=$(shasum -a 256 "$ARCHIVE" | awk '{ print $1 }')
 [ -n "$EXPECTED" ] && [ "$EXPECTED" = "$ACTUAL" ] || fail "SHA-256 check failed for $ARCHIVE. Nothing was installed."
 echo "SHA-256 verified."
 
 tar -xzf "$ARCHIVE"
+for option in "$@"; do
+  case "$option" in
+    --also-codex|--also-claude-code|--skill-root)
+      grep -Fq -- "$option" ./macos-bundle/scripts/install.mjs || fail "Release $VERSION does not support $option. Use a bundle that includes this option." ;;
+  esac
+done
 ./macos-bundle/install.command "$@"
 
 echo
 echo "Opening the permission setup. Grant Accessibility and Screen Recording when macOS asks;"
 echo "only you can approve these. The setup files stay in $STAGE/macos-bundle."
 ./macos-bundle/Setup.Mac.Permissions.command
-echo "Then, in Antigravity, type /computer-use and describe your task."
+echo "In Antigravity, type /computer-use and describe your task."
+for option in "$@"; do
+  if [ "$option" = --also-codex ]; then echo 'In Codex, invoke $antigravity-computer-use.'; fi
+done

@@ -289,9 +289,11 @@ test('recovered End closes an undispatched task under an unconfirmed Stop, settl
   persistRecoveryStop(latch,guard,{unconfirmed:true,nonce:'b'.repeat(32)});
   // A watchdog recorded before dispatch that is still alive keeps Stop unconfirmed.
   fs.writeFileSync(path.join(dir,guard+'.watchdog'),`${process.pid}|12345`);
+  assert.equal((await restart().ready()).next_action,'inspect_diagnostics');
   await assert.rejects(restart().finish(),e=>e.code==='guardian_stop_unconfirmed');assert(readStopLatch(latch).unconfirmed);assert.equal(JSON.parse(fs.readFileSync(file)).open,true);
   fs.rmSync(path.join(dir,guard+'.watchdog'));
-  const r=restart();assert.equal((await r.finish()).ended,true);assert.equal(JSON.parse(fs.readFileSync(file)).open,false);
+  const r=restart();assert.equal((await r.ready()).next_action,'end_recovered_task');assert(readStopLatch(latch).unconfirmed);
+  assert.equal((await r.finish()).ended,true);assert.equal(JSON.parse(fs.readFileSync(file)).open,false);
   assert.equal(readStopLatch(latch).value,'stopped');assert(!readStopLatch(latch).unconfirmed);
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
