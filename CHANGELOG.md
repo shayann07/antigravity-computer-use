@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 1.0.7 - Verified text delivery, idle-restart recovery and more agent installs
+
+- Out-of-range arguments such as `--settle-ms 2400` return `bad_arguments` with advice to fix and retry, instead of a diagnostics lockout. No input is sent (#151).
+- `ready --apps` and `ready --launch APP --reason TEXT` combine readiness with window discovery or an observed launch in one call. On a fresh install, the first `ready` waits for the new service to publish its session instead of failing with `ENOENT` (#154).
 
 - Windows typing and text paste verify the edit against the target field. If the field cannot confirm delivery, the controller reports an unknown outcome and asks for observation before further input. The skill also covers delayed publish confirmation and recovering a lost task token (#146).
 - After a controller restart, `ready` can recommend `end` for a verified, undispatched task under an unconfirmed Stop. It checks the original Stop episode, input ledger and recorded actors. End repeats the checks before closing the task (#151).
